@@ -48,6 +48,7 @@ type PendingLeaderboardEntry = {
 type GameState = {
   bestScore: number;
   bonusFood: BonusFood | null;
+  boardSize: number;
   direction: Direction;
   food: Point;
   pendingLeaderboardEntry: PendingLeaderboardEntry | null;
@@ -63,7 +64,15 @@ type LeaderboardPanelProps = {
   testId: string;
 };
 
-const BOARD_SIZE = 19;
+type CreateInitialGameOptions = {
+  bestScore?: number;
+  boardSize?: number;
+};
+
+const DEFAULT_BOARD_SIZE = 19;
+const MIN_BOARD_SIZE = 11;
+const MAX_BOARD_SIZE = 25;
+const BOARD_SIZE_STEP = 2;
 const BONUS_FOOD_MIN_SNAKE_DISTANCE = 5;
 const BONUS_FOOD_SCORE = 2;
 const BONUS_FOOD_SPAWN_DELAY_MAX_MS = 10_000;
@@ -76,16 +85,10 @@ const EMPTY_LEADERBOARD_SNAPSHOT = "";
 const LEADERBOARD_STORAGE_KEY = "classic-snake:leaderboard:v1";
 const LEADERBOARD_STORAGE_VERSION = 1;
 const MAX_PLAYER_NAME_LENGTH = 18;
-const BOARD_CELLS = Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, index) => ({
-  x: index % BOARD_SIZE,
-  y: Math.floor(index / BOARD_SIZE),
-}));
-const INITIAL_SNAKE: Point[] = [
-  { x: 9, y: 9 },
-  { x: 8, y: 9 },
-  { x: 7, y: 9 },
-];
-const INITIAL_FOOD: Point = { x: 13, y: 9 };
+const BOARD_SIZE_OPTIONS = Array.from(
+  { length: Math.floor((MAX_BOARD_SIZE - MIN_BOARD_SIZE) / BOARD_SIZE_STEP) + 1 },
+  (_, index) => MIN_BOARD_SIZE + index * BOARD_SIZE_STEP,
+);
 const START_SCREEN_CELLS = Array.from({ length: 15 }, (_, index) => ({
   index,
   isSnake: [2, 7, 8, 9, 14].includes(index),
@@ -136,6 +139,44 @@ function getRandomDuration(minMs: number, maxMs: number) {
   return Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
 }
 
+function normalizeBoardSize(value: number) {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_BOARD_SIZE;
+  }
+
+  const clampedValue = Math.min(MAX_BOARD_SIZE, Math.max(MIN_BOARD_SIZE, Math.round(value)));
+  const steppedOffset =
+    Math.round((clampedValue - MIN_BOARD_SIZE) / BOARD_SIZE_STEP) * BOARD_SIZE_STEP;
+
+  return Math.min(MAX_BOARD_SIZE, Math.max(MIN_BOARD_SIZE, MIN_BOARD_SIZE + steppedOffset));
+}
+
+function createBoardCells(boardSize: number) {
+  return Array.from({ length: boardSize * boardSize }, (_, index) => ({
+    x: index % boardSize,
+    y: Math.floor(index / boardSize),
+  }));
+}
+
+function createInitialSnake(boardSize: number): Point[] {
+  const center = Math.floor(boardSize / 2);
+
+  return [
+    { x: center, y: center },
+    { x: center - 1, y: center },
+    { x: center - 2, y: center },
+  ];
+}
+
+function createInitialFood(boardSize: number): Point {
+  const center = Math.floor(boardSize / 2);
+
+  return {
+    x: Math.min(boardSize - 2, center + 4),
+    y: center,
+  };
+}
+
 function isOppositeDirection(first: Direction, second: Direction) {
   const firstOffset = directionOffsets[first];
   const secondOffset = directionOffsets[second];
@@ -143,17 +184,19 @@ function isOppositeDirection(first: Direction, second: Direction) {
   return firstOffset.x + secondOffset.x === 0 && firstOffset.y + secondOffset.y === 0;
 }
 
-function generateFood(snake: Point[], additionalOccupiedCells: Point[] = []) {
+function generateFood(boardSize: number, snake: Point[], additionalOccupiedCells: Point[] = []) {
   const occupiedCells = new Set([...snake, ...additionalOccupiedCells].map(getPointKey));
-  const openCells = BOARD_CELLS.filter((cell) => !occupiedCells.has(getPointKey(cell)));
+  const boardCells = createBoardCells(boardSize);
+  const openCells = boardCells.filter((cell) => !occupiedCells.has(getPointKey(cell)));
   const nextCell = openCells[Math.floor(Math.random() * openCells.length)];
 
   return nextCell ?? { x: 0, y: 0 };
 }
 
-function generateBonusFoodPosition(snake: Point[], food: Point) {
+function generateBonusFoodPosition(boardSize: number, snake: Point[], food: Point) {
   const occupiedCells = new Set([...snake, food].map(getPointKey));
-  const openCells = BOARD_CELLS.filter(
+  const boardCells = createBoardCells(boardSize);
+  const openCells = boardCells.filter(
     (cell) =>
       !occupiedCells.has(getPointKey(cell)) &&
       snake.every(
@@ -165,8 +208,8 @@ function generateBonusFoodPosition(snake: Point[], food: Point) {
   return nextCell ?? null;
 }
 
-function createBonusFood(snake: Point[], food: Point) {
-  const position = generateBonusFoodPosition(snake, food);
+function createBonusFood(boardSize: number, snake: Point[], food: Point) {
+  const position = generateBonusFoodPosition(boardSize, snake, food);
 
   if (position === null) {
     return null;
@@ -320,16 +363,22 @@ function isTypingTarget(target: EventTarget | null) {
   );
 }
 
-function createInitialGame(bestScore = 0): GameState {
+function createInitialGame({
+  bestScore = 0,
+  boardSize = DEFAULT_BOARD_SIZE,
+}: CreateInitialGameOptions = {}): GameState {
+  const normalizedBoardSize = normalizeBoardSize(boardSize);
+
   return {
     bestScore,
     bonusFood: null,
+    boardSize: normalizedBoardSize,
     direction: "right",
-    food: INITIAL_FOOD,
+    food: createInitialFood(normalizedBoardSize),
     pendingLeaderboardEntry: null,
     queuedDirection: "right",
     score: 0,
-    snake: INITIAL_SNAKE,
+    snake: createInitialSnake(normalizedBoardSize),
     status: "ready",
   };
 }
@@ -380,6 +429,7 @@ export function SnakeGame() {
   const bestScore = Math.max(game.bestScore, leaderboardBestScore);
   const pendingLeaderboardEntry = game.pendingLeaderboardEntry;
   const visibleBonusFood = game.bonusFood ?? null;
+  const boardCells = useMemo(() => createBoardCells(game.boardSize), [game.boardSize]);
 
   const occupiedCells = useMemo(() => {
     const cells = new Map<string, "body" | "bonusFood" | "food" | "head">();
@@ -406,6 +456,32 @@ export function SnakeGame() {
   const leaderboardSlots = useMemo(
     () => Array.from({ length: LEADERBOARD_LIMIT }, (_, index) => leaderboard[index] ?? null),
     [leaderboard],
+  );
+  const canSelectBoardSize =
+    game.status === "ready" || (game.status === "lost" && pendingLeaderboardEntry === null);
+
+  const selectBoardSize = useCallback(
+    (nextBoardSize: number) => {
+      const boardSize = normalizeBoardSize(nextBoardSize);
+
+      setPlayerName("");
+      setGame((current) => {
+        if (
+          current.status === "running" ||
+          current.status === "paused" ||
+          current.pendingLeaderboardEntry !== null ||
+          current.boardSize === boardSize
+        ) {
+          return current;
+        }
+
+        return createInitialGame({
+          bestScore: Math.max(current.bestScore, leaderboardBestScore),
+          boardSize,
+        });
+      });
+    },
+    [leaderboardBestScore],
   );
 
   const queueDirection = useCallback((nextDirection: Direction) => {
@@ -444,9 +520,9 @@ export function SnakeGame() {
       const collisionBody = ateAnyFood ? current.snake : current.snake.slice(0, -1);
       const hitWall =
         nextHead.x < 0 ||
-        nextHead.x >= BOARD_SIZE ||
+        nextHead.x >= current.boardSize ||
         nextHead.y < 0 ||
-        nextHead.y >= BOARD_SIZE;
+        nextHead.y >= current.boardSize;
       const hitBody = collisionBody.some((segment) => isSamePoint(segment, nextHead));
 
       if (hitWall || hitBody) {
@@ -481,9 +557,14 @@ export function SnakeGame() {
       return {
         bestScore: Math.max(current.bestScore, nextScore, leaderboardBestScore),
         bonusFood: nextBonusFood,
+        boardSize: current.boardSize,
         direction,
         food: ateFood
-          ? generateFood(nextSnake, nextBonusFood === null ? [] : [nextBonusFood.position])
+          ? generateFood(
+              current.boardSize,
+              nextSnake,
+              nextBonusFood === null ? [] : [nextBonusFood.position],
+            )
           : current.food,
         pendingLeaderboardEntry: current.pendingLeaderboardEntry,
         queuedDirection: direction,
@@ -506,7 +587,10 @@ export function SnakeGame() {
       }
 
       return {
-        ...createInitialGame(Math.max(current.bestScore, leaderboardBestScore)),
+        ...createInitialGame({
+          bestScore: Math.max(current.bestScore, leaderboardBestScore),
+          boardSize: current.boardSize,
+        }),
         status: "running",
       };
     });
@@ -515,7 +599,10 @@ export function SnakeGame() {
   const restartGame = useCallback(() => {
     setPlayerName("");
     setGame((current) => ({
-      ...createInitialGame(Math.max(current.bestScore, leaderboardBestScore)),
+      ...createInitialGame({
+        bestScore: Math.max(current.bestScore, leaderboardBestScore),
+        boardSize: current.boardSize,
+      }),
       status: "running",
     }));
   }, [leaderboardBestScore]);
@@ -556,7 +643,7 @@ export function SnakeGame() {
           return current;
         }
 
-        const bonusFood = createBonusFood(current.snake, current.food);
+        const bonusFood = createBonusFood(current.boardSize, current.snake, current.food);
 
         return bonusFood === null ? current : { ...current, bonusFood };
       });
@@ -685,6 +772,33 @@ export function SnakeGame() {
             </div>
           </dl>
 
+          <div className="flex flex-col gap-2 rounded-md border border-[var(--snake-border)] p-3">
+            <label
+              className="text-xs font-medium text-[var(--snake-muted)]"
+              htmlFor="snake-board-size"
+            >
+              Field size
+            </label>
+            <select
+              aria-label={`Field size. Selectable from ${MIN_BOARD_SIZE} by ${MIN_BOARD_SIZE} to ${MAX_BOARD_SIZE} by ${MAX_BOARD_SIZE}.`}
+              className="h-9 w-full rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] px-3 text-sm font-semibold text-[var(--snake-ink)] outline-none transition disabled:cursor-not-allowed disabled:opacity-55 focus-visible:border-[var(--snake-head)] focus-visible:ring-3 focus-visible:ring-[color-mix(in_oklch,var(--snake-head)_25%,transparent)]"
+              data-testid="snake-board-size"
+              disabled={!canSelectBoardSize}
+              id="snake-board-size"
+              onChange={(event) => selectBoardSize(Number(event.target.value))}
+              value={game.boardSize}
+            >
+              {BOARD_SIZE_OPTIONS.map((boardSize) => (
+                <option
+                  key={boardSize}
+                  value={boardSize}
+                >
+                  {boardSize} x {boardSize}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
             {showSideActions ? (
               <div className="grid w-full grid-cols-[minmax(0,1fr)_2rem] gap-2">
@@ -752,17 +866,17 @@ export function SnakeGame() {
         <div className="mx-auto flex w-full max-w-[min(92vw,38rem)] flex-col gap-3">
           <div className="relative aspect-square overflow-hidden rounded-md border border-[var(--snake-board-border)] bg-[var(--snake-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--snake-board)_24%,transparent)]">
             <div
-              aria-label={`Snake board. Score ${game.score}. ${statusLabels[game.status]}.${
+              aria-label={`Snake board. Field ${game.boardSize} by ${game.boardSize}. Score ${game.score}. ${statusLabels[game.status]}.${
                 visibleBonusFood === null ? "" : " Yellow apple active."
               }`}
               className="grid size-full gap-px rounded-[0.375rem] bg-[var(--snake-grid)] p-px"
               data-testid="snake-board"
               role="img"
               style={{
-                gridTemplateColumns: `repeat(${BOARD_SIZE}, minmax(0, 1fr))`,
+                gridTemplateColumns: `repeat(${game.boardSize}, minmax(0, 1fr))`,
               }}
             >
-              {BOARD_CELLS.map((cell) => {
+              {boardCells.map((cell) => {
                 const cellType = occupiedCells.get(getPointKey(cell));
 
                 return (
