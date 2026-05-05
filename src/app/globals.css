@@ -78,6 +78,7 @@
   --snake-board-border: oklch(0.27 0.06 158);
   --snake-board-cell: oklch(0.23 0.046 158);
   --snake-board-text: oklch(0.98 0.01 130);
+  --snake-bonus-food: oklch(0.87 0.18 86);
   --snake-body: oklch(0.67 0.18 135);
   --snake-border: oklch(0.89 0.024 150);
   --snake-food: oklch(0.66 0.22 28);
