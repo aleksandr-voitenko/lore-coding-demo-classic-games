@@ -43,6 +43,10 @@ const INITIAL_SNAKE: Point[] = [
   { x: 7, y: 9 },
 ];
 const INITIAL_FOOD: Point = { x: 13, y: 9 };
+const START_SCREEN_CELLS = Array.from({ length: 15 }, (_, index) => ({
+  index,
+  isSnake: [2, 7, 8, 9, 14].includes(index),
+}));
 
 const directionOffsets: Record<Direction, Point> = {
   up: { x: 0, y: -1 },
@@ -256,8 +260,12 @@ export function SnakeGame() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [game.status, queueDirection, restartGame, toggleRunState]);
 
-  const primaryAction = game.status === "running" ? "Pause" : game.status === "paused" ? "Resume" : "Start";
+  const primaryAction =
+    game.status === "running" ? "Pause" : game.status === "paused" ? "Resume" : "Start";
   const PrimaryIcon = game.status === "running" ? PauseIcon : PlayIcon;
+  const showStartScreen = game.status === "ready";
+  const showGameOverScreen = game.status === "lost";
+  const showSideActions = game.status === "running" || game.status === "paused";
   const showBoardState = game.status !== "running";
 
   return (
@@ -307,21 +315,23 @@ export function SnakeGame() {
           </dl>
 
           <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
-            <div className="grid w-full grid-cols-[minmax(0,1fr)_2rem] gap-2">
-              <Button onClick={toggleRunState} type="button">
-                <PrimaryIcon data-icon="inline-start" />
-                {primaryAction}
-              </Button>
-              <Button
-                aria-label="Restart"
-                onClick={restartGame}
-                size="icon"
-                type="button"
-                variant="outline"
-              >
-                <RotateCcwIcon />
-              </Button>
-            </div>
+            {showSideActions ? (
+              <div className="grid w-full grid-cols-[minmax(0,1fr)_2rem] gap-2">
+                <Button onClick={toggleRunState} type="button">
+                  <PrimaryIcon data-icon="inline-start" />
+                  {primaryAction}
+                </Button>
+                <Button
+                  aria-label="Restart"
+                  onClick={restartGame}
+                  size="icon"
+                  type="button"
+                  variant="outline"
+                >
+                  <RotateCcwIcon />
+                </Button>
+              </div>
+            ) : null}
 
             <div className="grid w-32 grid-cols-3 gap-2">
               <Button
@@ -400,7 +410,71 @@ export function SnakeGame() {
               })}
             </div>
 
-            {showBoardState ? (
+            {showStartScreen ? (
+              <div
+                className="absolute inset-2 flex flex-col items-center justify-center gap-5 rounded-[0.375rem] bg-[var(--snake-board)] px-6 text-center text-[var(--snake-board-text)]"
+                data-testid="snake-start-screen"
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div
+                    className="grid grid-cols-5 gap-1"
+                    aria-hidden="true"
+                  >
+                    {START_SCREEN_CELLS.map(({ index, isSnake }) => (
+                      <span
+                        className={cn(
+                          "size-3 rounded-[0.18rem] bg-[var(--snake-grid)]",
+                          isSnake && "bg-[var(--snake-head)]",
+                        )}
+                        key={index}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <p className="text-3xl font-semibold tracking-normal text-balance">
+                      Classic Snake
+                    </p>
+                    <p
+                      className="text-sm font-medium text-[color-mix(in_oklch,var(--snake-board-text)_74%,transparent)]"
+                      aria-live="polite"
+                    >
+                      {statusLabels[game.status]}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  className="min-w-32"
+                  data-testid="snake-start-button"
+                  onClick={toggleRunState}
+                  size="lg"
+                  type="button"
+                  variant="secondary"
+                >
+                  <PlayIcon data-icon="inline-start" />
+                  Start
+                </Button>
+              </div>
+            ) : showGameOverScreen ? (
+              <div
+                className="absolute inset-2 flex flex-col items-center justify-center gap-5 rounded-[0.375rem] bg-[color-mix(in_oklch,var(--snake-board)_78%,transparent)] px-6 text-center text-[var(--snake-board-text)] backdrop-blur-[2px]"
+                data-testid="snake-game-over-screen"
+              >
+                <p className="text-3xl font-semibold tracking-normal text-balance">
+                  {statusLabels[game.status]}
+                </p>
+                <Button
+                  className="min-w-36"
+                  data-testid="snake-new-game-button"
+                  onClick={restartGame}
+                  size="lg"
+                  type="button"
+                  variant="secondary"
+                >
+                  <RotateCcwIcon data-icon="inline-start" />
+                  New game
+                </Button>
+              </div>
+            ) : showBoardState ? (
               <div
                 className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--snake-board)_72%,transparent)] text-center text-[var(--snake-board-text)] backdrop-blur-[2px]"
                 data-testid="snake-board-state"
