@@ -8,8 +8,16 @@ import {
   PauseIcon,
   PlayIcon,
   RotateCcwIcon,
+  SaveIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -22,10 +30,21 @@ type Point = {
   y: number;
 };
 
+type LeaderboardEntry = {
+  name: string;
+  score: number;
+};
+
+type PendingLeaderboardEntry = {
+  rank: number;
+  score: number;
+};
+
 type GameState = {
   bestScore: number;
   direction: Direction;
   food: Point;
+  pendingLeaderboardEntry: PendingLeaderboardEntry | null;
   queuedDirection: Direction;
   score: number;
   snake: Point[];
@@ -33,6 +52,12 @@ type GameState = {
 };
 
 const BOARD_SIZE = 19;
+const LEADERBOARD_LIMIT = 3;
+const LEADERBOARD_CHANGE_EVENT = "classic-snake:leaderboard-change";
+const EMPTY_LEADERBOARD_SNAPSHOT = "";
+const LEADERBOARD_STORAGE_KEY = "classic-snake:leaderboard:v1";
+const LEADERBOARD_STORAGE_VERSION = 1;
+const MAX_PLAYER_NAME_LENGTH = 18;
 const BOARD_CELLS = Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, index) => ({
   x: index % BOARD_SIZE,
   y: Math.floor(index / BOARD_SIZE),
@@ -100,11 +125,154 @@ function generateFood(snake: Point[]) {
   return nextCell ?? { x: 0, y: 0 };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizePlayerName(value: unknown) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.trim().slice(0, MAX_PLAYER_NAME_LENGTH);
+}
+
+function normalizeLeaderboard(value: unknown): LeaderboardEntry[] {
+  const candidateEntries =
+    isRecord(value) && value.version === LEADERBOARD_STORAGE_VERSION
+      ? value.entries
+      : Array.isArray(value)
+        ? value
+        : [];
+
+  if (!Array.isArray(candidateEntries)) {
+    return [];
+  }
+
+  return candidateEntries
+    .flatMap((entry) => {
+      if (!isRecord(entry) || typeof entry.score !== "number" || !Number.isFinite(entry.score)) {
+        return [];
+      }
+
+      const score = Math.floor(entry.score);
+
+      if (score <= 0) {
+        return [];
+      }
+
+      return [
+        {
+          name: normalizePlayerName(entry.name),
+          score,
+        },
+      ];
+    })
+    .sort((first, second) => second.score - first.score)
+    .slice(0, LEADERBOARD_LIMIT);
+}
+
+function getStoredLeaderboardSnapshot() {
+  if (typeof window === "undefined") {
+    return EMPTY_LEADERBOARD_SNAPSHOT;
+  }
+
+  try {
+    return window.localStorage.getItem(LEADERBOARD_STORAGE_KEY) ?? EMPTY_LEADERBOARD_SNAPSHOT;
+  } catch {
+    return EMPTY_LEADERBOARD_SNAPSHOT;
+  }
+}
+
+function getServerLeaderboardSnapshot() {
+  return EMPTY_LEADERBOARD_SNAPSHOT;
+}
+
+function parseLeaderboardSnapshot(snapshot: string) {
+  if (snapshot === EMPTY_LEADERBOARD_SNAPSHOT) {
+    return [];
+  }
+
+  try {
+    return normalizeLeaderboard(JSON.parse(snapshot));
+  } catch {
+    return [];
+  }
+}
+
+function subscribeToLeaderboardStore(onStoreChange: () => void) {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(LEADERBOARD_CHANGE_EVENT, onStoreChange);
+
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(LEADERBOARD_CHANGE_EVENT, onStoreChange);
+  };
+}
+
+function writeStoredLeaderboard(leaderboard: LeaderboardEntry[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      LEADERBOARD_STORAGE_KEY,
+      JSON.stringify({
+        entries: leaderboard,
+        version: LEADERBOARD_STORAGE_VERSION,
+      }),
+    );
+    window.dispatchEvent(new Event(LEADERBOARD_CHANGE_EVENT));
+  } catch {
+    return;
+  }
+}
+
+function getLeaderboardRank(score: number, leaderboard: LeaderboardEntry[]) {
+  if (score <= 0) {
+    return null;
+  }
+
+  const nextRank = leaderboard.findIndex((entry) => score > entry.score);
+
+  if (nextRank >= 0) {
+    return nextRank;
+  }
+
+  return leaderboard.length < LEADERBOARD_LIMIT ? leaderboard.length : null;
+}
+
+function insertLeaderboardEntry(leaderboard: LeaderboardEntry[], entry: LeaderboardEntry) {
+  return normalizeLeaderboard({
+    entries: [...leaderboard, entry],
+    version: LEADERBOARD_STORAGE_VERSION,
+  });
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return (
+    target.isContentEditable ||
+    target.tagName === "INPUT" ||
+    target.tagName === "SELECT" ||
+    target.tagName === "TEXTAREA"
+  );
+}
+
 function createInitialGame(bestScore = 0): GameState {
   return {
     bestScore,
     direction: "right",
     food: INITIAL_FOOD,
+    pendingLeaderboardEntry: null,
     queuedDirection: "right",
     score: 0,
     snake: INITIAL_SNAKE,
@@ -114,6 +282,19 @@ function createInitialGame(bestScore = 0): GameState {
 
 export function SnakeGame() {
   const [game, setGame] = useState<GameState>(() => createInitialGame());
+  const [playerName, setPlayerName] = useState("");
+  const leaderboardSnapshot = useSyncExternalStore(
+    subscribeToLeaderboardStore,
+    getStoredLeaderboardSnapshot,
+    getServerLeaderboardSnapshot,
+  );
+  const leaderboard = useMemo(
+    () => parseLeaderboardSnapshot(leaderboardSnapshot),
+    [leaderboardSnapshot],
+  );
+  const leaderboardBestScore = leaderboard[0]?.score ?? 0;
+  const bestScore = Math.max(game.bestScore, leaderboardBestScore);
+  const pendingLeaderboardEntry = game.pendingLeaderboardEntry;
 
   const occupiedCells = useMemo(() => {
     const cells = new Map<string, "body" | "food" | "head">();
@@ -133,6 +314,11 @@ export function SnakeGame() {
 
     return Math.max(78, 156 - Math.floor(game.score / 4) * 8);
   }, [game.score, game.status]);
+
+  const leaderboardSlots = useMemo(
+    () => Array.from({ length: LEADERBOARD_LIMIT }, (_, index) => leaderboard[index] ?? null),
+    [leaderboard],
+  );
 
   const queueDirection = useCallback((nextDirection: Direction) => {
     setGame((current) => {
@@ -172,9 +358,18 @@ export function SnakeGame() {
       const hitBody = collisionBody.some((segment) => isSamePoint(segment, nextHead));
 
       if (hitWall || hitBody) {
+        const rank = getLeaderboardRank(current.score, leaderboard);
+
         return {
           ...current,
           direction,
+          pendingLeaderboardEntry:
+            rank === null
+              ? null
+              : {
+                  rank,
+                  score: current.score,
+                },
           queuedDirection: direction,
           status: "lost",
         };
@@ -189,18 +384,20 @@ export function SnakeGame() {
       const nextScore = ateFood ? current.score + 1 : current.score;
 
       return {
-        bestScore: Math.max(current.bestScore, nextScore),
+        bestScore: Math.max(current.bestScore, nextScore, leaderboardBestScore),
         direction,
         food: ateFood ? generateFood(nextSnake) : current.food,
+        pendingLeaderboardEntry: current.pendingLeaderboardEntry,
         queuedDirection: direction,
         score: nextScore,
         snake: nextSnake,
         status: current.status,
       };
     });
-  }, []);
+  }, [leaderboard, leaderboardBestScore]);
 
   const toggleRunState = useCallback(() => {
+    setPlayerName("");
     setGame((current) => {
       if (current.status === "running") {
         return { ...current, status: "paused" };
@@ -211,18 +408,44 @@ export function SnakeGame() {
       }
 
       return {
-        ...createInitialGame(current.bestScore),
+        ...createInitialGame(Math.max(current.bestScore, leaderboardBestScore)),
         status: "running",
       };
     });
-  }, []);
+  }, [leaderboardBestScore]);
 
   const restartGame = useCallback(() => {
+    setPlayerName("");
     setGame((current) => ({
-      ...createInitialGame(current.bestScore),
+      ...createInitialGame(Math.max(current.bestScore, leaderboardBestScore)),
       status: "running",
     }));
-  }, []);
+  }, [leaderboardBestScore]);
+
+  const saveLeaderboardScore = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+
+      if (pendingLeaderboardEntry === null) {
+        return;
+      }
+
+      const nextLeaderboard = insertLeaderboardEntry(leaderboard, {
+        name: playerName,
+        score: pendingLeaderboardEntry.score,
+      });
+      const nextBestScore = nextLeaderboard[0]?.score ?? 0;
+
+      writeStoredLeaderboard(nextLeaderboard);
+      setGame((current) => ({
+        ...current,
+        bestScore: Math.max(current.bestScore, nextBestScore),
+        pendingLeaderboardEntry: null,
+      }));
+      setPlayerName("");
+    },
+    [leaderboard, pendingLeaderboardEntry, playerName],
+  );
 
   useEffect(() => {
     if (speed === null) {
@@ -236,6 +459,10 @@ export function SnakeGame() {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (pendingLeaderboardEntry !== null || isTypingTarget(event.target)) {
+        return;
+      }
+
       const nextDirection = keyDirections[event.key];
 
       if (nextDirection) {
@@ -258,7 +485,7 @@ export function SnakeGame() {
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [game.status, queueDirection, restartGame, toggleRunState]);
+  }, [game.status, pendingLeaderboardEntry, queueDirection, restartGame, toggleRunState]);
 
   const primaryAction =
     game.status === "running" ? "Pause" : game.status === "paused" ? "Resume" : "Start";
@@ -309,7 +536,7 @@ export function SnakeGame() {
                 className="font-mono text-3xl font-semibold leading-none"
                 data-testid="snake-best"
               >
-                {game.bestScore}
+                {bestScore}
               </dd>
             </div>
           </dl>
@@ -412,7 +639,7 @@ export function SnakeGame() {
 
             {showStartScreen ? (
               <div
-                className="absolute inset-2 flex flex-col items-center justify-center gap-5 rounded-[0.375rem] bg-[var(--snake-board)] px-6 text-center text-[var(--snake-board-text)]"
+                className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[var(--snake-board)] px-4 py-5 text-center text-[var(--snake-board-text)]"
                 data-testid="snake-start-screen"
               >
                 <div className="flex flex-col items-center gap-3">
@@ -442,6 +669,31 @@ export function SnakeGame() {
                     </p>
                   </div>
                 </div>
+                <div
+                  className="flex w-full max-w-xs flex-col gap-2 rounded-md border border-[color-mix(in_oklch,var(--snake-board-text)_14%,transparent)] bg-[color-mix(in_oklch,var(--snake-grid)_42%,transparent)] p-3"
+                  data-testid="snake-start-leaderboard"
+                >
+                  <p className="text-sm font-semibold">Leaderboard</p>
+                  <ol className="flex flex-col gap-1">
+                    {leaderboardSlots.map((entry, index) => (
+                      <li
+                        className="grid grid-cols-[1.75rem_minmax(0,1fr)_3rem] items-center gap-2 rounded-md bg-[color-mix(in_oklch,var(--snake-board)_70%,transparent)] px-2 py-1.5 text-sm"
+                        data-testid={`snake-leaderboard-slot-${index + 1}`}
+                        key={index}
+                      >
+                        <span className="font-mono text-xs font-semibold text-[color-mix(in_oklch,var(--snake-board-text)_70%,transparent)]">
+                          {index + 1}
+                        </span>
+                        <span className="truncate text-left font-medium">
+                          {entry ? entry.name || "Anonymous" : "Open"}
+                        </span>
+                        <span className="text-right font-mono font-semibold">
+                          {entry?.score ?? "-"}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
                 <Button
                   className="min-w-32"
                   data-testid="snake-start-button"
@@ -459,20 +711,83 @@ export function SnakeGame() {
                 className="absolute inset-2 flex flex-col items-center justify-center gap-5 rounded-[0.375rem] bg-[color-mix(in_oklch,var(--snake-board)_78%,transparent)] px-6 text-center text-[var(--snake-board-text)] backdrop-blur-[2px]"
                 data-testid="snake-game-over-screen"
               >
-                <p className="text-3xl font-semibold tracking-normal text-balance">
-                  {statusLabels[game.status]}
-                </p>
-                <Button
-                  className="min-w-36"
-                  data-testid="snake-new-game-button"
-                  onClick={restartGame}
-                  size="lg"
-                  type="button"
-                  variant="secondary"
-                >
-                  <RotateCcwIcon data-icon="inline-start" />
-                  New game
-                </Button>
+                {pendingLeaderboardEntry ? (
+                  <form
+                    className="flex w-full max-w-xs flex-col items-center gap-4"
+                    data-testid="snake-leaderboard-form"
+                    onSubmit={saveLeaderboardScore}
+                  >
+                    <div className="flex flex-col items-center gap-1">
+                      <p className="text-sm font-semibold">
+                        Top {pendingLeaderboardEntry.rank + 1} score
+                      </p>
+                      <p
+                        className="font-mono text-5xl font-semibold leading-none"
+                        data-testid="snake-qualifying-score"
+                      >
+                        {pendingLeaderboardEntry.score}
+                      </p>
+                    </div>
+                    <div className="flex w-full flex-col gap-1 text-left">
+                      <label
+                        className="text-xs font-medium text-[color-mix(in_oklch,var(--snake-board-text)_76%,transparent)]"
+                        htmlFor="snake-player-name"
+                      >
+                        Name
+                      </label>
+                      <input
+                        autoComplete="name"
+                        autoFocus
+                        className="h-9 w-full rounded-md border border-[color-mix(in_oklch,var(--snake-board-text)_22%,transparent)] bg-[color-mix(in_oklch,var(--snake-board-text)_10%,transparent)] px-3 text-sm font-medium text-[var(--snake-board-text)] outline-none transition placeholder:text-[color-mix(in_oklch,var(--snake-board-text)_54%,transparent)] focus-visible:border-[var(--snake-head)] focus-visible:ring-3 focus-visible:ring-[color-mix(in_oklch,var(--snake-head)_35%,transparent)]"
+                        data-testid="snake-player-name"
+                        id="snake-player-name"
+                        maxLength={MAX_PLAYER_NAME_LENGTH}
+                        onChange={(event) => setPlayerName(event.target.value)}
+                        placeholder="Player name"
+                        type="text"
+                        value={playerName}
+                      />
+                    </div>
+                    <div className="grid w-full grid-cols-2 gap-2">
+                      <Button
+                        data-testid="snake-save-score-button"
+                        size="lg"
+                        type="submit"
+                        variant="secondary"
+                      >
+                        <SaveIcon data-icon="inline-start" />
+                        Save
+                      </Button>
+                      <Button
+                        data-testid="snake-new-game-button"
+                        onClick={restartGame}
+                        size="lg"
+                        type="button"
+                        variant="outline"
+                      >
+                        <RotateCcwIcon data-icon="inline-start" />
+                        New game
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <p className="text-3xl font-semibold tracking-normal text-balance">
+                      {statusLabels[game.status]}
+                    </p>
+                    <Button
+                      className="min-w-36"
+                      data-testid="snake-new-game-button"
+                      onClick={restartGame}
+                      size="lg"
+                      type="button"
+                      variant="secondary"
+                    >
+                      <RotateCcwIcon data-icon="inline-start" />
+                      New game
+                    </Button>
+                  </>
+                )}
               </div>
             ) : showBoardState ? (
               <div
