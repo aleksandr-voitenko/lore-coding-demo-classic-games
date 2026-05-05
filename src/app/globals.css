@@ -88,6 +88,7 @@
   --snake-muted: oklch(0.45 0.035 150);
   --snake-page: oklch(0.985 0.012 150);
   --snake-panel: oklch(1 0 0);
+  --snake-speed-food: oklch(0.62 0.22 310);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
