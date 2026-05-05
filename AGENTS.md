@@ -20,7 +20,7 @@ Do not mix unrelated formatting, refactoring, and behavior changes in the same t
 
 A task is an atomic unit of development effort applied to the project.
 
-For nearly every meaningful line of code in the project, there should be an associated task. This allows a human developer or AI agent to use the repository history as a knowledge tree.
+For nearly every meaningful line of code in the project, there should be an associated task. This allows a human developer or AI agent to use the repository history as a knowledge graph.
 
 A task is a historical entity. It should contain the high-level information required to understand why the change was made, what was changed, and how completeness was verified.
 

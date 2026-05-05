@@ -51,6 +51,12 @@ type GameState = {
   status: GameStatus;
 };
 
+type LeaderboardPanelProps = {
+  slotTestIdPrefix: string;
+  slots: Array<LeaderboardEntry | null>;
+  testId: string;
+};
+
 const BOARD_SIZE = 19;
 const LEADERBOARD_LIMIT = 3;
 const LEADERBOARD_CHANGE_EVENT = "classic-snake:leaderboard-change";
@@ -278,6 +284,36 @@ function createInitialGame(bestScore = 0): GameState {
     snake: INITIAL_SNAKE,
     status: "ready",
   };
+}
+
+function LeaderboardPanel({ slotTestIdPrefix, slots, testId }: LeaderboardPanelProps) {
+  return (
+    <div
+      className="flex w-full max-w-xs flex-col gap-2 rounded-md border border-[color-mix(in_oklch,var(--snake-board-text)_14%,transparent)] bg-[color-mix(in_oklch,var(--snake-grid)_42%,transparent)] p-3"
+      data-testid={testId}
+    >
+      <p className="text-sm font-semibold">Leaderboard</p>
+      <ol className="flex flex-col gap-1">
+        {slots.map((entry, index) => (
+          <li
+            className="grid grid-cols-[1.75rem_minmax(0,1fr)_3rem] items-center gap-2 rounded-md bg-[color-mix(in_oklch,var(--snake-board)_70%,transparent)] px-2 py-1.5 text-sm"
+            data-testid={`${slotTestIdPrefix}-${index + 1}`}
+            key={index}
+          >
+            <span className="font-mono text-xs font-semibold text-[color-mix(in_oklch,var(--snake-board-text)_70%,transparent)]">
+              {index + 1}
+            </span>
+            <span className="truncate text-left font-medium">
+              {entry ? entry.name || "Anonymous" : "Open"}
+            </span>
+            <span className="text-right font-mono font-semibold">
+              {entry?.score ?? "-"}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
 }
 
 export function SnakeGame() {
@@ -669,31 +705,11 @@ export function SnakeGame() {
                     </p>
                   </div>
                 </div>
-                <div
-                  className="flex w-full max-w-xs flex-col gap-2 rounded-md border border-[color-mix(in_oklch,var(--snake-board-text)_14%,transparent)] bg-[color-mix(in_oklch,var(--snake-grid)_42%,transparent)] p-3"
-                  data-testid="snake-start-leaderboard"
-                >
-                  <p className="text-sm font-semibold">Leaderboard</p>
-                  <ol className="flex flex-col gap-1">
-                    {leaderboardSlots.map((entry, index) => (
-                      <li
-                        className="grid grid-cols-[1.75rem_minmax(0,1fr)_3rem] items-center gap-2 rounded-md bg-[color-mix(in_oklch,var(--snake-board)_70%,transparent)] px-2 py-1.5 text-sm"
-                        data-testid={`snake-leaderboard-slot-${index + 1}`}
-                        key={index}
-                      >
-                        <span className="font-mono text-xs font-semibold text-[color-mix(in_oklch,var(--snake-board-text)_70%,transparent)]">
-                          {index + 1}
-                        </span>
-                        <span className="truncate text-left font-medium">
-                          {entry ? entry.name || "Anonymous" : "Open"}
-                        </span>
-                        <span className="text-right font-mono font-semibold">
-                          {entry?.score ?? "-"}
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
+                <LeaderboardPanel
+                  slotTestIdPrefix="snake-leaderboard-slot"
+                  slots={leaderboardSlots}
+                  testId="snake-start-leaderboard"
+                />
                 <Button
                   className="min-w-32"
                   data-testid="snake-start-button"
@@ -708,73 +724,95 @@ export function SnakeGame() {
               </div>
             ) : showGameOverScreen ? (
               <div
-                className="absolute inset-2 flex flex-col items-center justify-center gap-5 rounded-[0.375rem] bg-[color-mix(in_oklch,var(--snake-board)_78%,transparent)] px-6 text-center text-[var(--snake-board-text)] backdrop-blur-[2px]"
+                className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[color-mix(in_oklch,var(--snake-board)_78%,transparent)] px-4 py-5 text-center text-[var(--snake-board-text)] backdrop-blur-[2px]"
                 data-testid="snake-game-over-screen"
               >
                 {pendingLeaderboardEntry ? (
-                  <form
-                    className="flex w-full max-w-xs flex-col items-center gap-4"
-                    data-testid="snake-leaderboard-form"
-                    onSubmit={saveLeaderboardScore}
-                  >
-                    <div className="flex flex-col items-center gap-1">
-                      <p className="text-sm font-semibold">
-                        Top {pendingLeaderboardEntry.rank + 1} score
-                      </p>
-                      <p
-                        className="font-mono text-5xl font-semibold leading-none"
-                        data-testid="snake-qualifying-score"
-                      >
-                        {pendingLeaderboardEntry.score}
-                      </p>
-                    </div>
-                    <div className="flex w-full flex-col gap-1 text-left">
-                      <label
-                        className="text-xs font-medium text-[color-mix(in_oklch,var(--snake-board-text)_76%,transparent)]"
-                        htmlFor="snake-player-name"
-                      >
-                        Name
-                      </label>
-                      <input
-                        autoComplete="name"
-                        autoFocus
-                        className="h-9 w-full rounded-md border border-[color-mix(in_oklch,var(--snake-board-text)_22%,transparent)] bg-[color-mix(in_oklch,var(--snake-board-text)_10%,transparent)] px-3 text-sm font-medium text-[var(--snake-board-text)] outline-none transition placeholder:text-[color-mix(in_oklch,var(--snake-board-text)_54%,transparent)] focus-visible:border-[var(--snake-head)] focus-visible:ring-3 focus-visible:ring-[color-mix(in_oklch,var(--snake-head)_35%,transparent)]"
-                        data-testid="snake-player-name"
-                        id="snake-player-name"
-                        maxLength={MAX_PLAYER_NAME_LENGTH}
-                        onChange={(event) => setPlayerName(event.target.value)}
-                        placeholder="Player name"
-                        type="text"
-                        value={playerName}
-                      />
-                    </div>
-                    <div className="grid w-full grid-cols-2 gap-2">
-                      <Button
-                        data-testid="snake-save-score-button"
-                        size="lg"
-                        type="submit"
-                        variant="secondary"
-                      >
-                        <SaveIcon data-icon="inline-start" />
-                        Save
-                      </Button>
-                      <Button
-                        data-testid="snake-new-game-button"
-                        onClick={restartGame}
-                        size="lg"
-                        type="button"
-                        variant="outline"
-                      >
-                        <RotateCcwIcon data-icon="inline-start" />
-                        New game
-                      </Button>
-                    </div>
-                  </form>
+                  <>
+                    <form
+                      className="flex w-full max-w-xs flex-col items-center gap-3"
+                      data-testid="snake-leaderboard-form"
+                      onSubmit={saveLeaderboardScore}
+                    >
+                      <div className="flex flex-col items-center gap-1">
+                        <p className="text-sm font-semibold">
+                          Top {pendingLeaderboardEntry.rank + 1} score
+                        </p>
+                        <p
+                          className="font-mono text-5xl font-semibold leading-none"
+                          data-testid="snake-qualifying-score"
+                        >
+                          {pendingLeaderboardEntry.score}
+                        </p>
+                      </div>
+                      <div className="flex w-full flex-col gap-1 text-left">
+                        <label
+                          className="text-xs font-medium text-[color-mix(in_oklch,var(--snake-board-text)_76%,transparent)]"
+                          htmlFor="snake-player-name"
+                        >
+                          Name
+                        </label>
+                        <input
+                          autoComplete="name"
+                          autoFocus
+                          className="h-9 w-full rounded-md border border-[color-mix(in_oklch,var(--snake-board-text)_22%,transparent)] bg-[color-mix(in_oklch,var(--snake-board-text)_10%,transparent)] px-3 text-sm font-medium text-[var(--snake-board-text)] outline-none transition placeholder:text-[color-mix(in_oklch,var(--snake-board-text)_54%,transparent)] focus-visible:border-[var(--snake-head)] focus-visible:ring-3 focus-visible:ring-[color-mix(in_oklch,var(--snake-head)_35%,transparent)]"
+                          data-testid="snake-player-name"
+                          id="snake-player-name"
+                          maxLength={MAX_PLAYER_NAME_LENGTH}
+                          onChange={(event) => setPlayerName(event.target.value)}
+                          placeholder="Player name"
+                          type="text"
+                          value={playerName}
+                        />
+                      </div>
+                      <div className="grid w-full grid-cols-2 gap-2">
+                        <Button
+                          data-testid="snake-save-score-button"
+                          size="lg"
+                          type="submit"
+                          variant="secondary"
+                        >
+                          <SaveIcon data-icon="inline-start" />
+                          Save
+                        </Button>
+                        <Button
+                          data-testid="snake-new-game-button"
+                          onClick={restartGame}
+                          size="lg"
+                          type="button"
+                          variant="outline"
+                        >
+                          <RotateCcwIcon data-icon="inline-start" />
+                          New game
+                        </Button>
+                      </div>
+                    </form>
+                    <LeaderboardPanel
+                      slotTestIdPrefix="snake-final-leaderboard-slot"
+                      slots={leaderboardSlots}
+                      testId="snake-final-leaderboard"
+                    />
+                  </>
                 ) : (
                   <>
-                    <p className="text-3xl font-semibold tracking-normal text-balance">
-                      {statusLabels[game.status]}
-                    </p>
+                    <div className="flex flex-col items-center gap-1">
+                      <p className="text-3xl font-semibold tracking-normal text-balance">
+                        {statusLabels[game.status]}
+                      </p>
+                      <div className="flex flex-col items-center gap-0.5">
+                        <p className="text-sm font-semibold text-[color-mix(in_oklch,var(--snake-board-text)_76%,transparent)]">
+                          Your score:
+                        </p>
+                        <p className="font-mono text-4xl font-semibold leading-none">
+                          {game.score}
+                        </p>
+                      </div>
+                    </div>
+                    <LeaderboardPanel
+                      slotTestIdPrefix="snake-final-leaderboard-slot"
+                      slots={leaderboardSlots}
+                      testId="snake-final-leaderboard"
+                    />
                     <Button
                       className="min-w-36"
                       data-testid="snake-new-game-button"
