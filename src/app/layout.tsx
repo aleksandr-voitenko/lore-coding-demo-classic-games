@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Task Workflow Test",
-  description: "Development environment for task-based project work.",
+  title: "Classic Snake",
+  description: "A simple classic snake game built with Next.js.",
 };
 
 export default function RootLayout({
