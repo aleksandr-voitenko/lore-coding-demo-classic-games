@@ -86,6 +86,8 @@
   --snake-head: oklch(0.82 0.2 132);
   --snake-ink: oklch(0.18 0.035 150);
   --snake-muted: oklch(0.45 0.035 150);
+  --snake-obstacle: oklch(0.46 0.026 245);
+  --snake-obstacle-edge: oklch(0.66 0.022 235);
   --snake-page: oklch(0.985 0.012 150);
   --snake-panel: oklch(1 0 0);
   --snake-speed-food: oklch(0.62 0.22 310);

@@ -4,12 +4,16 @@ import {
   advanceSnakeGame,
   BONUS_FOOD_MIN_SNAKE_DISTANCE,
   BONUS_FOOD_TIMEOUT_MIN_MS,
+  createInitialObstacleSafeCells,
   createInitialGame,
   expireTimedFood,
+  generateObstacles,
   generateTimedFoodPosition,
   getGameTickDelay,
   getManhattanDistance,
+  getPointKey,
   isSamePoint,
+  OBSTACLE_CLUSTER_MAX_SIZE,
   spawnTimedFood,
   type GameState,
   type Point,
@@ -24,6 +28,7 @@ function createRandomSequence(values: number[]) {
 function createRunningGame(overrides: Partial<GameState> = {}): GameState {
   return {
     ...createInitialGame({ boardSize: 11 }),
+    obstacles: [],
     status: "running",
     ...overrides,
   };
@@ -33,19 +38,101 @@ function expectDifferentPoint(first: Point, second: Point) {
   expect(isSamePoint(first, second)).toBe(false);
 }
 
+function getConnectedClusters(points: Point[]) {
+  const pointsByKey = new Map(points.map((point) => [getPointKey(point), point]));
+  const visitedKeys = new Set<string>();
+  const clusters: Point[][] = [];
+  const offsets = [
+    { x: 0, y: -1 },
+    { x: 1, y: 0 },
+    { x: 0, y: 1 },
+    { x: -1, y: 0 },
+  ];
+
+  points.forEach((point) => {
+    const pointKey = getPointKey(point);
+
+    if (visitedKeys.has(pointKey)) {
+      return;
+    }
+
+    const cluster: Point[] = [];
+    const pendingPoints = [point];
+    visitedKeys.add(pointKey);
+
+    while (pendingPoints.length > 0) {
+      const currentPoint = pendingPoints.pop()!;
+      cluster.push(currentPoint);
+
+      offsets.forEach((offset) => {
+        const neighborKey = getPointKey({
+          x: currentPoint.x + offset.x,
+          y: currentPoint.y + offset.y,
+        });
+        const neighbor = pointsByKey.get(neighborKey);
+
+        if (neighbor === undefined || visitedKeys.has(neighborKey)) {
+          return;
+        }
+
+        visitedKeys.add(neighborKey);
+        pendingPoints.push(neighbor);
+      });
+    }
+
+    clusters.push(cluster);
+  });
+
+  return clusters;
+}
+
 describe("snake game engine", () => {
-  it("places timed food away from the snake without overlapping red food", () => {
+  it("generates persistent obstacle islands away from the starting path", () => {
+    const game = createInitialGame({
+      boardSize: 11,
+      random: createRandomSequence([0, 0, 0, 0, 0, 0, 0, 0]),
+    });
+    const safeCellKeys = new Set(createInitialObstacleSafeCells(game.boardSize).map(getPointKey));
+    const obstacleKeys = new Set(game.obstacles.map(getPointKey));
+    const clusters = getConnectedClusters(game.obstacles);
+
+    expect(game.obstacles.length).toBeGreaterThan(0);
+    expect(obstacleKeys.size).toBe(game.obstacles.length);
+    expect(game.obstacles.every((obstacle) => obstacle.x > 0 && obstacle.x < game.boardSize - 1)).toBe(
+      true,
+    );
+    expect(game.obstacles.every((obstacle) => obstacle.y > 0 && obstacle.y < game.boardSize - 1)).toBe(
+      true,
+    );
+    expect(game.obstacles.every((obstacle) => !safeCellKeys.has(getPointKey(obstacle)))).toBe(true);
+    expect(clusters.every((cluster) => cluster.length <= OBSTACLE_CLUSTER_MAX_SIZE)).toBe(true);
+  });
+
+  it("caps each generated obstacle cluster at six cells", () => {
+    const obstacles = generateObstacles(
+      19,
+      createInitialObstacleSafeCells(19),
+      createRandomSequence([0.99, 0.99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    );
+    const clusters = getConnectedClusters(obstacles);
+
+    expect(clusters.length).toBeGreaterThan(0);
+    expect(clusters.every((cluster) => cluster.length <= OBSTACLE_CLUSTER_MAX_SIZE)).toBe(true);
+  });
+
+  it("places timed food away from the snake without overlapping red food or obstacles", () => {
     const game = createInitialGame({ boardSize: 11 });
     const position = generateTimedFoodPosition(
       game.boardSize,
       game.snake,
       game.food,
-      [],
+      game.obstacles,
       () => 0,
     );
 
     expect(position).not.toBeNull();
     expect(isSamePoint(position!, game.food)).toBe(false);
+    expect(game.obstacles.every((obstacle) => !isSamePoint(position!, obstacle))).toBe(true);
     expect(game.snake.every((segment) => !isSamePoint(position!, segment))).toBe(true);
     expect(
       game.snake.every(
@@ -86,6 +173,56 @@ describe("snake game engine", () => {
     expect(nextGame.snake.every((segment) => !isSamePoint(nextGame.speedFood!.position, segment))).toBe(
       true,
     );
+  });
+
+  it("keeps red food from respawning over obstacle islands", () => {
+    const game = createRunningGame({
+      food: { x: 6, y: 5 },
+      obstacles: [
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+      ],
+      snake: [
+        { x: 5, y: 5 },
+        { x: 4, y: 5 },
+        { x: 3, y: 5 },
+      ],
+    });
+
+    const nextGame = advanceSnakeGame(game, {
+      random: () => 0,
+    });
+
+    expect(nextGame.food).toEqual({ x: 2, y: 0 });
+    expect(game.obstacles.every((obstacle) => !isSamePoint(nextGame.food, obstacle))).toBe(true);
+  });
+
+  it("keeps timed food from spawning over obstacle islands", () => {
+    const game = createRunningGame();
+    const blockedPosition = generateTimedFoodPosition(
+      game.boardSize,
+      game.snake,
+      game.food,
+      [],
+      () => 0,
+    );
+
+    expect(blockedPosition).not.toBeNull();
+
+    const nextGame = spawnTimedFood(
+      {
+        ...game,
+        obstacles: [blockedPosition!],
+      },
+      "bonusFood",
+      {
+        now: () => 1_000,
+        random: createRandomSequence([0, 0]),
+      },
+    );
+
+    expect(nextGame.bonusFood).not.toBeNull();
+    expectDifferentPoint(nextGame.bonusFood!.position, blockedPosition!);
   });
 
   it("eating a purple diamond scores 3, grows, clears it, and increases speed", () => {
@@ -147,6 +284,36 @@ describe("snake game engine", () => {
     const nextGame = advanceSnakeGame(game);
 
     expect(nextGame.status).toBe("lost");
+    expect(nextGame.bonusFood).toBeNull();
+    expect(nextGame.speedFood).toBeNull();
+  });
+
+  it("ends the game when the snake hits an obstacle", () => {
+    const game = createRunningGame({
+      bonusFood: {
+        expiresAt: 8_000,
+        position: { x: 1, y: 1 },
+      },
+      food: { x: 9, y: 9 },
+      obstacles: [{ x: 6, y: 5 }],
+      score: 4,
+      snake: [
+        { x: 5, y: 5 },
+        { x: 4, y: 5 },
+        { x: 3, y: 5 },
+      ],
+      speedFood: {
+        expiresAt: 9_000,
+        position: { x: 2, y: 1 },
+      },
+    });
+
+    const nextGame = advanceSnakeGame(game);
+
+    expect(nextGame.status).toBe("lost");
+    expect(nextGame.score).toBe(4);
+    expect(nextGame.snake).toEqual(game.snake);
+    expect(nextGame.obstacles).toEqual(game.obstacles);
     expect(nextGame.bonusFood).toBeNull();
     expect(nextGame.speedFood).toBeNull();
   });

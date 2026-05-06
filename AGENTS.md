@@ -4,7 +4,7 @@
 
 This repository is developed through explicit, task-based changes.
 
-A task is an atomic unit of development effort. Each meaningful change should be traceable through the commit message that introduced it. Together, these commit messages form a historical knowledge tree for human developers and AI agents.
+A task is an atomic unit of development effort. Each meaningful change should be traceable through the commit message that introduced it. Together, these commit messages form a historical knowledge graph for human developers and AI agents.
 
 For nearly every meaningful line of code, it should be possible to use repository history to understand:
 

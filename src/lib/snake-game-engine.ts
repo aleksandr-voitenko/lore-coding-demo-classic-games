@@ -27,6 +27,7 @@ export type GameState = {
   boardSize: number;
   direction: Direction;
   food: Point;
+  obstacles: Point[];
   pendingLeaderboardEntry: PendingLeaderboardEntry | null;
   queuedDirection: Direction;
   score: number;
@@ -39,6 +40,7 @@ export type GameState = {
 export type CreateInitialGameOptions = {
   bestScore?: number;
   boardSize?: number;
+  random?: RandomSource;
 };
 
 export type TimedFoodKind = "bonusFood" | "speedFood";
@@ -68,6 +70,8 @@ export const BONUS_FOOD_TIMEOUT_MAX_MS = 12_000;
 export const BONUS_FOOD_TIMEOUT_MIN_MS = 6_000;
 export const LEADERBOARD_LIMIT = 3;
 export const MIN_GAME_TICK_DELAY_MS = 50;
+export const OBSTACLE_CLUSTER_MAX_SIZE = 6;
+export const OBSTACLE_CLUSTER_MIN_SIZE = 2;
 export const SPEED_FOOD_SCORE = 3;
 export const SPEED_FOOD_SPEED_INCREASE = 1;
 export const BOARD_SIZE_OPTIONS = Array.from(
@@ -81,6 +85,10 @@ export const directionOffsets: Record<Direction, Point> = {
   down: { x: 0, y: 1 },
   left: { x: -1, y: 0 },
 };
+
+const OBSTACLE_CLUSTER_ATTEMPT_LIMIT = 40;
+const OBSTACLE_SEED_ATTEMPT_LIMIT = 80;
+const ORTHOGONAL_OFFSETS = Object.values(directionOffsets);
 
 export function getPointKey(point: Point) {
   return `${point.x}:${point.y}`;
@@ -102,6 +110,20 @@ export function getRandomDuration(
   return Math.floor(random() * (maxMs - minMs + 1)) + minMs;
 }
 
+function createSeededRandom(seed: number): RandomSource {
+  let value = seed % 2_147_483_647;
+
+  if (value <= 0) {
+    value += 2_147_483_646;
+  }
+
+  return () => {
+    value = (value * 16_807) % 2_147_483_647;
+
+    return (value - 1) / 2_147_483_646;
+  };
+}
+
 export function normalizeBoardSize(value: number) {
   if (!Number.isFinite(value)) {
     return DEFAULT_BOARD_SIZE;
@@ -121,6 +143,36 @@ export function createBoardCells(boardSize: number) {
   }));
 }
 
+function isInteriorBoardCell(point: Point, boardSize: number) {
+  return point.x > 0 && point.x < boardSize - 1 && point.y > 0 && point.y < boardSize - 1;
+}
+
+function getRandomItem<T>(items: T[], random: RandomSource) {
+  return items[Math.floor(random() * items.length)] ?? null;
+}
+
+function getOrthogonalNeighbors(point: Point, boardSize: number) {
+  return ORTHOGONAL_OFFSETS.flatMap((offset) => {
+    const neighbor = {
+      x: point.x + offset.x,
+      y: point.y + offset.y,
+    };
+
+    return isInteriorBoardCell(neighbor, boardSize) ? [neighbor] : [];
+  });
+}
+
+function hasOrthogonalObstacleNeighbor(point: Point, obstacleKeys: Set<string>) {
+  return ORTHOGONAL_OFFSETS.some((offset) =>
+    obstacleKeys.has(
+      getPointKey({
+        x: point.x + offset.x,
+        y: point.y + offset.y,
+      }),
+    ),
+  );
+}
+
 export function createInitialSnake(boardSize: number): Point[] {
   const center = Math.floor(boardSize / 2);
 
@@ -138,6 +190,142 @@ export function createInitialFood(boardSize: number): Point {
     x: Math.min(boardSize - 2, center + 4),
     y: center,
   };
+}
+
+export function createInitialObstacleSafeCells(boardSize: number) {
+  const snake = createInitialSnake(boardSize);
+  const food = createInitialFood(boardSize);
+  const head = snake[0];
+  const safeCells = new Map([...snake, food].map((cell) => [getPointKey(cell), cell]));
+
+  if (head.y === food.y) {
+    const pathStart = Math.min(head.x, food.x);
+    const pathEnd = Math.max(head.x, food.x);
+
+    for (let x = pathStart; x <= pathEnd; x += 1) {
+      const pathCell = { x, y: head.y };
+      safeCells.set(getPointKey(pathCell), pathCell);
+    }
+  }
+
+  ORTHOGONAL_OFFSETS.forEach((offset) => {
+    const neighbor = {
+      x: head.x + offset.x,
+      y: head.y + offset.y,
+    };
+
+    if (neighbor.x >= 0 && neighbor.x < boardSize && neighbor.y >= 0 && neighbor.y < boardSize) {
+      safeCells.set(getPointKey(neighbor), neighbor);
+    }
+  });
+
+  return Array.from(safeCells.values());
+}
+
+function getObstacleClusterCount(boardSize: number) {
+  return Math.max(1, Math.round(boardSize / 7));
+}
+
+function getObstacleClusterSize(random: RandomSource) {
+  return (
+    Math.floor(random() * (OBSTACLE_CLUSTER_MAX_SIZE - OBSTACLE_CLUSTER_MIN_SIZE + 1)) +
+    OBSTACLE_CLUSTER_MIN_SIZE
+  );
+}
+
+function isAvailableObstacleCell(
+  cell: Point,
+  boardSize: number,
+  occupiedKeys: Set<string>,
+  obstacleKeys: Set<string>,
+  clusterKeys: Set<string> = new Set(),
+) {
+  const cellKey = getPointKey(cell);
+
+  return (
+    isInteriorBoardCell(cell, boardSize) &&
+    !occupiedKeys.has(cellKey) &&
+    !obstacleKeys.has(cellKey) &&
+    !clusterKeys.has(cellKey) &&
+    !hasOrthogonalObstacleNeighbor(cell, obstacleKeys)
+  );
+}
+
+function generateObstacleCluster(
+  boardSize: number,
+  occupiedKeys: Set<string>,
+  obstacleKeys: Set<string>,
+  random: RandomSource,
+) {
+  const boardCells = createBoardCells(boardSize);
+
+  for (let attempt = 0; attempt < OBSTACLE_SEED_ATTEMPT_LIMIT; attempt += 1) {
+    const seedCandidates = boardCells.filter((cell) =>
+      isAvailableObstacleCell(cell, boardSize, occupiedKeys, obstacleKeys),
+    );
+    const seed = getRandomItem(seedCandidates, random);
+
+    if (seed === null) {
+      return [];
+    }
+
+    const targetSize = getObstacleClusterSize(random);
+    const cluster = [seed];
+    const clusterKeys = new Set([getPointKey(seed)]);
+
+    for (
+      let growthAttempt = 0;
+      cluster.length < targetSize && growthAttempt < OBSTACLE_CLUSTER_ATTEMPT_LIMIT;
+      growthAttempt += 1
+    ) {
+      const expansionCandidates = cluster
+        .flatMap((cell) => getOrthogonalNeighbors(cell, boardSize))
+        .filter((cell, index, candidates) => {
+          const cellKey = getPointKey(cell);
+
+          return (
+            candidates.findIndex((candidate) => getPointKey(candidate) === cellKey) === index &&
+            isAvailableObstacleCell(cell, boardSize, occupiedKeys, obstacleKeys, clusterKeys)
+          );
+        });
+      const nextCell = getRandomItem(expansionCandidates, random);
+
+      if (nextCell === null) {
+        break;
+      }
+
+      cluster.push(nextCell);
+      clusterKeys.add(getPointKey(nextCell));
+    }
+
+    return cluster;
+  }
+
+  return [];
+}
+
+export function generateObstacles(
+  boardSize: number,
+  occupiedCells: Point[],
+  random: RandomSource = Math.random,
+) {
+  const occupiedKeys = new Set(occupiedCells.map(getPointKey));
+  const obstacleKeys = new Set<string>();
+  const obstacles: Point[] = [];
+
+  for (let clusterIndex = 0; clusterIndex < getObstacleClusterCount(boardSize); clusterIndex += 1) {
+    const cluster = generateObstacleCluster(boardSize, occupiedKeys, obstacleKeys, random);
+
+    cluster.forEach((cell) => {
+      const cellKey = getPointKey(cell);
+
+      obstacleKeys.add(cellKey);
+      occupiedKeys.add(cellKey);
+      obstacles.push(cell);
+    });
+  }
+
+  return obstacles;
 }
 
 export function isOppositeDirection(first: Direction, second: Direction) {
@@ -210,19 +398,28 @@ export function createTimedFood(
 export function createInitialGame({
   bestScore = 0,
   boardSize = DEFAULT_BOARD_SIZE,
+  random,
 }: CreateInitialGameOptions = {}): GameState {
   const normalizedBoardSize = normalizeBoardSize(boardSize);
+  const randomSource = random ?? createSeededRandom(normalizedBoardSize);
+  const snake = createInitialSnake(normalizedBoardSize);
+  const food = createInitialFood(normalizedBoardSize);
 
   return {
     bestScore,
     bonusFood: null,
     boardSize: normalizedBoardSize,
     direction: "right",
-    food: createInitialFood(normalizedBoardSize),
+    food,
+    obstacles: generateObstacles(
+      normalizedBoardSize,
+      createInitialObstacleSafeCells(normalizedBoardSize),
+      randomSource,
+    ),
     pendingLeaderboardEntry: null,
     queuedDirection: "right",
     score: 0,
-    snake: createInitialSnake(normalizedBoardSize),
+    snake,
     speedBoosts: 0,
     speedFood: null,
     status: "ready",
@@ -286,7 +483,10 @@ export function spawnTimedFood(
     current.boardSize,
     current.snake,
     current.food,
-    otherTimedFood === null ? [] : [otherTimedFood.position],
+    [
+      ...current.obstacles,
+      ...(otherTimedFood === null ? [] : [otherTimedFood.position]),
+    ],
     options,
   );
 
@@ -349,8 +549,9 @@ export function advanceSnakeGame(
     nextHead.y < 0 ||
     nextHead.y >= current.boardSize;
   const hitBody = collisionBody.some((segment) => isSamePoint(segment, nextHead));
+  const hitObstacle = current.obstacles.some((obstacle) => isSamePoint(obstacle, nextHead));
 
-  if (hitWall || hitBody) {
+  if (hitWall || hitBody || hitObstacle) {
     const rank = getLeaderboardRank(current.score, leaderboard);
 
     return {
@@ -386,6 +587,7 @@ export function advanceSnakeGame(
     current.speedBoosts + (ateSpeedFood ? SPEED_FOOD_SPEED_INCREASE : 0);
   const nextSpeedFood = ateSpeedFood ? null : currentSpeedFood;
   const occupiedSpecialFood = [
+    ...current.obstacles,
     ...(nextBonusFood === null ? [] : [nextBonusFood.position]),
     ...(nextSpeedFood === null ? [] : [nextSpeedFood.position]),
   ];
@@ -395,7 +597,10 @@ export function advanceSnakeGame(
     bonusFood: nextBonusFood,
     boardSize: current.boardSize,
     direction,
-    food: ateFood ? generateFood(current.boardSize, nextSnake, occupiedSpecialFood, random) : current.food,
+    food: ateFood
+      ? generateFood(current.boardSize, nextSnake, occupiedSpecialFood, random)
+      : current.food,
+    obstacles: current.obstacles,
     pendingLeaderboardEntry: current.pendingLeaderboardEntry,
     queuedDirection: direction,
     score: nextScore,

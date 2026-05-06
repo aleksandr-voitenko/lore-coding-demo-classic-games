@@ -6,6 +6,7 @@ import { createFoodFeedback } from "./snake-food-feedback";
 function createRunningGame(overrides: Partial<GameState> = {}): GameState {
   return {
     ...createInitialGame({ boardSize: 11 }),
+    obstacles: [],
     status: "running",
     ...overrides,
   };

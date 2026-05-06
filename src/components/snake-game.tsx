@@ -265,8 +265,14 @@ export function SnakeGame() {
   const boardCells = useMemo(() => createBoardCells(game.boardSize), [game.boardSize]);
 
   const occupiedCells = useMemo(() => {
-    const cells = new Map<string, "body" | "bonusFood" | "food" | "head" | "speedFood">();
+    const cells = new Map<
+      string,
+      "body" | "bonusFood" | "food" | "head" | "obstacle" | "speedFood"
+    >();
 
+    game.obstacles.forEach((obstacle) => {
+      cells.set(getPointKey(obstacle), "obstacle");
+    });
     cells.set(getPointKey(game.food), "food");
     if (visibleBonusFood !== null) {
       cells.set(getPointKey(visibleBonusFood.position), "bonusFood");
@@ -279,7 +285,7 @@ export function SnakeGame() {
     });
 
     return cells;
-  }, [game.food, game.snake, visibleBonusFood, visibleSpeedFood]);
+  }, [game.food, game.obstacles, game.snake, visibleBonusFood, visibleSpeedFood]);
 
   const speed = useMemo(() => {
     return getGameTickDelay({
@@ -315,6 +321,7 @@ export function SnakeGame() {
         return createInitialGame({
           bestScore: Math.max(current.bestScore, leaderboardBestScore),
           boardSize,
+          random: Math.random,
         });
       });
     },
@@ -353,6 +360,7 @@ export function SnakeGame() {
         ...createInitialGame({
           bestScore: Math.max(current.bestScore, leaderboardBestScore),
           boardSize: current.boardSize,
+          random: Math.random,
         }),
         status: "running",
       };
@@ -366,6 +374,7 @@ export function SnakeGame() {
       ...createInitialGame({
         bestScore: Math.max(current.bestScore, leaderboardBestScore),
         boardSize: current.boardSize,
+        random: Math.random,
       }),
       status: "running",
     }));
@@ -657,6 +666,8 @@ export function SnakeGame() {
           <div className="relative aspect-square overflow-hidden rounded-md border border-[var(--snake-board-border)] bg-[var(--snake-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--snake-board)_24%,transparent)]">
             <div
               aria-label={`Snake board. Field ${game.boardSize} by ${game.boardSize}. Score ${game.score}. ${statusLabels[game.status]}.${
+                game.obstacles.length === 0 ? "" : ` ${game.obstacles.length} obstacle blocks.`
+              }${
                 visibleBonusFood === null ? "" : " Yellow apple active."
               }${visibleSpeedFood === null ? "" : " Purple diamond active."
               }`}
@@ -681,6 +692,8 @@ export function SnakeGame() {
                         "bg-[var(--snake-head)] shadow-[0_0_0_1px_color-mix(in_oklch,var(--snake-head)_42%,white),inset_0_-2px_0_color-mix(in_oklch,var(--snake-board)_25%,transparent)]",
                       cellType === "food" &&
                         "rounded-full bg-[var(--snake-food)] shadow-[0_0_18px_color-mix(in_oklch,var(--snake-food)_48%,transparent)]",
+                      cellType === "obstacle" &&
+                        "rounded-[0.12rem] bg-[var(--snake-obstacle)] shadow-[inset_0_1px_0_color-mix(in_oklch,var(--snake-obstacle-edge)_65%,transparent),inset_0_-2px_0_color-mix(in_oklch,black_28%,transparent)]",
                       cellType === "bonusFood" &&
                         "rounded-full bg-[var(--snake-bonus-food)] shadow-[0_0_20px_color-mix(in_oklch,var(--snake-bonus-food)_58%,transparent)]",
                       cellType === "speedFood" &&
