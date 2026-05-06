@@ -32,6 +32,7 @@ export type GameState = {
   queuedDirection: Direction;
   score: number;
   snake: Point[];
+  slowFood: TimedFood | null;
   speedBoosts: number;
   speedFood: TimedFood | null;
   status: GameStatus;
@@ -43,7 +44,9 @@ export type CreateInitialGameOptions = {
   random?: RandomSource;
 };
 
-export type TimedFoodKind = "bonusFood" | "speedFood";
+export const TIMED_FOOD_KINDS = ["bonusFood", "speedFood", "slowFood"] as const;
+
+export type TimedFoodKind = (typeof TIMED_FOOD_KINDS)[number];
 
 type RandomSource = () => number;
 
@@ -52,6 +55,8 @@ type TimedFoodOptions = {
   preferredDistanceTargets?: Point[];
   preferredMaxDistance?: number;
   random?: RandomSource;
+  timeoutMaxMs?: number;
+  timeoutMinMs?: number;
 };
 
 type AdvanceSnakeOptions = {
@@ -73,8 +78,13 @@ export const BONUS_FOOD_TIMEOUT_MAX_MS = 12_000;
 export const BONUS_FOOD_TIMEOUT_MIN_MS = 6_000;
 export const LEADERBOARD_LIMIT = 3;
 export const MIN_GAME_TICK_DELAY_MS = 50;
+export const MAX_GAME_SPEED = Math.round(1000 / MIN_GAME_TICK_DELAY_MS);
 export const OBSTACLE_CLUSTER_MAX_SIZE = 6;
 export const OBSTACLE_CLUSTER_MIN_SIZE = 2;
+export const SLOW_FOOD_SCORE = 1;
+export const SLOW_FOOD_SPEED_DECREASE = 1;
+export const SLOW_FOOD_TIMEOUT_MAX_MS = 3_000;
+export const SLOW_FOOD_TIMEOUT_MIN_MS = 2_000;
 export const SPEED_FOOD_SCORE = 3;
 export const SPEED_FOOD_SPEED_INCREASE = 1;
 export const BOARD_SIZE_OPTIONS = Array.from(
@@ -401,6 +411,8 @@ export function createTimedFood(
     preferredDistanceTargets = [],
     preferredMaxDistance = 0,
     random = Math.random,
+    timeoutMaxMs = BONUS_FOOD_TIMEOUT_MAX_MS,
+    timeoutMinMs = BONUS_FOOD_TIMEOUT_MIN_MS,
   }: TimedFoodOptions = {},
 ) {
   const candidateCells = getTimedFoodCandidateCells(
@@ -429,7 +441,7 @@ export function createTimedFood(
   }
 
   return {
-    expiresAt: now() + getRandomDuration(BONUS_FOOD_TIMEOUT_MIN_MS, BONUS_FOOD_TIMEOUT_MAX_MS, random),
+    expiresAt: now() + getRandomDuration(timeoutMinMs, timeoutMaxMs, random),
     position,
   };
 }
@@ -459,10 +471,27 @@ export function createInitialGame({
     queuedDirection: "right",
     score: 0,
     snake,
+    slowFood: null,
     speedBoosts: 0,
     speedFood: null,
     status: "ready",
   };
+}
+
+function getBaseGameTickDelay(score: number) {
+  return Math.max(78, 156 - Math.floor(score / 4) * 8);
+}
+
+function getBaseGameSpeed(score: number) {
+  return Math.round(1000 / getBaseGameTickDelay(score));
+}
+
+function getAdjustedGameSpeed(score: number, speedBoosts: number) {
+  return Math.min(MAX_GAME_SPEED, Math.max(1, getBaseGameSpeed(score) + speedBoosts));
+}
+
+function getSpeedBoostsForTargetSpeed(score: number, speed: number) {
+  return speed - getBaseGameSpeed(score);
 }
 
 export function getGameTickDelay(game: Pick<GameState, "score" | "speedBoosts" | "status">) {
@@ -470,15 +499,21 @@ export function getGameTickDelay(game: Pick<GameState, "score" | "speedBoosts" |
     return null;
   }
 
-  const baseTickDelay = Math.max(78, 156 - Math.floor(game.score / 4) * 8);
+  const baseTickDelay = getBaseGameTickDelay(game.score);
 
   if (game.speedBoosts === 0) {
     return baseTickDelay;
   }
 
-  const boostedSpeed = Math.round(1000 / baseTickDelay) + game.speedBoosts;
+  const adjustedSpeed = getAdjustedGameSpeed(game.score, game.speedBoosts);
 
-  return Math.max(MIN_GAME_TICK_DELAY_MS, Math.round(1000 / boostedSpeed));
+  return Math.max(MIN_GAME_TICK_DELAY_MS, Math.round(1000 / adjustedSpeed));
+}
+
+export function getGameSpeed(game: Pick<GameState, "score" | "speedBoosts" | "status">) {
+  const tickDelay = getGameTickDelay(game);
+
+  return tickDelay === null ? null : Math.round(1000 / tickDelay);
 }
 
 export function getLeaderboardRank(score: number, leaderboard: LeaderboardEntry[]) {
@@ -508,6 +543,14 @@ export function queueGameDirection(current: GameState, nextDirection: Direction)
   };
 }
 
+function getActiveTimedFoodPositions(current: GameState, excludedKind: TimedFoodKind) {
+  return TIMED_FOOD_KINDS.flatMap((timedFoodKind) => {
+    const timedFood = current[timedFoodKind];
+
+    return timedFoodKind === excludedKind || timedFood === null ? [] : [timedFood.position];
+  });
+}
+
 export function spawnTimedFood(
   current: GameState,
   kind: TimedFoodKind,
@@ -517,19 +560,20 @@ export function spawnTimedFood(
     return current;
   }
 
-  const otherTimedFood = kind === "bonusFood" ? current.speedFood : current.bonusFood;
   const timedFood = createTimedFood(
     current.boardSize,
     current.snake,
     current.food,
     [
       ...current.obstacles,
-      ...(otherTimedFood === null ? [] : [otherTimedFood.position]),
+      ...getActiveTimedFoodPositions(current, kind),
     ],
     {
       ...options,
       preferredDistanceTargets: kind === "bonusFood" ? current.obstacles : undefined,
       preferredMaxDistance: kind === "bonusFood" ? BONUS_FOOD_OBSTACLE_DISTANCE_MAX : undefined,
+      timeoutMaxMs: kind === "slowFood" ? SLOW_FOOD_TIMEOUT_MAX_MS : undefined,
+      timeoutMinMs: kind === "slowFood" ? SLOW_FOOD_TIMEOUT_MIN_MS : undefined,
     },
   );
 
@@ -578,13 +622,16 @@ export function advanceSnakeGame(
     y: head.y + offset.y,
   };
   const currentBonusFood = current.bonusFood ?? null;
+  const currentSlowFood = current.slowFood ?? null;
   const currentSpeedFood = current.speedFood ?? null;
   const ateFood = isSamePoint(nextHead, current.food);
   const ateBonusFood =
     currentBonusFood !== null && isSamePoint(nextHead, currentBonusFood.position);
+  const ateSlowFood =
+    currentSlowFood !== null && isSamePoint(nextHead, currentSlowFood.position);
   const ateSpeedFood =
     currentSpeedFood !== null && isSamePoint(nextHead, currentSpeedFood.position);
-  const ateGrowthFood = ateFood || ateBonusFood || ateSpeedFood;
+  const ateGrowthFood = ateFood || ateBonusFood || ateSlowFood || ateSpeedFood;
   const collisionBody = ateGrowthFood ? current.snake : current.snake.slice(0, -1);
   const hitWall =
     nextHead.x < 0 ||
@@ -609,6 +656,7 @@ export function advanceSnakeGame(
               score: current.score,
             },
       queuedDirection: direction,
+      slowFood: null,
       speedFood: null,
       status: "lost",
     };
@@ -624,14 +672,25 @@ export function advanceSnakeGame(
     current.score +
     (ateFood ? 1 : 0) +
     (ateBonusFood ? BONUS_FOOD_SCORE : 0) +
+    (ateSlowFood ? SLOW_FOOD_SCORE : 0) +
     (ateSpeedFood ? SPEED_FOOD_SCORE : 0);
   const nextBonusFood = ateBonusFood ? null : currentBonusFood;
-  const nextSpeedBoosts =
+  const nextSlowFood = ateSlowFood ? null : currentSlowFood;
+  let nextSpeedBoosts =
     current.speedBoosts + (ateSpeedFood ? SPEED_FOOD_SPEED_INCREASE : 0);
+
+  if (ateSlowFood) {
+    const currentSpeed = getGameSpeed(current) ?? 1;
+    const nextSpeed = Math.max(1, currentSpeed - SLOW_FOOD_SPEED_DECREASE);
+
+    nextSpeedBoosts = getSpeedBoostsForTargetSpeed(nextScore, nextSpeed);
+  }
+
   const nextSpeedFood = ateSpeedFood ? null : currentSpeedFood;
   const occupiedSpecialFood = [
     ...current.obstacles,
     ...(nextBonusFood === null ? [] : [nextBonusFood.position]),
+    ...(nextSlowFood === null ? [] : [nextSlowFood.position]),
     ...(nextSpeedFood === null ? [] : [nextSpeedFood.position]),
   ];
 
@@ -648,6 +707,7 @@ export function advanceSnakeGame(
     queuedDirection: direction,
     score: nextScore,
     snake: nextSnake,
+    slowFood: nextSlowFood,
     speedBoosts: nextSpeedBoosts,
     speedFood: nextSpeedFood,
     status: current.status,

@@ -90,6 +90,7 @@
   --snake-obstacle-edge: oklch(0.66 0.022 235);
   --snake-page: oklch(0.985 0.012 150);
   --snake-panel: oklch(1 0 0);
+  --snake-slow-food: oklch(0.66 0.19 244);
   --snake-speed-food: oklch(0.62 0.22 310);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);

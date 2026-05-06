@@ -10,11 +10,13 @@ import {
   expireTimedFood,
   generateObstacles,
   generateTimedFoodPosition,
+  getGameSpeed,
   getGameTickDelay,
   getManhattanDistance,
   getPointKey,
   isSamePoint,
   OBSTACLE_CLUSTER_MAX_SIZE,
+  SLOW_FOOD_TIMEOUT_MIN_MS,
   spawnTimedFood,
   type GameState,
   type Point,
@@ -254,6 +256,57 @@ describe("snake game engine", () => {
     );
   });
 
+  it("spawns blue triangles briefly and avoids active timed foods", () => {
+    const game = createRunningGame();
+    const firstEligiblePosition = generateTimedFoodPosition(
+      game.boardSize,
+      game.snake,
+      game.food,
+      [],
+      () => 0,
+    );
+
+    expect(firstEligiblePosition).not.toBeNull();
+
+    const secondEligiblePosition = generateTimedFoodPosition(
+      game.boardSize,
+      game.snake,
+      game.food,
+      [firstEligiblePosition!],
+      () => 0,
+    );
+
+    expect(secondEligiblePosition).not.toBeNull();
+
+    const nextGame = spawnTimedFood(
+      {
+        ...game,
+        bonusFood: {
+          expiresAt: 8_000,
+          position: firstEligiblePosition!,
+        },
+        speedFood: {
+          expiresAt: 9_000,
+          position: secondEligiblePosition!,
+        },
+      },
+      "slowFood",
+      {
+        now: () => 1_000,
+        random: createRandomSequence([0, 0]),
+      },
+    );
+
+    expect(nextGame.slowFood).not.toBeNull();
+    expect(nextGame.slowFood?.expiresAt).toBe(1_000 + SLOW_FOOD_TIMEOUT_MIN_MS);
+    expectDifferentPoint(nextGame.slowFood!.position, firstEligiblePosition!);
+    expectDifferentPoint(nextGame.slowFood!.position, secondEligiblePosition!);
+    expectDifferentPoint(nextGame.slowFood!.position, nextGame.food);
+    expect(nextGame.snake.every((segment) => !isSamePoint(nextGame.slowFood!.position, segment))).toBe(
+      true,
+    );
+  });
+
   it("keeps red food from respawning over obstacle islands", () => {
     const game = createRunningGame({
       food: { x: 6, y: 5 },
@@ -330,6 +383,57 @@ describe("snake game engine", () => {
     expect(getGameTickDelay(nextGame)).toBeLessThan(initialSpeed!);
   });
 
+  it("eating a blue triangle scores 1, grows, clears it, and decreases speed", () => {
+    const game = createRunningGame({
+      food: { x: 9, y: 9 },
+      score: 0,
+      snake: [
+        { x: 5, y: 5 },
+        { x: 4, y: 5 },
+        { x: 3, y: 5 },
+      ],
+      slowFood: {
+        expiresAt: 9_000,
+        position: { x: 6, y: 5 },
+      },
+    });
+    const initialSpeed = getGameSpeed(game);
+
+    const nextGame = advanceSnakeGame(game);
+
+    expect(nextGame.score).toBe(1);
+    expect(nextGame.snake).toHaveLength(game.snake.length + 1);
+    expect(nextGame.snake[0]).toEqual({ x: 6, y: 5 });
+    expect(nextGame.slowFood).toBeNull();
+    expect(getGameSpeed(nextGame)).toBe(initialSpeed! - 1);
+    expect(getGameTickDelay(nextGame)).toBeGreaterThan(getGameTickDelay(game)!);
+  });
+
+  it("keeps blue triangles from decreasing speed below 1", () => {
+    const game = createRunningGame({
+      food: { x: 9, y: 9 },
+      score: 3,
+      snake: [
+        { x: 5, y: 5 },
+        { x: 4, y: 5 },
+        { x: 3, y: 5 },
+      ],
+      slowFood: {
+        expiresAt: 9_000,
+        position: { x: 6, y: 5 },
+      },
+      speedBoosts: -5,
+    });
+
+    expect(getGameSpeed(game)).toBe(1);
+
+    const nextGame = advanceSnakeGame(game);
+
+    expect(nextGame.score).toBe(4);
+    expect(nextGame.slowFood).toBeNull();
+    expect(getGameSpeed(nextGame)).toBe(1);
+  });
+
   it("expires purple diamonds only when the matching timeout is current", () => {
     const game = createRunningGame({
       speedFood: {
@@ -340,6 +444,18 @@ describe("snake game engine", () => {
 
     expect(expireTimedFood(game, "speedFood", 6_999).speedFood).toEqual(game.speedFood);
     expect(expireTimedFood(game, "speedFood", 7_000).speedFood).toBeNull();
+  });
+
+  it("expires blue triangles only when the matching timeout is current", () => {
+    const game = createRunningGame({
+      slowFood: {
+        expiresAt: 7_000,
+        position: { x: 1, y: 1 },
+      },
+    });
+
+    expect(expireTimedFood(game, "slowFood", 6_999).slowFood).toEqual(game.slowFood);
+    expect(expireTimedFood(game, "slowFood", 7_000).slowFood).toBeNull();
   });
 
   it("clears active timed foods on game over", () => {
@@ -354,6 +470,10 @@ describe("snake game engine", () => {
         { x: 9, y: 5 },
         { x: 8, y: 5 },
       ],
+      slowFood: {
+        expiresAt: 10_000,
+        position: { x: 3, y: 1 },
+      },
       speedFood: {
         expiresAt: 9_000,
         position: { x: 2, y: 1 },
@@ -364,6 +484,7 @@ describe("snake game engine", () => {
 
     expect(nextGame.status).toBe("lost");
     expect(nextGame.bonusFood).toBeNull();
+    expect(nextGame.slowFood).toBeNull();
     expect(nextGame.speedFood).toBeNull();
   });
 
@@ -381,6 +502,10 @@ describe("snake game engine", () => {
         { x: 4, y: 5 },
         { x: 3, y: 5 },
       ],
+      slowFood: {
+        expiresAt: 10_000,
+        position: { x: 3, y: 1 },
+      },
       speedFood: {
         expiresAt: 9_000,
         position: { x: 2, y: 1 },
@@ -394,10 +519,11 @@ describe("snake game engine", () => {
     expect(nextGame.snake).toEqual(game.snake);
     expect(nextGame.obstacles).toEqual(game.obstacles);
     expect(nextGame.bonusFood).toBeNull();
+    expect(nextGame.slowFood).toBeNull();
     expect(nextGame.speedFood).toBeNull();
   });
 
-  it("keeps red food from respawning over active yellow apples or purple diamonds", () => {
+  it("keeps red food from respawning over active timed foods", () => {
     const game = createRunningGame({
       bonusFood: {
         expiresAt: 8_000,
@@ -409,6 +535,10 @@ describe("snake game engine", () => {
         { x: 4, y: 5 },
         { x: 3, y: 5 },
       ],
+      slowFood: {
+        expiresAt: 10_000,
+        position: { x: 2, y: 0 },
+      },
       speedFood: {
         expiresAt: 9_000,
         position: { x: 1, y: 0 },
@@ -419,8 +549,9 @@ describe("snake game engine", () => {
       random: () => 0,
     });
 
-    expect(nextGame.food).toEqual({ x: 2, y: 0 });
+    expect(nextGame.food).toEqual({ x: 3, y: 0 });
     expectDifferentPoint(nextGame.food, game.bonusFood!.position);
+    expectDifferentPoint(nextGame.food, game.slowFood!.position);
     expectDifferentPoint(nextGame.food, game.speedFood!.position);
   });
 });

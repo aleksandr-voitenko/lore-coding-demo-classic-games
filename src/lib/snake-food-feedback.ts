@@ -1,6 +1,9 @@
 import {
   BONUS_FOOD_SCORE,
+  getGameSpeed,
   isSamePoint,
+  SLOW_FOOD_SCORE,
+  SLOW_FOOD_SPEED_DECREASE,
   SPEED_FOOD_SCORE,
   SPEED_FOOD_SPEED_INCREASE,
   type GameState,
@@ -51,6 +54,17 @@ export function createFoodFeedback(
       `+${SPEED_FOOD_SCORE} ${POINT_REWARD_ICON}`,
       `+${SPEED_FOOD_SPEED_INCREASE} ${SPEED_REWARD_ICON}`,
     );
+  }
+
+  if (
+    previousGame.slowFood !== null &&
+    isSamePoint(position, previousGame.slowFood.position)
+  ) {
+    lines.push(`+${SLOW_FOOD_SCORE} ${POINT_REWARD_ICON}`);
+
+    if ((getGameSpeed(nextGame) ?? 1) < (getGameSpeed(previousGame) ?? 1)) {
+      lines.push(`-${SLOW_FOOD_SPEED_DECREASE} ${SPEED_REWARD_ICON}`);
+    }
   }
 
   if (lines.length === 0) {
