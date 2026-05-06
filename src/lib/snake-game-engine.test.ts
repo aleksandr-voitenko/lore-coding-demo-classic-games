@@ -141,6 +141,59 @@ describe("snake game engine", () => {
     ).toBe(true);
   });
 
+  it("spawns yellow apples next to obstacle islands when possible", () => {
+    const obstacle = { x: 8, y: 2 };
+    const game = createRunningGame({
+      obstacles: [obstacle],
+    });
+
+    const nextGame = spawnTimedFood(game, "bonusFood", {
+      now: () => 1_000,
+      random: createRandomSequence([0, 0]),
+    });
+
+    expect(nextGame.bonusFood).not.toBeNull();
+    expect(nextGame.bonusFood?.expiresAt).toBe(1_000 + BONUS_FOOD_TIMEOUT_MIN_MS);
+    expect(nextGame.bonusFood?.position).toEqual({ x: 8, y: 1 });
+    expect(getManhattanDistance(nextGame.bonusFood!.position, obstacle)).toBe(1);
+    expectDifferentPoint(nextGame.bonusFood!.position, nextGame.food);
+    expect(nextGame.snake.every((segment) => !isSamePoint(nextGame.bonusFood!.position, segment))).toBe(
+      true,
+    );
+  });
+
+  it("falls back to generic yellow apple placement when obstacle-adjacent cells are unsafe", () => {
+    const obstacle = { x: 5, y: 4 };
+    const game = createRunningGame({
+      obstacles: [obstacle],
+    });
+
+    const nextGame = spawnTimedFood(game, "bonusFood", {
+      now: () => 1_000,
+      random: createRandomSequence([0, 0]),
+    });
+
+    expect(nextGame.bonusFood).not.toBeNull();
+    expect(nextGame.bonusFood?.position).toEqual({ x: 0, y: 0 });
+    expect(getManhattanDistance(nextGame.bonusFood!.position, obstacle)).not.toBe(1);
+  });
+
+  it("keeps purple diamonds on generic timed food placement near obstacle islands", () => {
+    const obstacle = { x: 8, y: 2 };
+    const game = createRunningGame({
+      obstacles: [obstacle],
+    });
+
+    const nextGame = spawnTimedFood(game, "speedFood", {
+      now: () => 1_000,
+      random: createRandomSequence([0, 0]),
+    });
+
+    expect(nextGame.speedFood).not.toBeNull();
+    expect(nextGame.speedFood?.position).toEqual({ x: 0, y: 0 });
+    expect(getManhattanDistance(nextGame.speedFood!.position, obstacle)).not.toBe(1);
+  });
+
   it("spawns purple diamonds with deterministic timing and avoids active yellow apples", () => {
     const game = createRunningGame();
     const firstEligiblePosition = generateTimedFoodPosition(

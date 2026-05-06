@@ -49,6 +49,7 @@ type RandomSource = () => number;
 
 type TimedFoodOptions = {
   now?: () => number;
+  preferredAdjacentCells?: Point[];
   random?: RandomSource;
 };
 
@@ -171,6 +172,10 @@ function hasOrthogonalObstacleNeighbor(point: Point, obstacleKeys: Set<string>) 
       }),
     ),
   );
+}
+
+function isOrthogonallyAdjacentToAny(point: Point, targets: Point[]) {
+  return targets.some((target) => getManhattanDistance(point, target) === 1);
 }
 
 export function createInitialSnake(boardSize: number): Point[] {
@@ -356,18 +361,28 @@ export function generateTimedFoodPosition(
   additionalOccupiedCells: Point[] = [],
   random: RandomSource = Math.random,
 ) {
+  const openCells = getTimedFoodCandidateCells(boardSize, snake, food, additionalOccupiedCells);
+  const nextCell = getRandomItem(openCells, random);
+
+  return nextCell;
+}
+
+function getTimedFoodCandidateCells(
+  boardSize: number,
+  snake: Point[],
+  food: Point,
+  additionalOccupiedCells: Point[] = [],
+) {
   const occupiedCells = new Set([...snake, food, ...additionalOccupiedCells].map(getPointKey));
   const boardCells = createBoardCells(boardSize);
-  const openCells = boardCells.filter(
+
+  return boardCells.filter(
     (cell) =>
       !occupiedCells.has(getPointKey(cell)) &&
       snake.every(
         (segment) => getManhattanDistance(cell, segment) >= BONUS_FOOD_MIN_SNAKE_DISTANCE,
       ),
   );
-  const nextCell = openCells[Math.floor(random() * openCells.length)];
-
-  return nextCell ?? null;
 }
 
 export function createTimedFood(
@@ -375,13 +390,19 @@ export function createTimedFood(
   snake: Point[],
   food: Point,
   additionalOccupiedCells: Point[] = [],
-  { now = Date.now, random = Math.random }: TimedFoodOptions = {},
+  { now = Date.now, preferredAdjacentCells = [], random = Math.random }: TimedFoodOptions = {},
 ) {
-  const position = generateTimedFoodPosition(
+  const candidateCells = getTimedFoodCandidateCells(
     boardSize,
     snake,
     food,
     additionalOccupiedCells,
+  );
+  const preferredCandidateCells = candidateCells.filter((cell) =>
+    isOrthogonallyAdjacentToAny(cell, preferredAdjacentCells),
+  );
+  const position = getRandomItem(
+    preferredCandidateCells.length > 0 ? preferredCandidateCells : candidateCells,
     random,
   );
 
@@ -487,7 +508,10 @@ export function spawnTimedFood(
       ...current.obstacles,
       ...(otherTimedFood === null ? [] : [otherTimedFood.position]),
     ],
-    options,
+    {
+      ...options,
+      preferredAdjacentCells: kind === "bonusFood" ? current.obstacles : undefined,
+    },
   );
 
   if (timedFood === null) {
