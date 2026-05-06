@@ -49,7 +49,8 @@ type RandomSource = () => number;
 
 type TimedFoodOptions = {
   now?: () => number;
-  preferredAdjacentCells?: Point[];
+  preferredDistanceTargets?: Point[];
+  preferredMaxDistance?: number;
   random?: RandomSource;
 };
 
@@ -64,6 +65,7 @@ export const MIN_BOARD_SIZE = 11;
 export const MAX_BOARD_SIZE = 25;
 export const BOARD_SIZE_STEP = 2;
 export const BONUS_FOOD_MIN_SNAKE_DISTANCE = 5;
+export const BONUS_FOOD_OBSTACLE_DISTANCE_MAX = 3;
 export const BONUS_FOOD_SCORE = 2;
 export const BONUS_FOOD_SPAWN_DELAY_MAX_MS = 10_000;
 export const BONUS_FOOD_SPAWN_DELAY_MIN_MS = 4_000;
@@ -174,8 +176,12 @@ function hasOrthogonalObstacleNeighbor(point: Point, obstacleKeys: Set<string>) 
   );
 }
 
-function isOrthogonallyAdjacentToAny(point: Point, targets: Point[]) {
-  return targets.some((target) => getManhattanDistance(point, target) === 1);
+function isWithinManhattanDistance(point: Point, targets: Point[], maxDistance: number) {
+  return targets.some((target) => {
+    const distance = getManhattanDistance(point, target);
+
+    return distance > 0 && distance <= maxDistance;
+  });
 }
 
 export function createInitialSnake(boardSize: number): Point[] {
@@ -390,7 +396,12 @@ export function createTimedFood(
   snake: Point[],
   food: Point,
   additionalOccupiedCells: Point[] = [],
-  { now = Date.now, preferredAdjacentCells = [], random = Math.random }: TimedFoodOptions = {},
+  {
+    now = Date.now,
+    preferredDistanceTargets = [],
+    preferredMaxDistance = 0,
+    random = Math.random,
+  }: TimedFoodOptions = {},
 ) {
   const candidateCells = getTimedFoodCandidateCells(
     boardSize,
@@ -398,9 +409,16 @@ export function createTimedFood(
     food,
     additionalOccupiedCells,
   );
-  const preferredCandidateCells = candidateCells.filter((cell) =>
-    isOrthogonallyAdjacentToAny(cell, preferredAdjacentCells),
-  );
+  const selectedMaxDistance =
+    preferredDistanceTargets.length > 0 && preferredMaxDistance > 0
+      ? Math.floor(random() * preferredMaxDistance) + 1
+      : 0;
+  const preferredCandidateCells =
+    selectedMaxDistance > 0
+      ? candidateCells.filter((cell) =>
+          isWithinManhattanDistance(cell, preferredDistanceTargets, selectedMaxDistance),
+        )
+      : [];
   const position = getRandomItem(
     preferredCandidateCells.length > 0 ? preferredCandidateCells : candidateCells,
     random,
@@ -510,7 +528,8 @@ export function spawnTimedFood(
     ],
     {
       ...options,
-      preferredAdjacentCells: kind === "bonusFood" ? current.obstacles : undefined,
+      preferredDistanceTargets: kind === "bonusFood" ? current.obstacles : undefined,
+      preferredMaxDistance: kind === "bonusFood" ? BONUS_FOOD_OBSTACLE_DISTANCE_MAX : undefined,
     },
   );
 

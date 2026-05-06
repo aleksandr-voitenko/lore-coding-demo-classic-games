@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   advanceSnakeGame,
   BONUS_FOOD_MIN_SNAKE_DISTANCE,
+  BONUS_FOOD_OBSTACLE_DISTANCE_MAX,
   BONUS_FOOD_TIMEOUT_MIN_MS,
   createInitialObstacleSafeCells,
   createInitialGame,
@@ -149,7 +150,7 @@ describe("snake game engine", () => {
 
     const nextGame = spawnTimedFood(game, "bonusFood", {
       now: () => 1_000,
-      random: createRandomSequence([0, 0]),
+      random: createRandomSequence([0, 0, 0]),
     });
 
     expect(nextGame.bonusFood).not.toBeNull();
@@ -162,7 +163,30 @@ describe("snake game engine", () => {
     );
   });
 
-  it("falls back to generic yellow apple placement when obstacle-adjacent cells are unsafe", () => {
+  it("spawns yellow apples near obstacle islands without requiring contact", () => {
+    const obstacle = { x: 8, y: 2 };
+    const game = createRunningGame({
+      obstacles: [obstacle],
+    });
+
+    const nextGame = spawnTimedFood(game, "bonusFood", {
+      now: () => 1_000,
+      random: createRandomSequence([0.99, 0, 0]),
+    });
+
+    expect(nextGame.bonusFood).not.toBeNull();
+    expect(nextGame.bonusFood?.position).toEqual({ x: 7, y: 0 });
+    expect(getManhattanDistance(nextGame.bonusFood!.position, obstacle)).toBeGreaterThan(1);
+    expect(getManhattanDistance(nextGame.bonusFood!.position, obstacle)).toBeLessThanOrEqual(
+      BONUS_FOOD_OBSTACLE_DISTANCE_MAX,
+    );
+    expectDifferentPoint(nextGame.bonusFood!.position, nextGame.food);
+    expect(nextGame.snake.every((segment) => !isSamePoint(nextGame.bonusFood!.position, segment))).toBe(
+      true,
+    );
+  });
+
+  it("falls back to generic yellow apple placement when near-obstacle cells are unsafe", () => {
     const obstacle = { x: 5, y: 4 };
     const game = createRunningGame({
       obstacles: [obstacle],
@@ -170,12 +194,14 @@ describe("snake game engine", () => {
 
     const nextGame = spawnTimedFood(game, "bonusFood", {
       now: () => 1_000,
-      random: createRandomSequence([0, 0]),
+      random: createRandomSequence([0.99, 0, 0]),
     });
 
     expect(nextGame.bonusFood).not.toBeNull();
     expect(nextGame.bonusFood?.position).toEqual({ x: 0, y: 0 });
-    expect(getManhattanDistance(nextGame.bonusFood!.position, obstacle)).not.toBe(1);
+    expect(getManhattanDistance(nextGame.bonusFood!.position, obstacle)).toBeGreaterThan(
+      BONUS_FOOD_OBSTACLE_DISTANCE_MAX,
+    );
   });
 
   it("keeps purple diamonds on generic timed food placement near obstacle islands", () => {
