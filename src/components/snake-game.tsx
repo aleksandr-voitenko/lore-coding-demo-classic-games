@@ -15,6 +15,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -42,6 +43,7 @@ import {
   type GameStatus,
   type LeaderboardEntry,
 } from "@/lib/snake-game-engine";
+import { createFoodFeedback, type FoodFeedback } from "@/lib/snake-food-feedback";
 import { cn } from "@/lib/utils";
 
 type LeaderboardPanelProps = {
@@ -242,7 +244,10 @@ function LeaderboardPanel({ slotTestIdPrefix, slots, testId }: LeaderboardPanelP
 
 export function SnakeGame() {
   const [game, setGame] = useState<GameState>(() => createInitialGame());
+  const [foodFeedbacks, setFoodFeedbacks] = useState<FoodFeedback[]>([]);
   const [playerName, setPlayerName] = useState("");
+  const foodFeedbackIdRef = useRef(0);
+  const previousGameRef = useRef(game);
   const leaderboardSnapshot = useSyncExternalStore(
     subscribeToLeaderboardStore,
     getStoredLeaderboardSnapshot,
@@ -296,6 +301,7 @@ export function SnakeGame() {
       const boardSize = normalizeBoardSize(nextBoardSize);
 
       setPlayerName("");
+      setFoodFeedbacks([]);
       setGame((current) => {
         if (
           current.status === "running" ||
@@ -314,6 +320,10 @@ export function SnakeGame() {
     },
     [leaderboardBestScore],
   );
+
+  const removeFoodFeedback = useCallback((id: number) => {
+    setFoodFeedbacks((current) => current.filter((feedback) => feedback.id !== id));
+  }, []);
 
   const queueDirection = useCallback((nextDirection: Direction) => {
     setGame((current) => queueGameDirection(current, nextDirection));
@@ -351,6 +361,7 @@ export function SnakeGame() {
 
   const restartGame = useCallback(() => {
     setPlayerName("");
+    setFoodFeedbacks([]);
     setGame((current) => ({
       ...createInitialGame({
         bestScore: Math.max(current.bestScore, leaderboardBestScore),
@@ -384,6 +395,20 @@ export function SnakeGame() {
     },
     [leaderboard, pendingLeaderboardEntry, playerName],
   );
+
+  useEffect(() => {
+    const previousGame = previousGameRef.current;
+    previousGameRef.current = game;
+
+    const feedback = createFoodFeedback(previousGame, game, foodFeedbackIdRef.current);
+
+    if (feedback === null) {
+      return;
+    }
+
+    foodFeedbackIdRef.current += 1;
+    setFoodFeedbacks((current) => [...current, feedback].slice(-6));
+  }, [game]);
 
   useEffect(() => {
     if (game.status !== "running" || visibleBonusFood !== null) {
@@ -666,6 +691,35 @@ export function SnakeGame() {
                 );
               })}
             </div>
+
+            {game.status === "running" ? (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-2 overflow-hidden rounded-[0.375rem]"
+              >
+                {foodFeedbacks.map((feedback) => (
+                  <div
+                    className="snake-food-feedback absolute z-10 flex min-w-12 flex-col items-center justify-center gap-0.5 rounded-md border border-[color-mix(in_oklch,var(--snake-board-text)_28%,transparent)] bg-[color-mix(in_oklch,var(--snake-board)_80%,transparent)] px-2 py-1 text-center text-sm font-black leading-none text-[var(--snake-board-text)] shadow-[0_10px_24px_color-mix(in_oklch,var(--snake-board)_38%,transparent)] backdrop-blur-[1px]"
+                    data-testid="snake-food-feedback"
+                    key={feedback.id}
+                    onAnimationEnd={() => removeFoodFeedback(feedback.id)}
+                    style={{
+                      left: `${((feedback.position.x + 0.5) / game.boardSize) * 100}%`,
+                      top: `${((feedback.position.y + 0.5) / game.boardSize) * 100}%`,
+                    }}
+                  >
+                    {feedback.lines.map((line, index) => (
+                      <span
+                        className="whitespace-nowrap"
+                        key={`${feedback.id}-${index}`}
+                      >
+                        {line}
+                      </span>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            ) : null}
 
             {showStartScreen ? (
               <div
