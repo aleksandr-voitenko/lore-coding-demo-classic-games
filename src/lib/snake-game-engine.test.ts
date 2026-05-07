@@ -20,6 +20,8 @@ import {
   getTimedFoodSpawnDelay,
   isSamePoint,
   OBSTACLE_CLUSTER_MAX_SIZE,
+  OBSTACLE_CLUSTER_MIN_SIZE,
+  OBSTACLE_FIELD_COVERAGE_RATIO,
   SLOW_FOOD_TIMEOUT_MIN_MS,
   spawnTimedFood,
   TIMED_FOOD_KINDS,
@@ -101,6 +103,10 @@ function getConnectedClusters(points: Point[]) {
   return clusters;
 }
 
+function getObstacleCellBudget(boardSize: number) {
+  return Math.floor(boardSize * boardSize * OBSTACLE_FIELD_COVERAGE_RATIO);
+}
+
 describe("snake game engine", () => {
   it("keeps timed food rules aligned with timed food kinds", () => {
     expect(Object.keys(TIMED_FOOD_RULES)).toEqual([...TIMED_FOOD_KINDS]);
@@ -172,8 +178,10 @@ describe("snake game engine", () => {
     );
     const obstacleKeys = new Set(game.obstacles.map(getPointKey));
     const clusters = getConnectedClusters(game.obstacles);
+    const obstacleCellBudget = getObstacleCellBudget(game.boardSize);
 
     expect(game.obstacles.length).toBeGreaterThan(0);
+    expect(game.obstacles.length).toBeLessThanOrEqual(obstacleCellBudget);
     expect(obstacleKeys.size).toBe(game.obstacles.length);
     expect(game.obstacles.every((obstacle) => obstacle.x > 0 && obstacle.x < game.boardSize - 1)).toBe(
       true,
@@ -183,6 +191,32 @@ describe("snake game engine", () => {
     );
     expect(game.obstacles.every((obstacle) => !safeCellKeys.has(getPointKey(obstacle)))).toBe(true);
     expect(clusters.every((cluster) => cluster.length <= OBSTACLE_CLUSTER_MAX_SIZE)).toBe(true);
+  });
+
+  it("scales generated obstacle cells to the configured field coverage", () => {
+    const smallBoardSize = 11;
+    const largeBoardSize = 25;
+    const smallObstacles = generateObstacles(
+      smallBoardSize,
+      createInitialObstacleSafeCells(smallBoardSize),
+      createRandomSequence([0]),
+    );
+    const largeObstacles = generateObstacles(
+      largeBoardSize,
+      createInitialObstacleSafeCells(largeBoardSize),
+      createRandomSequence([0]),
+    );
+    const smallBudget = getObstacleCellBudget(smallBoardSize);
+    const largeBudget = getObstacleCellBudget(largeBoardSize);
+    const smallCoverage = smallObstacles.length / (smallBoardSize * smallBoardSize);
+    const largeCoverage = largeObstacles.length / (largeBoardSize * largeBoardSize);
+
+    expect(smallObstacles.length).toBeLessThan(largeObstacles.length);
+    expect(smallObstacles.length).toBeLessThanOrEqual(smallBudget);
+    expect(largeObstacles.length).toBeLessThanOrEqual(largeBudget);
+    expect(smallBudget - smallObstacles.length).toBeLessThan(OBSTACLE_CLUSTER_MIN_SIZE);
+    expect(largeBudget - largeObstacles.length).toBeLessThan(OBSTACLE_CLUSTER_MIN_SIZE);
+    expect(Math.abs(smallCoverage - largeCoverage)).toBeLessThan(0.01);
   });
 
   it("caps each generated obstacle cluster at six cells", () => {

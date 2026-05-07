@@ -103,6 +103,7 @@ export const MIN_GAME_TICK_DELAY_MS = 50;
 export const MAX_GAME_SPEED = Math.round(1000 / MIN_GAME_TICK_DELAY_MS);
 export const OBSTACLE_CLUSTER_MAX_SIZE = 6;
 export const OBSTACLE_CLUSTER_MIN_SIZE = 2;
+export const OBSTACLE_FIELD_COVERAGE_RATIO = 0.06;
 export const SLOW_FOOD_SCORE = 1;
 export const SLOW_FOOD_SPEED_DECREASE = 1;
 export const SLOW_FOOD_TIMEOUT_MAX_MS = 3_000;
@@ -331,13 +332,15 @@ export function createInitialObstacleSafeCells(boardSize: number, food = createI
   return Array.from(safeCells.values());
 }
 
-function getObstacleClusterCount(boardSize: number) {
-  return Math.max(1, Math.round(boardSize / 7));
+function getObstacleCellBudget(boardSize: number) {
+  return Math.floor(boardSize * boardSize * OBSTACLE_FIELD_COVERAGE_RATIO);
 }
 
-function getObstacleClusterSize(random: RandomSource) {
+function getObstacleClusterSize(random: RandomSource, maxSize = OBSTACLE_CLUSTER_MAX_SIZE) {
+  const cappedMaxSize = Math.min(OBSTACLE_CLUSTER_MAX_SIZE, maxSize);
+
   return (
-    Math.floor(random() * (OBSTACLE_CLUSTER_MAX_SIZE - OBSTACLE_CLUSTER_MIN_SIZE + 1)) +
+    Math.floor(random() * (cappedMaxSize - OBSTACLE_CLUSTER_MIN_SIZE + 1)) +
     OBSTACLE_CLUSTER_MIN_SIZE
   );
 }
@@ -365,7 +368,12 @@ function generateObstacleCluster(
   occupiedKeys: Set<string>,
   obstacleKeys: Set<string>,
   random: RandomSource,
+  maxSize = OBSTACLE_CLUSTER_MAX_SIZE,
 ) {
+  if (maxSize < OBSTACLE_CLUSTER_MIN_SIZE) {
+    return [];
+  }
+
   const boardCells = createBoardCells(boardSize);
 
   for (let attempt = 0; attempt < OBSTACLE_SEED_ATTEMPT_LIMIT; attempt += 1) {
@@ -378,7 +386,7 @@ function generateObstacleCluster(
       return [];
     }
 
-    const targetSize = getObstacleClusterSize(random);
+    const targetSize = getObstacleClusterSize(random, maxSize);
     const cluster = [seed];
     const clusterKeys = new Set([getPointKey(seed)]);
 
@@ -421,9 +429,21 @@ export function generateObstacles(
   const occupiedKeys = new Set(occupiedCells.map(getPointKey));
   const obstacleKeys = new Set<string>();
   const obstacles: Point[] = [];
+  const obstacleCellBudget = getObstacleCellBudget(boardSize);
 
-  for (let clusterIndex = 0; clusterIndex < getObstacleClusterCount(boardSize); clusterIndex += 1) {
-    const cluster = generateObstacleCluster(boardSize, occupiedKeys, obstacleKeys, random);
+  while (obstacles.length + OBSTACLE_CLUSTER_MIN_SIZE <= obstacleCellBudget) {
+    const remainingBudget = obstacleCellBudget - obstacles.length;
+    const cluster = generateObstacleCluster(
+      boardSize,
+      occupiedKeys,
+      obstacleKeys,
+      random,
+      remainingBudget,
+    );
+
+    if (cluster.length === 0) {
+      break;
+    }
 
     cluster.forEach((cell) => {
       const cellKey = getPointKey(cell);
