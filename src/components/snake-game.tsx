@@ -44,6 +44,15 @@ import {
   type LeaderboardEntry,
 } from "@/lib/snake-game-engine";
 import { createFoodFeedback, type FoodFeedback } from "@/lib/snake-food-feedback";
+import {
+  getServerLeaderboardSnapshot,
+  getStoredLeaderboardSnapshot,
+  insertLeaderboardEntry,
+  MAX_LEADERBOARD_PLAYER_NAME_LENGTH,
+  parseLeaderboardSnapshot,
+  subscribeToLeaderboardStore,
+  writeStoredLeaderboard,
+} from "@/lib/snake-leaderboard";
 import { cn } from "@/lib/utils";
 
 type LeaderboardPanelProps = {
@@ -52,11 +61,6 @@ type LeaderboardPanelProps = {
   testId: string;
 };
 
-const LEADERBOARD_CHANGE_EVENT = "classic-snake:leaderboard-change";
-const EMPTY_LEADERBOARD_SNAPSHOT = "";
-const LEADERBOARD_STORAGE_KEY = "classic-snake:leaderboard:v1";
-const LEADERBOARD_STORAGE_VERSION = 1;
-const MAX_PLAYER_NAME_LENGTH = 18;
 const START_SCREEN_CELLS = Array.from({ length: 15 }, (_, index) => ({
   index,
   isSnake: [2, 7, 8, 9, 14].includes(index),
@@ -83,121 +87,6 @@ const statusLabels: Record<GameStatus, string> = {
   paused: "Paused",
   lost: "Game over",
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function normalizePlayerName(value: unknown) {
-  if (typeof value !== "string") {
-    return "";
-  }
-
-  return value.trim().slice(0, MAX_PLAYER_NAME_LENGTH);
-}
-
-function normalizeLeaderboard(value: unknown): LeaderboardEntry[] {
-  const candidateEntries =
-    isRecord(value) && value.version === LEADERBOARD_STORAGE_VERSION
-      ? value.entries
-      : Array.isArray(value)
-        ? value
-        : [];
-
-  if (!Array.isArray(candidateEntries)) {
-    return [];
-  }
-
-  return candidateEntries
-    .flatMap((entry) => {
-      if (!isRecord(entry) || typeof entry.score !== "number" || !Number.isFinite(entry.score)) {
-        return [];
-      }
-
-      const score = Math.floor(entry.score);
-
-      if (score <= 0) {
-        return [];
-      }
-
-      return [
-        {
-          name: normalizePlayerName(entry.name),
-          score,
-        },
-      ];
-    })
-    .sort((first, second) => second.score - first.score)
-    .slice(0, LEADERBOARD_LIMIT);
-}
-
-function getStoredLeaderboardSnapshot() {
-  if (typeof window === "undefined") {
-    return EMPTY_LEADERBOARD_SNAPSHOT;
-  }
-
-  try {
-    return window.localStorage.getItem(LEADERBOARD_STORAGE_KEY) ?? EMPTY_LEADERBOARD_SNAPSHOT;
-  } catch {
-    return EMPTY_LEADERBOARD_SNAPSHOT;
-  }
-}
-
-function getServerLeaderboardSnapshot() {
-  return EMPTY_LEADERBOARD_SNAPSHOT;
-}
-
-function parseLeaderboardSnapshot(snapshot: string) {
-  if (snapshot === EMPTY_LEADERBOARD_SNAPSHOT) {
-    return [];
-  }
-
-  try {
-    return normalizeLeaderboard(JSON.parse(snapshot));
-  } catch {
-    return [];
-  }
-}
-
-function subscribeToLeaderboardStore(onStoreChange: () => void) {
-  if (typeof window === "undefined") {
-    return () => {};
-  }
-
-  window.addEventListener("storage", onStoreChange);
-  window.addEventListener(LEADERBOARD_CHANGE_EVENT, onStoreChange);
-
-  return () => {
-    window.removeEventListener("storage", onStoreChange);
-    window.removeEventListener(LEADERBOARD_CHANGE_EVENT, onStoreChange);
-  };
-}
-
-function writeStoredLeaderboard(leaderboard: LeaderboardEntry[]) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(
-      LEADERBOARD_STORAGE_KEY,
-      JSON.stringify({
-        entries: leaderboard,
-        version: LEADERBOARD_STORAGE_VERSION,
-      }),
-    );
-    window.dispatchEvent(new Event(LEADERBOARD_CHANGE_EVENT));
-  } catch {
-    return;
-  }
-}
-
-function insertLeaderboardEntry(leaderboard: LeaderboardEntry[], entry: LeaderboardEntry) {
-  return normalizeLeaderboard({
-    entries: [...leaderboard, entry],
-    version: LEADERBOARD_STORAGE_VERSION,
-  });
-}
 
 function isTypingTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) {
@@ -855,7 +744,7 @@ export function SnakeGame() {
                           className="h-9 w-full rounded-md border border-[color-mix(in_oklch,var(--snake-board-text)_22%,transparent)] bg-[color-mix(in_oklch,var(--snake-board-text)_10%,transparent)] px-3 text-sm font-medium text-[var(--snake-board-text)] outline-none transition placeholder:text-[color-mix(in_oklch,var(--snake-board-text)_54%,transparent)] focus-visible:border-[var(--snake-head)] focus-visible:ring-3 focus-visible:ring-[color-mix(in_oklch,var(--snake-head)_35%,transparent)]"
                           data-testid="snake-player-name"
                           id="snake-player-name"
-                          maxLength={MAX_PLAYER_NAME_LENGTH}
+                          maxLength={MAX_LEADERBOARD_PLAYER_NAME_LENGTH}
                           onChange={(event) => setPlayerName(event.target.value)}
                           placeholder="Player name"
                           type="text"
