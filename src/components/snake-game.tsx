@@ -11,7 +11,9 @@ import {
   SaveIcon,
 } from "lucide-react";
 import {
+  type Dispatch,
   type FormEvent,
+  type SetStateAction,
   useCallback,
   useEffect,
   useMemo,
@@ -42,6 +44,7 @@ import {
   type GameState,
   type GameStatus,
   type LeaderboardEntry,
+  type TimedFoodKind,
 } from "@/lib/snake-game-engine";
 import { createFoodFeedback, type FoodFeedback } from "@/lib/snake-food-feedback";
 import {
@@ -59,6 +62,13 @@ type LeaderboardPanelProps = {
   slotTestIdPrefix: string;
   slots: Array<LeaderboardEntry | null>;
   testId: string;
+};
+
+type TimedFoodLifecycleOptions = {
+  gameStatus: GameStatus;
+  kind: TimedFoodKind;
+  setGame: Dispatch<SetStateAction<GameState>>;
+  timedFood: GameState[TimedFoodKind];
 };
 
 const START_SCREEN_CELLS = Array.from({ length: 15 }, (_, index) => ({
@@ -129,6 +139,42 @@ function LeaderboardPanel({ slotTestIdPrefix, slots, testId }: LeaderboardPanelP
       </ol>
     </div>
   );
+}
+
+function useTimedFoodLifecycle({
+  gameStatus,
+  kind,
+  setGame,
+  timedFood,
+}: TimedFoodLifecycleOptions) {
+  useEffect(() => {
+    if (gameStatus !== "running" || timedFood !== null) {
+      return;
+    }
+
+    const spawn = window.setTimeout(() => {
+      setGame((current) => spawnTimedFood(current, kind));
+    }, getRandomDuration(BONUS_FOOD_SPAWN_DELAY_MIN_MS, BONUS_FOOD_SPAWN_DELAY_MAX_MS));
+
+    return () => window.clearTimeout(spawn);
+  }, [gameStatus, kind, setGame, timedFood]);
+
+  const expiresAt = timedFood?.expiresAt ?? null;
+
+  useEffect(() => {
+    if (gameStatus !== "running" || expiresAt === null) {
+      return;
+    }
+
+    const timeout = window.setTimeout(
+      () => {
+        setGame((current) => expireTimedFood(current, kind, expiresAt));
+      },
+      Math.max(0, expiresAt - Date.now()),
+    );
+
+    return () => window.clearTimeout(timeout);
+  }, [expiresAt, gameStatus, kind, setGame]);
 }
 
 export function SnakeGame() {
@@ -312,92 +358,24 @@ export function SnakeGame() {
     setFoodFeedbacks((current) => [...current, feedback].slice(-6));
   }, [game]);
 
-  useEffect(() => {
-    if (game.status !== "running" || visibleBonusFood !== null) {
-      return;
-    }
-
-    const spawn = window.setTimeout(() => {
-      setGame((current) => spawnTimedFood(current, "bonusFood"));
-    }, getRandomDuration(BONUS_FOOD_SPAWN_DELAY_MIN_MS, BONUS_FOOD_SPAWN_DELAY_MAX_MS));
-
-    return () => window.clearTimeout(spawn);
-  }, [game.status, visibleBonusFood]);
-
-  useEffect(() => {
-    if (game.status !== "running" || visibleSpeedFood !== null) {
-      return;
-    }
-
-    const spawn = window.setTimeout(() => {
-      setGame((current) => spawnTimedFood(current, "speedFood"));
-    }, getRandomDuration(BONUS_FOOD_SPAWN_DELAY_MIN_MS, BONUS_FOOD_SPAWN_DELAY_MAX_MS));
-
-    return () => window.clearTimeout(spawn);
-  }, [game.status, visibleSpeedFood]);
-
-  useEffect(() => {
-    if (game.status !== "running" || visibleSlowFood !== null) {
-      return;
-    }
-
-    const spawn = window.setTimeout(() => {
-      setGame((current) => spawnTimedFood(current, "slowFood"));
-    }, getRandomDuration(BONUS_FOOD_SPAWN_DELAY_MIN_MS, BONUS_FOOD_SPAWN_DELAY_MAX_MS));
-
-    return () => window.clearTimeout(spawn);
-  }, [game.status, visibleSlowFood]);
-
-  const bonusFoodExpiresAt = visibleBonusFood?.expiresAt ?? null;
-
-  useEffect(() => {
-    if (game.status !== "running" || bonusFoodExpiresAt === null) {
-      return;
-    }
-
-    const timeout = window.setTimeout(
-      () => {
-        setGame((current) => expireTimedFood(current, "bonusFood", bonusFoodExpiresAt));
-      },
-      Math.max(0, bonusFoodExpiresAt - Date.now()),
-    );
-
-    return () => window.clearTimeout(timeout);
-  }, [bonusFoodExpiresAt, game.status]);
-
-  const speedFoodExpiresAt = visibleSpeedFood?.expiresAt ?? null;
-
-  useEffect(() => {
-    if (game.status !== "running" || speedFoodExpiresAt === null) {
-      return;
-    }
-
-    const timeout = window.setTimeout(
-      () => {
-        setGame((current) => expireTimedFood(current, "speedFood", speedFoodExpiresAt));
-      },
-      Math.max(0, speedFoodExpiresAt - Date.now()),
-    );
-
-    return () => window.clearTimeout(timeout);
-  }, [game.status, speedFoodExpiresAt]);
-
-  const slowFoodExpiresAt = visibleSlowFood?.expiresAt ?? null;
-
-  useEffect(() => {
-    if (game.status !== "running" || slowFoodExpiresAt === null) {
-      return;
-    }
-
-    const timeout = window.setTimeout(
-      () => {
-        setGame((current) => expireTimedFood(current, "slowFood", slowFoodExpiresAt));
-      },
-      Math.max(0, slowFoodExpiresAt - Date.now()),
-    );
-
-    return () => window.clearTimeout(timeout);
-  }, [game.status, slowFoodExpiresAt]);
+  useTimedFoodLifecycle({
+    gameStatus: game.status,
+    kind: "bonusFood",
+    setGame,
+    timedFood: visibleBonusFood,
+  });
+  useTimedFoodLifecycle({
+    gameStatus: game.status,
+    kind: "speedFood",
+    setGame,
+    timedFood: visibleSpeedFood,
+  });
+  useTimedFoodLifecycle({
+    gameStatus: game.status,
+    kind: "slowFood",
+    setGame,
+    timedFood: visibleSlowFood,
+  });
 
   useEffect(() => {
     if (speed === null) {
