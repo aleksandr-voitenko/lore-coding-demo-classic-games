@@ -204,30 +204,43 @@ export function createInitialSnake(boardSize: number): Point[] {
   ];
 }
 
-export function createInitialFood(boardSize: number): Point {
+export function createInitialFood(boardSize: number, random?: RandomSource): Point {
   const center = Math.floor(boardSize / 2);
 
-  return {
-    x: Math.min(boardSize - 2, center + 4),
-    y: center,
-  };
+  if (random === undefined) {
+    return {
+      x: Math.min(boardSize - 2, center + 4),
+      y: center,
+    };
+  }
+
+  return generateFood(boardSize, createInitialSnake(boardSize), [], random);
 }
 
-export function createInitialObstacleSafeCells(boardSize: number) {
-  const snake = createInitialSnake(boardSize);
-  const food = createInitialFood(boardSize);
-  const head = snake[0];
-  const safeCells = new Map([...snake, food].map((cell) => [getPointKey(cell), cell]));
+function createInitialFoodPath(head: Point, food: Point) {
+  const pathCells = new Map<string, Point>();
+  const xStep = food.x >= head.x ? 1 : -1;
+  const yStep = food.y >= head.y ? 1 : -1;
 
-  if (head.y === food.y) {
-    const pathStart = Math.min(head.x, food.x);
-    const pathEnd = Math.max(head.x, food.x);
-
-    for (let x = pathStart; x <= pathEnd; x += 1) {
-      const pathCell = { x, y: head.y };
-      safeCells.set(getPointKey(pathCell), pathCell);
-    }
+  for (let x = head.x; x !== food.x + xStep; x += xStep) {
+    const pathCell = { x, y: head.y };
+    pathCells.set(getPointKey(pathCell), pathCell);
   }
+
+  for (let y = head.y; y !== food.y + yStep; y += yStep) {
+    const pathCell = { x: food.x, y };
+    pathCells.set(getPointKey(pathCell), pathCell);
+  }
+
+  return Array.from(pathCells.values());
+}
+
+export function createInitialObstacleSafeCells(boardSize: number, food = createInitialFood(boardSize)) {
+  const snake = createInitialSnake(boardSize);
+  const head = snake[0];
+  const safeCells = new Map(
+    [...snake, food, ...createInitialFoodPath(head, food)].map((cell) => [getPointKey(cell), cell]),
+  );
 
   ORTHOGONAL_OFFSETS.forEach((offset) => {
     const neighbor = {
@@ -454,7 +467,7 @@ export function createInitialGame({
   const normalizedBoardSize = normalizeBoardSize(boardSize);
   const randomSource = random ?? createSeededRandom(normalizedBoardSize);
   const snake = createInitialSnake(normalizedBoardSize);
-  const food = createInitialFood(normalizedBoardSize);
+  const food = createInitialFood(normalizedBoardSize, random);
 
   return {
     bestScore,
@@ -464,7 +477,7 @@ export function createInitialGame({
     food,
     obstacles: generateObstacles(
       normalizedBoardSize,
-      createInitialObstacleSafeCells(normalizedBoardSize),
+      createInitialObstacleSafeCells(normalizedBoardSize, food),
       randomSource,
     ),
     pendingLeaderboardEntry: null,

@@ -90,12 +90,33 @@ function getConnectedClusters(points: Point[]) {
 }
 
 describe("snake game engine", () => {
+  it("randomizes the first red food with the initial-game random source", () => {
+    const lowFoodGame = createInitialGame({
+      boardSize: 11,
+      random: createRandomSequence([0, 0, 0, 0, 0, 0, 0, 0]),
+    });
+    const middleFoodGame = createInitialGame({
+      boardSize: 11,
+      random: createRandomSequence([0.5, 0, 0, 0, 0, 0, 0, 0]),
+    });
+
+    expect(lowFoodGame.food).toEqual({ x: 0, y: 0 });
+    expect(middleFoodGame.food).toEqual({ x: 7, y: 5 });
+    expectDifferentPoint(lowFoodGame.food, middleFoodGame.food);
+    [lowFoodGame, middleFoodGame].forEach((game) => {
+      expect(game.snake.every((segment) => !isSamePoint(game.food, segment))).toBe(true);
+      expect(game.obstacles.every((obstacle) => !isSamePoint(game.food, obstacle))).toBe(true);
+    });
+  });
+
   it("generates persistent obstacle islands away from the starting path", () => {
     const game = createInitialGame({
       boardSize: 11,
       random: createRandomSequence([0, 0, 0, 0, 0, 0, 0, 0]),
     });
-    const safeCellKeys = new Set(createInitialObstacleSafeCells(game.boardSize).map(getPointKey));
+    const safeCellKeys = new Set(
+      createInitialObstacleSafeCells(game.boardSize, game.food).map(getPointKey),
+    );
     const obstacleKeys = new Set(game.obstacles.map(getPointKey));
     const clusters = getConnectedClusters(game.obstacles);
 
