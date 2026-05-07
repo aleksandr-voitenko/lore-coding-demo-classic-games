@@ -1,11 +1,7 @@
 import {
-  BONUS_FOOD_SCORE,
+  getActiveTimedFoodEntries,
   getGameSpeed,
   isSamePoint,
-  SLOW_FOOD_SCORE,
-  SLOW_FOOD_SPEED_DECREASE,
-  SPEED_FOOD_SCORE,
-  SPEED_FOOD_SPEED_INCREASE,
   type GameState,
   type Point,
 } from "./snake-game-engine";
@@ -39,33 +35,24 @@ export function createFoodFeedback(
     lines.push(`+1 ${POINT_REWARD_ICON}`);
   }
 
-  if (
-    previousGame.bonusFood !== null &&
-    isSamePoint(position, previousGame.bonusFood.position)
-  ) {
-    lines.push(`+${BONUS_FOOD_SCORE} ${POINT_REWARD_ICON}`);
-  }
-
-  if (
-    previousGame.speedFood !== null &&
-    isSamePoint(position, previousGame.speedFood.position)
-  ) {
-    lines.push(
-      `+${SPEED_FOOD_SCORE} ${POINT_REWARD_ICON}`,
-      `+${SPEED_FOOD_SPEED_INCREASE} ${SPEED_REWARD_ICON}`,
-    );
-  }
-
-  if (
-    previousGame.slowFood !== null &&
-    isSamePoint(position, previousGame.slowFood.position)
-  ) {
-    lines.push(`+${SLOW_FOOD_SCORE} ${POINT_REWARD_ICON}`);
-
-    if ((getGameSpeed(nextGame) ?? 1) < (getGameSpeed(previousGame) ?? 1)) {
-      lines.push(`-${SLOW_FOOD_SPEED_DECREASE} ${SPEED_REWARD_ICON}`);
+  getActiveTimedFoodEntries(previousGame).forEach(({ rule, timedFood }) => {
+    if (!isSamePoint(position, timedFood.position)) {
+      return;
     }
-  }
+
+    lines.push(`+${rule.score} ${POINT_REWARD_ICON}`);
+
+    if (rule.speedEffect?.direction === "increase") {
+      lines.push(`+${rule.speedEffect.amount} ${SPEED_REWARD_ICON}`);
+    }
+
+    if (
+      rule.speedEffect?.direction === "decrease" &&
+      (getGameSpeed(nextGame) ?? 1) < (getGameSpeed(previousGame) ?? 1)
+    ) {
+      lines.push(`-${rule.speedEffect.amount} ${SPEED_REWARD_ICON}`);
+    }
+  });
 
   if (lines.length === 0) {
     return null;

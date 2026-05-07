@@ -4,6 +4,7 @@ import {
   advanceSnakeGame,
   BONUS_FOOD_MIN_SNAKE_DISTANCE,
   BONUS_FOOD_OBSTACLE_DISTANCE_MAX,
+  BONUS_FOOD_SPAWN_DELAY_MIN_MS,
   BONUS_FOOD_TIMEOUT_MIN_MS,
   createInitialObstacleSafeCells,
   createInitialGame,
@@ -14,10 +15,13 @@ import {
   getGameTickDelay,
   getManhattanDistance,
   getPointKey,
+  getTimedFoodSpawnDelay,
   isSamePoint,
   OBSTACLE_CLUSTER_MAX_SIZE,
   SLOW_FOOD_TIMEOUT_MIN_MS,
   spawnTimedFood,
+  TIMED_FOOD_KINDS,
+  TIMED_FOOD_RULES,
   type GameState,
   type Point,
 } from "./snake-game-engine";
@@ -90,6 +94,35 @@ function getConnectedClusters(points: Point[]) {
 }
 
 describe("snake game engine", () => {
+  it("keeps timed food rules aligned with timed food kinds", () => {
+    expect(Object.keys(TIMED_FOOD_RULES)).toEqual([...TIMED_FOOD_KINDS]);
+    expect(TIMED_FOOD_RULES.bonusFood).toMatchObject({
+      label: "Yellow apple",
+      preferredObstacleDistanceMax: BONUS_FOOD_OBSTACLE_DISTANCE_MAX,
+      score: 2,
+      timeoutMinMs: BONUS_FOOD_TIMEOUT_MIN_MS,
+    });
+    expect(TIMED_FOOD_RULES.speedFood).toMatchObject({
+      label: "Purple diamond",
+      score: 3,
+      speedEffect: {
+        amount: 1,
+        direction: "increase",
+      },
+      timeoutMinMs: BONUS_FOOD_TIMEOUT_MIN_MS,
+    });
+    expect(TIMED_FOOD_RULES.slowFood).toMatchObject({
+      label: "Blue triangle",
+      score: 1,
+      speedEffect: {
+        amount: 1,
+        direction: "decrease",
+      },
+      timeoutMinMs: SLOW_FOOD_TIMEOUT_MIN_MS,
+    });
+    expect(getTimedFoodSpawnDelay("bonusFood", () => 0)).toBe(BONUS_FOOD_SPAWN_DELAY_MIN_MS);
+  });
+
   it("randomizes the first red food with the initial-game random source", () => {
     const lowFoodGame = createInitialGame({
       boardSize: 11,

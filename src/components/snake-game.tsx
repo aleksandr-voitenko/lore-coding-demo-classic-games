@@ -26,14 +26,14 @@ import { Button } from "@/components/ui/button";
 import {
   advanceSnakeGame,
   BOARD_SIZE_OPTIONS,
-  BONUS_FOOD_SPAWN_DELAY_MAX_MS,
-  BONUS_FOOD_SPAWN_DELAY_MIN_MS,
   createBoardCells,
   createInitialGame,
   expireTimedFood,
+  getActiveTimedFoodEntries,
   getGameTickDelay,
   getPointKey,
-  getRandomDuration,
+  getTimedFoodSpawnDelay,
+  isTimedFoodKind,
   LEADERBOARD_LIMIT,
   MAX_BOARD_SIZE,
   MIN_BOARD_SIZE,
@@ -71,6 +71,8 @@ type TimedFoodLifecycleOptions = {
   timedFood: GameState[TimedFoodKind];
 };
 
+type BoardCellType = "body" | "food" | "head" | "obstacle" | TimedFoodKind;
+
 const START_SCREEN_CELLS = Array.from({ length: 15 }, (_, index) => ({
   index,
   isSnake: [2, 7, 8, 9, 14].includes(index),
@@ -96,6 +98,15 @@ const statusLabels: Record<GameStatus, string> = {
   running: "Running",
   paused: "Paused",
   lost: "Game over",
+};
+
+const timedFoodCellClassNames: Record<TimedFoodKind, string> = {
+  bonusFood:
+    "rounded-full bg-[var(--snake-bonus-food)] shadow-[0_0_20px_color-mix(in_oklch,var(--snake-bonus-food)_58%,transparent)]",
+  speedFood:
+    "scale-75 rotate-45 rounded-[0.08rem] bg-[var(--snake-speed-food)] shadow-[0_0_20px_color-mix(in_oklch,var(--snake-speed-food)_60%,transparent)]",
+  slowFood:
+    "scale-90 rounded-none bg-[var(--snake-slow-food)] shadow-[0_0_20px_color-mix(in_oklch,var(--snake-slow-food)_62%,transparent)] [clip-path:polygon(50%_8%,92%_88%,8%_88%)]",
 };
 
 function isTypingTarget(target: EventTarget | null) {
@@ -154,7 +165,7 @@ function useTimedFoodLifecycle({
 
     const spawn = window.setTimeout(() => {
       setGame((current) => spawnTimedFood(current, kind));
-    }, getRandomDuration(BONUS_FOOD_SPAWN_DELAY_MIN_MS, BONUS_FOOD_SPAWN_DELAY_MAX_MS));
+    }, getTimedFoodSpawnDelay(kind));
 
     return () => window.clearTimeout(spawn);
   }, [gameStatus, kind, setGame, timedFood]);
@@ -195,36 +206,36 @@ export function SnakeGame() {
   const leaderboardBestScore = leaderboard[0]?.score ?? 0;
   const bestScore = Math.max(game.bestScore, leaderboardBestScore);
   const pendingLeaderboardEntry = game.pendingLeaderboardEntry;
-  const visibleBonusFood = game.bonusFood ?? null;
-  const visibleSlowFood = game.slowFood ?? null;
-  const visibleSpeedFood = game.speedFood ?? null;
   const boardCells = useMemo(() => createBoardCells(game.boardSize), [game.boardSize]);
+  const activeTimedFoodEntries = useMemo(
+    () =>
+      getActiveTimedFoodEntries({
+        bonusFood: game.bonusFood,
+        slowFood: game.slowFood,
+        speedFood: game.speedFood,
+      }),
+    [game.bonusFood, game.slowFood, game.speedFood],
+  );
+  const activeTimedFoodLabel = activeTimedFoodEntries
+    .map(({ rule }) => ` ${rule.label} active.`)
+    .join("");
 
   const occupiedCells = useMemo(() => {
-    const cells = new Map<
-      string,
-      "body" | "bonusFood" | "food" | "head" | "obstacle" | "slowFood" | "speedFood"
-    >();
+    const cells = new Map<string, BoardCellType>();
 
     game.obstacles.forEach((obstacle) => {
       cells.set(getPointKey(obstacle), "obstacle");
     });
     cells.set(getPointKey(game.food), "food");
-    if (visibleBonusFood !== null) {
-      cells.set(getPointKey(visibleBonusFood.position), "bonusFood");
-    }
-    if (visibleSlowFood !== null) {
-      cells.set(getPointKey(visibleSlowFood.position), "slowFood");
-    }
-    if (visibleSpeedFood !== null) {
-      cells.set(getPointKey(visibleSpeedFood.position), "speedFood");
-    }
+    activeTimedFoodEntries.forEach(({ kind, timedFood }) => {
+      cells.set(getPointKey(timedFood.position), kind);
+    });
     game.snake.forEach((segment, index) => {
       cells.set(getPointKey(segment), index === 0 ? "head" : "body");
     });
 
     return cells;
-  }, [game.food, game.obstacles, game.snake, visibleBonusFood, visibleSlowFood, visibleSpeedFood]);
+  }, [activeTimedFoodEntries, game.food, game.obstacles, game.snake]);
 
   const speed = useMemo(() => {
     return getGameTickDelay({
@@ -362,19 +373,19 @@ export function SnakeGame() {
     gameStatus: game.status,
     kind: "bonusFood",
     setGame,
-    timedFood: visibleBonusFood,
+    timedFood: game.bonusFood,
   });
   useTimedFoodLifecycle({
     gameStatus: game.status,
     kind: "speedFood",
     setGame,
-    timedFood: visibleSpeedFood,
+    timedFood: game.speedFood,
   });
   useTimedFoodLifecycle({
     gameStatus: game.status,
     kind: "slowFood",
     setGame,
-    timedFood: visibleSlowFood,
+    timedFood: game.slowFood,
   });
 
   useEffect(() => {
@@ -567,11 +578,7 @@ export function SnakeGame() {
             <div
               aria-label={`Snake board. Field ${game.boardSize} by ${game.boardSize}. Score ${game.score}. ${statusLabels[game.status]}.${
                 game.obstacles.length === 0 ? "" : ` ${game.obstacles.length} obstacle blocks.`
-              }${
-                visibleBonusFood === null ? "" : " Yellow apple active."
-              }${visibleSpeedFood === null ? "" : " Purple diamond active."
-              }${visibleSlowFood === null ? "" : " Blue triangle active."
-              }`}
+              }${activeTimedFoodLabel}`}
               className="grid size-full gap-px rounded-[0.375rem] bg-[var(--snake-grid)] p-px"
               data-testid="snake-board"
               role="img"
@@ -581,6 +588,9 @@ export function SnakeGame() {
             >
               {boardCells.map((cell) => {
                 const cellType = occupiedCells.get(getPointKey(cell));
+                const timedFoodCellClassName = isTimedFoodKind(cellType)
+                  ? timedFoodCellClassNames[cellType]
+                  : null;
 
                 return (
                   <span
@@ -595,12 +605,7 @@ export function SnakeGame() {
                         "rounded-full bg-[var(--snake-food)] shadow-[0_0_18px_color-mix(in_oklch,var(--snake-food)_48%,transparent)]",
                       cellType === "obstacle" &&
                         "rounded-[0.12rem] bg-[var(--snake-obstacle)] shadow-[inset_0_1px_0_color-mix(in_oklch,var(--snake-obstacle-edge)_65%,transparent),inset_0_-2px_0_color-mix(in_oklch,black_28%,transparent)]",
-                      cellType === "bonusFood" &&
-                        "rounded-full bg-[var(--snake-bonus-food)] shadow-[0_0_20px_color-mix(in_oklch,var(--snake-bonus-food)_58%,transparent)]",
-                      cellType === "speedFood" &&
-                        "scale-75 rotate-45 rounded-[0.08rem] bg-[var(--snake-speed-food)] shadow-[0_0_20px_color-mix(in_oklch,var(--snake-speed-food)_60%,transparent)]",
-                      cellType === "slowFood" &&
-                        "scale-90 rounded-none bg-[var(--snake-slow-food)] shadow-[0_0_20px_color-mix(in_oklch,var(--snake-slow-food)_62%,transparent)] [clip-path:polygon(50%_8%,92%_88%,8%_88%)]",
+                      timedFoodCellClassName,
                     )}
                     key={getPointKey(cell)}
                   />
