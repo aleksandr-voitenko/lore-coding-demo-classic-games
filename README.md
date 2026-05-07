@@ -1,6 +1,9 @@
 # Task Workflow Test
 
-Development environment for task-based project work.
+Task Workflow Test is a Next.js App Router project used for task-based development
+practice. The app currently centers on a polished Snake game with deterministic
+gameplay tests, local leaderboard persistence, timed special foods, obstacle
+islands, and a full-board win state.
 
 ## Stack
 
@@ -8,7 +11,9 @@ Development environment for task-based project work.
 - TypeScript
 - Next.js App Router
 - React with the React Compiler enabled
+- Tailwind CSS v4
 - shadcn/ui
+- Vitest
 - ESLint
 
 ## Getting Started
@@ -25,28 +30,50 @@ Run the development server:
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to play the game.
 
-Start editing the app in `src/app/page.tsx`. The page auto-updates as you edit the file.
+## Project Map
+
+- `src/app/page.tsx` renders the Snake game route.
+- `src/components/snake-game.tsx` owns React state, browser events, timers,
+  board rendering, controls, and leaderboard UI orchestration.
+- `src/lib/snake-game-engine.ts` contains pure gameplay rules for movement,
+  food placement, scoring, timed-food behavior, obstacles, win/loss state, and
+  speed.
+- `src/lib/snake-leaderboard.ts` contains localStorage snapshot parsing,
+  normalization, subscription, and insertion rules for the leaderboard.
+- `src/lib/snake-food-feedback.ts` derives pickup feedback labels from gameplay
+  state transitions.
+- `src/lib/*.test.ts` contains deterministic Vitest coverage for gameplay,
+  leaderboard persistence, and pickup feedback behavior.
+
+When changing gameplay rules, prefer adding or updating engine tests with
+injected randomness or time. Keep browser-only concerns in the React component
+and reusable state rules in `src/lib`.
 
 ## Checks
 
+Run the deterministic test suite:
+
 ```bash
-npm run lint
+npm test
+```
+
+Run the standard project checks:
+
+```bash
 npm run typecheck
+npm run lint
 npm run build
 ```
 
 ## UI Components
 
-shadcn/ui is initialized with Tailwind CSS v4, the `base-nova` preset, and the `@/*` import alias. Add components with:
+shadcn/ui is initialized with Tailwind CSS v4, the `base-nova` preset, and the
+`@/*` import alias. Add components with:
 
 ```bash
 npx shadcn@latest add <component>
 ```
 
-The starter `button` component is available at `src/components/ui/button.tsx`.
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The shared button component is available at `src/components/ui/button.tsx`.
