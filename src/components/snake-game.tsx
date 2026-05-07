@@ -98,6 +98,7 @@ const statusLabels: Record<GameStatus, string> = {
   running: "Running",
   paused: "Paused",
   lost: "Game over",
+  won: "You won",
 };
 
 const timedFoodCellClassNames: Record<TimedFoodKind, string> = {
@@ -226,7 +227,9 @@ export function SnakeGame() {
     game.obstacles.forEach((obstacle) => {
       cells.set(getPointKey(obstacle), "obstacle");
     });
-    cells.set(getPointKey(game.food), "food");
+    if (game.food !== null) {
+      cells.set(getPointKey(game.food), "food");
+    }
     activeTimedFoodEntries.forEach(({ kind, timedFood }) => {
       cells.set(getPointKey(timedFood.position), kind);
     });
@@ -250,7 +253,8 @@ export function SnakeGame() {
     [leaderboard],
   );
   const canSelectBoardSize =
-    game.status === "ready" || (game.status === "lost" && pendingLeaderboardEntry === null);
+    game.status === "ready" ||
+    ((game.status === "lost" || game.status === "won") && pendingLeaderboardEntry === null);
 
   const selectBoardSize = useCallback(
     (nextBoardSize: number) => {
@@ -417,7 +421,7 @@ export function SnakeGame() {
         toggleRunState();
       }
 
-      if (event.key === "Enter" && game.status === "lost") {
+      if (event.key === "Enter" && (game.status === "lost" || game.status === "won")) {
         event.preventDefault();
         restartGame();
       }
@@ -432,7 +436,7 @@ export function SnakeGame() {
     game.status === "running" ? "Pause" : game.status === "paused" ? "Resume" : "Start";
   const PrimaryIcon = game.status === "running" ? PauseIcon : PlayIcon;
   const showStartScreen = game.status === "ready";
-  const showGameOverScreen = game.status === "lost";
+  const showGameOverScreen = game.status === "lost" || game.status === "won";
   const showSideActions = game.status === "running" || game.status === "paused";
   const showBoardState = game.status !== "running";
 

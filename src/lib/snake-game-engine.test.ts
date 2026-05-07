@@ -6,9 +6,11 @@ import {
   BONUS_FOOD_OBSTACLE_DISTANCE_MAX,
   BONUS_FOOD_SPAWN_DELAY_MIN_MS,
   BONUS_FOOD_TIMEOUT_MIN_MS,
+  createBoardCells,
   createInitialObstacleSafeCells,
   createInitialGame,
   expireTimedFood,
+  generateFood,
   generateObstacles,
   generateTimedFoodPosition,
   getGameSpeed,
@@ -41,7 +43,13 @@ function createRunningGame(overrides: Partial<GameState> = {}): GameState {
   };
 }
 
-function expectDifferentPoint(first: Point, second: Point) {
+function expectPoint(point: Point | null): asserts point is Point {
+  expect(point).not.toBeNull();
+}
+
+function expectDifferentPoint(first: Point | null, second: Point | null) {
+  expectPoint(first);
+  expectPoint(second);
   expect(isSamePoint(first, second)).toBe(false);
 }
 
@@ -135,11 +143,21 @@ describe("snake game engine", () => {
 
     expect(lowFoodGame.food).toEqual({ x: 0, y: 0 });
     expect(middleFoodGame.food).toEqual({ x: 7, y: 5 });
-    expectDifferentPoint(lowFoodGame.food, middleFoodGame.food);
+    const lowFood = lowFoodGame.food;
+    const middleFood = middleFoodGame.food;
+    expectPoint(lowFood);
+    expectPoint(middleFood);
+    expectDifferentPoint(lowFood, middleFood);
     [lowFoodGame, middleFoodGame].forEach((game) => {
-      expect(game.snake.every((segment) => !isSamePoint(game.food, segment))).toBe(true);
-      expect(game.obstacles.every((obstacle) => !isSamePoint(game.food, obstacle))).toBe(true);
+      const food = game.food;
+      expectPoint(food);
+      expect(game.snake.every((segment) => !isSamePoint(food, segment))).toBe(true);
+      expect(game.obstacles.every((obstacle) => !isSamePoint(food, obstacle))).toBe(true);
     });
+  });
+
+  it("returns no red-food position when every board cell is occupied", () => {
+    expect(generateFood(3, createBoardCells(3), [], () => 0)).toBeNull();
   });
 
   it("generates persistent obstacle islands away from the starting path", () => {
@@ -147,8 +165,10 @@ describe("snake game engine", () => {
       boardSize: 11,
       random: createRandomSequence([0, 0, 0, 0, 0, 0, 0, 0]),
     });
+    const food = game.food;
+    expectPoint(food);
     const safeCellKeys = new Set(
-      createInitialObstacleSafeCells(game.boardSize, game.food).map(getPointKey),
+      createInitialObstacleSafeCells(game.boardSize, food).map(getPointKey),
     );
     const obstacleKeys = new Set(game.obstacles.map(getPointKey));
     const clusters = getConnectedClusters(game.obstacles);
@@ -179,16 +199,18 @@ describe("snake game engine", () => {
 
   it("places timed food away from the snake without overlapping red food or obstacles", () => {
     const game = createInitialGame({ boardSize: 11 });
+    const food = game.food;
+    expectPoint(food);
     const position = generateTimedFoodPosition(
       game.boardSize,
       game.snake,
-      game.food,
+      food,
       game.obstacles,
       () => 0,
     );
 
     expect(position).not.toBeNull();
-    expect(isSamePoint(position!, game.food)).toBe(false);
+    expect(isSamePoint(position!, food)).toBe(false);
     expect(game.obstacles.every((obstacle) => !isSamePoint(position!, obstacle))).toBe(true);
     expect(game.snake.every((segment) => !isSamePoint(position!, segment))).toBe(true);
     expect(
@@ -380,7 +402,9 @@ describe("snake game engine", () => {
     });
 
     expect(nextGame.food).toEqual({ x: 2, y: 0 });
-    expect(game.obstacles.every((obstacle) => !isSamePoint(nextGame.food, obstacle))).toBe(true);
+    const food = nextGame.food;
+    expectPoint(food);
+    expect(game.obstacles.every((obstacle) => !isSamePoint(food, obstacle))).toBe(true);
   });
 
   it("keeps timed food from spawning over obstacle islands", () => {
@@ -572,6 +596,41 @@ describe("snake game engine", () => {
     expect(nextGame.score).toBe(4);
     expect(nextGame.snake).toEqual(game.snake);
     expect(nextGame.obstacles).toEqual(game.obstacles);
+    expect(nextGame.bonusFood).toBeNull();
+    expect(nextGame.slowFood).toBeNull();
+    expect(nextGame.speedFood).toBeNull();
+  });
+
+  it("wins instead of respawning red food when the snake fills the board", () => {
+    const game = createRunningGame({
+      bestScore: 0,
+      boardSize: 3,
+      food: { x: 2, y: 2 },
+      score: 0,
+      snake: [
+        { x: 1, y: 2 },
+        { x: 1, y: 1 },
+        { x: 0, y: 1 },
+        { x: 0, y: 2 },
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+        { x: 2, y: 0 },
+        { x: 2, y: 1 },
+      ],
+    });
+
+    const nextGame = advanceSnakeGame(game, {
+      leaderboard: [],
+      random: () => 0,
+    });
+
+    expect(nextGame.status).toBe("won");
+    expect(nextGame.food).toBeNull();
+    expect(nextGame.score).toBe(1);
+    expect(nextGame.bestScore).toBe(1);
+    expect(nextGame.snake).toHaveLength(9);
+    expect(nextGame.snake[0]).toEqual({ x: 2, y: 2 });
+    expect(nextGame.pendingLeaderboardEntry).toEqual({ rank: 0, score: 1 });
     expect(nextGame.bonusFood).toBeNull();
     expect(nextGame.slowFood).toBeNull();
     expect(nextGame.speedFood).toBeNull();

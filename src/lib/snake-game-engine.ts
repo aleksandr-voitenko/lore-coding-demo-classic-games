@@ -1,5 +1,5 @@
 export type Direction = "up" | "right" | "down" | "left";
-export type GameStatus = "ready" | "running" | "paused" | "lost";
+export type GameStatus = "ready" | "running" | "paused" | "lost" | "won";
 
 export type Point = {
   x: number;
@@ -26,7 +26,7 @@ export type GameState = {
   bonusFood: TimedFood | null;
   boardSize: number;
   direction: Direction;
-  food: Point;
+  food: Point | null;
   obstacles: Point[];
   pendingLeaderboardEntry: PendingLeaderboardEntry | null;
   queuedDirection: Direction;
@@ -284,7 +284,12 @@ export function createInitialFood(boardSize: number, random?: RandomSource): Poi
     };
   }
 
-  return generateFood(boardSize, createInitialSnake(boardSize), [], random);
+  return (
+    generateFood(boardSize, createInitialSnake(boardSize), [], random) ?? {
+      x: Math.min(boardSize - 2, center + 4),
+      y: center,
+    }
+  );
 }
 
 function createInitialFoodPath(head: Point, food: Point) {
@@ -448,18 +453,25 @@ export function generateFood(
   const occupiedCells = new Set([...snake, ...additionalOccupiedCells].map(getPointKey));
   const boardCells = createBoardCells(boardSize);
   const openCells = boardCells.filter((cell) => !occupiedCells.has(getPointKey(cell)));
-  const nextCell = openCells[Math.floor(random() * openCells.length)];
 
-  return nextCell ?? { x: 0, y: 0 };
+  if (openCells.length === 0) {
+    return null;
+  }
+
+  return openCells[Math.floor(random() * openCells.length)] ?? null;
 }
 
 export function generateTimedFoodPosition(
   boardSize: number,
   snake: Point[],
-  food: Point,
+  food: Point | null,
   additionalOccupiedCells: Point[] = [],
   random: RandomSource = Math.random,
 ) {
+  if (food === null) {
+    return null;
+  }
+
   const openCells = getTimedFoodCandidateCells(boardSize, snake, food, additionalOccupiedCells);
   const nextCell = getRandomItem(openCells, random);
 
@@ -487,7 +499,7 @@ function getTimedFoodCandidateCells(
 export function createTimedFood(
   boardSize: number,
   snake: Point[],
-  food: Point,
+  food: Point | null,
   additionalOccupiedCells: Point[] = [],
   {
     now = Date.now,
@@ -498,6 +510,10 @@ export function createTimedFood(
     timeoutMinMs = BONUS_FOOD_TIMEOUT_MIN_MS,
   }: TimedFoodOptions = {},
 ) {
+  if (food === null) {
+    return null;
+  }
+
   const candidateCells = getTimedFoodCandidateCells(
     boardSize,
     snake,
@@ -614,7 +630,11 @@ export function getLeaderboardRank(score: number, leaderboard: LeaderboardEntry[
 }
 
 export function queueGameDirection(current: GameState, nextDirection: Direction): GameState {
-  if (current.status === "lost" || isOppositeDirection(nextDirection, current.direction)) {
+  if (
+    current.status === "lost" ||
+    current.status === "won" ||
+    isOppositeDirection(nextDirection, current.direction)
+  ) {
     return current;
   }
 
@@ -659,6 +679,17 @@ function getClearedTimedFoodState() {
     slowFood: null,
     speedFood: null,
   };
+}
+
+function createPendingLeaderboardEntry(score: number, leaderboard: LeaderboardEntry[]) {
+  const rank = getLeaderboardRank(score, leaderboard);
+
+  return rank === null
+    ? null
+    : {
+        rank,
+        score,
+      };
 }
 
 function getEatenTimedFoodKinds(current: GameState, nextHead: Point) {
@@ -773,7 +804,7 @@ export function advanceSnakeGame(
     x: head.x + offset.x,
     y: head.y + offset.y,
   };
-  const ateFood = isSamePoint(nextHead, current.food);
+  const ateFood = current.food !== null && isSamePoint(nextHead, current.food);
   const eatenTimedFoodKinds = getEatenTimedFoodKinds(current, nextHead);
   const ateGrowthFood = ateFood || eatenTimedFoodKinds.length > 0;
   const collisionBody = ateGrowthFood ? current.snake : current.snake.slice(0, -1);
@@ -786,18 +817,10 @@ export function advanceSnakeGame(
   const hitObstacle = current.obstacles.some((obstacle) => isSamePoint(obstacle, nextHead));
 
   if (hitWall || hitBody || hitObstacle) {
-    const rank = getLeaderboardRank(current.score, leaderboard);
-
     return {
       ...current,
       direction,
-      pendingLeaderboardEntry:
-        rank === null
-          ? null
-          : {
-              rank,
-              score: current.score,
-            },
+      pendingLeaderboardEntry: createPendingLeaderboardEntry(current.score, leaderboard),
       queuedDirection: direction,
       ...getClearedTimedFoodState(),
       status: "lost",
@@ -822,15 +845,33 @@ export function advanceSnakeGame(
     ...current.obstacles,
     ...getActiveTimedFoodPositions(nextTimedFoodState),
   ];
+  const nextFood = ateFood
+    ? generateFood(current.boardSize, nextSnake, occupiedSpecialFood, random)
+    : current.food;
+
+  if (ateFood && nextFood === null) {
+    return {
+      bestScore: Math.max(current.bestScore, nextScore, leaderboardBestScore),
+      ...getClearedTimedFoodState(),
+      boardSize: current.boardSize,
+      direction,
+      food: null,
+      obstacles: current.obstacles,
+      pendingLeaderboardEntry: createPendingLeaderboardEntry(nextScore, leaderboard),
+      queuedDirection: direction,
+      score: nextScore,
+      snake: nextSnake,
+      speedBoosts: nextSpeedBoosts,
+      status: "won",
+    };
+  }
 
   return {
     bestScore: Math.max(current.bestScore, nextScore, leaderboardBestScore),
     ...nextTimedFoodState,
     boardSize: current.boardSize,
     direction,
-    food: ateFood
-      ? generateFood(current.boardSize, nextSnake, occupiedSpecialFood, random)
-      : current.food,
+    food: nextFood,
     obstacles: current.obstacles,
     pendingLeaderboardEntry: current.pendingLeaderboardEntry,
     queuedDirection: direction,

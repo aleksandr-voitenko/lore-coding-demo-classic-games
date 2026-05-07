@@ -31,7 +31,7 @@ export function createFoodFeedback(
   const position = nextGame.snake[0];
   const lines: string[] = [];
 
-  if (isSamePoint(position, previousGame.food)) {
+  if (previousGame.food !== null && isSamePoint(position, previousGame.food)) {
     lines.push(`+1 ${POINT_REWARD_ICON}`);
   }
 
