@@ -1,12 +1,113 @@
-# General workflow
+# Software development best practices
+
+## Core principles
+
+Do not make unsupported guesses. 
+
+Ask the user when a requirement is blocking, risky, irreversible, or meaningfully ambiguous. If the ambiguity is minor and repository context strongly suggests the answer, make a reasonable assumption, document it, and continue.
+
+Start non-trivial work with research or planning. Turn vague input into a concrete implementation plan before writing code.
+
+Consider alternatives when a decision affects architecture, behavior, public APIs, data models, dependencies, performance, security, accessibility, or maintainability. Present trade-offs to the user when the choice is meaningful.
+
+Preserve existing behavior unless the task intentionally changes it. If behavior changes as a side effect, call it out and confirm with the user that it is intended.
+
+Keep changes atomic. Do not mix unrelated behavior changes, refactors, formatting, dependency updates, or UI cleanup in one task. If a cleanup or refactor is strictly necessary to safely implement the requested change, explicitly state why in your plan and proceed only if appropriate.
+
+If a separate, unrelated issue is discovered, leave it unchanged but notify the user about it. Include the fix in the current task only when necessary to complete or verify the requested change safely.
+
+## Architecture, deployment, and feature management
+
+Ensure all database migrations, data model updates, and API changes are backward compatible to allow for safe, zero-downtime deployments. 
+
+Use feature flags or toggles for incomplete, large, or risky new features. This allows code to be merged into the main branch safely without exposing unfinished behavior in production.
+
+For any significant architectural, technical, or dependency change, draft an Architectural Decision Record (ADR) outlining the context, alternatives considered, and the final decision. Present this to the user for review before proceeding.
+
+## Code quality
+
+Prefer clear, maintainable code over clever code.
+
+Use names that describe behavior or intent and align with the surrounding codebase vocabulary.
+
+Avoid unnecessary abstractions. Add abstractions only when they reduce duplication, clarify intent, or make future changes safer.
+
+Keep implementation details local when possible. Avoid large rewrites unless explicitly required by the task.
+
+Follow the Boy Scout Rule: leave the code better than you found it. While respecting the rule of atomic commits, always update outdated inline documentation, docstrings, or comments when modifying a function to ensure long-term codebase health. Do not leave obsolete comments behind.
+
+Implement graceful error handling. Do not swallow exceptions silently, and ensure errors are logged with sufficient context to make debugging easier in production.
+
+For refactors, behavior should remain strictly unchanged unless the task explicitly says otherwise.
+
+## Formatting and mechanical changes
+
+Keep formatting-only and mechanical changes separate from behavior changes.
+
+Formatting-only commits should contain no intended behavior changes.
+
+Mechanical commits may include codemods, generated-name normalization, simple file renames, repetitive import updates, or repetitive path updates with no intended behavior change.
+
+If formatting or mechanical changes affect many lines and reduce useful blame history, add the commit hash to `.git-blame-ignore-revs` when the repository uses that file.
+
+## Testing and verification
+
+Verification should prove the behavior that matters.
+
+For each important behavior introduced, changed, fixed, or intentionally preserved, include at least one matching verification step.
+
+Prefer automated tests when the project structure supports them.
+
+Use deterministic tests for randomness, timers, generated data, and asynchronous behavior when practical.
+
+For UI changes, verify the specific screen, state, and interaction that changed.
+
+For API or data-model changes, verify relevant request, response, migration, compatibility, and error behavior.
+
+For accessibility changes, verify relevant focus, keyboard, semantic, label, or screen-reader-visible behavior.
+
+For performance changes, include measurements or before-and-after evidence when practical.
+
+Do not claim that tests, builds, migrations, browser checks, or user verification were performed unless you have actually executed and observed them.
+
+## Standard development checks
+
+Standard development checks are expected during development, but they are not a substitute for behavior-specific verification.
+
+Examples:
+
+- linting;
+- typechecking;
+- building;
+- formatting checks;
+- `git diff --check`;
+- smoke-starting the local app;
+- checking that a local route returns HTTP 200.
+
+Do not list standard checks in every task description when they pass.
+
+List standard checks only when:
+
+- the task is specifically about that check, build step, formatter, CI behavior, or project setup;
+- the check is the only meaningful verification for the task;
+- the check failed and affected the task;
+- the check was expected but was not run.
+
+If an expected standard check was not run, list it with a reason.
+
+Starting a local server is not meaningful verification by itself. Mention it only when a specific behavior was checked through the running app.
+
+# Task-based workflow
 
 ## Purpose
 
 This repository is developed through explicit, task-based changes.
 
-A task is an atomic unit of development effort. Each meaningful change should be traceable through the commit message that introduced it. Together, these commit messages form a historical knowledge graph for human developers and AI agents.
+A task is an atomic unit of development effort. Each meaningful change should be traceable through the commit message that introduced it.
 
-For nearly every meaningful line of code, it should be possible to use repository history to understand:
+Together, task commit messages form a historical knowledge graph for human developers and AI agents.
+
+For nearly every meaningful line of code, repository history should explain:
 
 - why the code exists;
 - what task introduced or changed it;
@@ -15,23 +116,13 @@ For nearly every meaningful line of code, it should be possible to use repositor
 
 Generated files, vendored code, lockfiles, binary assets, and external snapshots may be exceptions, but their changes should still be explained when they are part of a task.
 
-## Common principles
-
-Do not make unsupported guesses. If a requirement is blocking, risky, irreversible, or meaningfully ambiguous, ask the user before proceeding. If the ambiguity is minor and the likely answer is clear from repository context, make a reasonable assumption, document it, and continue.
-
-Start non-trivial work with research or planning. Turn vague input into a concrete implementation plan that is useful both as a human roadmap and as future historical context.
-
-When important implementation choices exist, consider alternatives. Present trade-offs to the user when the decision affects architecture, behavior, public APIs, data models, dependencies, performance, security, accessibility, or maintainability.
-
-Keep tasks atomic. Do not mix unrelated behavior changes, refactors, formatting, dependency updates, or UI cleanup in one task. If a separate issue is discovered, leave it unchanged, ask whether to expand the task, or create a separate task.
-
-Preserve useful blame history. Avoid broad unrelated rewrites. Keep mechanical formatting separate from behavior changes.
-
 ## Reading historical context
 
-Task descriptions are stored in commit messages. Before changing existing code, inspect the relevant implementation and the historical task descriptions behind it.
+Task descriptions are stored in commit messages.
 
-Useful commands include:
+Before changing existing code, inspect the relevant implementation and historical task descriptions.
+
+Useful commands:
 
 ```bash
 git blame -L <start>,<end> -- <file>
@@ -43,7 +134,9 @@ git log --follow -- <file>
 
 When files have been renamed or moved, use history-following commands where appropriate.
 
-For formatting-only or mechanical commits, look past the mechanical commit to the meaningful earlier task when possible. If the repository uses `.git-blame-ignore-revs`, prefer:
+For formatting-only or mechanical commits, look past the mechanical commit to the meaningful earlier task when possible.
+
+If the repository uses `.git-blame-ignore-revs`, prefer:
 
 ```bash
 git blame --ignore-revs-file .git-blame-ignore-revs -- <file>
@@ -57,12 +150,7 @@ When exploring history:
 4. Follow linked commits when they provide useful context.
 5. Use this history to guide the implementation plan.
 
-If exploration reveals that the original task is incomplete, misleading, or likely to require a different approach, stop and tell the user:
-
-- what was discovered;
-- why it matters;
-- realistic implementation options;
-- the recommended next step.
+If exploration reveals that the original task is incomplete, misleading, or likely to require a different approach, stop and tell the user what was discovered, why it matters, the realistic options, and the recommended next step.
 
 ## Commit message format
 
@@ -84,7 +172,7 @@ Verification:
 ...
 ```
 
-The first line is the commit subject. It must start with a short task type followed by a concise description of the completed task.
+The first line is the commit subject. It must start with a task type followed by a concise description of the completed task.
 
 The `Links:` section is optional. Omit it only when no related historical commits are useful.
 
@@ -100,7 +188,7 @@ Do not use Markdown headings starting with `#` inside commit messages, because G
 
 ## Task types
 
-Use one of these task types in the commit subject.
+Use the type that best describes the primary purpose of the task.
 
 ```text
 Feature:        Add a new user-visible or system-visible capability.
@@ -125,33 +213,9 @@ Chore:          Perform repository maintenance that does not fit another type.
 
 Prefer the most specific accurate type. Use `Chore:` sparingly.
 
-When a task touches several categories, choose the type that best describes the primary purpose of the task, not incidental supporting work.
+When a task touches several categories, choose the type that describes the primary purpose, not incidental supporting work.
 
-Examples:
-
-```text
-Feature: Add timed yellow apples to Snake
-Improvement: Spawn yellow apples beside obstacle islands
-Improvement: Simplify the qualifying-score save form
-Bug fix: Prevent duplicate leaderboard submissions
-Refactor: Extract shared score-formatting helper
-Revert: Revert optimistic leaderboard saves
-Formatting: Format source files with the project formatter
-Mechanical: Rename generated route constants
-Dependency: Update Vite and related plugins
-Database: Add index for leaderboard score lookups
-CI: Add typecheck step to pull request workflow
-Build: Configure production bundle splitting
-Test: Add regression tests for tied leaderboard scores
-Docs: Document the leaderboard scoring rules
-Config: Add local development environment defaults
-Security: Require CSRF token for score submission
-Performance: Reduce Snake board rerenders during movement
-Accessibility: Add accessible labels to Snake board cells
-Chore: Remove unused development script
-```
-
-Category selection examples:
+Examples of type selection:
 
 - If a feature requires a database migration, use `Feature:` unless the database change is the main purpose.
 - If a bug fix requires refactoring, use `Bug fix:`.
@@ -163,7 +227,7 @@ Category selection examples:
 
 ## Commit message sections
 
-### Subject line
+### Subject
 
 The subject line must be:
 
@@ -177,16 +241,14 @@ Good examples:
 
 ```text
 Feature: Add timed yellow apples to Snake
-Improvement: Preserve draft comments after page refresh
-Bug fix: Fix leaderboard sorting for tied scores
-Improvement: Add email validation to the signup form
+Bug fix: Prevent duplicate leaderboard submissions
+Refactor: Extract shared score-formatting helper
 ```
 
 Weak examples:
 
 ```text
 Improvement: Update component
-Improvement: Change state
 Bug fix: Fix bug
 Refactor: Refactor stuff
 ```
@@ -195,7 +257,7 @@ Refactor: Refactor stuff
 
 The optional `Links:` section contains related commit hashes that provide useful historical context.
 
-Prefer full commit hashes when possible. Each linked commit must include a short reason explaining why it matters.
+Prefer full commit hashes. Each linked commit must include a short reason explaining why it matters.
 
 Include commits that introduced or significantly changed relevant behavior, data models, APIs, UI, tests, configuration, or architectural decisions.
 
@@ -207,17 +269,18 @@ Example:
 Links:
 - e876f30f26473edad0e21384fa7e5e8f91bfb2f1 — introduced the profile page structure extended by this task
 - 7f5ef1510dd84282344d662055b2b92496013d55 — added the ranking field used by this task
+- 93ff88bf7320dc9487f303951ce7f6bf35939e38 — added obstacle generation that must avoid the initial food and starting path
 ```
 
 ### Context
 
 The `Context:` section explains why the task exists.
 
-It should describe the relevant current state, the problem or opportunity, and the desired outcome.
+Describe the relevant current state, the problem or opportunity, and the desired outcome.
 
-Include important constraints, assumptions, external references, and alternatives considered when they will help a future reader understand the decision.
+Include important constraints, assumptions, external references, and alternatives considered when they help a future reader understand the decision.
 
-For bug fixes, explain the incorrect behavior, the expected behavior, and the cause if known.
+For bug fixes, explain the incorrect behavior, expected behavior, and cause if known.
 
 For refactors, explain why the refactor is useful and whether behavior is intended to remain unchanged.
 
@@ -227,19 +290,17 @@ For reverts, explain why the original change is being reverted.
 
 The `Implementation:` section explains what changed.
 
-It should describe the transition from the previous project state to the new project state. Mention important files, components, classes, functions, migrations, configuration changes, API changes, dependency changes, and tests when relevant.
+Mention important files, components, classes, functions, migrations, configuration changes, API changes, dependency changes, and tests when relevant.
 
-Be specific enough that a future reader can understand the shape of the solution without reading the entire diff. Do not duplicate the diff line by line.
+Be specific enough that a future reader can understand the solution without reading the full diff. Do not duplicate the diff line by line.
 
 For behavior changes, describe the new behavior.
 
 For bug fixes, explain how the fix addresses the cause.
 
-For refactors, explicitly state whether behavior is intended to remain unchanged.
+For refactors, state whether behavior is intended to remain unchanged.
 
-For cleanup work, explain why it was necessary for the task.
-
-Mention test files in `Implementation:` only as part of the changed code structure. Put detailed test coverage and test results in `Verification:`.
+Mention test files only as part of the changed code structure. Put detailed test coverage and test results in `Verification:`.
 
 ### Verification
 
@@ -251,16 +312,7 @@ For each important behavior introduced, changed, fixed, or intentionally preserv
 
 Prefer verification entries that describe observable behavior, not only commands.
 
-Weak example:
-
-```text
-Verification:
-- Ran `npm test`.
-- Ran `npm run build`.
-- User verified the app.
-```
-
-Better example:
+Good:
 
 ```text
 Verification:
@@ -270,65 +322,30 @@ Verification:
 - Ran `npm test`; all 18 tests passed, including the new timed-food placement cases.
 ```
 
+Weak:
+
+```text
+Verification:
+- Ran `npm test`.
+- Ran `npm run build`.
+- Started the local dev server.
+```
+
 If manual verification was performed, describe the specific behavior that was checked.
 
-Weak example:
-
-```text
-Verification:
-- Started the local dev server at `http://localhost:3000`.
-```
-
-Better example:
-
-```text
-Verification:
-- Manually verified in the browser that yellow apples can appear beside obstacle islands during gameplay.
-```
-
-Starting a local server is not meaningful verification by itself. Only mention it if a specific behavior was checked through the running app.
-
-Standard development checks are expected during development, but they should not be listed in every `Verification:` section when they pass.
-
-Standard development checks include:
-
-- linting;
-- typechecking;
-- building;
-- formatting checks;
-- `git diff --check`;
-- smoke-starting the local app;
-- checking that a local route returns HTTP 200.
-
-List standard development checks only when:
-
-- the task is specifically about that check, build step, formatter, CI behavior, or project setup;
-- the check is the only meaningful verification for a formatting, mechanical, dependency, CI, build, configuration, or infrastructure task;
-- the check failed and the failure affected the task;
-- the check was not run.
-
-If an expected standard check was not run, list it with a reason.
-
-Example:
-
-```text
-Verification:
-- Added deterministic tests covering tied-score leaderboard sorting.
-- Ran `npm test`; the leaderboard sorting tests passed.
-- Not run: browser verification, because the changed behavior is isolated to the tested sorting helper.
-```
-
-Do not claim that tests, builds, migrations, browser checks, or user verification were performed unless they were actually performed.
+If something was not verified, say so clearly and explain why.
 
 Do not use generic checks as a substitute for behavior-specific verification.
 
-## Task workflow
+Do not list standard development checks when they pass unless they are directly relevant. Follow the standard-check rules from the best-practices section.
 
-### Starting a new task
+## Task lifecycle
+
+### Starting a task
 
 When the user says `Start a new task`, treat it as the boundary of a new task, even if there was previous conversation.
 
-When finalizing the task, gather required information from the latest `Start a new task` message onward, plus any relevant repository history discovered during exploration.
+When finalizing the task, gather required information from the latest `Start a new task` message onward, plus relevant repository history discovered during exploration.
 
 If the user starts a task using this form:
 
@@ -338,7 +355,7 @@ Start a new task: implement something useful
 
 use the text after `Start a new task:` to infer a draft subject and task type.
 
-If the type, subject, goal, or context is insufficient to plan the work, ask the user for the missing information. If the missing information is minor and the repository context strongly suggests the intended behavior, document the assumption and proceed.
+If the type, subject, goal, or context is insufficient to plan the work, ask for the missing information unless the repository context makes a safe assumption clear.
 
 ### Planning
 
@@ -350,7 +367,7 @@ Before editing code:
 4. Consider important implementation alternatives.
 5. Summarize the implementation plan before making substantial changes.
 
-Do not track only implementation mechanisms. Convert the task goal into observable behavior.
+Convert implementation goals into observable behavior.
 
 Weak:
 
@@ -364,7 +381,7 @@ Better:
 A yellow apple can appear during gameplay, awards 2 points when eaten, expires after its timeout, never overlaps other food, and is cleared when the game ends.
 ```
 
-Use these observable behaviors to guide implementation, tests, manual checks, and the final `Verification:` section.
+Use observable behaviors to guide implementation, tests, manual checks, and the final `Verification:` section.
 
 ### Editing code
 
@@ -374,7 +391,7 @@ While editing code:
 - avoid unrelated cleanup;
 - keep formatting-only changes separate where practical;
 - add or update tests when the project structure supports it;
-- keep track of historical commits that should appear in `Links:`;
+- track historical commits that should appear in `Links:`;
 - note assumptions, rejected alternatives, and discoveries that should appear in `Context:`.
 
 If existing behavior changes as a side effect, call it out and confirm that it is intended.
@@ -386,16 +403,16 @@ When the user says `Finalize the task`, create a commit-message-ready task descr
 Before writing it:
 
 1. Inspect the final diff.
-2. Review the current task context from the conversation.
-3. Select the task type that best describes the primary purpose of the completed work.
-4. Review relevant historical commits for the `Links:` section.
-5. Identify the concrete behaviors added, changed, fixed, or intentionally preserved.
+2. Review the current task context.
+3. Select the task type that best describes the primary purpose.
+4. Review relevant historical commits for `Links:`.
+5. Identify concrete behaviors added, changed, fixed, or intentionally preserved.
 6. Check which verification steps were actually performed.
-7. Make sure every important changed behavior has a matching verification item.
-8. Omit routine development checks that passed unless they are directly relevant to the task type.
+7. Make sure every important changed behavior has matching verification.
+8. Omit routine development checks that passed unless directly relevant.
 9. Include expected checks that were not run, with reasons.
 
-The final task description should describe the completed task, not the entire conversation.
+The final task description should describe the completed task, not the whole conversation.
 
 Do not include intermediate steps unless they explain an important decision, rejected alternative, constraint, or discovery.
 
