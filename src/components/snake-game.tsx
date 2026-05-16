@@ -69,6 +69,10 @@ type TimedFoodLifecycleOptions = {
 
 type BoardCellType = "body" | "food" | "head" | "obstacle" | TimedFoodKind;
 
+type SnakeGameProps = {
+  onBackToMenu?: () => void;
+};
+
 const START_SCREEN_CELLS = Array.from({ length: 15 }, (_, index) => ({
   index,
   isSnake: [2, 7, 8, 9, 14].includes(index),
@@ -199,7 +203,7 @@ function useTimedFoodLifecycle({
   }, [expiresAt, gameStatus, kind, setGame]);
 }
 
-export function SnakeGame() {
+export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
   const [game, setGame] = useState<GameState>(() => createInitialGame());
   const [foodFeedbacks, setFoodFeedbacks] = useState<FoodFeedback[]>([]);
   const [isSavingLeaderboardScore, setIsSavingLeaderboardScore] = useState(false);
@@ -488,21 +492,35 @@ export function SnakeGame() {
     <main className="min-h-svh bg-[var(--snake-page)] px-4 py-6 text-[var(--snake-ink)] sm:px-6 lg:py-8">
       <section className="mx-auto grid w-full max-w-6xl gap-5 lg:min-h-[calc(100svh-4rem)] lg:grid-cols-[minmax(17rem,20rem)_minmax(0,1fr)] lg:items-center">
         <aside className="flex flex-col gap-4 rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] p-4 shadow-sm">
-          <div className="flex flex-col gap-2">
-            <div
-              className="h-2 w-14 rounded-full bg-[var(--snake-accent)]"
-              aria-hidden="true"
-            />
-            <h1 className="text-3xl font-semibold tracking-normal text-balance">
-              Classic Snake
-            </h1>
-            <p
-              className="text-sm font-medium text-[var(--snake-muted)]"
-              aria-live="polite"
-              data-testid="snake-status"
-            >
-              {statusLabels[game.status]}
-            </p>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-col gap-2">
+              <div
+                className="h-2 w-14 rounded-full bg-[var(--snake-accent)]"
+                aria-hidden="true"
+              />
+              <h1 className="text-3xl font-semibold tracking-normal text-balance">
+                Classic Snake
+              </h1>
+              <p
+                className="text-sm font-medium text-[var(--snake-muted)]"
+                aria-live="polite"
+                data-testid="snake-status"
+              >
+                {statusLabels[game.status]}
+              </p>
+            </div>
+            {onBackToMenu ? (
+              <Button
+                aria-label="Back to game menu"
+                data-testid="snake-back-to-menu"
+                onClick={onBackToMenu}
+                size="icon"
+                type="button"
+                variant="outline"
+              >
+                <ArrowLeftIcon />
+              </Button>
+            ) : null}
           </div>
 
           <dl className="grid grid-cols-2 gap-3">

@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Classic Snake",
-  description: "A simple classic snake game built with Next.js.",
+  title: "Game Library",
+  description: "A card-based game launcher with Classic Snake.",
 };
 
 export default function RootLayout({

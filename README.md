@@ -1,9 +1,9 @@
 # Task Workflow Test
 
 Task Workflow Test is a Next.js App Router project used for task-based development
-practice. The app currently centers on a polished Snake game with deterministic
-gameplay tests, SQLite-backed leaderboard persistence, timed special foods, obstacle
-islands, and a full-board win state.
+practice. The app opens to a card-based game menu and currently includes a
+polished Snake game with deterministic gameplay tests, SQLite-backed leaderboard
+persistence, timed special foods, obstacle islands, and a full-board win state.
 
 ## Stack
 
@@ -31,7 +31,8 @@ Run the development server:
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to play the game.
+Open [http://localhost:3000](http://localhost:3000) to choose Classic Snake from
+the game menu.
 
 The server leaderboard uses SQLite. By default the database is created at
 `.data/snake-leaderboard.sqlite`, which is ignored by git. On a VPS, set
@@ -41,9 +42,13 @@ the SQLite adapter without changing the client API.
 
 ## Project Map
 
-- `src/app/page.tsx` renders the Snake game route.
+- `src/app/page.tsx` renders the game launcher route.
+- `src/components/game-launcher.tsx` owns the game-card menu and selected game
+  state.
 - `src/components/snake-game.tsx` owns React state, browser events, timers,
-  board rendering, controls, and leaderboard UI orchestration.
+  board rendering, controls, menu return, and leaderboard UI orchestration.
+- `public/images/snake-game-card.png` contains the Classic Snake menu artwork,
+  sourced from Clear_code's CC0 Snake game assets on OpenGameArt.
 - `src/lib/snake-game-engine.ts` contains pure gameplay rules for movement,
   food placement, scoring, timed-food behavior, obstacles, win/loss state, and
   speed.
