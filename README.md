@@ -2,7 +2,7 @@
 
 Task Workflow Test is a Next.js App Router project used for task-based development
 practice. The app currently centers on a polished Snake game with deterministic
-gameplay tests, local leaderboard persistence, timed special foods, obstacle
+gameplay tests, SQLite-backed leaderboard persistence, timed special foods, obstacle
 islands, and a full-board win state.
 
 ## Stack
@@ -11,6 +11,7 @@ islands, and a full-board win state.
 - TypeScript
 - Next.js App Router
 - React with the React Compiler enabled
+- SQLite through `better-sqlite3`
 - Tailwind CSS v4
 - shadcn/ui
 - Vitest
@@ -32,6 +33,12 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) to play the game.
 
+The server leaderboard uses SQLite. By default the database is created at
+`.data/snake-leaderboard.sqlite`, which is ignored by git. On a VPS, set
+`SNAKE_LEADERBOARD_SQLITE_PATH` to a path on durable storage. The API depends on
+a small leaderboard store interface, so a future Postgres adapter can replace
+the SQLite adapter without changing the client API.
+
 ## Project Map
 
 - `src/app/page.tsx` renders the Snake game route.
@@ -40,8 +47,10 @@ Open [http://localhost:3000](http://localhost:3000) to play the game.
 - `src/lib/snake-game-engine.ts` contains pure gameplay rules for movement,
   food placement, scoring, timed-food behavior, obstacles, win/loss state, and
   speed.
-- `src/lib/snake-leaderboard.ts` contains localStorage snapshot parsing,
-  normalization, subscription, and insertion rules for the leaderboard.
+- `src/lib/snake-leaderboard.ts` contains shared leaderboard normalization and
+  client API helpers.
+- `src/lib/server/sqlite-snake-leaderboard-store.ts` contains the SQLite-backed
+  leaderboard store used by `src/app/api/snake/leaderboard/route.ts`.
 - `src/lib/snake-food-feedback.ts` derives pickup feedback labels from gameplay
   state transitions.
 - `src/lib/*.test.ts` contains deterministic Vitest coverage for gameplay,

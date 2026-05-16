@@ -19,7 +19,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
 } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -48,19 +47,16 @@ import {
 } from "@/lib/snake-game-engine";
 import { createFoodFeedback, type FoodFeedback } from "@/lib/snake-food-feedback";
 import {
-  getServerLeaderboardSnapshot,
-  getStoredLeaderboardSnapshot,
-  insertLeaderboardEntry,
+  fetchLeaderboard,
   MAX_LEADERBOARD_PLAYER_NAME_LENGTH,
-  parseLeaderboardSnapshot,
-  subscribeToLeaderboardStore,
-  writeStoredLeaderboard,
+  submitLeaderboardScore,
 } from "@/lib/snake-leaderboard";
 import { cn } from "@/lib/utils";
 
 type LeaderboardPanelProps = {
   slotTestIdPrefix: string;
   slots: Array<LeaderboardEntry | null>;
+  statusMessage?: string;
   testId: string;
 };
 
@@ -123,7 +119,12 @@ function isTypingTarget(target: EventTarget | null) {
   );
 }
 
-function LeaderboardPanel({ slotTestIdPrefix, slots, testId }: LeaderboardPanelProps) {
+function LeaderboardPanel({
+  slotTestIdPrefix,
+  slots,
+  statusMessage,
+  testId,
+}: LeaderboardPanelProps) {
   return (
     <div
       className="flex w-full max-w-xs flex-col gap-2 rounded-md border border-[color-mix(in_oklch,var(--snake-board-text)_14%,transparent)] bg-[color-mix(in_oklch,var(--snake-grid)_42%,transparent)] p-3"
@@ -149,6 +150,15 @@ function LeaderboardPanel({ slotTestIdPrefix, slots, testId }: LeaderboardPanelP
           </li>
         ))}
       </ol>
+      {statusMessage ? (
+        <p
+          aria-live="polite"
+          className="text-xs font-medium text-[color-mix(in_oklch,var(--snake-board-text)_68%,transparent)]"
+          data-testid={`${testId}-status`}
+        >
+          {statusMessage}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -192,21 +202,17 @@ function useTimedFoodLifecycle({
 export function SnakeGame() {
   const [game, setGame] = useState<GameState>(() => createInitialGame());
   const [foodFeedbacks, setFoodFeedbacks] = useState<FoodFeedback[]>([]);
+  const [isSavingLeaderboardScore, setIsSavingLeaderboardScore] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardLoadFailed, setLeaderboardLoadFailed] = useState(false);
   const [playerName, setPlayerName] = useState("");
+  const [scoreSaveFailed, setScoreSaveFailed] = useState(false);
   const foodFeedbackIdRef = useRef(0);
   const previousGameRef = useRef(game);
-  const leaderboardSnapshot = useSyncExternalStore(
-    subscribeToLeaderboardStore,
-    getStoredLeaderboardSnapshot,
-    getServerLeaderboardSnapshot,
-  );
-  const leaderboard = useMemo(
-    () => parseLeaderboardSnapshot(leaderboardSnapshot),
-    [leaderboardSnapshot],
-  );
   const leaderboardBestScore = leaderboard[0]?.score ?? 0;
   const bestScore = Math.max(game.bestScore, leaderboardBestScore);
   const pendingLeaderboardEntry = game.pendingLeaderboardEntry;
+  const leaderboardStatusMessage = leaderboardLoadFailed ? "Leaderboard unavailable" : undefined;
   const boardCells = useMemo(() => createBoardCells(game.boardSize), [game.boardSize]);
   const activeTimedFoodEntries = useMemo(
     () =>
@@ -261,6 +267,7 @@ export function SnakeGame() {
       const boardSize = normalizeBoardSize(nextBoardSize);
 
       setPlayerName("");
+      setScoreSaveFailed(false);
       setFoodFeedbacks([]);
       setGame((current) => {
         if (
@@ -299,8 +306,32 @@ export function SnakeGame() {
     );
   }, [leaderboard, leaderboardBestScore]);
 
+  useEffect(() => {
+    let isCurrent = true;
+
+    fetchLeaderboard()
+      .then((nextLeaderboard) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setLeaderboard(nextLeaderboard);
+        setLeaderboardLoadFailed(false);
+      })
+      .catch(() => {
+        if (isCurrent) {
+          setLeaderboardLoadFailed(true);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
   const toggleRunState = useCallback(() => {
     setPlayerName("");
+    setScoreSaveFailed(false);
     setGame((current) => {
       if (current.status === "running") {
         return { ...current, status: "paused" };
@@ -323,6 +354,7 @@ export function SnakeGame() {
 
   const restartGame = useCallback(() => {
     setPlayerName("");
+    setScoreSaveFailed(false);
     setFoodFeedbacks([]);
     setGame((current) => ({
       ...createInitialGame({
@@ -335,28 +367,40 @@ export function SnakeGame() {
   }, [leaderboardBestScore]);
 
   const saveLeaderboardScore = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
+    async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
 
-      if (pendingLeaderboardEntry === null) {
+      if (pendingLeaderboardEntry === null || isSavingLeaderboardScore) {
         return;
       }
 
-      const nextLeaderboard = insertLeaderboardEntry(leaderboard, {
-        name: playerName,
-        score: pendingLeaderboardEntry.score,
-      });
-      const nextBestScore = nextLeaderboard[0]?.score ?? 0;
+      setIsSavingLeaderboardScore(true);
+      setScoreSaveFailed(false);
 
-      writeStoredLeaderboard(nextLeaderboard);
-      setGame((current) => ({
-        ...current,
-        bestScore: Math.max(current.bestScore, nextBestScore),
-        pendingLeaderboardEntry: null,
-      }));
-      setPlayerName("");
+      try {
+        const result = await submitLeaderboardScore({
+          boardSize: game.boardSize,
+          name: playerName,
+          score: pendingLeaderboardEntry.score,
+        });
+        const nextBestScore = result.entries[0]?.score ?? 0;
+
+        setLeaderboard(result.entries);
+        setLeaderboardLoadFailed(false);
+        setGame((current) => ({
+          ...current,
+          bestScore: Math.max(current.bestScore, nextBestScore),
+          pendingLeaderboardEntry: null,
+        }));
+        setPlayerName("");
+      } catch {
+        setLeaderboardLoadFailed(true);
+        setScoreSaveFailed(true);
+      } finally {
+        setIsSavingLeaderboardScore(false);
+      }
     },
-    [leaderboard, pendingLeaderboardEntry, playerName],
+    [game.boardSize, isSavingLeaderboardScore, pendingLeaderboardEntry, playerName],
   );
 
   useEffect(() => {
@@ -681,6 +725,7 @@ export function SnakeGame() {
                 <LeaderboardPanel
                   slotTestIdPrefix="snake-leaderboard-slot"
                   slots={leaderboardSlots}
+                  statusMessage={leaderboardStatusMessage}
                   testId="snake-start-leaderboard"
                 />
                 <Button
@@ -730,6 +775,7 @@ export function SnakeGame() {
                           autoFocus
                           className="h-9 w-full rounded-md border border-[color-mix(in_oklch,var(--snake-board-text)_22%,transparent)] bg-[color-mix(in_oklch,var(--snake-board-text)_10%,transparent)] px-3 text-sm font-medium text-[var(--snake-board-text)] outline-none transition placeholder:text-[color-mix(in_oklch,var(--snake-board-text)_54%,transparent)] focus-visible:border-[var(--snake-head)] focus-visible:ring-3 focus-visible:ring-[color-mix(in_oklch,var(--snake-head)_35%,transparent)]"
                           data-testid="snake-player-name"
+                          disabled={isSavingLeaderboardScore}
                           id="snake-player-name"
                           maxLength={MAX_LEADERBOARD_PLAYER_NAME_LENGTH}
                           onChange={(event) => setPlayerName(event.target.value)}
@@ -742,18 +788,29 @@ export function SnakeGame() {
                         <Button
                           className="w-full"
                           data-testid="snake-save-score-button"
+                          disabled={isSavingLeaderboardScore}
                           size="lg"
                           type="submit"
                           variant="secondary"
                         >
                           <SaveIcon data-icon="inline-start" />
-                          Save
+                          {isSavingLeaderboardScore ? "Saving" : "Save"}
                         </Button>
                       </div>
+                      {scoreSaveFailed ? (
+                        <p
+                          aria-live="polite"
+                          className="text-xs font-medium text-[color-mix(in_oklch,var(--snake-board-text)_76%,transparent)]"
+                          data-testid="snake-save-score-error"
+                        >
+                          Could not save score. Try again.
+                        </p>
+                      ) : null}
                     </form>
                     <LeaderboardPanel
                       slotTestIdPrefix="snake-final-leaderboard-slot"
                       slots={leaderboardSlots}
+                      statusMessage={leaderboardStatusMessage}
                       testId="snake-final-leaderboard"
                     />
                   </>
@@ -775,6 +832,7 @@ export function SnakeGame() {
                     <LeaderboardPanel
                       slotTestIdPrefix="snake-final-leaderboard-slot"
                       slots={leaderboardSlots}
+                      statusMessage={leaderboardStatusMessage}
                       testId="snake-final-leaderboard"
                     />
                     <Button
