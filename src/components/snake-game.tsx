@@ -16,24 +16,21 @@ import {
   type SetStateAction,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
 
+import { GameBoardColumn, GameHeader, GameShell, GameSidebar } from "@/components/game-layout";
+import { isTypingTarget } from "@/components/game-input";
+import { SnakeBoard } from "@/components/snake-board";
 import { Button } from "@/components/ui/button";
 import {
   advanceSnakeGame,
   BOARD_SIZE_OPTIONS,
-  createBoardCells,
   createInitialGame,
   expireTimedFood,
-  getActiveTimedFoodEntries,
   getGameTickDelay,
-  getPointKey,
   getTimedFoodSpawnDelay,
-  isTimedFoodKind,
-  LEADERBOARD_LIMIT,
   MAX_BOARD_SIZE,
   MIN_BOARD_SIZE,
   normalizeBoardSize,
@@ -46,12 +43,9 @@ import {
   type TimedFoodKind,
 } from "@/lib/snake-game-engine";
 import { createFoodFeedback, type FoodFeedback } from "@/lib/snake-food-feedback";
-import {
-  fetchLeaderboard,
-  MAX_LEADERBOARD_PLAYER_NAME_LENGTH,
-  submitLeaderboardScore,
-} from "@/lib/snake-leaderboard";
+import { MAX_LEADERBOARD_PLAYER_NAME_LENGTH } from "@/lib/snake-leaderboard";
 import { cn } from "@/lib/utils";
+import { useSnakeLeaderboard } from "@/hooks/use-snake-leaderboard";
 
 type LeaderboardPanelProps = {
   slotTestIdPrefix: string;
@@ -66,8 +60,6 @@ type TimedFoodLifecycleOptions = {
   setGame: Dispatch<SetStateAction<GameState>>;
   timedFood: GameState[TimedFoodKind];
 };
-
-type BoardCellType = "body" | "food" | "head" | "obstacle" | TimedFoodKind;
 
 type SnakeGameProps = {
   onBackToMenu?: () => void;
@@ -100,28 +92,6 @@ const statusLabels: Record<GameStatus, string> = {
   lost: "Game over",
   won: "You won",
 };
-
-const timedFoodCellClassNames: Record<TimedFoodKind, string> = {
-  bonusFood:
-    "rounded-full bg-[var(--snake-bonus-food)] shadow-[0_0_20px_color-mix(in_oklch,var(--snake-bonus-food)_58%,transparent)]",
-  speedFood:
-    "scale-75 rotate-45 rounded-[0.08rem] bg-[var(--snake-speed-food)] shadow-[0_0_20px_color-mix(in_oklch,var(--snake-speed-food)_60%,transparent)]",
-  slowFood:
-    "scale-90 rounded-none bg-[var(--snake-slow-food)] shadow-[0_0_20px_color-mix(in_oklch,var(--snake-slow-food)_62%,transparent)] [clip-path:polygon(50%_8%,92%_88%,8%_88%)]",
-};
-
-function isTypingTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  return (
-    target.isContentEditable ||
-    target.tagName === "INPUT" ||
-    target.tagName === "SELECT" ||
-    target.tagName === "TEXTAREA"
-  );
-}
 
 function LeaderboardPanel({
   slotTestIdPrefix,
@@ -206,62 +176,31 @@ function useTimedFoodLifecycle({
 export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
   const [game, setGame] = useState<GameState>(() => createInitialGame());
   const [foodFeedbacks, setFoodFeedbacks] = useState<FoodFeedback[]>([]);
-  const [isSavingLeaderboardScore, setIsSavingLeaderboardScore] = useState(false);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [leaderboardLoadFailed, setLeaderboardLoadFailed] = useState(false);
-  const [playerName, setPlayerName] = useState("");
-  const [scoreSaveFailed, setScoreSaveFailed] = useState(false);
   const foodFeedbackIdRef = useRef(0);
   const previousGameRef = useRef(game);
-  const leaderboardBestScore = leaderboard[0]?.score ?? 0;
-  const bestScore = Math.max(game.bestScore, leaderboardBestScore);
   const pendingLeaderboardEntry = game.pendingLeaderboardEntry;
-  const leaderboardStatusMessage = leaderboardLoadFailed ? "Leaderboard unavailable" : undefined;
-  const boardCells = useMemo(() => createBoardCells(game.boardSize), [game.boardSize]);
-  const activeTimedFoodEntries = useMemo(
-    () =>
-      getActiveTimedFoodEntries({
-        bonusFood: game.bonusFood,
-        slowFood: game.slowFood,
-        speedFood: game.speedFood,
-      }),
-    [game.bonusFood, game.slowFood, game.speedFood],
-  );
-  const activeTimedFoodLabel = activeTimedFoodEntries
-    .map(({ rule }) => ` ${rule.label} active.`)
-    .join("");
-
-  const occupiedCells = useMemo(() => {
-    const cells = new Map<string, BoardCellType>();
-
-    game.obstacles.forEach((obstacle) => {
-      cells.set(getPointKey(obstacle), "obstacle");
-    });
-    if (game.food !== null) {
-      cells.set(getPointKey(game.food), "food");
-    }
-    activeTimedFoodEntries.forEach(({ kind, timedFood }) => {
-      cells.set(getPointKey(timedFood.position), kind);
-    });
-    game.snake.forEach((segment, index) => {
-      cells.set(getPointKey(segment), index === 0 ? "head" : "body");
-    });
-
-    return cells;
-  }, [activeTimedFoodEntries, game.food, game.obstacles, game.snake]);
-
-  const speed = useMemo(() => {
-    return getGameTickDelay({
-      score: game.score,
-      speedBoosts: game.speedBoosts,
-      status: game.status,
-    });
-  }, [game.score, game.speedBoosts, game.status]);
-
-  const leaderboardSlots = useMemo(
-    () => Array.from({ length: LEADERBOARD_LIMIT }, (_, index) => leaderboard[index] ?? null),
-    [leaderboard],
-  );
+  const {
+    isSavingLeaderboardScore,
+    leaderboard,
+    leaderboardBestScore,
+    leaderboardSlots,
+    leaderboardStatusMessage,
+    playerName,
+    resetLeaderboardForm,
+    saveLeaderboardScore: savePendingLeaderboardScore,
+    scoreSaveFailed,
+    setPlayerName,
+  } = useSnakeLeaderboard({
+    boardSize: game.boardSize,
+    pendingLeaderboardEntry,
+    setGame,
+  });
+  const bestScore = Math.max(game.bestScore, leaderboardBestScore);
+  const speed = getGameTickDelay({
+    score: game.score,
+    speedBoosts: game.speedBoosts,
+    status: game.status,
+  });
   const canSelectBoardSize =
     game.status === "ready" ||
     ((game.status === "lost" || game.status === "won") && pendingLeaderboardEntry === null);
@@ -270,8 +209,7 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
     (nextBoardSize: number) => {
       const boardSize = normalizeBoardSize(nextBoardSize);
 
-      setPlayerName("");
-      setScoreSaveFailed(false);
+      resetLeaderboardForm();
       setFoodFeedbacks([]);
       setGame((current) => {
         if (
@@ -290,7 +228,7 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
         });
       });
     },
-    [leaderboardBestScore],
+    [leaderboardBestScore, resetLeaderboardForm],
   );
 
   const removeFoodFeedback = useCallback((id: number) => {
@@ -310,32 +248,8 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
     );
   }, [leaderboard, leaderboardBestScore]);
 
-  useEffect(() => {
-    let isCurrent = true;
-
-    fetchLeaderboard()
-      .then((nextLeaderboard) => {
-        if (!isCurrent) {
-          return;
-        }
-
-        setLeaderboard(nextLeaderboard);
-        setLeaderboardLoadFailed(false);
-      })
-      .catch(() => {
-        if (isCurrent) {
-          setLeaderboardLoadFailed(true);
-        }
-      });
-
-    return () => {
-      isCurrent = false;
-    };
-  }, []);
-
   const toggleRunState = useCallback(() => {
-    setPlayerName("");
-    setScoreSaveFailed(false);
+    resetLeaderboardForm();
     setGame((current) => {
       if (current.status === "running") {
         return { ...current, status: "paused" };
@@ -354,11 +268,10 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
         status: "running",
       };
     });
-  }, [leaderboardBestScore]);
+  }, [leaderboardBestScore, resetLeaderboardForm]);
 
   const restartGame = useCallback(() => {
-    setPlayerName("");
-    setScoreSaveFailed(false);
+    resetLeaderboardForm();
     setFoodFeedbacks([]);
     setGame((current) => ({
       ...createInitialGame({
@@ -368,43 +281,14 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
       }),
       status: "running",
     }));
-  }, [leaderboardBestScore]);
+  }, [leaderboardBestScore, resetLeaderboardForm]);
 
   const saveLeaderboardScore = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
+    (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-
-      if (pendingLeaderboardEntry === null || isSavingLeaderboardScore) {
-        return;
-      }
-
-      setIsSavingLeaderboardScore(true);
-      setScoreSaveFailed(false);
-
-      try {
-        const result = await submitLeaderboardScore({
-          boardSize: game.boardSize,
-          name: playerName,
-          score: pendingLeaderboardEntry.score,
-        });
-        const nextBestScore = result.entries[0]?.score ?? 0;
-
-        setLeaderboard(result.entries);
-        setLeaderboardLoadFailed(false);
-        setGame((current) => ({
-          ...current,
-          bestScore: Math.max(current.bestScore, nextBestScore),
-          pendingLeaderboardEntry: null,
-        }));
-        setPlayerName("");
-      } catch {
-        setLeaderboardLoadFailed(true);
-        setScoreSaveFailed(true);
-      } finally {
-        setIsSavingLeaderboardScore(false);
-      }
+      void savePendingLeaderboardScore();
     },
-    [game.boardSize, isSavingLeaderboardScore, pendingLeaderboardEntry, playerName],
+    [savePendingLeaderboardScore],
   );
 
   useEffect(() => {
@@ -489,39 +373,17 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
   const showBoardState = game.status !== "running";
 
   return (
-    <main className="min-h-svh bg-[var(--snake-page)] px-4 py-6 text-[var(--snake-ink)] sm:px-6 lg:py-8">
-      <section className="mx-auto grid w-full max-w-6xl gap-5 lg:min-h-[calc(100svh-4rem)] lg:grid-cols-[minmax(17rem,20rem)_minmax(0,1fr)] lg:items-center">
-        <aside className="flex flex-col gap-4 rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex min-w-0 flex-col gap-2">
-              <div
-                className="h-2 w-14 rounded-full bg-[var(--snake-accent)]"
-                aria-hidden="true"
-              />
-              <h1 className="text-3xl font-semibold tracking-normal text-balance">
-                Classic Snake
-              </h1>
-              <p
-                className="text-sm font-medium text-[var(--snake-muted)]"
-                aria-live="polite"
-                data-testid="snake-status"
-              >
-                {statusLabels[game.status]}
-              </p>
-            </div>
-            {onBackToMenu ? (
-              <Button
-                aria-label="Back to game menu"
-                data-testid="snake-back-to-menu"
-                onClick={onBackToMenu}
-                size="icon"
-                type="button"
-                variant="outline"
-              >
-                <ArrowLeftIcon />
-              </Button>
-            ) : null}
-          </div>
+    <GameShell className="bg-[var(--snake-page)] text-[var(--snake-ink)]">
+      <GameSidebar className="border-[var(--snake-border)] bg-[var(--snake-panel)]">
+        <GameHeader
+          accentClassName="bg-[var(--snake-accent)]"
+          backButtonTestId="snake-back-to-menu"
+          onBackToMenu={onBackToMenu}
+          status={statusLabels[game.status]}
+          statusClassName="text-[var(--snake-muted)]"
+          statusTestId="snake-status"
+          title="Classic Snake"
+        />
 
           <dl className="grid grid-cols-2 gap-3">
             <div className="rounded-md border border-[var(--snake-border)] p-3">
@@ -637,77 +499,15 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
               </Button>
             </div>
           </div>
-        </aside>
+      </GameSidebar>
 
-        <div className="mx-auto flex w-full max-w-[min(92vw,38rem)] flex-col gap-3">
-          <div className="relative aspect-square overflow-hidden rounded-md border border-[var(--snake-board-border)] bg-[var(--snake-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--snake-board)_24%,transparent)]">
-            <div
-              aria-label={`Snake board. Field ${game.boardSize} by ${game.boardSize}. Score ${game.score}. ${statusLabels[game.status]}.${
-                game.obstacles.length === 0 ? "" : ` ${game.obstacles.length} obstacle blocks.`
-              }${activeTimedFoodLabel}`}
-              className="grid size-full gap-px rounded-[0.375rem] bg-[var(--snake-grid)] p-px"
-              data-testid="snake-board"
-              role="img"
-              style={{
-                gridTemplateColumns: `repeat(${game.boardSize}, minmax(0, 1fr))`,
-              }}
-            >
-              {boardCells.map((cell) => {
-                const cellType = occupiedCells.get(getPointKey(cell));
-                const timedFoodCellClassName = isTimedFoodKind(cellType)
-                  ? timedFoodCellClassNames[cellType]
-                  : null;
-
-                return (
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      "aspect-square rounded-[0.18rem] bg-[var(--snake-board-cell)] transition-colors",
-                      cellType === "body" &&
-                        "bg-[var(--snake-body)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--snake-board)_22%,transparent)]",
-                      cellType === "head" &&
-                        "bg-[var(--snake-head)] shadow-[0_0_0_1px_color-mix(in_oklch,var(--snake-head)_42%,white),inset_0_-2px_0_color-mix(in_oklch,var(--snake-board)_25%,transparent)]",
-                      cellType === "food" &&
-                        "rounded-full bg-[var(--snake-food)] shadow-[0_0_18px_color-mix(in_oklch,var(--snake-food)_48%,transparent)]",
-                      cellType === "obstacle" &&
-                        "rounded-[0.12rem] bg-[var(--snake-obstacle)] shadow-[inset_0_1px_0_color-mix(in_oklch,var(--snake-obstacle-edge)_65%,transparent),inset_0_-2px_0_color-mix(in_oklch,black_28%,transparent)]",
-                      timedFoodCellClassName,
-                    )}
-                    key={getPointKey(cell)}
-                  />
-                );
-              })}
-            </div>
-
-            {game.status === "running" ? (
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-2 overflow-hidden rounded-[0.375rem]"
-              >
-                {foodFeedbacks.map((feedback) => (
-                  <div
-                    className="snake-food-feedback absolute z-10 flex min-w-12 flex-col items-center justify-center gap-0.5 rounded-md border border-[color-mix(in_oklch,var(--snake-board-text)_28%,transparent)] bg-[color-mix(in_oklch,var(--snake-board)_80%,transparent)] px-2 py-1 text-center text-sm font-black leading-none text-[var(--snake-board-text)] shadow-[0_10px_24px_color-mix(in_oklch,var(--snake-board)_38%,transparent)] backdrop-blur-[1px]"
-                    data-testid="snake-food-feedback"
-                    key={feedback.id}
-                    onAnimationEnd={() => removeFoodFeedback(feedback.id)}
-                    style={{
-                      left: `${((feedback.position.x + 0.5) / game.boardSize) * 100}%`,
-                      top: `${((feedback.position.y + 0.5) / game.boardSize) * 100}%`,
-                    }}
-                  >
-                    {feedback.lines.map((line, index) => (
-                      <span
-                        className="whitespace-nowrap"
-                        key={`${feedback.id}-${index}`}
-                      >
-                        {line}
-                      </span>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
+      <GameBoardColumn className="max-w-[min(92vw,38rem)]">
+        <SnakeBoard
+          foodFeedbacks={foodFeedbacks}
+          game={game}
+          onFoodFeedbackAnimationEnd={removeFoodFeedback}
+          statusLabel={statusLabels[game.status]}
+        >
             {showStartScreen ? (
               <div
                 className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[var(--snake-board)] px-4 py-5 text-center text-[var(--snake-board-text)]"
@@ -877,7 +677,7 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
                 </p>
               </div>
             ) : null}
-          </div>
+        </SnakeBoard>
 
           <div className="flex items-center justify-between rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] px-3 py-2 text-xs font-medium text-[var(--snake-muted)]">
             <span data-testid="snake-length">Length {game.snake.length}</span>
@@ -885,8 +685,7 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
               Speed {speed === null ? "0" : `${Math.round(1000 / speed)}`}
             </span>
           </div>
-        </div>
-      </section>
-    </main>
+      </GameBoardColumn>
+    </GameShell>
   );
 }

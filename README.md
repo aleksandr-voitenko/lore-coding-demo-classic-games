@@ -46,10 +46,19 @@ the SQLite adapter without changing the client API.
 - `src/app/page.tsx` renders the game launcher route.
 - `src/components/game-launcher.tsx` owns the game-card menu and selected game
   state.
-- `src/components/snake-game.tsx` owns React state, browser events, timers,
-  board rendering, controls, menu return, and leaderboard UI orchestration.
-- `src/components/tetris-game.tsx` owns React state, browser events, timers,
-  board rendering, controls, and menu return for Classic Tetris.
+- `src/components/snake-game.tsx` owns Snake React state, browser events,
+  timers, controls, overlays, menu return, and composition of focused Snake UI
+  pieces.
+- `src/components/snake-board.tsx` renders the Snake board cells, active food
+  labels, and pickup feedback.
+- `src/hooks/use-snake-leaderboard.ts` owns Snake leaderboard loading,
+  submission state, failure state, and pending-score completion.
+- `src/components/tetris-game.tsx` owns Tetris React state, browser events,
+  timers, controls, overlays, and menu return for Classic Tetris.
+- `src/components/tetris-board.tsx` renders the Tetris board cells and exports
+  the shared tetromino cell classes used by Tetris previews.
+- `src/components/game-layout.tsx` and `src/components/game-input.ts` contain
+  shared game layout primitives and keyboard input helpers.
 - `public/images/snake-game-card.png` contains the Classic Snake menu artwork,
   sourced from Clear_code's CC0 Snake game assets on OpenGameArt.
 - `public/images/tetris-game-card.svg` contains the Classic Tetris menu

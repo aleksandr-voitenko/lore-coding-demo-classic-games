@@ -12,17 +12,18 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { GameBoardColumn, GameHeader, GameShell, GameSidebar } from "@/components/game-layout";
+import { isTypingTarget } from "@/components/game-input";
+import { TetrisBoard, tetrominoCellClassNames } from "@/components/tetris-board";
 import { Button } from "@/components/ui/button";
 import {
   advanceTetrisGame,
   createInitialTetrisGame,
-  createTetrisBoardCells,
   getTetrominoPreviewCells,
   getTetrisTickDelay,
   hardDropTetrisPiece,
   moveTetrisPiece,
   pauseTetrisGame,
-  renderTetrisBoard,
   rotateTetrisPiece,
   softDropTetrisPiece,
   startTetrisGame,
@@ -45,16 +46,6 @@ const statusLabels: Record<TetrisStatus, string> = {
   running: "Running",
 };
 
-const tetrominoCellClassNames: Record<TetrominoKind, string> = {
-  I: "bg-[var(--tetris-cyan)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-cyan)_32%,transparent)]",
-  J: "bg-[var(--tetris-blue)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-blue)_32%,transparent)]",
-  L: "bg-[var(--tetris-orange)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-orange)_32%,transparent)]",
-  O: "bg-[var(--tetris-yellow)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-yellow)_32%,transparent)]",
-  S: "bg-[var(--tetris-green)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-green)_32%,transparent)]",
-  T: "bg-[var(--tetris-purple)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-purple)_32%,transparent)]",
-  Z: "bg-[var(--tetris-red)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-red)_32%,transparent)]",
-};
-
 const START_SCREEN_BLOCKS = [
   { kind: "T", x: 1, y: 0 },
   { kind: "T", x: 0, y: 1 },
@@ -70,19 +61,6 @@ const START_SCREEN_BLOCKS = [
   { kind: "I", x: 3, y: 4 },
 ] satisfies Array<{ kind: TetrominoKind; x: number; y: number }>;
 
-function isTypingTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  return (
-    target.isContentEditable ||
-    target.tagName === "INPUT" ||
-    target.tagName === "SELECT" ||
-    target.tagName === "TEXTAREA"
-  );
-}
-
 function createRunningTetrisGame() {
   return {
     ...createInitialTetrisGame({ random: Math.random }),
@@ -92,8 +70,6 @@ function createRunningTetrisGame() {
 
 export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
   const [game, setGame] = useState<TetrisGameState>(() => createInitialTetrisGame());
-  const boardCells = useMemo(() => createTetrisBoardCells(), []);
-  const renderedBoard = useMemo(() => renderTetrisBoard(game), [game]);
   const nextPreviewCells = useMemo(
     () =>
       new Map(
@@ -249,39 +225,17 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
   ]);
 
   return (
-    <main className="min-h-svh bg-[var(--tetris-page)] px-4 py-6 text-[var(--tetris-ink)] sm:px-6 lg:py-8">
-      <section className="mx-auto grid w-full max-w-6xl gap-5 lg:min-h-[calc(100svh-4rem)] lg:grid-cols-[minmax(17rem,20rem)_minmax(0,1fr)] lg:items-center">
-        <aside className="flex flex-col gap-4 rounded-md border border-[var(--tetris-border)] bg-[var(--tetris-panel)] p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex min-w-0 flex-col gap-2">
-              <div
-                className="h-2 w-14 rounded-full bg-[linear-gradient(90deg,var(--tetris-cyan),var(--tetris-yellow),var(--tetris-purple))]"
-                aria-hidden="true"
-              />
-              <h1 className="text-3xl font-semibold tracking-normal text-balance">
-                Classic Tetris
-              </h1>
-              <p
-                className="text-sm font-medium text-[var(--tetris-muted)]"
-                aria-live="polite"
-                data-testid="tetris-status"
-              >
-                {statusLabels[game.status]}
-              </p>
-            </div>
-            {onBackToMenu ? (
-              <Button
-                aria-label="Back to game menu"
-                data-testid="tetris-back-to-menu"
-                onClick={onBackToMenu}
-                size="icon"
-                type="button"
-                variant="outline"
-              >
-                <ArrowLeftIcon />
-              </Button>
-            ) : null}
-          </div>
+    <GameShell className="bg-[var(--tetris-page)] text-[var(--tetris-ink)]">
+      <GameSidebar className="border-[var(--tetris-border)] bg-[var(--tetris-panel)]">
+        <GameHeader
+          accentClassName="bg-[linear-gradient(90deg,var(--tetris-cyan),var(--tetris-yellow),var(--tetris-purple))]"
+          backButtonTestId="tetris-back-to-menu"
+          onBackToMenu={onBackToMenu}
+          status={statusLabels[game.status]}
+          statusClassName="text-[var(--tetris-muted)]"
+          statusTestId="tetris-status"
+          title="Classic Tetris"
+        />
 
           <dl className="grid grid-cols-2 gap-3">
             <div className="rounded-md border border-[var(--tetris-border)] p-3">
@@ -428,35 +382,10 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
               </Button>
             </div>
           </div>
-        </aside>
+      </GameSidebar>
 
-        <div className="mx-auto flex w-full max-w-[min(86vw,19rem)] flex-col gap-3">
-          <div className="relative aspect-[1/2] overflow-hidden rounded-md border border-[var(--tetris-board-border)] bg-[var(--tetris-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--tetris-board)_26%,transparent)]">
-            <div
-              aria-label={`Tetris board. Field ${TETRIS_BOARD_WIDTH} by ${TETRIS_BOARD_HEIGHT}. Score ${game.score}. Lines ${game.lines}. Level ${game.level}. ${statusLabels[game.status]}.`}
-              className="grid size-full gap-px rounded-[0.375rem] bg-[var(--tetris-grid)] p-px"
-              data-testid="tetris-board"
-              role="img"
-              style={{
-                gridTemplateColumns: `repeat(${TETRIS_BOARD_WIDTH}, minmax(0, 1fr))`,
-              }}
-            >
-              {boardCells.map((cell) => {
-                const cellKind = renderedBoard[cell.y]?.[cell.x] ?? null;
-
-                return (
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      "aspect-square rounded-[0.16rem] bg-[var(--tetris-board-cell)] transition-colors",
-                      cellKind && tetrominoCellClassNames[cellKind],
-                    )}
-                    key={`${cell.x}:${cell.y}`}
-                  />
-                );
-              })}
-            </div>
-
+      <GameBoardColumn className="max-w-[min(86vw,19rem)]">
+        <TetrisBoard game={game} statusLabel={statusLabels[game.status]}>
             {showStartScreen ? (
               <div
                 className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[var(--tetris-board)] px-4 py-5 text-center text-[var(--tetris-board-text)]"
@@ -556,7 +485,7 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
                 </div>
               </div>
             ) : null}
-          </div>
+        </TetrisBoard>
 
           <div className="flex items-center justify-between rounded-md border border-[var(--tetris-border)] bg-[var(--tetris-panel)] px-3 py-2 text-xs font-medium text-[var(--tetris-muted)]">
             <span>
@@ -564,8 +493,7 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
             </span>
             <span>Speed {tickDelay === null ? "0" : `${Math.round(1000 / tickDelay)}`}</span>
           </div>
-        </div>
-      </section>
-    </main>
+      </GameBoardColumn>
+    </GameShell>
   );
 }
