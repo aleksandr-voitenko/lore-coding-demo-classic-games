@@ -2,12 +2,16 @@
 
 import { Gamepad2Icon, PlayIcon, TrophyIcon } from "lucide-react";
 import Image from "next/image";
-import { useCallback, useState } from "react";
+import { type ComponentType, useCallback, useState } from "react";
 
 import { SnakeGame } from "@/components/snake-game";
 import { TetrisGame } from "@/components/tetris-game";
 
 type GameId = "snake" | "tetris";
+
+type PlayableGameProps = {
+  onBackToMenu: () => void;
+};
 
 type GameCard = {
   accentClassName: string;
@@ -19,6 +23,7 @@ type GameCard = {
     unoptimized?: boolean;
     width: number;
   };
+  component: ComponentType<PlayableGameProps>;
   description: string;
   id: GameId;
   label: string;
@@ -38,6 +43,7 @@ const GAME_CARDS: GameCard[] = [
       src: "/images/snake-game-card.png",
       width: 250,
     },
+    component: SnakeGame,
     description: "A classic score chase with obstacles, timed food, and saved best runs.",
     id: "snake",
     label: "Classic Snake",
@@ -57,6 +63,7 @@ const GAME_CARDS: GameCard[] = [
       unoptimized: true,
       width: 250,
     },
+    component: TetrisGame,
     description: "A falling-block survival game with line clears, scoring, and rising speed.",
     id: "tetris",
     label: "Classic Tetris",
@@ -77,12 +84,10 @@ export function GameLauncher() {
     setSelectedGameId(null);
   }, []);
 
-  if (selectedGame?.id === "snake") {
-    return <SnakeGame onBackToMenu={returnToMenu} />;
-  }
+  if (selectedGame !== null) {
+    const SelectedGame = selectedGame.component;
 
-  if (selectedGame?.id === "tetris") {
-    return <TetrisGame onBackToMenu={returnToMenu} />;
+    return <SelectedGame onBackToMenu={returnToMenu} />;
   }
 
   return (
