@@ -3,7 +3,8 @@
 Task Workflow Test is a Next.js App Router project used for task-based development
 practice. The app opens to a card-based game menu and currently includes a
 polished Snake game with deterministic gameplay tests, SQLite-backed leaderboard
-persistence, timed special foods, obstacle islands, and a full-board win state.
+persistence, timed special foods, obstacle islands, and a full-board win state,
+plus a classic Tetris game with tested falling-block rules and line clearing.
 
 ## Stack
 
@@ -31,8 +32,8 @@ Run the development server:
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to choose Classic Snake from
-the game menu.
+Open [http://localhost:3000](http://localhost:3000) to choose a game from the
+menu.
 
 The server leaderboard uses SQLite. By default the database is created at
 `.data/snake-leaderboard.sqlite`, which is ignored by git. On a VPS, set
@@ -47,11 +48,17 @@ the SQLite adapter without changing the client API.
   state.
 - `src/components/snake-game.tsx` owns React state, browser events, timers,
   board rendering, controls, menu return, and leaderboard UI orchestration.
+- `src/components/tetris-game.tsx` owns React state, browser events, timers,
+  board rendering, controls, and menu return for Classic Tetris.
 - `public/images/snake-game-card.png` contains the Classic Snake menu artwork,
   sourced from Clear_code's CC0 Snake game assets on OpenGameArt.
+- `public/images/tetris-game-card.svg` contains the Classic Tetris menu
+  artwork.
 - `src/lib/snake-game-engine.ts` contains pure gameplay rules for movement,
   food placement, scoring, timed-food behavior, obstacles, win/loss state, and
   speed.
+- `src/lib/tetris-game-engine.ts` contains pure gameplay rules for tetromino
+  movement, rotation, locking, line clears, scoring, levels, and loss state.
 - `src/lib/snake-leaderboard.ts` contains shared leaderboard normalization and
   client API helpers.
 - `src/lib/server/sqlite-snake-leaderboard-store.ts` contains the SQLite-backed
@@ -62,7 +69,7 @@ the SQLite adapter without changing the client API.
   leaderboard persistence, and pickup feedback behavior.
 
 When changing gameplay rules, prefer adding or updating engine tests with
-injected randomness or time. Keep browser-only concerns in the React component
+injected randomness or time. Keep browser-only concerns in the React components
 and reusable state rules in `src/lib`.
 
 ## Checks

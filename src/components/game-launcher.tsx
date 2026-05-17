@@ -5,10 +5,20 @@ import Image from "next/image";
 import { useCallback, useState } from "react";
 
 import { SnakeGame } from "@/components/snake-game";
+import { TetrisGame } from "@/components/tetris-game";
 
-type GameId = "snake";
+type GameId = "snake" | "tetris";
 
 type GameCard = {
+  accentClassName: string;
+  artwork: {
+    height: number;
+    loading?: "eager" | "lazy";
+    priority?: boolean;
+    src: string;
+    unoptimized?: boolean;
+    width: number;
+  };
   description: string;
   id: GameId;
   label: string;
@@ -20,6 +30,14 @@ type GameCard = {
 
 const GAME_CARDS: GameCard[] = [
   {
+    accentClassName:
+      "bg-[linear-gradient(90deg,var(--snake-head),var(--snake-bonus-food),var(--snake-speed-food),var(--snake-slow-food))]",
+    artwork: {
+      height: 249,
+      priority: true,
+      src: "/images/snake-game-card.png",
+      width: 250,
+    },
     description: "A classic score chase with obstacles, timed food, and saved best runs.",
     id: "snake",
     label: "Classic Snake",
@@ -27,6 +45,25 @@ const GAME_CARDS: GameCard[] = [
       { label: "Mode", value: "Score" },
       { label: "Board", value: "11-25" },
       { label: "Records", value: "Top 3" },
+    ],
+  },
+  {
+    accentClassName:
+      "bg-[linear-gradient(90deg,var(--tetris-cyan),var(--tetris-yellow),var(--tetris-purple),var(--tetris-red))]",
+    artwork: {
+      height: 250,
+      loading: "eager",
+      src: "/images/tetris-game-card.svg",
+      unoptimized: true,
+      width: 250,
+    },
+    description: "A falling-block survival game with line clears, scoring, and rising speed.",
+    id: "tetris",
+    label: "Classic Tetris",
+    stats: [
+      { label: "Mode", value: "Lines" },
+      { label: "Board", value: "10x20" },
+      { label: "Pieces", value: "7" },
     ],
   },
 ];
@@ -42,6 +79,10 @@ export function GameLauncher() {
 
   if (selectedGame?.id === "snake") {
     return <SnakeGame onBackToMenu={returnToMenu} />;
+  }
+
+  if (selectedGame?.id === "tetris") {
+    return <TetrisGame onBackToMenu={returnToMenu} />;
   }
 
   return (
@@ -79,7 +120,7 @@ export function GameLauncher() {
             >
               <span className="relative block h-40 w-full overflow-hidden bg-[var(--snake-board)]">
                 <span
-                  className="absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,var(--snake-head),var(--snake-bonus-food),var(--snake-speed-food),var(--snake-slow-food))]"
+                  className={`absolute inset-x-0 top-0 h-1 ${game.accentClassName}`}
                   aria-hidden="true"
                 />
                 <Image
@@ -87,9 +128,11 @@ export function GameLauncher() {
                   aria-hidden="true"
                   className="scale-110 object-cover opacity-55 blur-[2px]"
                   fill
-                  priority
+                  loading={game.artwork.loading}
+                  priority={game.artwork.priority}
                   sizes="(min-width: 640px) 24rem, calc(100vw - 2rem)"
-                  src="/images/snake-game-card.png"
+                  src={game.artwork.src}
+                  unoptimized={game.artwork.unoptimized}
                 />
                 <span className="absolute inset-0 bg-[color-mix(in_oklch,var(--snake-board)_38%,transparent)]" />
                 <span className="absolute inset-3 flex items-center justify-center">
@@ -97,10 +140,12 @@ export function GameLauncher() {
                     alt=""
                     aria-hidden="true"
                     className="h-full w-auto rounded-md border border-[color-mix(in_oklch,var(--snake-board)_16%,white)] object-contain shadow-[0_18px_50px_color-mix(in_oklch,var(--snake-board)_34%,transparent)]"
-                    height={249}
-                    priority
-                    src="/images/snake-game-card.png"
-                    width={250}
+                    height={game.artwork.height}
+                    loading={game.artwork.loading}
+                    priority={game.artwork.priority}
+                    src={game.artwork.src}
+                    unoptimized={game.artwork.unoptimized}
+                    width={game.artwork.width}
                   />
                 </span>
               </span>
