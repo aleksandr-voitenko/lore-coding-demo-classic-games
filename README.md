@@ -4,10 +4,10 @@ Task Workflow Test is a Next.js App Router project used for task-based developme
 practice. The app opens to a card-based game menu and currently includes a
 polished Snake game with deterministic gameplay tests, SQLite-backed leaderboard
 persistence, timed special foods, obstacle islands, and a full-board win state,
-plus classic Tetris, Breakout, Minesweeper, and Space Invaders games with tested
-falling-block, paddle, ball, brick, minefield, flagging, reveal, invader
-formation, cannon, projectile, Pong paddle rallies, CPU tracking, scoring, and
-end-state rules.
+plus classic Tetris, Breakout, Minesweeper, Space Invaders, Pong, and 2048 games
+with tested falling-block, paddle, ball, brick, minefield, flagging, reveal,
+invader formation, cannon, projectile, Pong paddle rallies, CPU tracking, tile
+sliding-and-merging, scoring, and end-state rules.
 
 ## Stack
 
@@ -75,6 +75,10 @@ the SQLite adapter without changing the client API.
 - `src/components/space-invaders-board.tsx` renders the Space Invaders
   formation, player cannon, shot, base line, and board state using code-native
   game artwork.
+- `src/components/twenty-forty-eight-game.tsx` owns 2048 React state, browser
+  events, tile controls, overlays, and menu return for Classic 2048.
+- `src/components/twenty-forty-eight-board.tsx` renders the 2048 tile grid,
+  values, empty cells, and board state using code-native game artwork.
 - `src/components/pong-game.tsx` owns Pong React state, browser events, timers,
   paddle controls, overlays, and menu return for Classic Pong.
 - `src/components/pong-board.tsx` renders the Pong paddles, ball, center line,
@@ -91,6 +95,8 @@ the SQLite adapter without changing the client API.
   menu artwork.
 - `public/images/space-invaders-game-card.svg` contains the Classic Space
   Invaders menu artwork.
+- `public/images/twenty-forty-eight-game-card.svg` contains the Classic 2048
+  menu artwork.
 - `public/images/pong-game-card.svg` contains the Classic Pong menu artwork.
 - `src/lib/snake-game-engine.ts` contains pure gameplay rules for movement,
   food placement, scoring, timed-food behavior, obstacles, win/loss state, and
@@ -105,6 +111,9 @@ the SQLite adapter without changing the client API.
 - `src/lib/space-invaders-game-engine.ts` contains pure gameplay rules for
   player movement, firing, shot advancement, invader marching, edge drops,
   scoring, and win/loss state.
+- `src/lib/twenty-forty-eight-game-engine.ts` contains pure gameplay rules for
+  deterministic tile spawning, slide-and-merge movement, score tracking, best
+  score preservation, and win/loss state.
 - `src/lib/pong-game-engine.ts` contains pure gameplay rules for player paddle
   movement, CPU paddle tracking, ball collisions, rally resets, scoring, and
   win/loss state.

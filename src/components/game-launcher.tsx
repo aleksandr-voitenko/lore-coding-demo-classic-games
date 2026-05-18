@@ -10,8 +10,16 @@ import { PongGame } from "@/components/pong-game";
 import { SnakeGame } from "@/components/snake-game";
 import { SpaceInvadersGame } from "@/components/space-invaders-game";
 import { TetrisGame } from "@/components/tetris-game";
+import { TwentyFortyEightGame } from "@/components/twenty-forty-eight-game";
 
-type GameId = "snake" | "tetris" | "breakout" | "minesweeper" | "space-invaders" | "pong";
+type GameId =
+  | "snake"
+  | "tetris"
+  | "breakout"
+  | "minesweeper"
+  | "space-invaders"
+  | "twenty-forty-eight"
+  | "pong";
 
 type PlayableGameProps = {
   onBackToMenu: () => void;
@@ -135,6 +143,26 @@ const GAME_CARDS: GameCard[] = [
       { label: "Mode", value: "Defense" },
       { label: "Board", value: "420x560" },
       { label: "Aliens", value: "55" },
+    ],
+  },
+  {
+    accentClassName:
+      "bg-[linear-gradient(90deg,var(--twenty-tile-8),var(--twenty-tile-128),var(--twenty-tile-2048))]",
+    artwork: {
+      height: 250,
+      loading: "eager",
+      src: "/images/twenty-forty-eight-game-card.svg",
+      unoptimized: true,
+      width: 250,
+    },
+    component: TwentyFortyEightGame,
+    description: "A sliding tile puzzle with merges, score chasing, and a 2048 goal tile.",
+    id: "twenty-forty-eight",
+    label: "Classic 2048",
+    stats: [
+      { label: "Mode", value: "Merge" },
+      { label: "Board", value: "4x4" },
+      { label: "Goal", value: "2048" },
     ],
   },
   {

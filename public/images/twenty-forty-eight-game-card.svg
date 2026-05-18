@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 250" role="img" aria-label="Classic 2048 board artwork">
+  <defs>
+    <linearGradient id="background" x1="28" x2="222" y1="14" y2="236" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#152238"/>
+      <stop offset="1" stop-color="#334155"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="54" x2="196" y1="32" y2="210" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff" stop-opacity=".24"/>
+      <stop offset=".5" stop-color="#ffffff" stop-opacity=".04"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity=".13"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="145%">
+      <feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#06111f" flood-opacity=".36"/>
+    </filter>
+  </defs>
+  <rect width="250" height="250" fill="#f8fafc"/>
+  <rect x="30" y="20" width="190" height="210" rx="18" fill="url(#background)" filter="url(#shadow)"/>
+  <rect x="43" y="34" width="164" height="182" rx="10" fill="#475569"/>
+  <rect x="58" y="49" width="134" height="152" rx="7" fill="#64748b"/>
+  <g stroke="#475569" stroke-width="4">
+    <rect x="65" y="56" width="26" height="26" rx="5" fill="#d8dfeb"/>
+    <rect x="94" y="56" width="26" height="26" rx="5" fill="#d5c7a3"/>
+    <rect x="123" y="56" width="26" height="26" rx="5" fill="#fb923c"/>
+    <rect x="152" y="56" width="26" height="26" rx="5" fill="#f97316"/>
+    <rect x="65" y="85" width="26" height="26" rx="5" fill="#eab308"/>
+    <rect x="94" y="85" width="26" height="26" rx="5" fill="#22c55e"/>
+    <rect x="123" y="85" width="26" height="26" rx="5" fill="#64748b"/>
+    <rect x="152" y="85" width="26" height="26" rx="5" fill="#64748b"/>
+    <rect x="65" y="114" width="26" height="26" rx="5" fill="#64748b"/>
+    <rect x="94" y="114" width="26" height="26" rx="5" fill="#14b8a6"/>
+    <rect x="123" y="114" width="26" height="26" rx="5" fill="#0ea5e9"/>
+    <rect x="152" y="114" width="26" height="26" rx="5" fill="#64748b"/>
+    <rect x="65" y="143" width="26" height="26" rx="5" fill="#64748b"/>
+    <rect x="94" y="143" width="26" height="26" rx="5" fill="#64748b"/>
+    <rect x="123" y="143" width="26" height="26" rx="5" fill="#6366f1"/>
+    <rect x="152" y="143" width="26" height="26" rx="5" fill="#facc15"/>
+  </g>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-weight="900" text-anchor="middle">
+    <text x="78" y="74" font-size="11" fill="#334155">2</text>
+    <text x="107" y="74" font-size="11" fill="#334155">4</text>
+    <text x="136" y="74" font-size="11" fill="#fff7ed">8</text>
+    <text x="165" y="74" font-size="10" fill="#fff7ed">16</text>
+    <text x="78" y="103" font-size="10" fill="#fefce8">32</text>
+    <text x="107" y="103" font-size="10" fill="#ecfdf5">64</text>
+    <text x="107" y="132" font-size="8" fill="#f0fdfa">128</text>
+    <text x="136" y="132" font-size="8" fill="#f0f9ff">256</text>
+    <text x="136" y="161" font-size="8" fill="#eef2ff">512</text>
+    <text x="165" y="160" font-size="7" fill="#422006">2048</text>
+  </g>
+  <rect x="65" y="177" width="113" height="10" rx="5" fill="#f8fafc" opacity=".2"/>
+  <path d="M43 34h164v182H43z" fill="url(#shine)"/>
+  <circle cx="178" cy="57" r="4" fill="#f8fafc" opacity=".72"/>
+  <circle cx="190" cy="57" r="4" fill="#f8fafc" opacity=".32"/>
+</svg>
