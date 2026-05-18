@@ -27,6 +27,7 @@ import {
   SHRINK_FOOD_TAIL_TRIM,
   SLOW_FOOD_TIMEOUT_MIN_MS,
   spawnTimedFood,
+  STARTING_GAME_SPEED,
   TIMED_FOOD_KINDS,
   TIMED_FOOD_RULES,
   type GameState,
@@ -191,6 +192,14 @@ describe("snake game engine", () => {
 
   it("returns no red-food position when every board cell is occupied", () => {
     expect(generateFood(3, createBoardCells(3), [], () => 0)).toBeNull();
+  });
+
+  it("starts running games one speed unit slower before score-based acceleration", () => {
+    const game = createRunningGame();
+
+    expect(getGameSpeed(game)).toBe(STARTING_GAME_SPEED);
+    expect(getGameSpeed({ ...game, score: 3 })).toBe(STARTING_GAME_SPEED);
+    expect(getGameSpeed({ ...game, score: 4 })).toBe(STARTING_GAME_SPEED + 1);
   });
 
   it("generates persistent obstacle islands away from the starting path", () => {

@@ -120,6 +120,7 @@ export const SLOW_FOOD_TIMEOUT_MAX_MS = 3_000;
 export const SLOW_FOOD_TIMEOUT_MIN_MS = 2_000;
 export const SPEED_FOOD_SCORE = 3;
 export const SPEED_FOOD_SPEED_INCREASE = 1;
+export const STARTING_GAME_SPEED = 5;
 export const BOARD_SIZE_OPTIONS = Array.from(
   { length: Math.floor((MAX_BOARD_SIZE - MIN_BOARD_SIZE) / BOARD_SIZE_STEP) + 1 },
   (_, index) => MIN_BOARD_SIZE + index * BOARD_SIZE_STEP,
@@ -194,6 +195,8 @@ export const directionOffsets: Record<Direction, Point> = {
 const OBSTACLE_CLUSTER_ATTEMPT_LIMIT = 40;
 const OBSTACLE_SEED_ATTEMPT_LIMIT = 80;
 const ORTHOGONAL_OFFSETS = Object.values(directionOffsets);
+const MAX_BASE_GAME_SPEED = Math.round(1000 / 78);
+const SCORE_PER_BASE_SPEED_INCREASE = 4;
 
 export function getPointKey(point: Point) {
   return `${point.x}:${point.y}`;
@@ -632,11 +635,14 @@ export function createInitialGame({
 }
 
 function getBaseGameTickDelay(score: number) {
-  return Math.max(78, 156 - Math.floor(score / 4) * 8);
+  return Math.max(78, Math.round(1000 / getBaseGameSpeed(score)));
 }
 
 function getBaseGameSpeed(score: number) {
-  return Math.round(1000 / getBaseGameTickDelay(score));
+  return Math.min(
+    MAX_BASE_GAME_SPEED,
+    STARTING_GAME_SPEED + Math.floor(score / SCORE_PER_BASE_SPEED_INCREASE),
+  );
 }
 
 function getAdjustedGameSpeed(score: number, speedBoosts: number) {
