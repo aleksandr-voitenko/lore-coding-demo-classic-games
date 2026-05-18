@@ -14,7 +14,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Game Library",
-  description: "A card-based game launcher with Classic Snake, Classic Tetris, and Classic Breakout.",
+  description:
+    "A card-based game launcher with Classic Snake, Classic Tetris, Classic Breakout, and Classic Minesweeper.",
 };
 
 export default function RootLayout({

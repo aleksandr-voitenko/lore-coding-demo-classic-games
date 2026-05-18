@@ -4,8 +4,8 @@ Task Workflow Test is a Next.js App Router project used for task-based developme
 practice. The app opens to a card-based game menu and currently includes a
 polished Snake game with deterministic gameplay tests, SQLite-backed leaderboard
 persistence, timed special foods, obstacle islands, and a full-board win state,
-plus classic Tetris and Breakout games with tested falling-block, paddle, ball,
-brick, scoring, and end-state rules.
+plus classic Tetris, Breakout, and Minesweeper games with tested falling-block,
+paddle, ball, brick, minefield, flagging, reveal, scoring, and end-state rules.
 
 ## Stack
 
@@ -62,6 +62,11 @@ the SQLite adapter without changing the client API.
   timers, controls, overlays, and menu return for Classic Breakout.
 - `src/components/breakout-board.tsx` renders Breakout bricks, ball, paddle, and
   board state using code-native game artwork.
+- `src/components/minesweeper-game.tsx` owns Minesweeper React state, browser
+  events, elapsed-time tracking, reveal/flag controls, overlays, and menu return
+  for Classic Minesweeper.
+- `src/components/minesweeper-board.tsx` renders the Minesweeper cell grid,
+  covered/revealed/flagged/mine states, and context-menu flagging behavior.
 - `src/components/game-layout.tsx` and `src/components/game-input.ts` contain
   shared game layout primitives and keyboard input helpers.
 - `public/images/snake-game-card.png` contains the Classic Snake menu artwork,
@@ -70,6 +75,8 @@ the SQLite adapter without changing the client API.
   artwork.
 - `public/images/breakout-game-card.svg` contains the Classic Breakout menu
   artwork.
+- `public/images/minesweeper-game-card.svg` contains the Classic Minesweeper
+  menu artwork.
 - `src/lib/snake-game-engine.ts` contains pure gameplay rules for movement,
   food placement, scoring, timed-food behavior, obstacles, win/loss state, and
   speed.
@@ -77,6 +84,9 @@ the SQLite adapter without changing the client API.
   movement, rotation, locking, line clears, scoring, levels, and loss state.
 - `src/lib/breakout-game-engine.ts` contains pure gameplay rules for paddle
   movement, ball collisions, brick removal, scoring, lives, and win/loss state.
+- `src/lib/minesweeper-game-engine.ts` contains pure gameplay rules for
+  delayed mine placement, safe first reveals, adjacent counts, flood reveal,
+  flagging, and win/loss state.
 - `src/lib/snake-leaderboard.ts` contains shared leaderboard normalization and
   client API helpers.
 - `src/lib/server/sqlite-snake-leaderboard-store.ts` contains the SQLite-backed

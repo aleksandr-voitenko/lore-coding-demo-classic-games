@@ -5,10 +5,11 @@ import Image from "next/image";
 import { type ComponentType, useCallback, useState } from "react";
 
 import { BreakoutGame } from "@/components/breakout-game";
+import { MinesweeperGame } from "@/components/minesweeper-game";
 import { SnakeGame } from "@/components/snake-game";
 import { TetrisGame } from "@/components/tetris-game";
 
-type GameId = "snake" | "tetris" | "breakout";
+type GameId = "snake" | "tetris" | "breakout" | "minesweeper";
 
 type PlayableGameProps = {
   onBackToMenu: () => void;
@@ -92,6 +93,26 @@ const GAME_CARDS: GameCard[] = [
       { label: "Mode", value: "Bricks" },
       { label: "Board", value: "420x560" },
       { label: "Lives", value: "3" },
+    ],
+  },
+  {
+    accentClassName:
+      "bg-[linear-gradient(90deg,var(--minesweeper-flag),var(--minesweeper-one),var(--minesweeper-two),var(--minesweeper-three))]",
+    artwork: {
+      height: 250,
+      loading: "eager",
+      src: "/images/minesweeper-game-card.svg",
+      unoptimized: true,
+      width: 250,
+    },
+    component: MinesweeperGame,
+    description: "A classic minefield puzzle with safe first clicks, flags, and flood reveals.",
+    id: "minesweeper",
+    label: "Classic Minesweeper",
+    stats: [
+      { label: "Mode", value: "Flags" },
+      { label: "Board", value: "9x9" },
+      { label: "Mines", value: "10" },
     ],
   },
 ];
