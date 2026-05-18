@@ -4,7 +4,8 @@ Task Workflow Test is a Next.js App Router project used for task-based developme
 practice. The app opens to a card-based game menu and currently includes a
 polished Snake game with deterministic gameplay tests, SQLite-backed leaderboard
 persistence, timed special foods, obstacle islands, and a full-board win state,
-plus a classic Tetris game with tested falling-block rules and line clearing.
+plus classic Tetris and Breakout games with tested falling-block, paddle, ball,
+brick, scoring, and end-state rules.
 
 ## Stack
 
@@ -57,17 +58,25 @@ the SQLite adapter without changing the client API.
   timers, controls, overlays, and menu return for Classic Tetris.
 - `src/components/tetris-board.tsx` renders the Tetris board cells and exports
   the shared tetromino cell classes used by Tetris previews.
+- `src/components/breakout-game.tsx` owns Breakout React state, browser events,
+  timers, controls, overlays, and menu return for Classic Breakout.
+- `src/components/breakout-board.tsx` renders Breakout bricks, ball, paddle, and
+  board state using code-native game artwork.
 - `src/components/game-layout.tsx` and `src/components/game-input.ts` contain
   shared game layout primitives and keyboard input helpers.
 - `public/images/snake-game-card.png` contains the Classic Snake menu artwork,
   sourced from Clear_code's CC0 Snake game assets on OpenGameArt.
 - `public/images/tetris-game-card.svg` contains the Classic Tetris menu
   artwork.
+- `public/images/breakout-game-card.svg` contains the Classic Breakout menu
+  artwork.
 - `src/lib/snake-game-engine.ts` contains pure gameplay rules for movement,
   food placement, scoring, timed-food behavior, obstacles, win/loss state, and
   speed.
 - `src/lib/tetris-game-engine.ts` contains pure gameplay rules for tetromino
   movement, rotation, locking, line clears, scoring, levels, and loss state.
+- `src/lib/breakout-game-engine.ts` contains pure gameplay rules for paddle
+  movement, ball collisions, brick removal, scoring, lives, and win/loss state.
 - `src/lib/snake-leaderboard.ts` contains shared leaderboard normalization and
   client API helpers.
 - `src/lib/server/sqlite-snake-leaderboard-store.ts` contains the SQLite-backed

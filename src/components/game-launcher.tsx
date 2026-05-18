@@ -4,10 +4,11 @@ import { Gamepad2Icon, PlayIcon, TrophyIcon } from "lucide-react";
 import Image from "next/image";
 import { type ComponentType, useCallback, useState } from "react";
 
+import { BreakoutGame } from "@/components/breakout-game";
 import { SnakeGame } from "@/components/snake-game";
 import { TetrisGame } from "@/components/tetris-game";
 
-type GameId = "snake" | "tetris";
+type GameId = "snake" | "tetris" | "breakout";
 
 type PlayableGameProps = {
   onBackToMenu: () => void;
@@ -71,6 +72,26 @@ const GAME_CARDS: GameCard[] = [
       { label: "Mode", value: "Lines" },
       { label: "Board", value: "10x20" },
       { label: "Pieces", value: "7" },
+    ],
+  },
+  {
+    accentClassName:
+      "bg-[linear-gradient(90deg,var(--breakout-red),var(--breakout-yellow),var(--breakout-green),var(--breakout-blue))]",
+    artwork: {
+      height: 250,
+      loading: "eager",
+      src: "/images/breakout-game-card.svg",
+      unoptimized: true,
+      width: 250,
+    },
+    component: BreakoutGame,
+    description: "A paddle-and-ball brick breaker with lives, scoring, and wall clears.",
+    id: "breakout",
+    label: "Classic Breakout",
+    stats: [
+      { label: "Mode", value: "Bricks" },
+      { label: "Board", value: "420x560" },
+      { label: "Lives", value: "3" },
     ],
   },
 ];
