@@ -7,6 +7,7 @@ import { type ComponentType, useCallback, useState } from "react";
 import { BreakoutGame } from "@/components/breakout-game";
 import { MinesweeperGame } from "@/components/minesweeper-game";
 import { PongGame } from "@/components/pong-game";
+import { SimonGame } from "@/components/simon-game";
 import { SnakeGame } from "@/components/snake-game";
 import { SpaceInvadersGame } from "@/components/space-invaders-game";
 import { TetrisGame } from "@/components/tetris-game";
@@ -19,7 +20,8 @@ type GameId =
   | "minesweeper"
   | "space-invaders"
   | "twenty-forty-eight"
-  | "pong";
+  | "pong"
+  | "simon";
 
 type PlayableGameProps = {
   onBackToMenu: () => void;
@@ -182,6 +184,25 @@ const GAME_CARDS: GameCard[] = [
       { label: "Mode", value: "Duel" },
       { label: "Board", value: "420x560" },
       { label: "Target", value: "5" },
+    ],
+  },
+  {
+    accentClassName: "bg-[linear-gradient(90deg,#25a75a,#d73548,#f0bd38,#1d7ed0)]",
+    artwork: {
+      height: 250,
+      loading: "eager",
+      src: "/images/simon-game-card.svg",
+      unoptimized: true,
+      width: 250,
+    },
+    component: SimonGame,
+    description: "A memory pattern game with four pads, growing sequences, and strict misses.",
+    id: "simon",
+    label: "Classic Simon",
+    stats: [
+      { label: "Mode", value: "Memory" },
+      { label: "Pads", value: "4" },
+      { label: "Target", value: "12" },
     ],
   },
 ];

@@ -4,10 +4,11 @@ Task Workflow Test is a Next.js App Router project used for task-based developme
 practice. The app opens to a card-based game menu and currently includes a
 polished Snake game with deterministic gameplay tests, SQLite-backed leaderboard
 persistence, timed special foods, obstacle islands, and a full-board win state,
-plus classic Tetris, Breakout, Minesweeper, Space Invaders, Pong, and 2048 games
-with tested falling-block, paddle, ball, brick, minefield, flagging, reveal,
-invader formation, cannon, projectile, Pong paddle rallies, CPU tracking, tile
-sliding-and-merging, scoring, and end-state rules.
+plus classic Tetris, Breakout, Minesweeper, Space Invaders, Pong, 2048, and
+Simon games with tested falling-block, paddle, ball, brick, minefield, flagging,
+reveal, invader formation, cannon, projectile, Pong paddle rallies, CPU
+tracking, tile sliding-and-merging, Simon sequence playback, scoring, and
+end-state rules.
 
 ## Stack
 
@@ -83,6 +84,10 @@ the SQLite adapter without changing the client API.
   paddle controls, overlays, and menu return for Classic Pong.
 - `src/components/pong-board.tsx` renders the Pong paddles, ball, center line,
   and board state using code-native game artwork.
+- `src/components/simon-game.tsx` owns Simon React state, browser events,
+  playback timers, pad controls, overlays, and menu return for Classic Simon.
+- `src/components/simon-board.tsx` renders the Simon four-pad board, active pad
+  state, and input buttons using code-native game artwork.
 - `src/components/game-layout.tsx` and `src/components/game-input.ts` contain
   shared game layout primitives and keyboard input helpers.
 - `public/images/snake-game-card.png` contains the Classic Snake menu artwork,
@@ -98,6 +103,7 @@ the SQLite adapter without changing the client API.
 - `public/images/twenty-forty-eight-game-card.svg` contains the Classic 2048
   menu artwork.
 - `public/images/pong-game-card.svg` contains the Classic Pong menu artwork.
+- `public/images/simon-game-card.svg` contains the Classic Simon menu artwork.
 - `src/lib/snake-game-engine.ts` contains pure gameplay rules for movement,
   food placement, scoring, timed-food behavior, obstacles, win/loss state, and
   speed.
@@ -117,6 +123,9 @@ the SQLite adapter without changing the client API.
 - `src/lib/pong-game-engine.ts` contains pure gameplay rules for player paddle
   movement, CPU paddle tracking, ball collisions, rally resets, scoring, and
   win/loss state.
+- `src/lib/simon-game-engine.ts` contains pure gameplay rules for deterministic
+  sequence generation, playback advancement, input validation, round progress,
+  pause/resume, and win/loss state.
 - `src/lib/snake-leaderboard.ts` contains shared leaderboard normalization and
   client API helpers.
 - `src/lib/server/sqlite-snake-leaderboard-store.ts` contains the SQLite-backed
