@@ -6,7 +6,8 @@ polished Snake game with deterministic gameplay tests, SQLite-backed leaderboard
 persistence, timed special foods, obstacle islands, and a full-board win state,
 plus classic Tetris, Breakout, Minesweeper, and Space Invaders games with tested
 falling-block, paddle, ball, brick, minefield, flagging, reveal, invader
-formation, cannon, projectile, scoring, and end-state rules.
+formation, cannon, projectile, Pong paddle rallies, CPU tracking, scoring, and
+end-state rules.
 
 ## Stack
 
@@ -74,6 +75,10 @@ the SQLite adapter without changing the client API.
 - `src/components/space-invaders-board.tsx` renders the Space Invaders
   formation, player cannon, shot, base line, and board state using code-native
   game artwork.
+- `src/components/pong-game.tsx` owns Pong React state, browser events, timers,
+  paddle controls, overlays, and menu return for Classic Pong.
+- `src/components/pong-board.tsx` renders the Pong paddles, ball, center line,
+  and board state using code-native game artwork.
 - `src/components/game-layout.tsx` and `src/components/game-input.ts` contain
   shared game layout primitives and keyboard input helpers.
 - `public/images/snake-game-card.png` contains the Classic Snake menu artwork,
@@ -86,6 +91,7 @@ the SQLite adapter without changing the client API.
   menu artwork.
 - `public/images/space-invaders-game-card.svg` contains the Classic Space
   Invaders menu artwork.
+- `public/images/pong-game-card.svg` contains the Classic Pong menu artwork.
 - `src/lib/snake-game-engine.ts` contains pure gameplay rules for movement,
   food placement, scoring, timed-food behavior, obstacles, win/loss state, and
   speed.
@@ -99,6 +105,9 @@ the SQLite adapter without changing the client API.
 - `src/lib/space-invaders-game-engine.ts` contains pure gameplay rules for
   player movement, firing, shot advancement, invader marching, edge drops,
   scoring, and win/loss state.
+- `src/lib/pong-game-engine.ts` contains pure gameplay rules for player paddle
+  movement, CPU paddle tracking, ball collisions, rally resets, scoring, and
+  win/loss state.
 - `src/lib/snake-leaderboard.ts` contains shared leaderboard normalization and
   client API helpers.
 - `src/lib/server/sqlite-snake-leaderboard-store.ts` contains the SQLite-backed

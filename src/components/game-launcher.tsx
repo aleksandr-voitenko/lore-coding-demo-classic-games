@@ -6,11 +6,12 @@ import { type ComponentType, useCallback, useState } from "react";
 
 import { BreakoutGame } from "@/components/breakout-game";
 import { MinesweeperGame } from "@/components/minesweeper-game";
+import { PongGame } from "@/components/pong-game";
 import { SnakeGame } from "@/components/snake-game";
 import { SpaceInvadersGame } from "@/components/space-invaders-game";
 import { TetrisGame } from "@/components/tetris-game";
 
-type GameId = "snake" | "tetris" | "breakout" | "minesweeper" | "space-invaders";
+type GameId = "snake" | "tetris" | "breakout" | "minesweeper" | "space-invaders" | "pong";
 
 type PlayableGameProps = {
   onBackToMenu: () => void;
@@ -134,6 +135,25 @@ const GAME_CARDS: GameCard[] = [
       { label: "Mode", value: "Defense" },
       { label: "Board", value: "420x560" },
       { label: "Aliens", value: "55" },
+    ],
+  },
+  {
+    accentClassName: "bg-[linear-gradient(90deg,#38bdf8,#f8fafc,#f472b6)]",
+    artwork: {
+      height: 250,
+      loading: "eager",
+      src: "/images/pong-game-card.svg",
+      unoptimized: true,
+      width: 250,
+    },
+    component: PongGame,
+    description: "A paddle duel against a CPU opponent with rebounds, rallies, and scoring.",
+    id: "pong",
+    label: "Classic Pong",
+    stats: [
+      { label: "Mode", value: "Duel" },
+      { label: "Board", value: "420x560" },
+      { label: "Target", value: "5" },
     ],
   },
 ];
