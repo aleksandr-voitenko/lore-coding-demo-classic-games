@@ -31,6 +31,7 @@ export type GameState = {
   pendingLeaderboardEntry: PendingLeaderboardEntry | null;
   queuedDirection: Direction;
   score: number;
+  shrinkFood: TimedFood | null;
   snake: Point[];
   slowFood: TimedFood | null;
   speedBoosts: number;
@@ -44,7 +45,7 @@ export type CreateInitialGameOptions = {
   random?: RandomSource;
 };
 
-export const TIMED_FOOD_KINDS = ["bonusFood", "speedFood", "slowFood"] as const;
+export const TIMED_FOOD_KINDS = ["bonusFood", "speedFood", "slowFood", "shrinkFood"] as const;
 
 export type TimedFoodKind = (typeof TIMED_FOOD_KINDS)[number];
 
@@ -55,8 +56,14 @@ type TimedFoodSpeedEffect = {
   direction: "decrease" | "increase";
 };
 
+type TimedFoodLengthEffect = {
+  amount: number;
+  direction: "grow" | "shrink";
+};
+
 export type TimedFoodRule = {
   label: string;
+  lengthEffect: TimedFoodLengthEffect;
   preferredObstacleDistanceMax?: number;
   score: number;
   spawnDelayMaxMs: number;
@@ -99,11 +106,14 @@ export const BONUS_FOOD_SPAWN_DELAY_MIN_MS = 4_000;
 export const BONUS_FOOD_TIMEOUT_MAX_MS = 12_000;
 export const BONUS_FOOD_TIMEOUT_MIN_MS = 6_000;
 export const LEADERBOARD_LIMIT = 3;
+export const MIN_SNAKE_LENGTH = 3;
 export const MIN_GAME_TICK_DELAY_MS = 50;
 export const MAX_GAME_SPEED = Math.round(1000 / MIN_GAME_TICK_DELAY_MS);
 export const OBSTACLE_CLUSTER_MAX_SIZE = 6;
 export const OBSTACLE_CLUSTER_MIN_SIZE = 2;
 export const OBSTACLE_FIELD_COVERAGE_RATIO = 0.06;
+export const SHRINK_FOOD_SCORE = 1;
+export const SHRINK_FOOD_TAIL_TRIM = 1;
 export const SLOW_FOOD_SCORE = 1;
 export const SLOW_FOOD_SPEED_DECREASE = 1;
 export const SLOW_FOOD_TIMEOUT_MAX_MS = 3_000;
@@ -117,6 +127,10 @@ export const BOARD_SIZE_OPTIONS = Array.from(
 export const TIMED_FOOD_RULES: Record<TimedFoodKind, TimedFoodRule> = {
   bonusFood: {
     label: "Yellow apple",
+    lengthEffect: {
+      amount: 1,
+      direction: "grow",
+    },
     preferredObstacleDistanceMax: BONUS_FOOD_OBSTACLE_DISTANCE_MAX,
     score: BONUS_FOOD_SCORE,
     spawnDelayMaxMs: BONUS_FOOD_SPAWN_DELAY_MAX_MS,
@@ -126,6 +140,10 @@ export const TIMED_FOOD_RULES: Record<TimedFoodKind, TimedFoodRule> = {
   },
   speedFood: {
     label: "Purple diamond",
+    lengthEffect: {
+      amount: 1,
+      direction: "grow",
+    },
     score: SPEED_FOOD_SCORE,
     spawnDelayMaxMs: BONUS_FOOD_SPAWN_DELAY_MAX_MS,
     spawnDelayMinMs: BONUS_FOOD_SPAWN_DELAY_MIN_MS,
@@ -138,6 +156,10 @@ export const TIMED_FOOD_RULES: Record<TimedFoodKind, TimedFoodRule> = {
   },
   slowFood: {
     label: "Blue triangle",
+    lengthEffect: {
+      amount: 1,
+      direction: "grow",
+    },
     score: SLOW_FOOD_SCORE,
     spawnDelayMaxMs: BONUS_FOOD_SPAWN_DELAY_MAX_MS,
     spawnDelayMinMs: BONUS_FOOD_SPAWN_DELAY_MIN_MS,
@@ -147,6 +169,18 @@ export const TIMED_FOOD_RULES: Record<TimedFoodKind, TimedFoodRule> = {
     },
     timeoutMaxMs: SLOW_FOOD_TIMEOUT_MAX_MS,
     timeoutMinMs: SLOW_FOOD_TIMEOUT_MIN_MS,
+  },
+  shrinkFood: {
+    label: "Cyan hexagon",
+    lengthEffect: {
+      amount: SHRINK_FOOD_TAIL_TRIM,
+      direction: "shrink",
+    },
+    score: SHRINK_FOOD_SCORE,
+    spawnDelayMaxMs: BONUS_FOOD_SPAWN_DELAY_MAX_MS,
+    spawnDelayMinMs: BONUS_FOOD_SPAWN_DELAY_MIN_MS,
+    timeoutMaxMs: BONUS_FOOD_TIMEOUT_MAX_MS,
+    timeoutMinMs: BONUS_FOOD_TIMEOUT_MIN_MS,
   },
 };
 
@@ -268,11 +302,10 @@ function isWithinManhattanDistance(point: Point, targets: Point[], maxDistance: 
 export function createInitialSnake(boardSize: number): Point[] {
   const center = Math.floor(boardSize / 2);
 
-  return [
-    { x: center, y: center },
-    { x: center - 1, y: center },
-    { x: center - 2, y: center },
-  ];
+  return Array.from({ length: MIN_SNAKE_LENGTH }, (_, index) => ({
+    x: center - index,
+    y: center,
+  }));
 }
 
 export function createInitialFood(boardSize: number, random?: RandomSource): Point {
@@ -589,6 +622,7 @@ export function createInitialGame({
     pendingLeaderboardEntry: null,
     queuedDirection: "right",
     score: 0,
+    shrinkFood: null,
     snake,
     slowFood: null,
     speedBoosts: 0,
@@ -696,6 +730,7 @@ function getActiveTimedFoodPositions(
 function getClearedTimedFoodState() {
   return {
     bonusFood: null,
+    shrinkFood: null,
     slowFood: null,
     speedFood: null,
   };
@@ -722,11 +757,21 @@ function getTimedFoodScore(kinds: TimedFoodKind[]) {
   return kinds.reduce((score, kind) => score + TIMED_FOOD_RULES[kind].score, 0);
 }
 
+function getTimedFoodLengthDelta(kinds: TimedFoodKind[]) {
+  return kinds.reduce((lengthDelta, kind) => {
+    const lengthEffect = TIMED_FOOD_RULES[kind].lengthEffect;
+    const amount = lengthEffect.direction === "grow" ? lengthEffect.amount : -lengthEffect.amount;
+
+    return lengthDelta + amount;
+  }, 0);
+}
+
 function getTimedFoodStateAfterEating(current: GameState, eatenKinds: TimedFoodKind[]) {
   const eatenKindSet = new Set(eatenKinds);
 
   return {
     bonusFood: eatenKindSet.has("bonusFood") ? null : current.bonusFood,
+    shrinkFood: eatenKindSet.has("shrinkFood") ? null : current.shrinkFood,
     slowFood: eatenKindSet.has("slowFood") ? null : current.slowFood,
     speedFood: eatenKindSet.has("speedFood") ? null : current.speedFood,
   };
@@ -753,6 +798,12 @@ function getSpeedBoostsAfterEatingTimedFood(
 
     return getSpeedBoostsForTargetSpeed(nextScore, nextSpeed);
   }, current.speedBoosts);
+}
+
+function advanceSnakeSegments(snake: Point[], nextHead: Point, lengthDelta: number) {
+  const targetLength = Math.max(MIN_SNAKE_LENGTH, snake.length + lengthDelta);
+
+  return [nextHead, ...snake].slice(0, targetLength);
 }
 
 export function spawnTimedFood(
@@ -826,8 +877,8 @@ export function advanceSnakeGame(
   };
   const ateFood = current.food !== null && isSamePoint(nextHead, current.food);
   const eatenTimedFoodKinds = getEatenTimedFoodKinds(current, nextHead);
-  const ateGrowthFood = ateFood || eatenTimedFoodKinds.length > 0;
-  const collisionBody = ateGrowthFood ? current.snake : current.snake.slice(0, -1);
+  const lengthDelta = (ateFood ? 1 : 0) + getTimedFoodLengthDelta(eatenTimedFoodKinds);
+  const collisionBody = lengthDelta > 0 ? current.snake : current.snake.slice(0, -1);
   const hitWall =
     nextHead.x < 0 ||
     nextHead.x >= current.boardSize ||
@@ -847,12 +898,7 @@ export function advanceSnakeGame(
     };
   }
 
-  const nextSnake = [nextHead, ...current.snake];
-
-  if (!ateGrowthFood) {
-    nextSnake.pop();
-  }
-
+  const nextSnake = advanceSnakeSegments(current.snake, nextHead, lengthDelta);
   const nextScore =
     current.score + (ateFood ? 1 : 0) + getTimedFoodScore(eatenTimedFoodKinds);
   const nextTimedFoodState = getTimedFoodStateAfterEating(current, eatenTimedFoodKinds);

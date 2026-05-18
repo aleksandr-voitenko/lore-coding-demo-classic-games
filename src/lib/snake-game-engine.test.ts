@@ -19,9 +19,12 @@ import {
   getPointKey,
   getTimedFoodSpawnDelay,
   isSamePoint,
+  MIN_SNAKE_LENGTH,
   OBSTACLE_CLUSTER_MAX_SIZE,
   OBSTACLE_CLUSTER_MIN_SIZE,
   OBSTACLE_FIELD_COVERAGE_RATIO,
+  SHRINK_FOOD_SCORE,
+  SHRINK_FOOD_TAIL_TRIM,
   SLOW_FOOD_TIMEOUT_MIN_MS,
   spawnTimedFood,
   TIMED_FOOD_KINDS,
@@ -112,12 +115,20 @@ describe("snake game engine", () => {
     expect(Object.keys(TIMED_FOOD_RULES)).toEqual([...TIMED_FOOD_KINDS]);
     expect(TIMED_FOOD_RULES.bonusFood).toMatchObject({
       label: "Yellow apple",
+      lengthEffect: {
+        amount: 1,
+        direction: "grow",
+      },
       preferredObstacleDistanceMax: BONUS_FOOD_OBSTACLE_DISTANCE_MAX,
       score: 2,
       timeoutMinMs: BONUS_FOOD_TIMEOUT_MIN_MS,
     });
     expect(TIMED_FOOD_RULES.speedFood).toMatchObject({
       label: "Purple diamond",
+      lengthEffect: {
+        amount: 1,
+        direction: "grow",
+      },
       score: 3,
       speedEffect: {
         amount: 1,
@@ -127,6 +138,10 @@ describe("snake game engine", () => {
     });
     expect(TIMED_FOOD_RULES.slowFood).toMatchObject({
       label: "Blue triangle",
+      lengthEffect: {
+        amount: 1,
+        direction: "grow",
+      },
       score: 1,
       speedEffect: {
         amount: 1,
@@ -134,7 +149,19 @@ describe("snake game engine", () => {
       },
       timeoutMinMs: SLOW_FOOD_TIMEOUT_MIN_MS,
     });
+    expect(TIMED_FOOD_RULES.shrinkFood).toMatchObject({
+      label: "Cyan hexagon",
+      lengthEffect: {
+        amount: SHRINK_FOOD_TAIL_TRIM,
+        direction: "shrink",
+      },
+      score: SHRINK_FOOD_SCORE,
+      timeoutMinMs: BONUS_FOOD_TIMEOUT_MIN_MS,
+    });
     expect(getTimedFoodSpawnDelay("bonusFood", () => 0)).toBe(BONUS_FOOD_SPAWN_DELAY_MIN_MS);
+    expect(getTimedFoodSpawnDelay("shrinkFood", () => 0)).toBe(
+      BONUS_FOOD_SPAWN_DELAY_MIN_MS,
+    );
   });
 
   it("randomizes the first red food with the initial-game random source", () => {
@@ -417,6 +444,72 @@ describe("snake game engine", () => {
     );
   });
 
+  it("spawns cyan hexagons with deterministic timing and avoids active timed foods", () => {
+    const game = createRunningGame();
+    const firstEligiblePosition = generateTimedFoodPosition(
+      game.boardSize,
+      game.snake,
+      game.food,
+      [],
+      () => 0,
+    );
+
+    expect(firstEligiblePosition).not.toBeNull();
+
+    const secondEligiblePosition = generateTimedFoodPosition(
+      game.boardSize,
+      game.snake,
+      game.food,
+      [firstEligiblePosition!],
+      () => 0,
+    );
+
+    expect(secondEligiblePosition).not.toBeNull();
+
+    const thirdEligiblePosition = generateTimedFoodPosition(
+      game.boardSize,
+      game.snake,
+      game.food,
+      [firstEligiblePosition!, secondEligiblePosition!],
+      () => 0,
+    );
+
+    expect(thirdEligiblePosition).not.toBeNull();
+
+    const nextGame = spawnTimedFood(
+      {
+        ...game,
+        bonusFood: {
+          expiresAt: 8_000,
+          position: firstEligiblePosition!,
+        },
+        slowFood: {
+          expiresAt: 10_000,
+          position: thirdEligiblePosition!,
+        },
+        speedFood: {
+          expiresAt: 9_000,
+          position: secondEligiblePosition!,
+        },
+      },
+      "shrinkFood",
+      {
+        now: () => 1_000,
+        random: createRandomSequence([0, 0]),
+      },
+    );
+
+    expect(nextGame.shrinkFood).not.toBeNull();
+    expect(nextGame.shrinkFood?.expiresAt).toBe(1_000 + BONUS_FOOD_TIMEOUT_MIN_MS);
+    expectDifferentPoint(nextGame.shrinkFood!.position, firstEligiblePosition!);
+    expectDifferentPoint(nextGame.shrinkFood!.position, secondEligiblePosition!);
+    expectDifferentPoint(nextGame.shrinkFood!.position, thirdEligiblePosition!);
+    expectDifferentPoint(nextGame.shrinkFood!.position, nextGame.food);
+    expect(nextGame.snake.every((segment) => !isSamePoint(nextGame.shrinkFood!.position, segment))).toBe(
+      true,
+    );
+  });
+
   it("keeps red food from respawning over obstacle islands", () => {
     const game = createRunningGame({
       food: { x: 6, y: 5 },
@@ -546,6 +639,55 @@ describe("snake game engine", () => {
     expect(getGameSpeed(nextGame)).toBe(1);
   });
 
+  it("eating a cyan hexagon scores, clears it, and trims one tail segment", () => {
+    const game = createRunningGame({
+      food: { x: 9, y: 9 },
+      score: 0,
+      shrinkFood: {
+        expiresAt: 9_000,
+        position: { x: 6, y: 5 },
+      },
+      snake: [
+        { x: 5, y: 5 },
+        { x: 4, y: 5 },
+        { x: 3, y: 5 },
+        { x: 2, y: 5 },
+        { x: 1, y: 5 },
+      ],
+    });
+    const initialSpeed = getGameSpeed(game);
+
+    const nextGame = advanceSnakeGame(game);
+
+    expect(nextGame.score).toBe(SHRINK_FOOD_SCORE);
+    expect(nextGame.snake).toHaveLength(game.snake.length - SHRINK_FOOD_TAIL_TRIM);
+    expect(nextGame.snake[0]).toEqual({ x: 6, y: 5 });
+    expect(nextGame.snake.some((segment) => isSamePoint(segment, { x: 1, y: 5 }))).toBe(false);
+    expect(nextGame.shrinkFood).toBeNull();
+    expect(getGameSpeed(nextGame)).toBe(initialSpeed);
+  });
+
+  it("keeps cyan hexagons from trimming below the minimum snake length", () => {
+    const game = createRunningGame({
+      food: { x: 9, y: 9 },
+      shrinkFood: {
+        expiresAt: 9_000,
+        position: { x: 6, y: 5 },
+      },
+      snake: [
+        { x: 5, y: 5 },
+        { x: 4, y: 5 },
+        { x: 3, y: 5 },
+      ],
+    });
+
+    const nextGame = advanceSnakeGame(game);
+
+    expect(nextGame.score).toBe(SHRINK_FOOD_SCORE);
+    expect(nextGame.snake).toHaveLength(MIN_SNAKE_LENGTH);
+    expect(nextGame.shrinkFood).toBeNull();
+  });
+
   it("expires purple diamonds only when the matching timeout is current", () => {
     const game = createRunningGame({
       speedFood: {
@@ -570,6 +712,18 @@ describe("snake game engine", () => {
     expect(expireTimedFood(game, "slowFood", 7_000).slowFood).toBeNull();
   });
 
+  it("expires cyan hexagons only when the matching timeout is current", () => {
+    const game = createRunningGame({
+      shrinkFood: {
+        expiresAt: 7_000,
+        position: { x: 1, y: 1 },
+      },
+    });
+
+    expect(expireTimedFood(game, "shrinkFood", 6_999).shrinkFood).toEqual(game.shrinkFood);
+    expect(expireTimedFood(game, "shrinkFood", 7_000).shrinkFood).toBeNull();
+  });
+
   it("clears active timed foods on game over", () => {
     const game = createRunningGame({
       bonusFood: {
@@ -582,6 +736,10 @@ describe("snake game engine", () => {
         { x: 9, y: 5 },
         { x: 8, y: 5 },
       ],
+      shrinkFood: {
+        expiresAt: 11_000,
+        position: { x: 4, y: 1 },
+      },
       slowFood: {
         expiresAt: 10_000,
         position: { x: 3, y: 1 },
@@ -596,6 +754,7 @@ describe("snake game engine", () => {
 
     expect(nextGame.status).toBe("lost");
     expect(nextGame.bonusFood).toBeNull();
+    expect(nextGame.shrinkFood).toBeNull();
     expect(nextGame.slowFood).toBeNull();
     expect(nextGame.speedFood).toBeNull();
   });
@@ -614,6 +773,10 @@ describe("snake game engine", () => {
         { x: 4, y: 5 },
         { x: 3, y: 5 },
       ],
+      shrinkFood: {
+        expiresAt: 11_000,
+        position: { x: 4, y: 1 },
+      },
       slowFood: {
         expiresAt: 10_000,
         position: { x: 3, y: 1 },
@@ -631,6 +794,7 @@ describe("snake game engine", () => {
     expect(nextGame.snake).toEqual(game.snake);
     expect(nextGame.obstacles).toEqual(game.obstacles);
     expect(nextGame.bonusFood).toBeNull();
+    expect(nextGame.shrinkFood).toBeNull();
     expect(nextGame.slowFood).toBeNull();
     expect(nextGame.speedFood).toBeNull();
   });
@@ -666,6 +830,7 @@ describe("snake game engine", () => {
     expect(nextGame.snake[0]).toEqual({ x: 2, y: 2 });
     expect(nextGame.pendingLeaderboardEntry).toEqual({ rank: 0, score: 1 });
     expect(nextGame.bonusFood).toBeNull();
+    expect(nextGame.shrinkFood).toBeNull();
     expect(nextGame.slowFood).toBeNull();
     expect(nextGame.speedFood).toBeNull();
   });
@@ -682,6 +847,10 @@ describe("snake game engine", () => {
         { x: 4, y: 5 },
         { x: 3, y: 5 },
       ],
+      shrinkFood: {
+        expiresAt: 11_000,
+        position: { x: 3, y: 0 },
+      },
       slowFood: {
         expiresAt: 10_000,
         position: { x: 2, y: 0 },
@@ -696,8 +865,9 @@ describe("snake game engine", () => {
       random: () => 0,
     });
 
-    expect(nextGame.food).toEqual({ x: 3, y: 0 });
+    expect(nextGame.food).toEqual({ x: 4, y: 0 });
     expectDifferentPoint(nextGame.food, game.bonusFood!.position);
+    expectDifferentPoint(nextGame.food, game.shrinkFood!.position);
     expectDifferentPoint(nextGame.food, game.slowFood!.position);
     expectDifferentPoint(nextGame.food, game.speedFood!.position);
   });

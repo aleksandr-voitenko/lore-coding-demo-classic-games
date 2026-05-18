@@ -131,6 +131,55 @@ describe("snake food feedback", () => {
     });
   });
 
+  it("labels cyan hexagon pickups with point and tail-trim feedback", () => {
+    const game = createRunningGame({
+      food: { x: 9, y: 9 },
+      shrinkFood: {
+        expiresAt: 9_000,
+        position: { x: 6, y: 5 },
+      },
+      snake: [
+        { x: 5, y: 5 },
+        { x: 4, y: 5 },
+        { x: 3, y: 5 },
+        { x: 2, y: 5 },
+      ],
+    });
+
+    const nextGame = advanceSnakeGame(game);
+    const feedback = createFoodFeedback(game, nextGame, 17);
+
+    expect(feedback).toEqual({
+      id: 17,
+      lines: ["+1 🟡", "-1 ✂"],
+      position: { x: 6, y: 5 },
+    });
+  });
+
+  it("omits cyan hexagon tail feedback when the snake is already minimum length", () => {
+    const game = createRunningGame({
+      food: { x: 9, y: 9 },
+      shrinkFood: {
+        expiresAt: 9_000,
+        position: { x: 6, y: 5 },
+      },
+      snake: [
+        { x: 5, y: 5 },
+        { x: 4, y: 5 },
+        { x: 3, y: 5 },
+      ],
+    });
+
+    const nextGame = advanceSnakeGame(game);
+    const feedback = createFoodFeedback(game, nextGame, 18);
+
+    expect(feedback).toEqual({
+      id: 18,
+      lines: ["+1 🟡"],
+      position: { x: 6, y: 5 },
+    });
+  });
+
   it("does not create feedback when score does not change", () => {
     const game = createRunningGame({
       food: { x: 9, y: 9 },
@@ -141,6 +190,6 @@ describe("snake food feedback", () => {
       ],
     });
 
-    expect(createFoodFeedback(game, advanceSnakeGame(game), 17)).toBeNull();
+    expect(createFoodFeedback(game, advanceSnakeGame(game), 19)).toBeNull();
   });
 });

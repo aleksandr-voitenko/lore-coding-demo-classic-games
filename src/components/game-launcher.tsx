@@ -39,7 +39,7 @@ type GameCard = {
 const GAME_CARDS: GameCard[] = [
   {
     accentClassName:
-      "bg-[linear-gradient(90deg,var(--snake-head),var(--snake-bonus-food),var(--snake-speed-food),var(--snake-slow-food))]",
+      "bg-[linear-gradient(90deg,var(--snake-head),var(--snake-bonus-food),var(--snake-speed-food),var(--snake-slow-food),var(--snake-shrink-food))]",
     artwork: {
       height: 249,
       priority: true,

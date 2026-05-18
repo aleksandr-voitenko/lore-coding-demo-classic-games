@@ -27,6 +27,8 @@ type SnakeBoardProps = {
 const timedFoodCellClassNames: Record<TimedFoodKind, string> = {
   bonusFood:
     "rounded-full bg-[var(--snake-bonus-food)] shadow-[0_0_20px_color-mix(in_oklch,var(--snake-bonus-food)_58%,transparent)]",
+  shrinkFood:
+    "scale-90 rounded-none bg-[var(--snake-shrink-food)] shadow-[0_0_20px_color-mix(in_oklch,var(--snake-shrink-food)_58%,transparent)] [clip-path:polygon(25%_6%,75%_6%,100%_50%,75%_94%,25%_94%,0_50%)]",
   speedFood:
     "scale-75 rotate-45 rounded-[0.08rem] bg-[var(--snake-speed-food)] shadow-[0_0_20px_color-mix(in_oklch,var(--snake-speed-food)_60%,transparent)]",
   slowFood:
@@ -45,10 +47,11 @@ export function SnakeBoard({
     () =>
       getActiveTimedFoodEntries({
         bonusFood: game.bonusFood,
+        shrinkFood: game.shrinkFood,
         slowFood: game.slowFood,
         speedFood: game.speedFood,
       }),
-    [game.bonusFood, game.slowFood, game.speedFood],
+    [game.bonusFood, game.shrinkFood, game.slowFood, game.speedFood],
   );
   const activeTimedFoodLabel = activeTimedFoodEntries
     .map(({ rule }) => ` ${rule.label} active.`)

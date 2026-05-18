@@ -323,6 +323,12 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
     setGame,
     timedFood: game.slowFood,
   });
+  useTimedFoodLifecycle({
+    gameStatus: game.status,
+    kind: "shrinkFood",
+    setGame,
+    timedFood: game.shrinkFood,
+  });
 
   useEffect(() => {
     if (speed === null) {

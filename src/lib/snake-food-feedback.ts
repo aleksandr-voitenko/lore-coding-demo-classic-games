@@ -14,6 +14,7 @@ export type FoodFeedback = {
 
 const POINT_REWARD_ICON = "🟡";
 const SPEED_REWARD_ICON = "⚡";
+const TAIL_TRIM_REWARD_ICON = "✂";
 
 export function createFoodFeedback(
   previousGame: GameState,
@@ -51,6 +52,13 @@ export function createFoodFeedback(
       (getGameSpeed(nextGame) ?? 1) < (getGameSpeed(previousGame) ?? 1)
     ) {
       lines.push(`-${rule.speedEffect.amount} ${SPEED_REWARD_ICON}`);
+    }
+
+    if (
+      rule.lengthEffect.direction === "shrink" &&
+      nextGame.snake.length < previousGame.snake.length
+    ) {
+      lines.push(`-${previousGame.snake.length - nextGame.snake.length} ${TAIL_TRIM_REWARD_ICON}`);
     }
   });
 
