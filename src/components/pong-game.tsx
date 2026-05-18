@@ -120,35 +120,41 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
   }, [game.status, moveDown, moveUp, startGame, toggleRunState]);
 
   return (
-    <GameShell className="bg-[#06101f] text-[#e5f2ff]">
-      <GameSidebar className="border-[#16324f] bg-[#0b1728]">
+    <GameShell className="bg-[var(--pong-page)] text-[var(--pong-ink)]">
+      <GameSidebar className="border-[var(--pong-border)] bg-[var(--pong-panel)]">
         <GameHeader
-          accentClassName="bg-[linear-gradient(90deg,#38bdf8,#f8fafc,#f472b6)]"
+          accentClassName="bg-[linear-gradient(90deg,var(--pong-blue),var(--pong-ball),var(--pong-pink))]"
           backButtonTestId="pong-back-to-menu"
           onBackToMenu={onBackToMenu}
           status={statusLabels[game.status]}
-          statusClassName="text-[#9fb6c9]"
+          statusClassName="text-[var(--pong-muted)]"
           statusTestId="pong-status"
           title="Classic Pong"
         />
 
         <dl className="grid grid-cols-2 gap-3">
-          <div className="rounded-md border border-[#16324f] p-3">
-            <dt className="text-xs font-medium text-[#9fb6c9]">Player</dt>
-            <dd className="font-mono text-3xl font-semibold leading-none" data-testid="pong-player-score">
+          <div className="rounded-md border border-[var(--pong-border)] p-3">
+            <dt className="text-xs font-medium text-[var(--pong-muted)]">Player</dt>
+            <dd
+              className="font-mono text-3xl font-semibold leading-none"
+              data-testid="pong-player-score"
+            >
               {game.score.player}
             </dd>
           </div>
-          <div className="rounded-md border border-[#16324f] p-3">
-            <dt className="text-xs font-medium text-[#9fb6c9]">CPU</dt>
-            <dd className="font-mono text-3xl font-semibold leading-none" data-testid="pong-cpu-score">
+          <div className="rounded-md border border-[var(--pong-border)] p-3">
+            <dt className="text-xs font-medium text-[var(--pong-muted)]">CPU</dt>
+            <dd
+              className="font-mono text-3xl font-semibold leading-none"
+              data-testid="pong-cpu-score"
+            >
               {game.score.cpu}
             </dd>
           </div>
         </dl>
 
-        <div className="rounded-md border border-[#16324f] p-3">
-          <p className="text-xs font-medium text-[#9fb6c9]">Target</p>
+        <div className="rounded-md border border-[var(--pong-border)] p-3">
+          <p className="text-xs font-medium text-[var(--pong-muted)]">Target</p>
           <p className="font-mono text-3xl font-semibold leading-none">{PONG_TARGET_SCORE}</p>
         </div>
 
@@ -273,7 +279,7 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
           ) : null}
         </PongBoard>
 
-        <div className="flex items-center justify-between rounded-md border border-[#16324f] bg-[#0b1728] px-3 py-2 text-xs font-medium text-[#9fb6c9]">
+        <div className="flex items-center justify-between rounded-md border border-[var(--pong-border)] bg-[var(--pong-panel)] px-3 py-2 text-xs font-medium text-[var(--pong-muted)]">
           <span>Board {pongBoardSizeLabel}</span>
           <span>Speed {tickDelay === null ? "0" : Math.round(1000 / tickDelay)}</span>
         </div>

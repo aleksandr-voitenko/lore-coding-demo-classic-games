@@ -168,7 +168,8 @@ const GAME_CARDS: GameCard[] = [
     ],
   },
   {
-    accentClassName: "bg-[linear-gradient(90deg,#38bdf8,#f8fafc,#f472b6)]",
+    accentClassName:
+      "bg-[linear-gradient(90deg,var(--pong-blue),var(--pong-ball),var(--pong-pink))]",
     artwork: {
       height: 250,
       loading: "eager",
