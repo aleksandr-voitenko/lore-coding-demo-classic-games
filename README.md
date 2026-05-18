@@ -4,8 +4,9 @@ Task Workflow Test is a Next.js App Router project used for task-based developme
 practice. The app opens to a card-based game menu and currently includes a
 polished Snake game with deterministic gameplay tests, SQLite-backed leaderboard
 persistence, timed special foods, obstacle islands, and a full-board win state,
-plus classic Tetris, Breakout, and Minesweeper games with tested falling-block,
-paddle, ball, brick, minefield, flagging, reveal, scoring, and end-state rules.
+plus classic Tetris, Breakout, Minesweeper, and Space Invaders games with tested
+falling-block, paddle, ball, brick, minefield, flagging, reveal, invader
+formation, cannon, projectile, scoring, and end-state rules.
 
 ## Stack
 
@@ -67,6 +68,12 @@ the SQLite adapter without changing the client API.
   for Classic Minesweeper.
 - `src/components/minesweeper-board.tsx` renders the Minesweeper cell grid,
   covered/revealed/flagged/mine states, and context-menu flagging behavior.
+- `src/components/space-invaders-game.tsx` owns Space Invaders React state,
+  browser events, timers, controls, overlays, and menu return for Classic Space
+  Invaders.
+- `src/components/space-invaders-board.tsx` renders the Space Invaders
+  formation, player cannon, shot, base line, and board state using code-native
+  game artwork.
 - `src/components/game-layout.tsx` and `src/components/game-input.ts` contain
   shared game layout primitives and keyboard input helpers.
 - `public/images/snake-game-card.png` contains the Classic Snake menu artwork,
@@ -77,6 +84,8 @@ the SQLite adapter without changing the client API.
   artwork.
 - `public/images/minesweeper-game-card.svg` contains the Classic Minesweeper
   menu artwork.
+- `public/images/space-invaders-game-card.svg` contains the Classic Space
+  Invaders menu artwork.
 - `src/lib/snake-game-engine.ts` contains pure gameplay rules for movement,
   food placement, scoring, timed-food behavior, obstacles, win/loss state, and
   speed.
@@ -87,6 +96,9 @@ the SQLite adapter without changing the client API.
 - `src/lib/minesweeper-game-engine.ts` contains pure gameplay rules for
   delayed mine placement, safe first reveals, adjacent counts, flood reveal,
   flagging, and win/loss state.
+- `src/lib/space-invaders-game-engine.ts` contains pure gameplay rules for
+  player movement, firing, shot advancement, invader marching, edge drops,
+  scoring, and win/loss state.
 - `src/lib/snake-leaderboard.ts` contains shared leaderboard normalization and
   client API helpers.
 - `src/lib/server/sqlite-snake-leaderboard-store.ts` contains the SQLite-backed

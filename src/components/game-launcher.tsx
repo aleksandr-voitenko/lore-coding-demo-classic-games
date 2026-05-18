@@ -7,9 +7,10 @@ import { type ComponentType, useCallback, useState } from "react";
 import { BreakoutGame } from "@/components/breakout-game";
 import { MinesweeperGame } from "@/components/minesweeper-game";
 import { SnakeGame } from "@/components/snake-game";
+import { SpaceInvadersGame } from "@/components/space-invaders-game";
 import { TetrisGame } from "@/components/tetris-game";
 
-type GameId = "snake" | "tetris" | "breakout" | "minesweeper";
+type GameId = "snake" | "tetris" | "breakout" | "minesweeper" | "space-invaders";
 
 type PlayableGameProps = {
   onBackToMenu: () => void;
@@ -113,6 +114,26 @@ const GAME_CARDS: GameCard[] = [
       { label: "Mode", value: "Flags" },
       { label: "Board", value: "9x9" },
       { label: "Mines", value: "10" },
+    ],
+  },
+  {
+    accentClassName:
+      "bg-[linear-gradient(90deg,var(--invaders-lime),var(--invaders-cyan),var(--invaders-magenta),var(--invaders-yellow))]",
+    artwork: {
+      height: 250,
+      loading: "eager",
+      src: "/images/space-invaders-game-card.svg",
+      unoptimized: true,
+      width: 250,
+    },
+    component: SpaceInvadersGame,
+    description: "A cannon defense arcade game with marching invaders, shots, and scoring.",
+    id: "space-invaders",
+    label: "Classic Space Invaders",
+    stats: [
+      { label: "Mode", value: "Defense" },
+      { label: "Board", value: "420x560" },
+      { label: "Aliens", value: "55" },
     ],
   },
 ];
