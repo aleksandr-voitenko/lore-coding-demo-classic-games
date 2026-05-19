@@ -47,11 +47,11 @@ export const SPACE_INVADERS_STARTING_LIVES = 3;
 export const SPACE_INVADERS_BASE_Y = 492;
 export const SPACE_INVADERS_TICK_DELAY_MS = 85;
 
-const INVADER_DROP_Y = 20;
+const INVADER_DROP_Y = 4;
 const INVADER_GAP_X = 12;
 const INVADER_GAP_Y = 18;
 const INVADER_HEIGHT = 18;
-const INVADER_STEP_X = 6;
+const INVADER_STEP_X = 2;
 const INVADER_TOP = 64;
 const INVADER_WIDTH = 22;
 const INVADER_X = 38;

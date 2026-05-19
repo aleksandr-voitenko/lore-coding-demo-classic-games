@@ -4,6 +4,7 @@ import {
   advanceSpaceInvadersGame,
   createInitialSpaceInvadersGame,
   fireSpaceInvadersShot,
+  getSpaceInvadersTickDelay,
   moveSpaceInvadersPlayer,
   pauseSpaceInvadersGame,
   SPACE_INVADERS_BASE_Y,
@@ -160,9 +161,34 @@ describe("space invaders game engine", () => {
 
     expect(marchedInvader).toMatchObject({
       x: targetInvader.x,
-      y: targetInvader.y + 20,
+      y: targetInvader.y + 4,
     });
     expect(advanced.marchDirection).toBe(-1);
+  });
+
+  it("keeps the untouched formation above the base for a playable opening window", () => {
+    const ticksForTwoMinutes = Math.floor(120_000 / getSpaceInvadersTickDelay());
+    const ticksForThreeMinutes = Math.floor(180_000 / getSpaceInvadersTickDelay());
+    let game = createRunningGame();
+
+    for (let tick = 0; tick < ticksForTwoMinutes; tick += 1) {
+      game = advanceSpaceInvadersGame(game);
+    }
+
+    const lowestActiveInvaderEdge = Math.max(
+      ...game.invaders
+        .filter((invader) => invader.isActive)
+        .map((invader) => invader.y + invader.height),
+    );
+
+    expect(game.status).toBe("running");
+    expect(lowestActiveInvaderEdge).toBeLessThan(SPACE_INVADERS_BASE_Y);
+
+    for (let tick = ticksForTwoMinutes; tick < ticksForThreeMinutes; tick += 1) {
+      game = advanceSpaceInvadersGame(game);
+    }
+
+    expect(game.status).toBe("lost");
   });
 
   it("loses when an active invader reaches the player base", () => {
