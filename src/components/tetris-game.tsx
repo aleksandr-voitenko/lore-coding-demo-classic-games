@@ -13,6 +13,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  GameAbandonDialog,
   GameBoardActions,
   GameBoardColumn,
   GameBoardStage,
@@ -20,6 +21,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
@@ -207,6 +209,14 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
     isGameActive: game.status === "running",
     onPauseGame: pauseGameForHelp,
     onResumeGame: resumeGameAfterHelp,
+  });
+  const { abandonDialogProps } = useGameEscapeToMenu({
+    isDisabled: isHelpVisible,
+    isGameStarted: game.status !== "ready",
+    onBackToMenu,
+    onPauseGame: pauseGameForHelp,
+    onResumeGame: resumeGameAfterHelp,
+    shouldPauseBeforeConfirm: canPauseGame,
   });
 
   useEffect(() => {
@@ -578,6 +588,7 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
             <span>Speed {tickDelay === null ? "0" : `${Math.round(1000 / tickDelay)}`}</span>
           </div>
       </GameBoardColumn>
+      {abandonDialogProps ? <GameAbandonDialog {...abandonDialogProps} /> : null}
     </GameShell>
   );
 }

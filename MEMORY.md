@@ -100,6 +100,12 @@ patterns and constraints here.
   Controls sections use compact keyboard/mouse rows; use arrow glyphs only for
   arrow keys and text labels for other keys or pointer actions. Rules sections
   remain short bullet lists.
+- Use `useGameEscapeToMenu` and `GameAbandonDialog` from
+  `src/components/game-layout.tsx` for Escape-to-menu behavior. `ready` games
+  return directly to the launcher, non-`ready` games show the abandon
+  confirmation, and realtime games pass their existing pause/resume callbacks
+  with `shouldPauseBeforeConfirm` for active or paused states. Keep this hook
+  disabled while Help is visible so Help owns Escape until it closes.
 
 ## Verification Commands
 

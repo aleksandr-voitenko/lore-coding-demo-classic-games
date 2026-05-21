@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { isTypingTarget } from "@/components/game-input";
 import {
+  GameAbandonDialog,
   GameBoardActions,
   GameBoardColumn,
   GameBoardStage,
@@ -12,6 +13,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
@@ -129,6 +131,14 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
     isGameActive: game.status === "running",
     onPauseGame: pauseGameForHelp,
     onResumeGame: resumeGameAfterHelp,
+  });
+  const { abandonDialogProps } = useGameEscapeToMenu({
+    isDisabled: isHelpVisible,
+    isGameStarted: game.status !== "ready",
+    onBackToMenu,
+    onPauseGame: pauseGameForHelp,
+    onResumeGame: resumeGameAfterHelp,
+    shouldPauseBeforeConfirm: canPauseGame,
   });
 
   useEffect(() => {
@@ -350,6 +360,7 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
           <span>Speed {tickDelay === null ? "0" : Math.round(1000 / tickDelay)}</span>
         </div>
       </GameBoardColumn>
+      {abandonDialogProps ? <GameAbandonDialog {...abandonDialogProps} /> : null}
     </GameShell>
   );
 }

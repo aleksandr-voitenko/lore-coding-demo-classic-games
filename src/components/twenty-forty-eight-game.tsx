@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { isTypingTarget } from "@/components/game-input";
 import {
+  GameAbandonDialog,
   GameBoardActions,
   GameBoardColumn,
   GameBoardStage,
@@ -19,6 +20,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
@@ -102,6 +104,11 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
   const showStartScreen = game.status === "ready";
   const showEndScreen = game.status === "lost" || game.status === "won";
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen();
+  const { abandonDialogProps } = useGameEscapeToMenu({
+    isDisabled: isHelpVisible,
+    isGameStarted: game.status !== "ready",
+    onBackToMenu,
+  });
 
   const startGame = useCallback(() => {
     setGame((current) => startTwentyFortyEightGame(current));
@@ -340,6 +347,7 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
           </span>
         </div>
       </GameBoardColumn>
+      {abandonDialogProps ? <GameAbandonDialog {...abandonDialogProps} /> : null}
     </GameShell>
   );
 }

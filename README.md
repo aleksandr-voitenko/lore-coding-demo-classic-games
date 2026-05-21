@@ -11,6 +11,8 @@ Breakout, Minesweeper, Space Invaders, Pong, 2048, and Simon.
 - Classic Tetris, Breakout, Minesweeper, Space Invaders, Pong, 2048, and Simon
   with deterministic gameplay rules and polished browser controls.
 - Closable in-game Help screens with controls and rules for every game.
+- Escape-to-menu controls that confirm before abandoning started games and pause
+  real-time games while the confirmation is open.
 - Local game-card artwork for every game in the launcher.
 
 ## Stack

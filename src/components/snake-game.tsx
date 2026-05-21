@@ -20,6 +20,7 @@ import {
 } from "react";
 
 import {
+  GameAbandonDialog,
   GameBoardActions,
   GameBoardColumn,
   GameBoardStage,
@@ -27,6 +28,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
@@ -349,10 +351,19 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
     );
   }, []);
 
+  const canPauseGame = game.status === "running" || game.status === "paused";
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({
     isGameActive: game.status === "running",
     onPauseGame: pauseGameForHelp,
     onResumeGame: resumeGameAfterHelp,
+  });
+  const { abandonDialogProps } = useGameEscapeToMenu({
+    isDisabled: isHelpVisible,
+    isGameStarted: game.status !== "ready",
+    onBackToMenu,
+    onPauseGame: pauseGameForHelp,
+    onResumeGame: resumeGameAfterHelp,
+    shouldPauseBeforeConfirm: canPauseGame,
   });
 
   const saveLeaderboardScore = useCallback(
@@ -453,7 +464,6 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
     toggleRunState,
   ]);
 
-  const canPauseGame = game.status === "running" || game.status === "paused";
   const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
   const showStartScreen = game.status === "ready";
   const showGameOverScreen = game.status === "lost" || game.status === "won";
@@ -782,6 +792,7 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
             </span>
           </div>
       </GameBoardColumn>
+      {abandonDialogProps ? <GameAbandonDialog {...abandonDialogProps} /> : null}
     </GameShell>
   );
 }

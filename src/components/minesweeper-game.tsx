@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { isTypingTarget } from "@/components/game-input";
 import {
+  GameAbandonDialog,
   GameBoardActions,
   GameBoardColumn,
   GameBoardStage,
@@ -12,6 +13,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
@@ -79,6 +81,11 @@ export function MinesweeperGame({ onBackToMenu }: MinesweeperGameProps = {}) {
   const remainingMineCount = getMinesweeperRemainingMineCount(game);
   const showEndScreen = game.status === "lost" || game.status === "won";
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen();
+  const { abandonDialogProps } = useGameEscapeToMenu({
+    isDisabled: isHelpVisible,
+    isGameStarted: game.status !== "ready",
+    onBackToMenu,
+  });
 
   const revealCell = useCallback((cellId: string) => {
     setGame((current) => revealMinesweeperCell(current, cellId, { random: Math.random }));
@@ -275,6 +282,7 @@ export function MinesweeperGame({ onBackToMenu }: MinesweeperGameProps = {}) {
           </span>
         </div>
       </GameBoardColumn>
+      {abandonDialogProps ? <GameAbandonDialog {...abandonDialogProps} /> : null}
     </GameShell>
   );
 }
