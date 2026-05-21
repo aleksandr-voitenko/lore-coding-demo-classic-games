@@ -115,6 +115,9 @@ patterns and constraints here.
   closes. Use the hook's returned `requestBackToMenu` callback for Back buttons
   so clicks and Escape follow the same direct-return or abandon-confirmation
   path.
+- Keep shared Help and Escape/back-to-menu state transitions in
+  `src/lib/game-ui-flow.ts`; `game-layout.tsx` hooks should apply the transition
+  effects rather than reimplementing the pause/resume/dialog state machine.
 
 ## Verification Commands
 

@@ -9,9 +9,20 @@ import {
   XIcon,
   type LucideIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  cancelGameMenuExitFlow,
+  closeGameHelpFlow,
+  confirmGameMenuExitFlow,
+  initialGameHelpFlowState,
+  initialGameMenuExitFlowState,
+  openGameHelpFlow,
+  requestGameMenuExitFlow,
+  type GameHelpFlowEffect,
+  type GameMenuExitFlowEffect,
+} from "@/lib/game-ui-flow";
 import { cn } from "@/lib/utils";
 
 type GameShellProps = {
@@ -225,37 +236,38 @@ export function useGameHelpScreen({
   onPauseGame,
   onResumeGame,
 }: UseGameHelpScreenOptions = {}) {
-  const [isHelpVisible, setIsHelpVisible] = useState(false);
-  const shouldResumeOnCloseRef = useRef(false);
+  const [helpFlow, setHelpFlow] = useState(initialGameHelpFlowState);
+
+  const applyHelpEffect = useCallback(
+    (effect: GameHelpFlowEffect) => {
+      if (effect === "pause") {
+        onPauseGame?.();
+      }
+
+      if (effect === "resume") {
+        onResumeGame?.();
+      }
+    },
+    [onPauseGame, onResumeGame],
+  );
 
   const openHelp = useCallback(() => {
-    if (isHelpVisible) {
-      return;
-    }
+    const transition = openGameHelpFlow(helpFlow, isGameActive);
 
-    shouldResumeOnCloseRef.current = isGameActive;
-
-    if (isGameActive) {
-      onPauseGame?.();
-    }
-
-    setIsHelpVisible(true);
-  }, [isGameActive, isHelpVisible, onPauseGame]);
+    setHelpFlow(transition.state);
+    applyHelpEffect(transition.effect);
+  }, [applyHelpEffect, helpFlow, isGameActive]);
 
   const closeHelp = useCallback(() => {
-    setIsHelpVisible(false);
+    const transition = closeGameHelpFlow(helpFlow);
 
-    if (!shouldResumeOnCloseRef.current) {
-      return;
-    }
-
-    shouldResumeOnCloseRef.current = false;
-    onResumeGame?.();
-  }, [onResumeGame]);
+    setHelpFlow(transition.state);
+    applyHelpEffect(transition.effect);
+  }, [applyHelpEffect, helpFlow]);
 
   return {
     closeHelp,
-    isHelpVisible,
+    isHelpVisible: helpFlow.isHelpVisible,
     openHelp,
   };
 }
@@ -268,54 +280,63 @@ export function useGameEscapeToMenu({
   onResumeGame,
   shouldPauseBeforeConfirm = false,
 }: UseGameEscapeToMenuOptions) {
-  const [isAbandonDialogVisible, setIsAbandonDialogVisible] = useState(false);
-  const shouldResumeOnCancelRef = useRef(false);
+  const [menuExitFlow, setMenuExitFlow] = useState(initialGameMenuExitFlowState);
+
+  const applyMenuExitEffect = useCallback(
+    (effect: GameMenuExitFlowEffect) => {
+      if (effect === "back") {
+        onBackToMenu?.();
+      }
+
+      if (effect === "pause") {
+        onPauseGame?.();
+      }
+
+      if (effect === "resume") {
+        onResumeGame?.();
+      }
+    },
+    [onBackToMenu, onPauseGame, onResumeGame],
+  );
 
   const cancelAbandon = useCallback(() => {
-    setIsAbandonDialogVisible(false);
+    const transition = cancelGameMenuExitFlow(menuExitFlow);
 
-    if (!shouldResumeOnCancelRef.current) {
-      return;
-    }
-
-    shouldResumeOnCancelRef.current = false;
-    onResumeGame?.();
-  }, [onResumeGame]);
+    setMenuExitFlow(transition.state);
+    applyMenuExitEffect(transition.effect);
+  }, [applyMenuExitEffect, menuExitFlow]);
 
   const confirmAbandon = useCallback(() => {
-    shouldResumeOnCancelRef.current = false;
-    setIsAbandonDialogVisible(false);
-    onBackToMenu?.();
-  }, [onBackToMenu]);
+    const transition = confirmGameMenuExitFlow();
+
+    setMenuExitFlow(transition.state);
+    applyMenuExitEffect(transition.effect);
+  }, [applyMenuExitEffect]);
 
   const requestBackToMenu = useCallback(() => {
-    if (!onBackToMenu || isDisabled || isAbandonDialogVisible) {
+    if (!onBackToMenu) {
       return;
     }
 
-    if (!isGameStarted) {
-      onBackToMenu();
-      return;
-    }
+    const transition = requestGameMenuExitFlow(menuExitFlow, {
+      isDisabled,
+      isGameStarted,
+      shouldPauseBeforeConfirm,
+    });
 
-    shouldResumeOnCancelRef.current = shouldPauseBeforeConfirm;
-
-    if (shouldPauseBeforeConfirm) {
-      onPauseGame?.();
-    }
-
-    setIsAbandonDialogVisible(true);
+    setMenuExitFlow(transition.state);
+    applyMenuExitEffect(transition.effect);
   }, [
-    isAbandonDialogVisible,
+    applyMenuExitEffect,
     isDisabled,
     isGameStarted,
+    menuExitFlow,
     onBackToMenu,
-    onPauseGame,
     shouldPauseBeforeConfirm,
   ]);
 
   useEffect(() => {
-    if (!onBackToMenu || isDisabled || isAbandonDialogVisible) {
+    if (!onBackToMenu || isDisabled || menuExitFlow.isAbandonDialogVisible) {
       return;
     }
 
@@ -331,10 +352,10 @@ export function useGameEscapeToMenu({
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isAbandonDialogVisible, isDisabled, onBackToMenu, requestBackToMenu]);
+  }, [isDisabled, menuExitFlow.isAbandonDialogVisible, onBackToMenu, requestBackToMenu]);
 
   return {
-    abandonDialogProps: isAbandonDialogVisible
+    abandonDialogProps: menuExitFlow.isAbandonDialogVisible
       ? {
           onCancel: cancelAbandon,
           onConfirm: confirmAbandon,
