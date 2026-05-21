@@ -115,6 +115,11 @@ patterns and constraints here.
 ## Verification Commands
 
 - `npm test` runs deterministic Vitest coverage.
+- `npm run test:coverage` runs Vitest with V8 coverage and writes reports under
+  `reports/coverage/`.
+- `npm run test:agent` runs Vitest with V8 coverage and writes machine-readable
+  test results to `reports/vitest/results.json` and `reports/vitest/junit.xml`
+  plus machine-readable coverage under `reports/coverage/`.
 - `npm run typecheck` runs TypeScript without emitting.
 - `npm run lint` runs ESLint.
 - `npm run build` builds the Next.js app.

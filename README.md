@@ -58,6 +58,17 @@ Run the deterministic test suite:
 npm test
 ```
 
+Generate machine-readable test and coverage reports:
+
+```bash
+npm run test:agent
+```
+
+The agent report command writes test results to `reports/vitest/results.json`
+and `reports/vitest/junit.xml`. Coverage output is written under
+`reports/coverage/`, including `coverage-final.json`, `coverage-summary.json`,
+`lcov.info`, and `cobertura-coverage.xml`.
+
 Run the standard project checks:
 
 ```bash
