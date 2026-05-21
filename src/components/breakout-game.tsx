@@ -15,8 +15,11 @@ import {
   GameBoardColumn,
   GameBoardStage,
   GameHeader,
+  GameHelpScreen,
   GameShell,
   GameSidebar,
+  useGameHelpScreen,
+  type GameHelpSection,
 } from "@/components/game-layout";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,6 +49,41 @@ const statusLabels: Record<BreakoutStatus, string> = {
   running: "Running",
   won: "You won",
 };
+
+const BREAKOUT_HELP_SECTIONS: GameHelpSection[] = [
+  {
+    title: "Controls",
+    controls: [
+      {
+        buttons: [{ text: "Enter", label: "Enter key" }],
+        label: "Start game",
+      },
+      {
+        buttons: [{ icon: ArrowLeftIcon, label: "Left" }, { text: "A", label: "A key" }],
+        label: "Move paddle left",
+      },
+      {
+        buttons: [{ icon: ArrowRightIcon, label: "Right" }, { text: "D", label: "D key" }],
+        label: "Move paddle right",
+      },
+      {
+        buttons: [
+          { text: "Space", label: "Space key" },
+          { text: "P", label: "P key" },
+        ],
+        label: "Pause or resume",
+      },
+    ],
+  },
+  {
+    title: "Rules",
+    items: [
+      "Keep the ball in play with the paddle.",
+      "Break every active brick to clear the wall.",
+      "Missing the ball costs a life, and the game ends when no lives remain.",
+    ],
+  },
+];
 
 export function BreakoutGame({ onBackToMenu }: BreakoutGameProps = {}) {
   const [game, setGame] = useState<BreakoutGameState>(() => createInitialBreakoutGame());
@@ -87,6 +125,20 @@ export function BreakoutGame({ onBackToMenu }: BreakoutGameProps = {}) {
     setGame((current) => advanceBreakoutGame(current));
   }, []);
 
+  const pauseGameForHelp = useCallback(() => {
+    setGame((current) => pauseBreakoutGame(current));
+  }, []);
+
+  const resumeGameAfterHelp = useCallback(() => {
+    setGame((current) => startBreakoutGame(current));
+  }, []);
+
+  const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({
+    isGameActive: game.status === "running",
+    onPauseGame: pauseGameForHelp,
+    onResumeGame: resumeGameAfterHelp,
+  });
+
   useEffect(() => {
     if (tickDelay === null) {
       return;
@@ -99,7 +151,7 @@ export function BreakoutGame({ onBackToMenu }: BreakoutGameProps = {}) {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isTypingTarget(event.target)) {
+      if (isHelpVisible || isTypingTarget(event.target)) {
         return;
       }
 
@@ -130,7 +182,7 @@ export function BreakoutGame({ onBackToMenu }: BreakoutGameProps = {}) {
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [game.status, moveLeft, moveRight, startGame, toggleRunState]);
+  }, [game.status, isHelpVisible, moveLeft, moveRight, startGame, toggleRunState]);
 
   return (
     <GameShell className="bg-[var(--breakout-page)] text-[var(--breakout-ink)]">
@@ -204,9 +256,11 @@ export function BreakoutGame({ onBackToMenu }: BreakoutGameProps = {}) {
         <GameBoardStage
           actions={
             <GameBoardActions
+              helpDisabled={isHelpVisible}
+              onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{
-                disabled: !canPauseGame,
+                disabled: isHelpVisible || !canPauseGame,
                 isResume: game.status === "paused",
                 label: pauseActionLabel,
                 onClick: toggleRunState,
@@ -304,6 +358,15 @@ export function BreakoutGame({ onBackToMenu }: BreakoutGameProps = {}) {
                 </Button>
               </div>
             </div>
+          ) : null}
+          {isHelpVisible ? (
+            <GameHelpScreen
+              className="border-[color-mix(in_oklch,var(--breakout-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--breakout-board)_94%,black)] text-[var(--breakout-board-text)]"
+              onClose={closeHelp}
+              sections={BREAKOUT_HELP_SECTIONS}
+              testId="breakout-help-screen"
+              title="Classic Breakout"
+            />
           ) : null}
           </BreakoutBoard>
         </GameBoardStage>

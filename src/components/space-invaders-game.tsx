@@ -14,8 +14,11 @@ import {
   GameBoardColumn,
   GameBoardStage,
   GameHeader,
+  GameHelpScreen,
   GameShell,
   GameSidebar,
+  useGameHelpScreen,
+  type GameHelpSection,
 } from "@/components/game-layout";
 import { isTypingTarget } from "@/components/game-input";
 import {
@@ -50,6 +53,42 @@ const statusLabels: Record<SpaceInvadersStatus, string> = {
   running: "Running",
   won: "Earth defended",
 };
+
+const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
+  {
+    title: "Controls",
+    controls: [
+      {
+        buttons: [{ text: "Enter", label: "Enter key" }],
+        label: "Start game",
+      },
+      {
+        buttons: [{ icon: ArrowLeftIcon, label: "Left" }, { text: "A", label: "A key" }],
+        label: "Move cannon left",
+      },
+      {
+        buttons: [{ icon: ArrowRightIcon, label: "Right" }, { text: "D", label: "D key" }],
+        label: "Move cannon right",
+      },
+      {
+        buttons: [{ text: "Space", label: "Space key" }],
+        label: "Fire",
+      },
+      {
+        buttons: [{ text: "P", label: "P key" }],
+        label: "Pause or resume",
+      },
+    ],
+  },
+  {
+    title: "Rules",
+    items: [
+      "Shoot every invader before the formation reaches your base.",
+      "Only one player shot can be active at a time.",
+      "Defend Earth to win; the game ends if the invaders reach the base.",
+    ],
+  },
+];
 
 export function SpaceInvadersGame({ onBackToMenu }: SpaceInvadersGameProps = {}) {
   const [game, setGame] = useState<SpaceInvadersGameState>(() =>
@@ -97,6 +136,20 @@ export function SpaceInvadersGame({ onBackToMenu }: SpaceInvadersGameProps = {})
     setGame((current) => advanceSpaceInvadersGame(current));
   }, []);
 
+  const pauseGameForHelp = useCallback(() => {
+    setGame((current) => pauseSpaceInvadersGame(current));
+  }, []);
+
+  const resumeGameAfterHelp = useCallback(() => {
+    setGame((current) => startSpaceInvadersGame(current));
+  }, []);
+
+  const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({
+    isGameActive: game.status === "running",
+    onPauseGame: pauseGameForHelp,
+    onResumeGame: resumeGameAfterHelp,
+  });
+
   useEffect(() => {
     if (tickDelay === null) {
       return;
@@ -109,7 +162,7 @@ export function SpaceInvadersGame({ onBackToMenu }: SpaceInvadersGameProps = {})
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isTypingTarget(event.target)) {
+      if (isHelpVisible || isTypingTarget(event.target)) {
         return;
       }
 
@@ -150,7 +203,7 @@ export function SpaceInvadersGame({ onBackToMenu }: SpaceInvadersGameProps = {})
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [fireShot, game.status, moveLeft, moveRight, startGame, toggleRunState]);
+  }, [fireShot, game.status, isHelpVisible, moveLeft, moveRight, startGame, toggleRunState]);
 
   return (
     <GameShell className="bg-[var(--invaders-page)] text-[var(--invaders-ink)]">
@@ -238,9 +291,11 @@ export function SpaceInvadersGame({ onBackToMenu }: SpaceInvadersGameProps = {})
         <GameBoardStage
           actions={
             <GameBoardActions
+              helpDisabled={isHelpVisible}
+              onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{
-                disabled: !canPauseGame,
+                disabled: isHelpVisible || !canPauseGame,
                 isResume: game.status === "paused",
                 label: pauseActionLabel,
                 onClick: toggleRunState,
@@ -342,6 +397,15 @@ export function SpaceInvadersGame({ onBackToMenu }: SpaceInvadersGameProps = {})
                 </Button>
               </div>
             </div>
+          ) : null}
+          {isHelpVisible ? (
+            <GameHelpScreen
+              className="border-[color-mix(in_oklch,var(--invaders-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--invaders-board)_94%,black)] text-[var(--invaders-board-text)]"
+              onClose={closeHelp}
+              sections={SPACE_INVADERS_HELP_SECTIONS}
+              testId="space-invaders-help-screen"
+              title="Classic Space Invaders"
+            />
           ) : null}
           </SpaceInvadersBoard>
         </GameBoardStage>

@@ -93,6 +93,13 @@ patterns and constraints here.
   `src/components/game-layout.tsx` for the right-side action rail beside game
   boards. Realtime games provide Help/Pause-or-Resume/Restart, while turn-based
   games such as Minesweeper and 2048 omit the pause action.
+- Use `GameHelpScreen` and `useGameHelpScreen` from
+  `src/components/game-layout.tsx` for game Help overlays. Realtime games should
+  pause when Help opens from an active run and resume only when Help caused the
+  pause; turn-based games should block keyboard input while Help is visible.
+  Controls sections use compact keyboard/mouse rows; use arrow glyphs only for
+  arrow keys and text labels for other keys or pointer actions. Rules sections
+  remain short bullet lists.
 
 ## Verification Commands
 

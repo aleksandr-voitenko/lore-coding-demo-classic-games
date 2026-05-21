@@ -24,8 +24,11 @@ import {
   GameBoardColumn,
   GameBoardStage,
   GameHeader,
+  GameHelpScreen,
   GameShell,
   GameSidebar,
+  useGameHelpScreen,
+  type GameHelpSection,
 } from "@/components/game-layout";
 import { isTypingTarget } from "@/components/game-input";
 import { SnakeBoard } from "@/components/snake-board";
@@ -98,6 +101,51 @@ const statusLabels: Record<GameStatus, string> = {
   lost: "Game over",
   won: "You won",
 };
+
+const SNAKE_HELP_SECTIONS: GameHelpSection[] = [
+  {
+    title: "Controls",
+    controls: [
+      {
+        buttons: [{ text: "Space", label: "Space key" }],
+        label: "Start game",
+      },
+      {
+        buttons: [{ text: "Space", label: "Space key" }],
+        label: "Pause or resume",
+      },
+      {
+        buttons: [{ icon: ArrowUpIcon, label: "Up" }, { text: "W", label: "W key" }],
+        label: "Move up",
+      },
+      {
+        buttons: [{ icon: ArrowLeftIcon, label: "Left" }, { text: "A", label: "A key" }],
+        label: "Move left",
+      },
+      {
+        buttons: [{ icon: ArrowDownIcon, label: "Down" }, { text: "S", label: "S key" }],
+        label: "Move down",
+      },
+      {
+        buttons: [{ icon: ArrowRightIcon, label: "Right" }, { text: "D", label: "D key" }],
+        label: "Move right",
+      },
+      {
+        buttons: [{ text: "Enter", label: "Enter key" }],
+        label: "Start a new game after finish",
+      },
+    ],
+  },
+  {
+    title: "Rules",
+    items: [
+      "Eat red apples to grow and score.",
+      "Special foods appear briefly and can change score, speed, or length.",
+      "Avoid walls, obstacles, and your own body.",
+      "Fill the board without crashing to win.",
+    ],
+  },
+];
 
 function LeaderboardPanel({
   slotTestIdPrefix,
@@ -289,6 +337,24 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
     }));
   }, [leaderboardBestScore, resetLeaderboardForm]);
 
+  const pauseGameForHelp = useCallback(() => {
+    setGame((current) =>
+      current.status === "running" ? { ...current, status: "paused" } : current,
+    );
+  }, []);
+
+  const resumeGameAfterHelp = useCallback(() => {
+    setGame((current) =>
+      current.status === "paused" ? { ...current, status: "running" } : current,
+    );
+  }, []);
+
+  const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({
+    isGameActive: game.status === "running",
+    onPauseGame: pauseGameForHelp,
+    onResumeGame: resumeGameAfterHelp,
+  });
+
   const saveLeaderboardScore = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -348,6 +414,10 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (isHelpVisible) {
+        return;
+      }
+
       if (pendingLeaderboardEntry !== null || isTypingTarget(event.target)) {
         return;
       }
@@ -374,7 +444,14 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [game.status, pendingLeaderboardEntry, queueDirection, restartGame, toggleRunState]);
+  }, [
+    game.status,
+    isHelpVisible,
+    pendingLeaderboardEntry,
+    queueDirection,
+    restartGame,
+    toggleRunState,
+  ]);
 
   const canPauseGame = game.status === "running" || game.status === "paused";
   const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
@@ -497,9 +574,11 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
         <GameBoardStage
           actions={
             <GameBoardActions
+              helpDisabled={isHelpVisible}
+              onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{
-                disabled: !canPauseGame,
+                disabled: isHelpVisible || !canPauseGame,
                 isResume: game.status === "paused",
                 label: pauseActionLabel,
                 onClick: toggleRunState,
@@ -683,6 +762,15 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
                   {statusLabels[game.status]}
                 </p>
               </div>
+            ) : null}
+            {isHelpVisible ? (
+              <GameHelpScreen
+                className="border-[color-mix(in_oklch,var(--snake-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--snake-board)_94%,black)] text-[var(--snake-board-text)]"
+                onClose={closeHelp}
+                sections={SNAKE_HELP_SECTIONS}
+                testId="snake-help-screen"
+                title="Classic Snake"
+              />
             ) : null}
           </SnakeBoard>
         </GameBoardStage>

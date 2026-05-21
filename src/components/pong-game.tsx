@@ -9,8 +9,11 @@ import {
   GameBoardColumn,
   GameBoardStage,
   GameHeader,
+  GameHelpScreen,
   GameShell,
   GameSidebar,
+  useGameHelpScreen,
+  type GameHelpSection,
 } from "@/components/game-layout";
 import { PongBoard, pongBoardSizeLabel } from "@/components/pong-board";
 import { Button } from "@/components/ui/button";
@@ -39,6 +42,41 @@ const statusLabels: Record<PongStatus, string> = {
   running: "Running",
   won: "You won",
 };
+
+const PONG_HELP_SECTIONS: GameHelpSection[] = [
+  {
+    title: "Controls",
+    controls: [
+      {
+        buttons: [{ text: "Enter", label: "Enter key" }],
+        label: "Start game",
+      },
+      {
+        buttons: [{ icon: ArrowUpIcon, label: "Up" }, { text: "W", label: "W key" }],
+        label: "Move paddle up",
+      },
+      {
+        buttons: [{ icon: ArrowDownIcon, label: "Down" }, { text: "S", label: "S key" }],
+        label: "Move paddle down",
+      },
+      {
+        buttons: [
+          { text: "Space", label: "Space key" },
+          { text: "P", label: "P key" },
+        ],
+        label: "Pause or resume",
+      },
+    ],
+  },
+  {
+    title: "Rules",
+    items: [
+      "Keep the ball past the CPU paddle to score.",
+      "Block the ball before it passes your paddle.",
+      `First side to ${PONG_TARGET_SCORE} points wins the match.`,
+    ],
+  },
+];
 
 export function PongGame({ onBackToMenu }: PongGameProps = {}) {
   const [game, setGame] = useState<PongGameState>(() => createInitialPongGame());
@@ -79,6 +117,20 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
     setGame((current) => advancePongGame(current));
   }, []);
 
+  const pauseGameForHelp = useCallback(() => {
+    setGame((current) => pausePongGame(current));
+  }, []);
+
+  const resumeGameAfterHelp = useCallback(() => {
+    setGame((current) => startPongGame(current));
+  }, []);
+
+  const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({
+    isGameActive: game.status === "running",
+    onPauseGame: pauseGameForHelp,
+    onResumeGame: resumeGameAfterHelp,
+  });
+
   useEffect(() => {
     if (tickDelay === null) {
       return;
@@ -91,7 +143,7 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isTypingTarget(event.target)) {
+      if (isHelpVisible || isTypingTarget(event.target)) {
         return;
       }
 
@@ -122,7 +174,7 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [game.status, moveDown, moveUp, startGame, toggleRunState]);
+  }, [game.status, isHelpVisible, moveDown, moveUp, startGame, toggleRunState]);
 
   return (
     <GameShell className="bg-[var(--pong-page)] text-[var(--pong-ink)]">
@@ -191,9 +243,11 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
         <GameBoardStage
           actions={
             <GameBoardActions
+              helpDisabled={isHelpVisible}
+              onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{
-                disabled: !canPauseGame,
+                disabled: isHelpVisible || !canPauseGame,
                 isResume: game.status === "paused",
                 label: pauseActionLabel,
                 onClick: toggleRunState,
@@ -278,6 +332,15 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
                 </Button>
               </div>
             </div>
+          ) : null}
+          {isHelpVisible ? (
+            <GameHelpScreen
+              className="border-[#e5f2ff]/25 bg-[#081525] text-[#e5f2ff]"
+              onClose={closeHelp}
+              sections={PONG_HELP_SECTIONS}
+              testId="pong-help-screen"
+              title="Classic Pong"
+            />
           ) : null}
           </PongBoard>
         </GameBoardStage>

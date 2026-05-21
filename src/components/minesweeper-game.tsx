@@ -9,8 +9,11 @@ import {
   GameBoardColumn,
   GameBoardStage,
   GameHeader,
+  GameHelpScreen,
   GameShell,
   GameSidebar,
+  useGameHelpScreen,
+  type GameHelpSection,
 } from "@/components/game-layout";
 import { MinesweeperBoard, minesweeperBoardSizeLabel } from "@/components/minesweeper-board";
 import { Button } from "@/components/ui/button";
@@ -36,6 +39,34 @@ const statusLabels: Record<MinesweeperStatus, string> = {
   won: "Board cleared",
 };
 
+const MINESWEEPER_HELP_SECTIONS: GameHelpSection[] = [
+  {
+    title: "Controls",
+    controls: [
+      {
+        buttons: [{ text: "Click", label: "Click" }],
+        label: "Reveal square",
+      },
+      {
+        buttons: [{ text: "Right click", label: "Right click" }, { text: "M", label: "M key" }],
+        label: "Flag square or toggle flag mode",
+      },
+      {
+        buttons: [{ text: "R", label: "R key" }],
+        label: "New minefield",
+      },
+    ],
+  },
+  {
+    title: "Rules",
+    items: [
+      "Reveal every safe square without revealing a mine.",
+      "Numbers show how many mines touch that square.",
+      "Use flags to mark suspected mines and track the remaining mine count.",
+    ],
+  },
+];
+
 function createNewMinesweeperGame() {
   return createInitialMinesweeperGame();
 }
@@ -47,6 +78,7 @@ export function MinesweeperGame({ onBackToMenu }: MinesweeperGameProps = {}) {
   const safeCellCount = game.width * game.height - game.mineCount;
   const remainingMineCount = getMinesweeperRemainingMineCount(game);
   const showEndScreen = game.status === "lost" || game.status === "won";
+  const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen();
 
   const revealCell = useCallback((cellId: string) => {
     setGame((current) => revealMinesweeperCell(current, cellId, { random: Math.random }));
@@ -63,7 +95,7 @@ export function MinesweeperGame({ onBackToMenu }: MinesweeperGameProps = {}) {
   }, []);
 
   useEffect(() => {
-    if (game.status !== "running") {
+    if (game.status !== "running" || isHelpVisible) {
       return;
     }
 
@@ -72,11 +104,11 @@ export function MinesweeperGame({ onBackToMenu }: MinesweeperGameProps = {}) {
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [game.status]);
+  }, [game.status, isHelpVisible]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isTypingTarget(event.target)) {
+      if (isHelpVisible || isTypingTarget(event.target)) {
         return;
       }
 
@@ -95,7 +127,7 @@ export function MinesweeperGame({ onBackToMenu }: MinesweeperGameProps = {}) {
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [startNewGame]);
+  }, [isHelpVisible, startNewGame]);
 
   return (
     <GameShell className="bg-[var(--minesweeper-page)] text-[var(--minesweeper-ink)]">
@@ -172,7 +204,14 @@ export function MinesweeperGame({ onBackToMenu }: MinesweeperGameProps = {}) {
 
       <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">
         <GameBoardStage
-          actions={<GameBoardActions onRestart={startNewGame} testIdPrefix="minesweeper" />}
+          actions={
+            <GameBoardActions
+              helpDisabled={isHelpVisible}
+              onHelp={openHelp}
+              onRestart={startNewGame}
+              testIdPrefix="minesweeper"
+            />
+          }
         >
           <MinesweeperBoard
             game={game}
@@ -208,6 +247,15 @@ export function MinesweeperGame({ onBackToMenu }: MinesweeperGameProps = {}) {
                 New game
               </Button>
             </div>
+          ) : null}
+          {isHelpVisible ? (
+            <GameHelpScreen
+              className="border-[color-mix(in_oklch,var(--minesweeper-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--minesweeper-mine)_92%,black)] text-[var(--minesweeper-board-text)]"
+              onClose={closeHelp}
+              sections={MINESWEEPER_HELP_SECTIONS}
+              testId="minesweeper-help-screen"
+              title="Classic Minesweeper"
+            />
           ) : null}
           </MinesweeperBoard>
         </GameBoardStage>

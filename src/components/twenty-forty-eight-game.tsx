@@ -16,8 +16,11 @@ import {
   GameBoardColumn,
   GameBoardStage,
   GameHeader,
+  GameHelpScreen,
   GameShell,
   GameSidebar,
+  useGameHelpScreen,
+  type GameHelpSection,
 } from "@/components/game-layout";
 import {
   TwentyFortyEightBoard,
@@ -47,6 +50,46 @@ const statusLabels: Record<TwentyFortyEightStatus, string> = {
   won: "2048 reached",
 };
 
+const TWENTY_FORTY_EIGHT_HELP_SECTIONS: GameHelpSection[] = [
+  {
+    title: "Controls",
+    controls: [
+      {
+        buttons: [{ text: "Enter", label: "Enter key" }],
+        label: "Start game",
+      },
+      {
+        buttons: [{ icon: ArrowUpIcon, label: "Up" }, { text: "W", label: "W key" }],
+        label: "Slide up",
+      },
+      {
+        buttons: [{ icon: ArrowLeftIcon, label: "Left" }, { text: "A", label: "A key" }],
+        label: "Slide left",
+      },
+      {
+        buttons: [{ icon: ArrowDownIcon, label: "Down" }, { text: "S", label: "S key" }],
+        label: "Slide down",
+      },
+      {
+        buttons: [{ icon: ArrowRightIcon, label: "Right" }, { text: "D", label: "D key" }],
+        label: "Slide right",
+      },
+      {
+        buttons: [{ text: "R", label: "R key" }],
+        label: "New board",
+      },
+    ],
+  },
+  {
+    title: "Rules",
+    items: [
+      "Tiles slide as far as possible in the chosen direction.",
+      "Matching tiles merge once per move and add to your score.",
+      "Reach 2048 to win; the game ends when no moves remain.",
+    ],
+  },
+];
+
 function createNewTwentyFortyEightGame() {
   return createInitialTwentyFortyEightGame({ random: Math.random });
 }
@@ -58,6 +101,7 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
   const topTile = getTwentyFortyEightTopTile(game);
   const showStartScreen = game.status === "ready";
   const showEndScreen = game.status === "lost" || game.status === "won";
+  const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen();
 
   const startGame = useCallback(() => {
     setGame((current) => startTwentyFortyEightGame(current));
@@ -73,7 +117,7 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isTypingTarget(event.target)) {
+      if (isHelpVisible || isTypingTarget(event.target)) {
         return;
       }
 
@@ -102,7 +146,7 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [game.status, moveTiles, restartGame, startGame]);
+  }, [game.status, isHelpVisible, moveTiles, restartGame, startGame]);
 
   return (
     <GameShell className="bg-[var(--twenty-page)] text-[var(--twenty-ink)]">
@@ -205,7 +249,12 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
       <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">
         <GameBoardStage
           actions={
-            <GameBoardActions onRestart={restartGame} testIdPrefix="twenty-forty-eight" />
+            <GameBoardActions
+              helpDisabled={isHelpVisible}
+              onHelp={openHelp}
+              onRestart={restartGame}
+              testIdPrefix="twenty-forty-eight"
+            />
           }
         >
           <TwentyFortyEightBoard game={game} statusLabel={statusLabels[game.status]}>
@@ -263,6 +312,15 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
                 New game
               </Button>
             </div>
+          ) : null}
+          {isHelpVisible ? (
+            <GameHelpScreen
+              className="border-[color-mix(in_oklch,var(--twenty-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--twenty-board)_94%,black)] text-[var(--twenty-board-text)]"
+              onClose={closeHelp}
+              sections={TWENTY_FORTY_EIGHT_HELP_SECTIONS}
+              testId="twenty-forty-eight-help-screen"
+              title="Classic 2048"
+            />
           ) : null}
           </TwentyFortyEightBoard>
         </GameBoardStage>

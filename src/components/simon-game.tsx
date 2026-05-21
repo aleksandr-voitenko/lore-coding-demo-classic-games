@@ -9,8 +9,11 @@ import {
   GameBoardColumn,
   GameBoardStage,
   GameHeader,
+  GameHelpScreen,
   GameShell,
   GameSidebar,
+  useGameHelpScreen,
+  type GameHelpSection,
 } from "@/components/game-layout";
 import { SimonBoard } from "@/components/simon-board";
 import { Button } from "@/components/ui/button";
@@ -41,6 +44,49 @@ const statusLabels: Record<SimonStatus, string> = {
   showing: "Watch",
   won: "Sequence cleared",
 };
+
+const SIMON_HELP_SECTIONS: GameHelpSection[] = [
+  {
+    title: "Controls",
+    controls: [
+      {
+        buttons: [{ text: "Enter", label: "Enter key" }],
+        label: "Start game",
+      },
+      {
+        buttons: [{ text: "1", label: "1 key" }, { text: "Q", label: "Q key" }],
+        label: "Green pad",
+      },
+      {
+        buttons: [{ text: "2", label: "2 key" }, { text: "W", label: "W key" }],
+        label: "Red pad",
+      },
+      {
+        buttons: [{ text: "3", label: "3 key" }, { text: "E", label: "E key" }],
+        label: "Yellow pad",
+      },
+      {
+        buttons: [{ text: "4", label: "4 key" }, { text: "R", label: "R key" }],
+        label: "Blue pad",
+      },
+      {
+        buttons: [
+          { text: "Space", label: "Space key" },
+          { text: "P", label: "P key" },
+        ],
+        label: "Pause or resume",
+      },
+    ],
+  },
+  {
+    title: "Rules",
+    items: [
+      "Watch the highlighted sequence, then repeat it in order.",
+      "Each cleared round adds one more pad to the pattern.",
+      "One wrong pad ends the game; clear the target sequence to win.",
+    ],
+  },
+];
 
 const keyToSimonPad: Record<string, SimonPadId> = {
   "1": "green",
@@ -104,6 +150,20 @@ export function SimonGame({ onBackToMenu }: SimonGameProps = {}) {
     setGame((current) => playSimonPad(current, pad, { random: Math.random }));
   }, []);
 
+  const pauseGameForHelp = useCallback(() => {
+    setGame((current) => pauseSimonGame(current));
+  }, []);
+
+  const resumeGameAfterHelp = useCallback(() => {
+    setGame((current) => startSimonGame(current, { random: Math.random }));
+  }, []);
+
+  const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({
+    isGameActive: game.status === "showing" || game.status === "input",
+    onPauseGame: pauseGameForHelp,
+    onResumeGame: resumeGameAfterHelp,
+  });
+
   useEffect(() => {
     if (playbackDelay === null) {
       return;
@@ -130,7 +190,7 @@ export function SimonGame({ onBackToMenu }: SimonGameProps = {}) {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isTypingTarget(event.target)) {
+      if (isHelpVisible || isTypingTarget(event.target)) {
         return;
       }
 
@@ -157,7 +217,7 @@ export function SimonGame({ onBackToMenu }: SimonGameProps = {}) {
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [game.status, pressPad, startGame, toggleRunState]);
+  }, [game.status, isHelpVisible, pressPad, startGame, toggleRunState]);
 
   return (
     <GameShell className="bg-[#f6f9fc] text-[#172033]">
@@ -260,9 +320,11 @@ export function SimonGame({ onBackToMenu }: SimonGameProps = {}) {
         <GameBoardStage
           actions={
             <GameBoardActions
+              helpDisabled={isHelpVisible}
+              onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{
-                disabled: !canPauseGame,
+                disabled: isHelpVisible || !canPauseGame,
                 isResume: game.status === "paused",
                 label: pauseActionLabel,
                 onClick: toggleRunState,
@@ -352,6 +414,15 @@ export function SimonGame({ onBackToMenu }: SimonGameProps = {}) {
                 </Button>
               </div>
             </div>
+          ) : null}
+          {isHelpVisible ? (
+            <GameHelpScreen
+              className="border-[#172033]/20 bg-[#f8fbff] text-[#172033]"
+              onClose={closeHelp}
+              sections={SIMON_HELP_SECTIONS}
+              testId="simon-help-screen"
+              title="Classic Simon"
+            />
           ) : null}
           </SimonBoard>
         </GameBoardStage>

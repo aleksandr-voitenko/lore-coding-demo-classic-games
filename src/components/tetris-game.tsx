@@ -4,6 +4,7 @@ import {
   ArrowDownIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
+  ArrowUpIcon,
   ChevronsDownIcon,
   PlayIcon,
   RotateCcwIcon,
@@ -16,8 +17,11 @@ import {
   GameBoardColumn,
   GameBoardStage,
   GameHeader,
+  GameHelpScreen,
   GameShell,
   GameSidebar,
+  useGameHelpScreen,
+  type GameHelpSection,
 } from "@/components/game-layout";
 import { isTypingTarget } from "@/components/game-input";
 import { TetrisBoard, tetrominoCellClassNames } from "@/components/tetris-board";
@@ -51,6 +55,58 @@ const statusLabels: Record<TetrisStatus, string> = {
   ready: "Ready",
   running: "Running",
 };
+
+const TETRIS_HELP_SECTIONS: GameHelpSection[] = [
+  {
+    title: "Controls",
+    controls: [
+      {
+        buttons: [{ text: "Enter", label: "Enter key" }],
+        label: "Start game",
+      },
+      {
+        buttons: [{ icon: ArrowLeftIcon, label: "Left" }, { text: "A", label: "A key" }],
+        label: "Move left",
+      },
+      {
+        buttons: [{ icon: ArrowRightIcon, label: "Right" }, { text: "D", label: "D key" }],
+        label: "Move right",
+      },
+      {
+        buttons: [{ icon: ArrowDownIcon, label: "Down" }, { text: "S", label: "S key" }],
+        label: "Soft drop",
+      },
+      {
+        buttons: [{ text: "Space", label: "Space key" }],
+        label: "Hard drop",
+      },
+      {
+        buttons: [
+          { icon: ArrowUpIcon, label: "Up" },
+          { text: "W", label: "W key" },
+          { text: "X", label: "X key" },
+        ],
+        label: "Rotate clockwise",
+      },
+      {
+        buttons: [{ text: "Z", label: "Z key" }],
+        label: "Rotate counterclockwise",
+      },
+      {
+        buttons: [{ text: "P", label: "P key" }],
+        label: "Pause or resume",
+      },
+    ],
+  },
+  {
+    title: "Rules",
+    items: [
+      "Fit falling pieces into complete horizontal lines.",
+      "Cleared lines score points and raise the level over time.",
+      "The game ends when a new piece cannot enter the board.",
+    ],
+  },
+];
 
 const START_SCREEN_BLOCKS = [
   { kind: "T", x: 1, y: 0 },
@@ -139,6 +195,20 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
     setGame((current) => advanceTetrisGame(current, { random: Math.random }));
   }, []);
 
+  const pauseGameForHelp = useCallback(() => {
+    setGame((current) => pauseTetrisGame(current));
+  }, []);
+
+  const resumeGameAfterHelp = useCallback(() => {
+    setGame((current) => startTetrisGame(current, { random: Math.random }));
+  }, []);
+
+  const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({
+    isGameActive: game.status === "running",
+    onPauseGame: pauseGameForHelp,
+    onResumeGame: resumeGameAfterHelp,
+  });
+
   useEffect(() => {
     if (tickDelay === null) {
       return;
@@ -151,7 +221,7 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isTypingTarget(event.target)) {
+      if (isHelpVisible || isTypingTarget(event.target)) {
         return;
       }
 
@@ -224,6 +294,7 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
     rotateClockwise,
     rotateCounterclockwise,
     softDrop,
+    isHelpVisible,
     startGame,
     toggleRunState,
   ]);
@@ -374,9 +445,11 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
         <GameBoardStage
           actions={
             <GameBoardActions
+              helpDisabled={isHelpVisible}
+              onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{
-                disabled: !canPauseGame,
+                disabled: isHelpVisible || !canPauseGame,
                 isResume: game.status === "paused",
                 label: pauseActionLabel,
                 onClick: toggleRunState,
@@ -485,6 +558,15 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
                   </Button>
                 </div>
               </div>
+            ) : null}
+            {isHelpVisible ? (
+              <GameHelpScreen
+                className="border-[color-mix(in_oklch,var(--tetris-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--tetris-board)_94%,black)] text-[var(--tetris-board-text)]"
+                onClose={closeHelp}
+                sections={TETRIS_HELP_SECTIONS}
+                testId="tetris-help-screen"
+                title="Classic Tetris"
+              />
             ) : null}
           </TetrisBoard>
         </GameBoardStage>
