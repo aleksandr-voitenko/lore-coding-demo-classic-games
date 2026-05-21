@@ -1,6 +1,6 @@
 "use client";
 
-import { FlagIcon, RotateCcwIcon, SearchIcon } from "lucide-react";
+import { RotateCcwIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { isTypingTarget } from "@/components/game-input";
@@ -178,33 +178,6 @@ export function MinesweeperGame({ onBackToMenu }: MinesweeperGameProps = {}) {
           </p>
         </div>
 
-        <div className="mx-auto flex w-full max-w-sm flex-col gap-3">
-          <div
-            className="grid grid-cols-2 gap-2"
-            data-testid="minesweeper-mode-controls"
-          >
-            <Button
-              aria-pressed={!isFlagMode}
-              data-testid="minesweeper-reveal-mode"
-              onClick={() => setIsFlagMode(false)}
-              type="button"
-              variant={isFlagMode ? "outline" : "default"}
-            >
-              <SearchIcon data-icon="inline-start" />
-              Reveal
-            </Button>
-            <Button
-              aria-pressed={isFlagMode}
-              data-testid="minesweeper-flag-mode"
-              onClick={() => setIsFlagMode(true)}
-              type="button"
-              variant={isFlagMode ? "default" : "outline"}
-            >
-              <FlagIcon data-icon="inline-start" />
-              Flag
-            </Button>
-          </div>
-        </div>
       </GameSidebar>
 
       <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">

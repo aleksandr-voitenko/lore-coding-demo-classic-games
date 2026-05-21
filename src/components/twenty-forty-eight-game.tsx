@@ -208,47 +208,6 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
           </div>
         </div>
 
-        <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
-          <div className="grid w-full grid-cols-3 gap-2">
-            <Button
-              aria-label="Move up"
-              className="col-start-2"
-              onClick={() => moveTiles("up")}
-              size="icon-lg"
-              type="button"
-              variant="outline"
-            >
-              <ArrowUpIcon />
-            </Button>
-            <Button
-              aria-label="Move left"
-              onClick={() => moveTiles("left")}
-              size="icon-lg"
-              type="button"
-              variant="outline"
-            >
-              <ArrowLeftIcon />
-            </Button>
-            <Button
-              aria-label="Move down"
-              onClick={() => moveTiles("down")}
-              size="icon-lg"
-              type="button"
-              variant="outline"
-            >
-              <ArrowDownIcon />
-            </Button>
-            <Button
-              aria-label="Move right"
-              onClick={() => moveTiles("right")}
-              size="icon-lg"
-              type="button"
-              variant="outline"
-            >
-              <ArrowRightIcon />
-            </Button>
-          </div>
-        </div>
       </GameSidebar>
 
       <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">

@@ -5,7 +5,6 @@ import {
   ArrowRightIcon,
   PlayIcon,
   RotateCcwIcon,
-  ZapIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -261,38 +260,6 @@ export function SpaceInvadersGame({ onBackToMenu }: SpaceInvadersGameProps = {})
           </p>
         </div>
 
-        <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
-          <div className="grid w-full grid-cols-3 gap-2">
-            <Button
-              aria-label="Move cannon left"
-              onClick={moveLeft}
-              size="icon-lg"
-              type="button"
-              variant="outline"
-            >
-              <ArrowLeftIcon />
-            </Button>
-            <Button
-              aria-label="Fire"
-              data-testid="space-invaders-fire-button"
-              onClick={fireShot}
-              size="icon-lg"
-              type="button"
-              variant="outline"
-            >
-              <ZapIcon />
-            </Button>
-            <Button
-              aria-label="Move cannon right"
-              onClick={moveRight}
-              size="icon-lg"
-              type="button"
-              variant="outline"
-            >
-              <ArrowRightIcon />
-            </Button>
-          </div>
-        </div>
       </GameSidebar>
 
       <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">

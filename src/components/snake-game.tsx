@@ -532,50 +532,6 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
             </select>
           </div>
 
-          <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
-            <div className="grid w-32 grid-cols-3 gap-2">
-              <Button
-                aria-label="Move up"
-                className="col-start-2"
-                onClick={() => queueDirection("up")}
-                size="icon-lg"
-                type="button"
-                variant="outline"
-              >
-                <ArrowUpIcon />
-              </Button>
-              <Button
-                aria-label="Move left"
-                className="col-start-1 row-start-2"
-                onClick={() => queueDirection("left")}
-                size="icon-lg"
-                type="button"
-                variant="outline"
-              >
-                <ArrowLeftIcon />
-              </Button>
-              <Button
-                aria-label="Move down"
-                className="col-start-2 row-start-2"
-                onClick={() => queueDirection("down")}
-                size="icon-lg"
-                type="button"
-                variant="outline"
-              >
-                <ArrowDownIcon />
-              </Button>
-              <Button
-                aria-label="Move right"
-                className="col-start-3 row-start-2"
-                onClick={() => queueDirection("right")}
-                size="icon-lg"
-                type="button"
-                variant="outline"
-              >
-                <ArrowRightIcon />
-              </Button>
-            </div>
-          </div>
       </GameSidebar>
 
       <GameBoardColumn className="max-w-[min(92vw,41.25rem)]">

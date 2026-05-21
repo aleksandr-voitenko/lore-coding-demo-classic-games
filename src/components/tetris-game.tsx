@@ -5,10 +5,8 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   ArrowUpIcon,
-  ChevronsDownIcon,
   PlayIcon,
   RotateCcwIcon,
-  RotateCwIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -422,66 +420,6 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
             </div>
           </div>
 
-          <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
-            <div className="grid w-full grid-cols-4 gap-2">
-              <Button
-                aria-label="Move left"
-                onClick={moveLeft}
-                size="icon-lg"
-                type="button"
-                variant="outline"
-              >
-                <ArrowLeftIcon />
-              </Button>
-              <Button
-                aria-label="Soft drop"
-                onClick={softDrop}
-                size="icon-lg"
-                type="button"
-                variant="outline"
-              >
-                <ArrowDownIcon />
-              </Button>
-              <Button
-                aria-label="Move right"
-                onClick={moveRight}
-                size="icon-lg"
-                type="button"
-                variant="outline"
-              >
-                <ArrowRightIcon />
-              </Button>
-              <Button
-                aria-label="Hard drop"
-                onClick={hardDrop}
-                size="icon-lg"
-                type="button"
-                variant="outline"
-              >
-                <ChevronsDownIcon />
-              </Button>
-              <Button
-                aria-label="Rotate counterclockwise"
-                className="col-span-2"
-                onClick={rotateCounterclockwise}
-                type="button"
-                variant="outline"
-              >
-                <RotateCcwIcon data-icon="inline-start" />
-                Rotate
-              </Button>
-              <Button
-                aria-label="Rotate clockwise"
-                className="col-span-2"
-                onClick={rotateClockwise}
-                type="button"
-                variant="outline"
-              >
-                <RotateCwIcon data-icon="inline-start" />
-                Rotate
-              </Button>
-            </div>
-          </div>
       </GameSidebar>
 
       <GameBoardColumn className="max-w-[min(86vw,22.25rem)]">

@@ -236,28 +236,6 @@ export function BreakoutGame({ onBackToMenu }: BreakoutGameProps = {}) {
           </p>
         </div>
 
-        <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
-          <div className="grid w-full grid-cols-2 gap-2">
-            <Button
-              aria-label="Move paddle left"
-              onClick={moveLeft}
-              size="icon-lg"
-              type="button"
-              variant="outline"
-            >
-              <ArrowLeftIcon />
-            </Button>
-            <Button
-              aria-label="Move paddle right"
-              onClick={moveRight}
-              size="icon-lg"
-              type="button"
-              variant="outline"
-            >
-              <ArrowRightIcon />
-            </Button>
-          </div>
-        </div>
       </GameSidebar>
 
       <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">

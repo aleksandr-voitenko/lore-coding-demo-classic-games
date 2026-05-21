@@ -282,46 +282,6 @@ export function SimonGame({ onBackToMenu }: SimonGameProps = {}) {
           </div>
         </div>
 
-        <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
-          <div className="grid w-full grid-cols-4 gap-2">
-            <Button
-              aria-label="Press green pad"
-              disabled={game.status !== "input"}
-              onClick={() => pressPad("green")}
-              type="button"
-              variant="outline"
-            >
-              1
-            </Button>
-            <Button
-              aria-label="Press red pad"
-              disabled={game.status !== "input"}
-              onClick={() => pressPad("red")}
-              type="button"
-              variant="outline"
-            >
-              2
-            </Button>
-            <Button
-              aria-label="Press yellow pad"
-              disabled={game.status !== "input"}
-              onClick={() => pressPad("yellow")}
-              type="button"
-              variant="outline"
-            >
-              3
-            </Button>
-            <Button
-              aria-label="Press blue pad"
-              disabled={game.status !== "input"}
-              onClick={() => pressPad("blue")}
-              type="button"
-              variant="outline"
-            >
-              4
-            </Button>
-          </div>
-        </div>
       </GameSidebar>
 
       <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">

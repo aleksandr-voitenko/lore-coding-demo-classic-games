@@ -223,28 +223,6 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
           <p className="font-mono text-3xl font-semibold leading-none">{PONG_TARGET_SCORE}</p>
         </div>
 
-        <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
-          <div className="grid w-full grid-cols-2 gap-2">
-            <Button
-              aria-label="Move paddle up"
-              onClick={moveUp}
-              size="icon-lg"
-              type="button"
-              variant="outline"
-            >
-              <ArrowUpIcon />
-            </Button>
-            <Button
-              aria-label="Move paddle down"
-              onClick={moveDown}
-              size="icon-lg"
-              type="button"
-              variant="outline"
-            >
-              <ArrowDownIcon />
-            </Button>
-          </div>
-        </div>
       </GameSidebar>
 
       <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">
