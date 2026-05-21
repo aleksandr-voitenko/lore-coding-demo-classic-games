@@ -229,21 +229,16 @@ export function GameLauncher() {
       data-testid="game-menu"
     >
       <section className="mx-auto flex min-h-[calc(100svh-3rem)] w-full max-w-6xl flex-col justify-center gap-6">
-        <header className="flex max-w-2xl flex-col gap-3">
+        <header className="flex max-w-2xl items-center gap-4">
           <div
-            className="flex size-11 items-center justify-center rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] text-[var(--snake-muted)] shadow-sm"
+            className="flex size-11 shrink-0 items-center justify-center rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] text-[var(--snake-muted)] shadow-sm"
             aria-hidden="true"
           >
             <Gamepad2Icon className="size-5" />
           </div>
-          <div className="flex flex-col gap-2">
-            <p className="text-sm font-semibold uppercase tracking-normal text-[var(--snake-muted)]">
-              Game Library
-            </p>
-            <h1 className="text-4xl font-semibold tracking-normal text-balance sm:text-5xl">
-              Choose a game
-            </h1>
-          </div>
+          <h1 className="text-3xl font-semibold tracking-normal text-black sm:text-4xl">
+            Game Library
+          </h1>
         </header>
 
         <div className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))]">
