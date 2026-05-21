@@ -125,6 +125,18 @@ const START_SCREEN_BLOCKS = [
   { kind: "I", x: 3, y: 4 },
 ] satisfies Array<{ kind: TetrominoKind; x: number; y: number }>;
 
+const TETRIS_PREVIEW_CANVAS_CELLS = 4;
+const TETRIS_PREVIEW_GAP_PERCENT = 3;
+const TETRIS_PREVIEW_CELL_SIZE_PERCENT =
+  (100 - TETRIS_PREVIEW_GAP_PERCENT * (TETRIS_PREVIEW_CANVAS_CELLS - 1)) /
+  TETRIS_PREVIEW_CANVAS_CELLS;
+
+type TetrisPreviewBlock = {
+  key: string;
+  leftPercent: number;
+  topPercent: number;
+};
+
 function createRunningTetrisGame() {
   return {
     ...createInitialTetrisGame({ random: Math.random }),
@@ -132,16 +144,38 @@ function createRunningTetrisGame() {
   };
 }
 
+function createCenteredPreviewBlocks(kind: TetrominoKind): TetrisPreviewBlock[] {
+  const cells = getTetrominoPreviewCells(kind);
+  const minX = Math.min(...cells.map((cell) => cell.x));
+  const maxX = Math.max(...cells.map((cell) => cell.x));
+  const minY = Math.min(...cells.map((cell) => cell.y));
+  const maxY = Math.max(...cells.map((cell) => cell.y));
+  const width = maxX - minX + 1;
+  const height = maxY - minY + 1;
+  const widthPercent =
+    width * TETRIS_PREVIEW_CELL_SIZE_PERCENT + (width - 1) * TETRIS_PREVIEW_GAP_PERCENT;
+  const heightPercent =
+    height * TETRIS_PREVIEW_CELL_SIZE_PERCENT + (height - 1) * TETRIS_PREVIEW_GAP_PERCENT;
+  const offsetXPercent = (100 - widthPercent) / 2;
+  const offsetYPercent = (100 - heightPercent) / 2;
+  const stepPercent = TETRIS_PREVIEW_CELL_SIZE_PERCENT + TETRIS_PREVIEW_GAP_PERCENT;
+
+  return cells.map((cell) => {
+    const x = cell.x - minX;
+    const y = cell.y - minY;
+
+    return {
+      key: `${x}:${y}`,
+      leftPercent: offsetXPercent + x * stepPercent,
+      topPercent: offsetYPercent + y * stepPercent,
+    };
+  });
+}
+
 export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
   const [game, setGame] = useState<TetrisGameState>(() => createInitialTetrisGame());
-  const nextPreviewCells = useMemo(
-    () =>
-      new Map(
-        getTetrominoPreviewCells(game.nextPieceKind).map((cell) => [
-          `${cell.x}:${cell.y}`,
-          game.nextPieceKind,
-        ]),
-      ),
+  const nextPreviewBlocks = useMemo(
+    () => createCenteredPreviewBlocks(game.nextPieceKind),
     [game.nextPieceKind],
   );
   const tickDelay = game.status === "running" ? getTetrisTickDelay(game.level) : null;
@@ -365,26 +399,27 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
               </p>
               <div
                 aria-label={`Next piece ${game.nextPieceKind}`}
-                className="grid aspect-square grid-cols-4 gap-0.5 rounded-[0.375rem] bg-[var(--tetris-grid)] p-1"
+                className="relative aspect-square overflow-hidden rounded-[0.375rem] bg-[var(--tetris-board)] p-1"
                 data-testid="tetris-next-piece"
                 role="img"
               >
-                {Array.from({ length: 16 }, (_, index) => {
-                  const x = index % 4;
-                  const y = Math.floor(index / 4);
-                  const cellKind = nextPreviewCells.get(`${x}:${y}`) ?? null;
-
-                  return (
+                <div aria-hidden="true" className="relative size-full">
+                  {nextPreviewBlocks.map((block) => (
                     <span
-                      aria-hidden="true"
                       className={cn(
-                        "aspect-square rounded-[0.16rem] bg-[var(--tetris-board-cell)]",
-                        cellKind && tetrominoCellClassNames[cellKind],
+                        "absolute rounded-[0.16rem]",
+                        tetrominoCellClassNames[game.nextPieceKind],
                       )}
-                      key={`${x}:${y}`}
+                      key={block.key}
+                      style={{
+                        height: `${TETRIS_PREVIEW_CELL_SIZE_PERCENT}%`,
+                        left: `${block.leftPercent}%`,
+                        top: `${block.topPercent}%`,
+                        width: `${TETRIS_PREVIEW_CELL_SIZE_PERCENT}%`,
+                      }}
                     />
-                  );
-                })}
+                  ))}
+                </div>
               </div>
             </div>
           </div>
