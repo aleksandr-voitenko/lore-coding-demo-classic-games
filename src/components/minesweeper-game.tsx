@@ -81,9 +81,9 @@ export function MinesweeperGame({ onBackToMenu }: MinesweeperGameProps = {}) {
   const remainingMineCount = getMinesweeperRemainingMineCount(game);
   const showEndScreen = game.status === "lost" || game.status === "won";
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen();
-  const { abandonDialogProps } = useGameEscapeToMenu({
+  const { abandonDialogProps, requestBackToMenu } = useGameEscapeToMenu({
     isDisabled: isHelpVisible,
-    isGameStarted: game.status !== "ready",
+    isGameStarted: game.status === "running",
     onBackToMenu,
   });
 
@@ -141,8 +141,6 @@ export function MinesweeperGame({ onBackToMenu }: MinesweeperGameProps = {}) {
       <GameSidebar className="border-[var(--minesweeper-border)] bg-[var(--minesweeper-panel)]">
         <GameHeader
           accentClassName="bg-[linear-gradient(90deg,var(--minesweeper-flag),var(--minesweeper-one),var(--minesweeper-two))]"
-          backButtonTestId="minesweeper-back-to-menu"
-          onBackToMenu={onBackToMenu}
           status={statusLabels[game.status]}
           statusClassName="text-[var(--minesweeper-muted)]"
           statusTestId="minesweeper-status"
@@ -213,7 +211,9 @@ export function MinesweeperGame({ onBackToMenu }: MinesweeperGameProps = {}) {
         <GameBoardStage
           actions={
             <GameBoardActions
+              backDisabled={isHelpVisible}
               helpDisabled={isHelpVisible}
+              onBackToMenu={requestBackToMenu}
               onHelp={openHelp}
               onRestart={startNewGame}
               testIdPrefix="minesweeper"

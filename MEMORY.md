@@ -91,8 +91,10 @@ patterns and constraints here.
   patterns.
 - Use `GameBoardStage` and `GameBoardActions` from
   `src/components/game-layout.tsx` for the right-side action rail beside game
-  boards. Realtime games provide Help/Pause-or-Resume/Restart, while turn-based
-  games such as Minesweeper and 2048 omit the pause action.
+  boards. The Back action belongs at the top of that rail and uses the shared
+  Escape-to-menu handler. Realtime games provide Back, Help, Pause-or-Resume,
+  and Restart, while turn-based games such as Minesweeper and 2048 provide
+  Back, Help, and Restart and omit the pause action.
 - Use `GameHelpScreen` and `useGameHelpScreen` from
   `src/components/game-layout.tsx` for game Help overlays. Realtime games should
   pause when Help opens from an active run and resume only when Help caused the
@@ -101,11 +103,14 @@ patterns and constraints here.
   arrow keys and text labels for other keys or pointer actions. Rules sections
   remain short bullet lists.
 - Use `useGameEscapeToMenu` and `GameAbandonDialog` from
-  `src/components/game-layout.tsx` for Escape-to-menu behavior. `ready` games
-  return directly to the launcher, non-`ready` games show the abandon
-  confirmation, and realtime games pass their existing pause/resume callbacks
-  with `shouldPauseBeforeConfirm` for active or paused states. Keep this hook
-  disabled while Help is visible so Help owns Escape until it closes.
+  `src/components/game-layout.tsx` for Escape-to-menu behavior. `ready` and
+  terminal `lost`/`won` games return directly to the launcher; active unfinished
+  games show the abandon confirmation. Realtime games pass their existing pause/
+  resume callbacks with `shouldPauseBeforeConfirm` for active or paused states.
+  Keep this hook disabled while Help is visible so Help owns Escape until it
+  closes. Use the hook's returned `requestBackToMenu` callback for Back buttons
+  so clicks and Escape follow the same direct-return or abandon-confirmation
+  path.
 
 ## Verification Commands
 

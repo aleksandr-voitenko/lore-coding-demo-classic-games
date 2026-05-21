@@ -42,7 +42,9 @@ type GameBoardPauseAction = {
 };
 
 type GameBoardActionsProps = {
+  backDisabled?: boolean;
   helpDisabled?: boolean;
+  onBackToMenu?: () => void;
   onHelp?: () => void;
   onRestart: () => void;
   pauseAction?: GameBoardPauseAction;
@@ -108,8 +110,6 @@ type GameBoardActionButtonProps = {
 
 type GameHeaderProps = {
   accentClassName: string;
-  backButtonTestId: string;
-  onBackToMenu?: () => void;
   status: string;
   statusClassName: string;
   statusTestId: string;
@@ -148,7 +148,9 @@ export function GameBoardStage({ actions, children }: GameBoardStageProps) {
 }
 
 export function GameBoardActions({
+  backDisabled,
   helpDisabled,
+  onBackToMenu,
   onHelp,
   onRestart,
   pauseAction,
@@ -163,6 +165,20 @@ export function GameBoardActions({
       className="z-30 flex flex-col items-end gap-2"
       data-testid={`${testIdPrefix}-board-actions`}
     >
+      {onBackToMenu ? (
+        <GameBoardActionButton
+          disabled={backDisabled}
+          isHintVisible={activeHint === "back"}
+          label="Back to game menu"
+          onHintActivate={() => setActiveHint("back")}
+          onHintClear={() => setActiveHint((current) => (current === "back" ? null : current))}
+          onClick={onBackToMenu}
+          testId={`${testIdPrefix}-back-to-menu`}
+        >
+          <ArrowLeftIcon />
+        </GameBoardActionButton>
+      ) : null}
+
       <GameBoardActionButton
         disabled={helpDisabled}
         isHintVisible={activeHint === "help"}
@@ -272,6 +288,32 @@ export function useGameEscapeToMenu({
     onBackToMenu?.();
   }, [onBackToMenu]);
 
+  const requestBackToMenu = useCallback(() => {
+    if (!onBackToMenu || isDisabled || isAbandonDialogVisible) {
+      return;
+    }
+
+    if (!isGameStarted) {
+      onBackToMenu();
+      return;
+    }
+
+    shouldResumeOnCancelRef.current = shouldPauseBeforeConfirm;
+
+    if (shouldPauseBeforeConfirm) {
+      onPauseGame?.();
+    }
+
+    setIsAbandonDialogVisible(true);
+  }, [
+    isAbandonDialogVisible,
+    isDisabled,
+    isGameStarted,
+    onBackToMenu,
+    onPauseGame,
+    shouldPauseBeforeConfirm,
+  ]);
+
   useEffect(() => {
     if (!onBackToMenu || isDisabled || isAbandonDialogVisible) {
       return;
@@ -283,32 +325,13 @@ export function useGameEscapeToMenu({
       }
 
       event.preventDefault();
-
-      if (!isGameStarted) {
-        onBackToMenu?.();
-        return;
-      }
-
-      shouldResumeOnCancelRef.current = shouldPauseBeforeConfirm;
-
-      if (shouldPauseBeforeConfirm) {
-        onPauseGame?.();
-      }
-
-      setIsAbandonDialogVisible(true);
+      requestBackToMenu();
     }
 
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    isAbandonDialogVisible,
-    isDisabled,
-    isGameStarted,
-    onBackToMenu,
-    onPauseGame,
-    shouldPauseBeforeConfirm,
-  ]);
+  }, [isAbandonDialogVisible, isDisabled, onBackToMenu, requestBackToMenu]);
 
   return {
     abandonDialogProps: isAbandonDialogVisible
@@ -317,6 +340,7 @@ export function useGameEscapeToMenu({
           onConfirm: confirmAbandon,
         }
       : null,
+    requestBackToMenu: onBackToMenu ? requestBackToMenu : undefined,
   };
 }
 
@@ -541,8 +565,6 @@ function GameBoardActionButton({
 
 export function GameHeader({
   accentClassName,
-  backButtonTestId,
-  onBackToMenu,
   status,
   statusClassName,
   statusTestId,
@@ -561,18 +583,6 @@ export function GameHeader({
           {status}
         </p>
       </div>
-      {onBackToMenu ? (
-        <Button
-          aria-label="Back to game menu"
-          data-testid={backButtonTestId}
-          onClick={onBackToMenu}
-          size="icon"
-          type="button"
-          variant="outline"
-        >
-          <ArrowLeftIcon />
-        </Button>
-      ) : null}
     </div>
   );
 }

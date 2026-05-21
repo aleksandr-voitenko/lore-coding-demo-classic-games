@@ -104,9 +104,9 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
   const showStartScreen = game.status === "ready";
   const showEndScreen = game.status === "lost" || game.status === "won";
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen();
-  const { abandonDialogProps } = useGameEscapeToMenu({
+  const { abandonDialogProps, requestBackToMenu } = useGameEscapeToMenu({
     isDisabled: isHelpVisible,
-    isGameStarted: game.status !== "ready",
+    isGameStarted: game.status === "running",
     onBackToMenu,
   });
 
@@ -160,8 +160,6 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
       <GameSidebar className="border-[var(--twenty-border)] bg-[var(--twenty-panel)]">
         <GameHeader
           accentClassName="bg-[linear-gradient(90deg,var(--twenty-tile-8),var(--twenty-tile-128),var(--twenty-tile-2048))]"
-          backButtonTestId="twenty-forty-eight-back-to-menu"
-          onBackToMenu={onBackToMenu}
           status={statusLabels[game.status]}
           statusClassName="text-[var(--twenty-muted)]"
           statusTestId="twenty-forty-eight-status"
@@ -257,7 +255,9 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
         <GameBoardStage
           actions={
             <GameBoardActions
+              backDisabled={isHelpVisible}
               helpDisabled={isHelpVisible}
+              onBackToMenu={requestBackToMenu}
               onHelp={openHelp}
               onRestart={restartGame}
               testIdPrefix="twenty-forty-eight"

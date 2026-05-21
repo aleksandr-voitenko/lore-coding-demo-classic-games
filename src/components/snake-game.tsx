@@ -357,9 +357,9 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
     onPauseGame: pauseGameForHelp,
     onResumeGame: resumeGameAfterHelp,
   });
-  const { abandonDialogProps } = useGameEscapeToMenu({
+  const { abandonDialogProps, requestBackToMenu } = useGameEscapeToMenu({
     isDisabled: isHelpVisible,
-    isGameStarted: game.status !== "ready",
+    isGameStarted: canPauseGame,
     onBackToMenu,
     onPauseGame: pauseGameForHelp,
     onResumeGame: resumeGameAfterHelp,
@@ -474,8 +474,6 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
       <GameSidebar className="border-[var(--snake-border)] bg-[var(--snake-panel)]">
         <GameHeader
           accentClassName="bg-[var(--snake-accent)]"
-          backButtonTestId="snake-back-to-menu"
-          onBackToMenu={onBackToMenu}
           status={statusLabels[game.status]}
           statusClassName="text-[var(--snake-muted)]"
           statusTestId="snake-status"
@@ -584,7 +582,9 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
         <GameBoardStage
           actions={
             <GameBoardActions
+              backDisabled={isHelpVisible}
               helpDisabled={isHelpVisible}
+              onBackToMenu={requestBackToMenu}
               onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{

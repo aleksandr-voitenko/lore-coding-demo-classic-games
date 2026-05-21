@@ -244,9 +244,9 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
     onPauseGame: pauseGameForHelp,
     onResumeGame: resumeGameAfterHelp,
   });
-  const { abandonDialogProps } = useGameEscapeToMenu({
+  const { abandonDialogProps, requestBackToMenu } = useGameEscapeToMenu({
     isDisabled: isHelpVisible,
-    isGameStarted: game.status !== "ready",
+    isGameStarted: canPauseGame,
     onBackToMenu,
     onPauseGame: pauseGameForHelp,
     onResumeGame: resumeGameAfterHelp,
@@ -348,8 +348,6 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
       <GameSidebar className="border-[var(--tetris-border)] bg-[var(--tetris-panel)]">
         <GameHeader
           accentClassName="bg-[linear-gradient(90deg,var(--tetris-cyan),var(--tetris-yellow),var(--tetris-purple))]"
-          backButtonTestId="tetris-back-to-menu"
-          onBackToMenu={onBackToMenu}
           status={statusLabels[game.status]}
           statusClassName="text-[var(--tetris-muted)]"
           statusTestId="tetris-status"
@@ -490,7 +488,9 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
         <GameBoardStage
           actions={
             <GameBoardActions
+              backDisabled={isHelpVisible}
               helpDisabled={isHelpVisible}
+              onBackToMenu={requestBackToMenu}
               onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{

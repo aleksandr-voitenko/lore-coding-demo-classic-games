@@ -165,9 +165,9 @@ export function SimonGame({ onBackToMenu }: SimonGameProps = {}) {
     onPauseGame: pauseGameForHelp,
     onResumeGame: resumeGameAfterHelp,
   });
-  const { abandonDialogProps } = useGameEscapeToMenu({
+  const { abandonDialogProps, requestBackToMenu } = useGameEscapeToMenu({
     isDisabled: isHelpVisible,
-    isGameStarted: game.status !== "ready",
+    isGameStarted: canPauseGame,
     onBackToMenu,
     onPauseGame: pauseGameForHelp,
     onResumeGame: resumeGameAfterHelp,
@@ -234,8 +234,6 @@ export function SimonGame({ onBackToMenu }: SimonGameProps = {}) {
       <GameSidebar className="border-[#d6dfeb] bg-white">
         <GameHeader
           accentClassName="bg-[linear-gradient(90deg,#25a75a,#d73548,#f0bd38,#1d7ed0)]"
-          backButtonTestId="simon-back-to-menu"
-          onBackToMenu={onBackToMenu}
           status={statusLabels[game.status]}
           statusClassName="text-[#59687d]"
           statusTestId="simon-status"
@@ -330,7 +328,9 @@ export function SimonGame({ onBackToMenu }: SimonGameProps = {}) {
         <GameBoardStage
           actions={
             <GameBoardActions
+              backDisabled={isHelpVisible}
               helpDisabled={isHelpVisible}
+              onBackToMenu={requestBackToMenu}
               onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{

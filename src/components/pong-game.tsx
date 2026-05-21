@@ -132,9 +132,9 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
     onPauseGame: pauseGameForHelp,
     onResumeGame: resumeGameAfterHelp,
   });
-  const { abandonDialogProps } = useGameEscapeToMenu({
+  const { abandonDialogProps, requestBackToMenu } = useGameEscapeToMenu({
     isDisabled: isHelpVisible,
-    isGameStarted: game.status !== "ready",
+    isGameStarted: canPauseGame,
     onBackToMenu,
     onPauseGame: pauseGameForHelp,
     onResumeGame: resumeGameAfterHelp,
@@ -191,8 +191,6 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
       <GameSidebar className="border-[var(--pong-border)] bg-[var(--pong-panel)]">
         <GameHeader
           accentClassName="bg-[linear-gradient(90deg,var(--pong-blue),var(--pong-ball),var(--pong-pink))]"
-          backButtonTestId="pong-back-to-menu"
-          onBackToMenu={onBackToMenu}
           status={statusLabels[game.status]}
           statusClassName="text-[var(--pong-muted)]"
           statusTestId="pong-status"
@@ -253,7 +251,9 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
         <GameBoardStage
           actions={
             <GameBoardActions
+              backDisabled={isHelpVisible}
               helpDisabled={isHelpVisible}
+              onBackToMenu={requestBackToMenu}
               onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{

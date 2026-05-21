@@ -140,9 +140,9 @@ export function BreakoutGame({ onBackToMenu }: BreakoutGameProps = {}) {
     onPauseGame: pauseGameForHelp,
     onResumeGame: resumeGameAfterHelp,
   });
-  const { abandonDialogProps } = useGameEscapeToMenu({
+  const { abandonDialogProps, requestBackToMenu } = useGameEscapeToMenu({
     isDisabled: isHelpVisible,
-    isGameStarted: game.status !== "ready",
+    isGameStarted: canPauseGame,
     onBackToMenu,
     onPauseGame: pauseGameForHelp,
     onResumeGame: resumeGameAfterHelp,
@@ -199,8 +199,6 @@ export function BreakoutGame({ onBackToMenu }: BreakoutGameProps = {}) {
       <GameSidebar className="border-[var(--breakout-border)] bg-[var(--breakout-panel)]">
         <GameHeader
           accentClassName="bg-[linear-gradient(90deg,var(--breakout-red),var(--breakout-yellow),var(--breakout-blue))]"
-          backButtonTestId="breakout-back-to-menu"
-          onBackToMenu={onBackToMenu}
           status={statusLabels[game.status]}
           statusClassName="text-[var(--breakout-muted)]"
           statusTestId="breakout-status"
@@ -266,7 +264,9 @@ export function BreakoutGame({ onBackToMenu }: BreakoutGameProps = {}) {
         <GameBoardStage
           actions={
             <GameBoardActions
+              backDisabled={isHelpVisible}
               helpDisabled={isHelpVisible}
+              onBackToMenu={requestBackToMenu}
               onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{
