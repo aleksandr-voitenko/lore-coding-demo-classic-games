@@ -69,6 +69,22 @@ and `reports/vitest/junit.xml`. Coverage output is written under
 `reports/coverage/`, including `coverage-final.json`, `coverage-summary.json`,
 `lcov.info`, and `cobertura-coverage.xml`.
 
+Generate a broad all-source coverage report:
+
+```bash
+npm run test:coverage
+```
+
+Run the thresholded core coverage gate:
+
+```bash
+npm run test:coverage:core
+```
+
+The core coverage command writes reports under `reports/coverage-core/` and
+checks deterministic engines, server/API helpers, pure board renderers, shared
+input filtering, and utilities separately from interactive client orchestration.
+
 Run the standard project checks:
 
 ```bash

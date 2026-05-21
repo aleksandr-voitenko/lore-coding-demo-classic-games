@@ -120,7 +120,13 @@ patterns and constraints here.
 
 - `npm test` runs deterministic Vitest coverage.
 - `npm run test:coverage` runs Vitest with V8 coverage and writes reports under
-  `reports/coverage/`.
+  `reports/coverage/`. This is the broad all-source diagnostic report, so it
+  includes currently untested interactive client orchestration.
+- `npm run test:coverage:core` runs the thresholded core coverage gate and
+  writes reports under `reports/coverage-core/`. It covers deterministic engines,
+  server/API helpers, pure board renderers, shared input filtering, and utilities
+  with minimum thresholds of statements 90%, branches 85%, functions 90%, and
+  lines 90%.
 - `npm run test:agent` runs Vitest with V8 coverage and writes machine-readable
   test results to `reports/vitest/results.json` and `reports/vitest/junit.xml`
   plus machine-readable coverage under `reports/coverage/`.
