@@ -3,14 +3,20 @@
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
-  PauseIcon,
   PlayIcon,
   RotateCcwIcon,
   ZapIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { GameBoardColumn, GameHeader, GameShell, GameSidebar } from "@/components/game-layout";
+import {
+  GameBoardActions,
+  GameBoardColumn,
+  GameBoardStage,
+  GameHeader,
+  GameShell,
+  GameSidebar,
+} from "@/components/game-layout";
 import { isTypingTarget } from "@/components/game-input";
 import {
   spaceInvaderClassNames,
@@ -51,13 +57,11 @@ export function SpaceInvadersGame({ onBackToMenu }: SpaceInvadersGameProps = {})
   );
   const tickDelay = game.status === "running" ? getSpaceInvadersTickDelay() : null;
   const activeInvaderCount = game.invaders.filter((invader) => invader.isActive).length;
-  const primaryAction =
-    game.status === "running" ? "Pause" : game.status === "paused" ? "Resume" : "Start";
-  const PrimaryIcon = game.status === "running" ? PauseIcon : PlayIcon;
+  const canPauseGame = game.status === "running" || game.status === "paused";
+  const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
   const showStartScreen = game.status === "ready";
   const showEndScreen = game.status === "lost" || game.status === "won";
   const showPauseScreen = game.status === "paused";
-  const showSideActions = game.status === "running" || game.status === "paused";
 
   const startGame = useCallback(() => {
     setGame((current) => startSpaceInvadersGame(current));
@@ -197,24 +201,6 @@ export function SpaceInvadersGame({ onBackToMenu }: SpaceInvadersGameProps = {})
         </div>
 
         <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
-          {showSideActions ? (
-            <div className="grid w-full grid-cols-[minmax(0,1fr)_2rem] gap-2">
-              <Button onClick={toggleRunState} type="button">
-                <PrimaryIcon data-icon="inline-start" />
-                {primaryAction}
-              </Button>
-              <Button
-                aria-label="Restart"
-                onClick={restartGame}
-                size="icon"
-                type="button"
-                variant="outline"
-              >
-                <RotateCcwIcon />
-              </Button>
-            </div>
-          ) : null}
-
           <div className="grid w-full grid-cols-3 gap-2">
             <Button
               aria-label="Move cannon left"
@@ -248,8 +234,23 @@ export function SpaceInvadersGame({ onBackToMenu }: SpaceInvadersGameProps = {})
         </div>
       </GameSidebar>
 
-      <GameBoardColumn className="max-w-[min(92vw,34rem)]">
-        <SpaceInvadersBoard game={game} statusLabel={statusLabels[game.status]}>
+      <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">
+        <GameBoardStage
+          actions={
+            <GameBoardActions
+              onRestart={restartGame}
+              pauseAction={{
+                disabled: !canPauseGame,
+                isResume: game.status === "paused",
+                label: pauseActionLabel,
+                onClick: toggleRunState,
+              }}
+              restartDisabled={game.status === "ready"}
+              testIdPrefix="space-invaders"
+            />
+          }
+        >
+          <SpaceInvadersBoard game={game} statusLabel={statusLabels[game.status]}>
           {showStartScreen ? (
             <div
               className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[var(--invaders-board)] px-4 py-5 text-center text-[var(--invaders-board-text)]"
@@ -342,7 +343,8 @@ export function SpaceInvadersGame({ onBackToMenu }: SpaceInvadersGameProps = {})
               </div>
             </div>
           ) : null}
-        </SpaceInvadersBoard>
+          </SpaceInvadersBoard>
+        </GameBoardStage>
 
         <div className="flex items-center justify-between rounded-md border border-[var(--invaders-border)] bg-[var(--invaders-panel)] px-3 py-2 text-xs font-medium text-[var(--invaders-muted)]">
           <span>Board {spaceInvadersBoardSizeLabel}</span>

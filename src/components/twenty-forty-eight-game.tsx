@@ -11,7 +11,14 @@ import {
 import { useCallback, useEffect, useState } from "react";
 
 import { isTypingTarget } from "@/components/game-input";
-import { GameBoardColumn, GameHeader, GameShell, GameSidebar } from "@/components/game-layout";
+import {
+  GameBoardActions,
+  GameBoardColumn,
+  GameBoardStage,
+  GameHeader,
+  GameShell,
+  GameSidebar,
+} from "@/components/game-layout";
 import {
   TwentyFortyEightBoard,
   twentyFortyEightBoardSizeLabel,
@@ -153,37 +160,6 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
         </div>
 
         <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
-          <div className="grid w-full grid-cols-[minmax(0,1fr)_2rem] gap-2">
-            {showStartScreen ? (
-              <Button
-                data-testid="twenty-forty-eight-start-button"
-                onClick={startGame}
-                type="button"
-              >
-                <PlayIcon data-icon="inline-start" />
-                Start
-              </Button>
-            ) : (
-              <Button
-                data-testid="twenty-forty-eight-new-game-button"
-                onClick={restartGame}
-                type="button"
-              >
-                <RotateCcwIcon data-icon="inline-start" />
-                New game
-              </Button>
-            )}
-            <Button
-              aria-label="Restart"
-              onClick={restartGame}
-              size="icon"
-              type="button"
-              variant="outline"
-            >
-              <RotateCcwIcon />
-            </Button>
-          </div>
-
           <div className="grid w-full grid-cols-3 gap-2">
             <Button
               aria-label="Move up"
@@ -226,8 +202,13 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
         </div>
       </GameSidebar>
 
-      <GameBoardColumn className="max-w-[min(92vw,34rem)]">
-        <TwentyFortyEightBoard game={game} statusLabel={statusLabels[game.status]}>
+      <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">
+        <GameBoardStage
+          actions={
+            <GameBoardActions onRestart={restartGame} testIdPrefix="twenty-forty-eight" />
+          }
+        >
+          <TwentyFortyEightBoard game={game} statusLabel={statusLabels[game.status]}>
           {showStartScreen ? (
             <div
               className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[var(--twenty-board)] px-4 py-5 text-center text-[var(--twenty-board-text)]"
@@ -283,7 +264,8 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
               </Button>
             </div>
           ) : null}
-        </TwentyFortyEightBoard>
+          </TwentyFortyEightBoard>
+        </GameBoardStage>
 
         <div className="flex items-center justify-between rounded-md border border-[var(--twenty-border)] bg-[var(--twenty-panel)] px-3 py-2 text-xs font-medium text-[var(--twenty-muted)]">
           <span>Board {twentyFortyEightBoardSizeLabel}</span>

@@ -89,6 +89,10 @@ patterns and constraints here.
   failures.
 - Keep local UI consistent with the shared game layout and shadcn button
   patterns.
+- Use `GameBoardStage` and `GameBoardActions` from
+  `src/components/game-layout.tsx` for the right-side action rail beside game
+  boards. Realtime games provide Help/Pause-or-Resume/Restart, while turn-based
+  games such as Minesweeper and 2048 omit the pause action.
 
 ## Verification Commands
 

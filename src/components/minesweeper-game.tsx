@@ -4,7 +4,14 @@ import { FlagIcon, RotateCcwIcon, SearchIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { isTypingTarget } from "@/components/game-input";
-import { GameBoardColumn, GameHeader, GameShell, GameSidebar } from "@/components/game-layout";
+import {
+  GameBoardActions,
+  GameBoardColumn,
+  GameBoardStage,
+  GameHeader,
+  GameShell,
+  GameSidebar,
+} from "@/components/game-layout";
 import { MinesweeperBoard, minesweeperBoardSizeLabel } from "@/components/minesweeper-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -160,27 +167,20 @@ export function MinesweeperGame({ onBackToMenu }: MinesweeperGameProps = {}) {
               Flag
             </Button>
           </div>
-
-          <Button
-            data-testid="minesweeper-new-game-button"
-            onClick={startNewGame}
-            type="button"
-            variant="outline"
-          >
-            <RotateCcwIcon data-icon="inline-start" />
-            New game
-          </Button>
         </div>
       </GameSidebar>
 
-      <GameBoardColumn className="max-w-[min(92vw,34rem)]">
-        <MinesweeperBoard
-          game={game}
-          isFlagMode={isFlagMode}
-          onRevealCell={revealCell}
-          onToggleFlag={toggleFlag}
-          statusLabel={statusLabels[game.status]}
+      <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">
+        <GameBoardStage
+          actions={<GameBoardActions onRestart={startNewGame} testIdPrefix="minesweeper" />}
         >
+          <MinesweeperBoard
+            game={game}
+            isFlagMode={isFlagMode}
+            onRevealCell={revealCell}
+            onToggleFlag={toggleFlag}
+            statusLabel={statusLabels[game.status]}
+          >
           {showEndScreen ? (
             <div
               className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[color-mix(in_oklch,var(--minesweeper-board)_76%,transparent)] px-4 py-5 text-center text-[var(--minesweeper-board-text)] backdrop-blur-[2px]"
@@ -209,7 +209,8 @@ export function MinesweeperGame({ onBackToMenu }: MinesweeperGameProps = {}) {
               </Button>
             </div>
           ) : null}
-        </MinesweeperBoard>
+          </MinesweeperBoard>
+        </GameBoardStage>
 
         <div className="flex items-center justify-between rounded-md border border-[var(--minesweeper-border)] bg-[var(--minesweeper-panel)] px-3 py-2 text-xs font-medium text-[var(--minesweeper-muted)]">
           <span>Board {minesweeperBoardSizeLabel}</span>

@@ -1,10 +1,17 @@
 "use client";
 
-import { PauseIcon, PlayIcon, RotateCcwIcon } from "lucide-react";
+import { PlayIcon, RotateCcwIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { isTypingTarget } from "@/components/game-input";
-import { GameBoardColumn, GameHeader, GameShell, GameSidebar } from "@/components/game-layout";
+import {
+  GameBoardActions,
+  GameBoardColumn,
+  GameBoardStage,
+  GameHeader,
+  GameShell,
+  GameSidebar,
+} from "@/components/game-layout";
 import { SimonBoard } from "@/components/simon-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -57,14 +64,9 @@ function createReadySimonGame() {
 export function SimonGame({ onBackToMenu }: SimonGameProps = {}) {
   const [game, setGame] = useState<SimonGameState>(() => createReadySimonGame());
   const playbackDelay = game.status === "showing" ? getSimonPlaybackDelay() : null;
-  const primaryAction =
-    game.status === "showing" || game.status === "input"
-      ? "Pause"
-      : game.status === "paused"
-        ? "Resume"
-        : "Start";
-  const PrimaryIcon =
-    game.status === "showing" || game.status === "input" ? PauseIcon : PlayIcon;
+  const canPauseGame =
+    game.status === "showing" || game.status === "input" || game.status === "paused";
+  const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
   const progressLabel = useMemo(() => {
     if (game.status === "input") {
       return `${game.inputIndex}/${game.sequence.length}`;
@@ -79,8 +81,6 @@ export function SimonGame({ onBackToMenu }: SimonGameProps = {}) {
   const showStartScreen = game.status === "ready";
   const showPauseScreen = game.status === "paused";
   const showEndScreen = game.status === "lost" || game.status === "won";
-  const showSideActions =
-    game.status === "showing" || game.status === "input" || game.status === "paused";
 
   const startGame = useCallback(() => {
     setGame((current) => startSimonGame(current, { random: Math.random }));
@@ -215,24 +215,6 @@ export function SimonGame({ onBackToMenu }: SimonGameProps = {}) {
         </div>
 
         <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
-          {showSideActions ? (
-            <div className="grid w-full grid-cols-[minmax(0,1fr)_2rem] gap-2">
-              <Button onClick={toggleRunState} type="button">
-                <PrimaryIcon data-icon="inline-start" />
-                {primaryAction}
-              </Button>
-              <Button
-                aria-label="Restart"
-                onClick={restartGame}
-                size="icon"
-                type="button"
-                variant="outline"
-              >
-                <RotateCcwIcon />
-              </Button>
-            </div>
-          ) : null}
-
           <div className="grid w-full grid-cols-4 gap-2">
             <Button
               aria-label="Press green pad"
@@ -274,8 +256,23 @@ export function SimonGame({ onBackToMenu }: SimonGameProps = {}) {
         </div>
       </GameSidebar>
 
-      <GameBoardColumn className="max-w-[min(92vw,34rem)]">
-        <SimonBoard game={game} onPadPress={pressPad} statusLabel={statusLabels[game.status]}>
+      <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">
+        <GameBoardStage
+          actions={
+            <GameBoardActions
+              onRestart={restartGame}
+              pauseAction={{
+                disabled: !canPauseGame,
+                isResume: game.status === "paused",
+                label: pauseActionLabel,
+                onClick: toggleRunState,
+              }}
+              restartDisabled={game.status === "ready"}
+              testIdPrefix="simon"
+            />
+          }
+        >
+          <SimonBoard game={game} onPadPress={pressPad} statusLabel={statusLabels[game.status]}>
           {showStartScreen ? (
             <div
               className="absolute inset-3 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[#f8fbff]/92 px-4 py-5 text-center text-[#172033] backdrop-blur-[2px]"
@@ -356,7 +353,8 @@ export function SimonGame({ onBackToMenu }: SimonGameProps = {}) {
               </div>
             </div>
           ) : null}
-        </SimonBoard>
+          </SimonBoard>
+        </GameBoardStage>
 
         <div className="flex items-center justify-between rounded-md border border-[#d6dfeb] bg-white px-3 py-2 text-xs font-medium text-[#59687d]">
           <span>Keys 1-4 or QWER</span>

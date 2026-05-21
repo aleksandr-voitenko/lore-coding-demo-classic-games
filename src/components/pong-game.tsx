@@ -1,10 +1,17 @@
 "use client";
 
-import { ArrowDownIcon, ArrowUpIcon, PauseIcon, PlayIcon, RotateCcwIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon, PlayIcon, RotateCcwIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { isTypingTarget } from "@/components/game-input";
-import { GameBoardColumn, GameHeader, GameShell, GameSidebar } from "@/components/game-layout";
+import {
+  GameBoardActions,
+  GameBoardColumn,
+  GameBoardStage,
+  GameHeader,
+  GameShell,
+  GameSidebar,
+} from "@/components/game-layout";
 import { PongBoard, pongBoardSizeLabel } from "@/components/pong-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,13 +43,11 @@ const statusLabels: Record<PongStatus, string> = {
 export function PongGame({ onBackToMenu }: PongGameProps = {}) {
   const [game, setGame] = useState<PongGameState>(() => createInitialPongGame());
   const tickDelay = game.status === "running" ? getPongTickDelay() : null;
-  const primaryAction =
-    game.status === "running" ? "Pause" : game.status === "paused" ? "Resume" : "Start";
-  const PrimaryIcon = game.status === "running" ? PauseIcon : PlayIcon;
+  const canPauseGame = game.status === "running" || game.status === "paused";
+  const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
   const showStartScreen = game.status === "ready";
   const showEndScreen = game.status === "lost" || game.status === "won";
   const showPauseScreen = game.status === "paused";
-  const showSideActions = game.status === "running" || game.status === "paused";
 
   const startGame = useCallback(() => {
     setGame((current) => startPongGame(current));
@@ -159,24 +164,6 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
         </div>
 
         <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
-          {showSideActions ? (
-            <div className="grid w-full grid-cols-[minmax(0,1fr)_2rem] gap-2">
-              <Button onClick={toggleRunState} type="button">
-                <PrimaryIcon data-icon="inline-start" />
-                {primaryAction}
-              </Button>
-              <Button
-                aria-label="Restart"
-                onClick={restartGame}
-                size="icon"
-                type="button"
-                variant="outline"
-              >
-                <RotateCcwIcon />
-              </Button>
-            </div>
-          ) : null}
-
           <div className="grid w-full grid-cols-2 gap-2">
             <Button
               aria-label="Move paddle up"
@@ -200,8 +187,23 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
         </div>
       </GameSidebar>
 
-      <GameBoardColumn className="max-w-[min(92vw,34rem)]">
-        <PongBoard game={game} statusLabel={statusLabels[game.status]}>
+      <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">
+        <GameBoardStage
+          actions={
+            <GameBoardActions
+              onRestart={restartGame}
+              pauseAction={{
+                disabled: !canPauseGame,
+                isResume: game.status === "paused",
+                label: pauseActionLabel,
+                onClick: toggleRunState,
+              }}
+              restartDisabled={game.status === "ready"}
+              testIdPrefix="pong"
+            />
+          }
+        >
+          <PongBoard game={game} statusLabel={statusLabels[game.status]}>
           {showStartScreen ? (
             <div
               className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[#081525] px-4 py-5 text-center text-[#e5f2ff]"
@@ -277,7 +279,8 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
               </div>
             </div>
           ) : null}
-        </PongBoard>
+          </PongBoard>
+        </GameBoardStage>
 
         <div className="flex items-center justify-between rounded-md border border-[var(--pong-border)] bg-[var(--pong-panel)] px-3 py-2 text-xs font-medium text-[var(--pong-muted)]">
           <span>Board {pongBoardSizeLabel}</span>

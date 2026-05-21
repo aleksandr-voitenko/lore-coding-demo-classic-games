@@ -5,7 +5,6 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   ArrowUpIcon,
-  PauseIcon,
   PlayIcon,
   RotateCcwIcon,
   SaveIcon,
@@ -20,7 +19,14 @@ import {
   useState,
 } from "react";
 
-import { GameBoardColumn, GameHeader, GameShell, GameSidebar } from "@/components/game-layout";
+import {
+  GameBoardActions,
+  GameBoardColumn,
+  GameBoardStage,
+  GameHeader,
+  GameShell,
+  GameSidebar,
+} from "@/components/game-layout";
 import { isTypingTarget } from "@/components/game-input";
 import { SnakeBoard } from "@/components/snake-board";
 import { Button } from "@/components/ui/button";
@@ -370,12 +376,10 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [game.status, pendingLeaderboardEntry, queueDirection, restartGame, toggleRunState]);
 
-  const primaryAction =
-    game.status === "running" ? "Pause" : game.status === "paused" ? "Resume" : "Start";
-  const PrimaryIcon = game.status === "running" ? PauseIcon : PlayIcon;
+  const canPauseGame = game.status === "running" || game.status === "paused";
+  const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
   const showStartScreen = game.status === "ready";
   const showGameOverScreen = game.status === "lost" || game.status === "won";
-  const showSideActions = game.status === "running" || game.status === "paused";
   const showBoardState = game.status !== "running";
 
   return (
@@ -444,24 +448,6 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
           </div>
 
           <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
-            {showSideActions ? (
-              <div className="grid w-full grid-cols-[minmax(0,1fr)_2rem] gap-2">
-                <Button onClick={toggleRunState} type="button">
-                  <PrimaryIcon data-icon="inline-start" />
-                  {primaryAction}
-                </Button>
-                <Button
-                  aria-label="Restart"
-                  onClick={restartGame}
-                  size="icon"
-                  type="button"
-                  variant="outline"
-                >
-                  <RotateCcwIcon />
-                </Button>
-              </div>
-            ) : null}
-
             <div className="grid w-32 grid-cols-3 gap-2">
               <Button
                 aria-label="Move up"
@@ -507,13 +493,28 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
           </div>
       </GameSidebar>
 
-      <GameBoardColumn className="max-w-[min(92vw,38rem)]">
-        <SnakeBoard
-          foodFeedbacks={foodFeedbacks}
-          game={game}
-          onFoodFeedbackAnimationEnd={removeFoodFeedback}
-          statusLabel={statusLabels[game.status]}
+      <GameBoardColumn className="max-w-[min(92vw,41.25rem)]">
+        <GameBoardStage
+          actions={
+            <GameBoardActions
+              onRestart={restartGame}
+              pauseAction={{
+                disabled: !canPauseGame,
+                isResume: game.status === "paused",
+                label: pauseActionLabel,
+                onClick: toggleRunState,
+              }}
+              restartDisabled={game.status === "ready" || pendingLeaderboardEntry !== null}
+              testIdPrefix="snake"
+            />
+          }
         >
+          <SnakeBoard
+            foodFeedbacks={foodFeedbacks}
+            game={game}
+            onFoodFeedbackAnimationEnd={removeFoodFeedback}
+            statusLabel={statusLabels[game.status]}
+          >
             {showStartScreen ? (
               <div
                 className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[var(--snake-board)] px-4 py-5 text-center text-[var(--snake-board-text)]"
@@ -683,7 +684,8 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
                 </p>
               </div>
             ) : null}
-        </SnakeBoard>
+          </SnakeBoard>
+        </GameBoardStage>
 
           <div className="flex items-center justify-between rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] px-3 py-2 text-xs font-medium text-[var(--snake-muted)]">
             <span data-testid="snake-length">Length {game.snake.length}</span>

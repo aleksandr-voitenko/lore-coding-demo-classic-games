@@ -5,14 +5,20 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   ChevronsDownIcon,
-  PauseIcon,
   PlayIcon,
   RotateCcwIcon,
   RotateCwIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { GameBoardColumn, GameHeader, GameShell, GameSidebar } from "@/components/game-layout";
+import {
+  GameBoardActions,
+  GameBoardColumn,
+  GameBoardStage,
+  GameHeader,
+  GameShell,
+  GameSidebar,
+} from "@/components/game-layout";
 import { isTypingTarget } from "@/components/game-input";
 import { TetrisBoard, tetrominoCellClassNames } from "@/components/tetris-board";
 import { Button } from "@/components/ui/button";
@@ -81,13 +87,11 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
     [game.nextPieceKind],
   );
   const tickDelay = game.status === "running" ? getTetrisTickDelay(game.level) : null;
-  const primaryAction =
-    game.status === "running" ? "Pause" : game.status === "paused" ? "Resume" : "Start";
-  const PrimaryIcon = game.status === "running" ? PauseIcon : PlayIcon;
+  const canPauseGame = game.status === "running" || game.status === "paused";
+  const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
   const showStartScreen = game.status === "ready";
   const showGameOverScreen = game.status === "lost";
   const showPauseScreen = game.status === "paused";
-  const showSideActions = game.status === "running" || game.status === "paused";
 
   const startGame = useCallback(() => {
     setGame((current) => startTetrisGame(current, { random: Math.random }));
@@ -305,24 +309,6 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
           </div>
 
           <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
-            {showSideActions ? (
-              <div className="grid w-full grid-cols-[minmax(0,1fr)_2rem] gap-2">
-                <Button onClick={toggleRunState} type="button">
-                  <PrimaryIcon data-icon="inline-start" />
-                  {primaryAction}
-                </Button>
-                <Button
-                  aria-label="Restart"
-                  onClick={restartGame}
-                  size="icon"
-                  type="button"
-                  variant="outline"
-                >
-                  <RotateCcwIcon />
-                </Button>
-              </div>
-            ) : null}
-
             <div className="grid w-full grid-cols-4 gap-2">
               <Button
                 aria-label="Move left"
@@ -384,8 +370,23 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
           </div>
       </GameSidebar>
 
-      <GameBoardColumn className="max-w-[min(86vw,19rem)]">
-        <TetrisBoard game={game} statusLabel={statusLabels[game.status]}>
+      <GameBoardColumn className="max-w-[min(86vw,22.25rem)]">
+        <GameBoardStage
+          actions={
+            <GameBoardActions
+              onRestart={restartGame}
+              pauseAction={{
+                disabled: !canPauseGame,
+                isResume: game.status === "paused",
+                label: pauseActionLabel,
+                onClick: toggleRunState,
+              }}
+              restartDisabled={game.status === "ready"}
+              testIdPrefix="tetris"
+            />
+          }
+        >
+          <TetrisBoard game={game} statusLabel={statusLabels[game.status]}>
             {showStartScreen ? (
               <div
                 className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[var(--tetris-board)] px-4 py-5 text-center text-[var(--tetris-board-text)]"
@@ -485,7 +486,8 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
                 </div>
               </div>
             ) : null}
-        </TetrisBoard>
+          </TetrisBoard>
+        </GameBoardStage>
 
           <div className="flex items-center justify-between rounded-md border border-[var(--tetris-border)] bg-[var(--tetris-panel)] px-3 py-2 text-xs font-medium text-[var(--tetris-muted)]">
             <span>
