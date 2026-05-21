@@ -28,7 +28,9 @@ patterns and constraints here.
   win/loss states, and state transitions.
 - `src/lib/*.test.ts` contains deterministic Vitest coverage for engines,
   leaderboard behavior, API routes, SQLite persistence, and Snake pickup
-  feedback.
+  feedback. `src/components/*.test.tsx` can use `react-dom/server` static
+  markup assertions for pure board renderer coverage without a browser DOM
+  harness.
 
 ## Game Modules
 
@@ -81,6 +83,8 @@ patterns and constraints here.
   `src/lib`.
 - When changing gameplay rules, add or update deterministic engine tests with
   injected randomness, time, or explicit state fixtures as needed.
+- Vitest resolves the `@/*` import alias to `src/`, matching the app import
+  pattern for component tests.
 - Preserve existing launcher integration when adding a game: extend the launcher
   catalog, add engine tests, add focused game and board components, add menu
   artwork, and update user-facing docs if the catalog changes.

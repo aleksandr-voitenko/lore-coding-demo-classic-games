@@ -4,14 +4,20 @@ import {
   advanceTetrisGame,
   createEmptyTetrisBoard,
   createInitialTetrisGame,
+  createTetrisBoardCells,
+  getTetrominoCells,
+  getTetrominoPreviewCells,
+  getTetrisTickDelay,
   hardDropTetrisPiece,
   moveTetrisPiece,
+  pauseTetrisGame,
   renderTetrisBoard,
   rotateTetrisPiece,
   softDropTetrisPiece,
   startTetrisGame,
   TETRIS_BOARD_HEIGHT,
   TETRIS_BOARD_WIDTH,
+  TETRIS_START_LEVEL,
   type TetrisCell,
   type TetrisGameState,
 } from "./tetris-game-engine";
@@ -54,6 +60,58 @@ describe("tetris game engine", () => {
     expect(renderedBoard[1]?.slice(3, 7)).toEqual(["I", "I", "I", "I"]);
   });
 
+  it("exposes stable board coordinates, preview cells, and gravity timing", () => {
+    const cells = createTetrisBoardCells();
+
+    expect(cells).toHaveLength(TETRIS_BOARD_WIDTH * TETRIS_BOARD_HEIGHT);
+    expect(cells.slice(0, 3)).toEqual([
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 2, y: 0 },
+    ]);
+    expect(cells[TETRIS_BOARD_WIDTH]).toEqual({ x: 0, y: 1 });
+    expect(cells.at(-1)).toEqual({
+      x: TETRIS_BOARD_WIDTH - 1,
+      y: TETRIS_BOARD_HEIGHT - 1,
+    });
+    expect(getTetrisTickDelay(TETRIS_START_LEVEL)).toBe(820);
+    expect(getTetrisTickDelay(20)).toBe(120);
+    expect(getTetrominoPreviewCells("T")).toEqual([
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+      { x: 2, y: 1 },
+    ]);
+    expect(
+      getTetrominoCells({
+        kind: "T",
+        position: { x: 4, y: 2 },
+        rotation: -1,
+      }),
+    ).toEqual([
+      { x: 5, y: 2 },
+      { x: 4, y: 3 },
+      { x: 5, y: 3 },
+      { x: 6, y: 3 },
+    ]);
+  });
+
+  it("starts, pauses, resumes, and ignores duplicate running starts", () => {
+    const readyGame = createInitialTetrisGame({ random: createRandomSequence([0, 3 / 7]) });
+    const runningGame = startTetrisGame(readyGame);
+    const duplicateStart = startTetrisGame(runningGame);
+    const pausedGame = pauseTetrisGame(runningGame);
+    const duplicatePause = pauseTetrisGame(pausedGame);
+    const resumedGame = startTetrisGame(pausedGame);
+
+    expect(runningGame.status).toBe("running");
+    expect(duplicateStart).toBe(runningGame);
+    expect(pausedGame.status).toBe("paused");
+    expect(duplicatePause).toBe(pausedGame);
+    expect(resumedGame.status).toBe("running");
+    expect(resumedGame.currentPiece).toBe(pausedGame.currentPiece);
+  });
+
   it("moves a running piece while blocking it at the side wall", () => {
     const game = createRunningGame();
     const movedLeft = moveTetrisPiece(game, -3, 0);
@@ -61,6 +119,24 @@ describe("tetris game engine", () => {
 
     expect(movedLeft.currentPiece.position.x).toBe(0);
     expect(blockedLeft.currentPiece.position.x).toBe(0);
+  });
+
+  it("ignores movement, rotation, and drops while not running", () => {
+    const readyGame = createInitialTetrisGame({ random: createRandomSequence([0, 3 / 7]) });
+    const runningOGame = createRunningGame({
+      currentPiece: {
+        kind: "O",
+        position: { x: 4, y: 0 },
+        rotation: 0,
+      },
+    });
+
+    expect(moveTetrisPiece(readyGame, 1, 0)).toBe(readyGame);
+    expect(rotateTetrisPiece(readyGame)).toBe(readyGame);
+    expect(advanceTetrisGame(readyGame)).toBe(readyGame);
+    expect(softDropTetrisPiece(readyGame)).toBe(readyGame);
+    expect(hardDropTetrisPiece(readyGame)).toBe(readyGame);
+    expect(rotateTetrisPiece(runningOGame)).toBe(runningOGame);
   });
 
   it("rotates with a small wall kick when the rotated piece would leave the board", () => {
@@ -77,6 +153,43 @@ describe("tetris game engine", () => {
     expect(rotated.currentPiece.position.x).toBe(6);
   });
 
+  it("rotates counterclockwise and leaves a piece unchanged when every kick is blocked", () => {
+    const game = createRunningGame({
+      currentPiece: {
+        kind: "T",
+        position: { x: 3, y: 0 },
+        rotation: 0,
+      },
+    });
+    const rotatedCounterclockwise = rotateTetrisPiece(game, "counterclockwise");
+    const blockedBoard = createEmptyTetrisBoard();
+
+    [3, 4, 5, 6, 7].forEach((x) => {
+      blockedBoard[0]![x] = "Z";
+    });
+
+    const blockedGame = createRunningGame({
+      board: blockedBoard,
+      currentPiece: {
+        kind: "I",
+        position: { x: 3, y: 0 },
+        rotation: 0,
+      },
+    });
+
+    expect(rotatedCounterclockwise.currentPiece.rotation).toBe(3);
+    expect(rotatedCounterclockwise.currentPiece.position).toEqual(game.currentPiece.position);
+    expect(rotateTetrisPiece(blockedGame)).toBe(blockedGame);
+  });
+
+  it("advances a running piece one row when gravity space is open", () => {
+    const game = createRunningGame();
+    const advanced = advanceTetrisGame(game);
+
+    expect(advanced.status).toBe("running");
+    expect(advanced.currentPiece.position.y).toBe(game.currentPiece.position.y + 1);
+  });
+
   it("hard drops, locks the current piece, and spawns the queued next piece", () => {
     const game = createRunningGame();
     const dropped = hardDropTetrisPiece(game, { random: createRandomSequence([4 / 7]) });
@@ -90,6 +203,25 @@ describe("tetris game engine", () => {
       "I",
       "I",
     ]);
+  });
+
+  it("soft drop locks instead of awarding movement points when the piece is blocked", () => {
+    const game = createRunningGame({
+      currentPiece: {
+        kind: "O",
+        position: { x: 4, y: TETRIS_BOARD_HEIGHT - 2 },
+        rotation: 0,
+      },
+      nextPieceKind: "T",
+      score: 10,
+    });
+    const dropped = softDropTetrisPiece(game, { random: createRandomSequence([6 / 7]) });
+
+    expect(dropped.score).toBe(10);
+    expect(dropped.currentPiece.kind).toBe("T");
+    expect(dropped.nextPieceKind).toBe("Z");
+    expect(dropped.board[TETRIS_BOARD_HEIGHT - 2]?.slice(5, 7)).toEqual(["O", "O"]);
+    expect(dropped.board[TETRIS_BOARD_HEIGHT - 1]?.slice(5, 7)).toEqual(["O", "O"]);
   });
 
   it("clears completed lines and scores them at the current level", () => {
@@ -108,6 +240,37 @@ describe("tetris game engine", () => {
     expect(advanced.board[TETRIS_BOARD_HEIGHT - 1]).toEqual(
       Array.from<TetrisCell>({ length: TETRIS_BOARD_WIDTH }).fill(null),
     );
+  });
+
+  it("scores a four-line clear and advances the level after ten total lines", () => {
+    const board = createEmptyTetrisBoard();
+
+    for (let y = TETRIS_BOARD_HEIGHT - 4; y < TETRIS_BOARD_HEIGHT; y += 1) {
+      board[y] = Array.from<TetrisCell>({ length: TETRIS_BOARD_WIDTH }).fill("Z");
+      board[y]![5] = null;
+    }
+
+    const game = createRunningGame({
+      board,
+      currentPiece: {
+        kind: "I",
+        position: { x: 3, y: TETRIS_BOARD_HEIGHT - 4 },
+        rotation: 1,
+      },
+      lines: 9,
+      nextPieceKind: "O",
+    });
+    const advanced = advanceTetrisGame(game);
+
+    expect(advanced.lines).toBe(13);
+    expect(advanced.level).toBe(2);
+    expect(advanced.score).toBe(1200);
+    expect(advanced.board.slice(TETRIS_BOARD_HEIGHT - 4)).toEqual([
+      Array.from<TetrisCell>({ length: TETRIS_BOARD_WIDTH }).fill(null),
+      Array.from<TetrisCell>({ length: TETRIS_BOARD_WIDTH }).fill(null),
+      Array.from<TetrisCell>({ length: TETRIS_BOARD_WIDTH }).fill(null),
+      Array.from<TetrisCell>({ length: TETRIS_BOARD_WIDTH }).fill(null),
+    ]);
   });
 
   it("soft drops one row and awards a soft-drop point", () => {
