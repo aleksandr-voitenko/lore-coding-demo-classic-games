@@ -37,8 +37,6 @@ import {
   rotateTetrisPiece,
   softDropTetrisPiece,
   startTetrisGame,
-  TETRIS_BOARD_HEIGHT,
-  TETRIS_BOARD_WIDTH,
   type TetrominoKind,
   type TetrisGameState,
   type TetrisStatus,
@@ -377,7 +375,7 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
             </div>
           </dl>
 
-          <div className="grid grid-cols-[minmax(0,1fr)_5rem] gap-3">
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_5rem] gap-3">
             <div className="rounded-md border border-[var(--tetris-border)] p-3">
               <p className="text-xs font-medium text-[var(--tetris-muted)]">
                 Level
@@ -387,6 +385,17 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
                 data-testid="tetris-level"
               >
                 {game.level}
+              </p>
+            </div>
+            <div className="rounded-md border border-[var(--tetris-border)] p-3">
+              <p className="text-xs font-medium text-[var(--tetris-muted)]">
+                Speed
+              </p>
+              <p
+                className="font-mono text-3xl font-semibold leading-none"
+                data-testid="tetris-speed"
+              >
+                {tickDelay === null ? "0" : `${Math.round(1000 / tickDelay)}`}
               </p>
             </div>
             <div className="flex flex-col gap-2 rounded-md border border-[var(--tetris-border)] p-3">
@@ -553,13 +562,6 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
             ) : null}
           </TetrisBoard>
         </GameBoardStage>
-
-          <div className="flex items-center justify-between rounded-md border border-[var(--tetris-border)] bg-[var(--tetris-panel)] px-3 py-2 text-xs font-medium text-[var(--tetris-muted)]">
-            <span>
-              Board {TETRIS_BOARD_WIDTH} x {TETRIS_BOARD_HEIGHT}
-            </span>
-            <span>Speed {tickDelay === null ? "0" : `${Math.round(1000 / tickDelay)}`}</span>
-          </div>
       </GameBoardColumn>
       {abandonDialogProps ? <GameAbandonDialog {...abandonDialogProps} /> : null}
     </GameShell>

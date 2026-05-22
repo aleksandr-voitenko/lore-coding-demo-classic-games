@@ -282,6 +282,16 @@ export function SimonGame({ onBackToMenu }: SimonGameProps = {}) {
           </div>
         </div>
 
+        <div className="rounded-md border border-[#d6dfeb] p-3">
+          <p className="text-xs font-medium text-[#59687d]">Speed</p>
+          <p
+            className="font-mono text-3xl font-semibold leading-none"
+            data-testid="simon-speed"
+          >
+            {playbackDelay === null ? "0" : Math.round(1000 / playbackDelay)}
+          </p>
+        </div>
+
       </GameSidebar>
 
       <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">
@@ -396,11 +406,6 @@ export function SimonGame({ onBackToMenu }: SimonGameProps = {}) {
           ) : null}
           </SimonBoard>
         </GameBoardStage>
-
-        <div className="flex items-center justify-between rounded-md border border-[#d6dfeb] bg-white px-3 py-2 text-xs font-medium text-[#59687d]">
-          <span>Keys 1-4 or QWER</span>
-          <span>Speed {playbackDelay === null ? "0" : Math.round(1000 / playbackDelay)}</span>
-        </div>
       </GameBoardColumn>
       {abandonDialogProps ? <GameAbandonDialog {...abandonDialogProps} /> : null}
     </GameShell>

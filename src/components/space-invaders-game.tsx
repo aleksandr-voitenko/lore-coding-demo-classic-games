@@ -25,7 +25,6 @@ import { isTypingTarget } from "@/components/game-input";
 import {
   spaceInvaderClassNames,
   SpaceInvadersBoard,
-  spaceInvadersBoardSizeLabel,
 } from "@/components/space-invaders-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -250,15 +249,26 @@ export function SpaceInvadersGame({ onBackToMenu }: SpaceInvadersGameProps = {})
           </div>
         </dl>
 
-        <div className="rounded-md border border-[var(--invaders-border)] p-3">
-          <p className="text-xs font-medium text-[var(--invaders-muted)]">Invaders</p>
-          <p
-            className="font-mono text-3xl font-semibold leading-none"
-            data-testid="space-invaders-remaining"
-          >
-            {activeInvaderCount}
-          </p>
-        </div>
+        <dl className="grid grid-cols-2 gap-3">
+          <div className="rounded-md border border-[var(--invaders-border)] p-3">
+            <dt className="text-xs font-medium text-[var(--invaders-muted)]">Invaders</dt>
+            <dd
+              className="font-mono text-3xl font-semibold leading-none"
+              data-testid="space-invaders-remaining"
+            >
+              {activeInvaderCount}
+            </dd>
+          </div>
+          <div className="rounded-md border border-[var(--invaders-border)] p-3">
+            <dt className="text-xs font-medium text-[var(--invaders-muted)]">Speed</dt>
+            <dd
+              className="font-mono text-3xl font-semibold leading-none"
+              data-testid="space-invaders-speed"
+            >
+              {tickDelay === null ? "0" : Math.round(1000 / tickDelay)}
+            </dd>
+          </div>
+        </dl>
 
       </GameSidebar>
 
@@ -386,11 +396,6 @@ export function SpaceInvadersGame({ onBackToMenu }: SpaceInvadersGameProps = {})
           ) : null}
           </SpaceInvadersBoard>
         </GameBoardStage>
-
-        <div className="flex items-center justify-between rounded-md border border-[var(--invaders-border)] bg-[var(--invaders-panel)] px-3 py-2 text-xs font-medium text-[var(--invaders-muted)]">
-          <span>Board {spaceInvadersBoardSizeLabel}</span>
-          <span>Speed {tickDelay === null ? "0" : Math.round(1000 / tickDelay)}</span>
-        </div>
       </GameBoardColumn>
       {abandonDialogProps ? <GameAbandonDialog {...abandonDialogProps} /> : null}
     </GameShell>

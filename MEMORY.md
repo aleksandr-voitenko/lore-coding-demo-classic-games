@@ -93,6 +93,10 @@ patterns and constraints here.
   failures.
 - Keep local UI consistent with the shared game layout and shadcn button
   patterns.
+- Keep per-game metrics and live status details in `GameSidebar`; do not add
+  separate information strips below `GameBoardStage`. Board dimensions belong in
+  board accessibility labels or real settings controls rather than decorative
+  visible metadata.
 - Use `GameBoardStage` and `GameBoardActions` from
   `src/components/game-layout.tsx` for the right-side action rail beside game
   boards. The Back action belongs at the top of that rail and uses the shared

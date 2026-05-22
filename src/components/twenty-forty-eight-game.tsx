@@ -24,10 +24,7 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
-import {
-  TwentyFortyEightBoard,
-  twentyFortyEightBoardSizeLabel,
-} from "@/components/twenty-forty-eight-board";
+import { TwentyFortyEightBoard } from "@/components/twenty-forty-eight-board";
 import { Button } from "@/components/ui/button";
 import {
   createInitialTwentyFortyEightGame,
@@ -290,21 +287,6 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
           ) : null}
           </TwentyFortyEightBoard>
         </GameBoardStage>
-
-        <div className="flex items-center justify-between rounded-md border border-[var(--twenty-border)] bg-[var(--twenty-panel)] px-3 py-2 text-xs font-medium text-[var(--twenty-muted)]">
-          <span>Board {twentyFortyEightBoardSizeLabel}</span>
-          <span
-            className={cn(
-              "rounded-[0.2rem] px-2 py-1 font-semibold",
-              game.status === "won"
-                ? "bg-[color-mix(in_oklch,var(--twenty-tile-2048)_18%,white)] text-[var(--twenty-tile-2048)]"
-                : "bg-[color-mix(in_oklch,var(--twenty-tile-8)_16%,white)] text-[var(--twenty-tile-8)]",
-            )}
-            data-testid="twenty-forty-eight-board-state"
-          >
-            {statusLabels[game.status]}
-          </span>
-        </div>
       </GameBoardColumn>
       {abandonDialogProps ? <GameAbandonDialog {...abandonDialogProps} /> : null}
     </GameShell>

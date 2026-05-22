@@ -17,7 +17,7 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
-import { MinesweeperBoard, minesweeperBoardSizeLabel } from "@/components/minesweeper-board";
+import { MinesweeperBoard } from "@/components/minesweeper-board";
 import { Button } from "@/components/ui/button";
 import {
   createInitialMinesweeperGame,
@@ -168,15 +168,31 @@ export function MinesweeperGame({ onBackToMenu }: MinesweeperGameProps = {}) {
           </div>
         </dl>
 
-        <div className="rounded-md border border-[var(--minesweeper-border)] p-3">
-          <p className="text-xs font-medium text-[var(--minesweeper-muted)]">Safe cells</p>
-          <p
-            className="font-mono text-3xl font-semibold leading-none"
-            data-testid="minesweeper-safe-cells"
-          >
-            {game.revealedSafeCellCount}/{safeCellCount}
-          </p>
-        </div>
+        <dl className="grid grid-cols-2 gap-3">
+          <div className="rounded-md border border-[var(--minesweeper-border)] p-3">
+            <dt className="text-xs font-medium text-[var(--minesweeper-muted)]">Safe cells</dt>
+            <dd
+              className="font-mono text-3xl font-semibold leading-none"
+              data-testid="minesweeper-safe-cells"
+            >
+              {game.revealedSafeCellCount}/{safeCellCount}
+            </dd>
+          </div>
+          <div className="rounded-md border border-[var(--minesweeper-border)] p-3">
+            <dt className="text-xs font-medium text-[var(--minesweeper-muted)]">Mode</dt>
+            <dd
+              className={cn(
+                "mt-1 inline-flex rounded-[0.2rem] px-2 py-1 text-sm font-semibold",
+                isFlagMode
+                  ? "bg-[color-mix(in_oklch,var(--minesweeper-flag)_14%,white)] text-[var(--minesweeper-flag)]"
+                  : "bg-[color-mix(in_oklch,var(--minesweeper-one)_14%,white)] text-[var(--minesweeper-one)]",
+              )}
+              data-testid="minesweeper-active-mode"
+            >
+              {isFlagMode ? "Flag" : "Reveal"}
+            </dd>
+          </div>
+        </dl>
 
       </GameSidebar>
 
@@ -239,21 +255,6 @@ export function MinesweeperGame({ onBackToMenu }: MinesweeperGameProps = {}) {
           ) : null}
           </MinesweeperBoard>
         </GameBoardStage>
-
-        <div className="flex items-center justify-between rounded-md border border-[var(--minesweeper-border)] bg-[var(--minesweeper-panel)] px-3 py-2 text-xs font-medium text-[var(--minesweeper-muted)]">
-          <span>Board {minesweeperBoardSizeLabel}</span>
-          <span
-            className={cn(
-              "rounded-[0.2rem] px-2 py-1 font-semibold",
-              isFlagMode
-                ? "bg-[color-mix(in_oklch,var(--minesweeper-flag)_14%,white)] text-[var(--minesweeper-flag)]"
-                : "bg-[color-mix(in_oklch,var(--minesweeper-one)_14%,white)] text-[var(--minesweeper-one)]",
-            )}
-            data-testid="minesweeper-active-mode"
-          >
-            {isFlagMode ? "Flag" : "Reveal"}
-          </span>
-        </div>
       </GameBoardColumn>
       {abandonDialogProps ? <GameAbandonDialog {...abandonDialogProps} /> : null}
     </GameShell>

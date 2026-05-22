@@ -503,6 +503,28 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
                 {bestScore}
               </dd>
             </div>
+            <div className="rounded-md border border-[var(--snake-border)] p-3">
+              <dt className="text-xs font-medium text-[var(--snake-muted)]">
+                Length
+              </dt>
+              <dd
+                className="font-mono text-3xl font-semibold leading-none"
+                data-testid="snake-length"
+              >
+                {game.snake.length}
+              </dd>
+            </div>
+            <div className="rounded-md border border-[var(--snake-border)] p-3">
+              <dt className="text-xs font-medium text-[var(--snake-muted)]">
+                Speed
+              </dt>
+              <dd
+                className="font-mono text-3xl font-semibold leading-none"
+                data-testid="snake-speed"
+              >
+                {speed === null ? "0" : `${Math.round(1000 / speed)}`}
+              </dd>
+            </div>
           </dl>
 
           <div className="flex flex-col gap-2 rounded-md border border-[var(--snake-border)] p-3">
@@ -740,13 +762,6 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
             ) : null}
           </SnakeBoard>
         </GameBoardStage>
-
-          <div className="flex items-center justify-between rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] px-3 py-2 text-xs font-medium text-[var(--snake-muted)]">
-            <span data-testid="snake-length">Length {game.snake.length}</span>
-            <span data-testid="snake-speed">
-              Speed {speed === null ? "0" : `${Math.round(1000 / speed)}`}
-            </span>
-          </div>
       </GameBoardColumn>
       {abandonDialogProps ? <GameAbandonDialog {...abandonDialogProps} /> : null}
     </GameShell>

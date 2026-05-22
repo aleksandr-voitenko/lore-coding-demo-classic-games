@@ -17,7 +17,7 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
-import { PongBoard, pongBoardSizeLabel } from "@/components/pong-board";
+import { PongBoard } from "@/components/pong-board";
 import { Button } from "@/components/ui/button";
 import {
   advancePongGame,
@@ -218,10 +218,23 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
           </div>
         </dl>
 
-        <div className="rounded-md border border-[var(--pong-border)] p-3">
-          <p className="text-xs font-medium text-[var(--pong-muted)]">Target</p>
-          <p className="font-mono text-3xl font-semibold leading-none">{PONG_TARGET_SCORE}</p>
-        </div>
+        <dl className="grid grid-cols-2 gap-3">
+          <div className="rounded-md border border-[var(--pong-border)] p-3">
+            <dt className="text-xs font-medium text-[var(--pong-muted)]">Target</dt>
+            <dd className="font-mono text-3xl font-semibold leading-none">
+              {PONG_TARGET_SCORE}
+            </dd>
+          </div>
+          <div className="rounded-md border border-[var(--pong-border)] p-3">
+            <dt className="text-xs font-medium text-[var(--pong-muted)]">Speed</dt>
+            <dd
+              className="font-mono text-3xl font-semibold leading-none"
+              data-testid="pong-speed"
+            >
+              {tickDelay === null ? "0" : Math.round(1000 / tickDelay)}
+            </dd>
+          </div>
+        </dl>
 
       </GameSidebar>
 
@@ -332,11 +345,6 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
           ) : null}
           </PongBoard>
         </GameBoardStage>
-
-        <div className="flex items-center justify-between rounded-md border border-[var(--pong-border)] bg-[var(--pong-panel)] px-3 py-2 text-xs font-medium text-[var(--pong-muted)]">
-          <span>Board {pongBoardSizeLabel}</span>
-          <span>Speed {tickDelay === null ? "0" : Math.round(1000 / tickDelay)}</span>
-        </div>
       </GameBoardColumn>
       {abandonDialogProps ? <GameAbandonDialog {...abandonDialogProps} /> : null}
     </GameShell>

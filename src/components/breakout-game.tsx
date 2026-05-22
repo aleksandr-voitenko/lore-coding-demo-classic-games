@@ -26,8 +26,6 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   advanceBreakoutGame,
-  BREAKOUT_BOARD_HEIGHT,
-  BREAKOUT_BOARD_WIDTH,
   createInitialBreakoutGame,
   getBreakoutTickDelay,
   moveBreakoutPaddleLeft,
@@ -226,15 +224,26 @@ export function BreakoutGame({ onBackToMenu }: BreakoutGameProps = {}) {
           </div>
         </dl>
 
-        <div className="rounded-md border border-[var(--breakout-border)] p-3">
-          <p className="text-xs font-medium text-[var(--breakout-muted)]">Bricks</p>
-          <p
-            className="font-mono text-3xl font-semibold leading-none"
-            data-testid="breakout-bricks-remaining"
-          >
-            {activeBrickCount}
-          </p>
-        </div>
+        <dl className="grid grid-cols-2 gap-3">
+          <div className="rounded-md border border-[var(--breakout-border)] p-3">
+            <dt className="text-xs font-medium text-[var(--breakout-muted)]">Bricks</dt>
+            <dd
+              className="font-mono text-3xl font-semibold leading-none"
+              data-testid="breakout-bricks-remaining"
+            >
+              {activeBrickCount}
+            </dd>
+          </div>
+          <div className="rounded-md border border-[var(--breakout-border)] p-3">
+            <dt className="text-xs font-medium text-[var(--breakout-muted)]">Speed</dt>
+            <dd
+              className="font-mono text-3xl font-semibold leading-none"
+              data-testid="breakout-speed"
+            >
+              {tickDelay === null ? "0" : Math.round(1000 / tickDelay)}
+            </dd>
+          </div>
+        </dl>
 
       </GameSidebar>
 
@@ -358,13 +367,6 @@ export function BreakoutGame({ onBackToMenu }: BreakoutGameProps = {}) {
           ) : null}
           </BreakoutBoard>
         </GameBoardStage>
-
-        <div className="flex items-center justify-between rounded-md border border-[var(--breakout-border)] bg-[var(--breakout-panel)] px-3 py-2 text-xs font-medium text-[var(--breakout-muted)]">
-          <span>
-            Board {BREAKOUT_BOARD_WIDTH} x {BREAKOUT_BOARD_HEIGHT}
-          </span>
-          <span>Speed {tickDelay === null ? "0" : Math.round(1000 / tickDelay)}</span>
-        </div>
       </GameBoardColumn>
       {abandonDialogProps ? <GameAbandonDialog {...abandonDialogProps} /> : null}
     </GameShell>
