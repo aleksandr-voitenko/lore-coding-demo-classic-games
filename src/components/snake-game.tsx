@@ -37,14 +37,10 @@ import { SnakeBoard } from "@/components/snake-board";
 import { Button } from "@/components/ui/button";
 import {
   advanceSnakeGame,
-  BOARD_SIZE_OPTIONS,
   createInitialGame,
   expireTimedFood,
   getGameTickDelay,
   getTimedFoodSpawnDelay,
-  MAX_BOARD_SIZE,
-  MIN_BOARD_SIZE,
-  normalizeBoardSize,
   queueGameDirection,
   spawnTimedFood,
   type Direction,
@@ -73,6 +69,7 @@ type TimedFoodLifecycleOptions = {
 };
 
 type SnakeGameProps = {
+  initialBoardSize?: number;
   onBackToMenu?: () => void;
 };
 
@@ -229,8 +226,10 @@ function useTimedFoodLifecycle({
   }, [expiresAt, gameStatus, kind, setGame]);
 }
 
-export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
-  const [game, setGame] = useState<GameState>(() => createInitialGame());
+export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {}) {
+  const [game, setGame] = useState<GameState>(() =>
+    createInitialGame({ boardSize: initialBoardSize }),
+  );
   const [foodFeedbacks, setFoodFeedbacks] = useState<FoodFeedback[]>([]);
   const foodFeedbackIdRef = useRef(0);
   const previousGameRef = useRef(game);
@@ -257,36 +256,6 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
     speedBoosts: game.speedBoosts,
     status: game.status,
   });
-  const canSelectBoardSize =
-    game.status === "ready" ||
-    ((game.status === "lost" || game.status === "won") && pendingLeaderboardEntry === null);
-
-  const selectBoardSize = useCallback(
-    (nextBoardSize: number) => {
-      const boardSize = normalizeBoardSize(nextBoardSize);
-
-      resetLeaderboardForm();
-      setFoodFeedbacks([]);
-      setGame((current) => {
-        if (
-          current.status === "running" ||
-          current.status === "paused" ||
-          current.pendingLeaderboardEntry !== null ||
-          current.boardSize === boardSize
-        ) {
-          return current;
-        }
-
-        return createInitialGame({
-          bestScore: Math.max(current.bestScore, leaderboardBestScore),
-          boardSize,
-          random: Math.random,
-        });
-      });
-    },
-    [leaderboardBestScore, resetLeaderboardForm],
-  );
-
   const removeFoodFeedback = useCallback((id: number) => {
     setFoodFeedbacks((current) => current.filter((feedback) => feedback.id !== id));
   }, []);
@@ -526,33 +495,6 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
               </dd>
             </div>
           </dl>
-
-          <div className="flex flex-col gap-2 rounded-md border border-[var(--snake-border)] p-3">
-            <label
-              className="text-xs font-medium text-[var(--snake-muted)]"
-              htmlFor="snake-board-size"
-            >
-              Field size
-            </label>
-            <select
-              aria-label={`Field size. Selectable from ${MIN_BOARD_SIZE} by ${MIN_BOARD_SIZE} to ${MAX_BOARD_SIZE} by ${MAX_BOARD_SIZE}.`}
-              className="h-9 w-full rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] px-3 text-sm font-semibold text-[var(--snake-ink)] outline-none transition disabled:cursor-not-allowed disabled:opacity-55 focus-visible:border-[var(--snake-head)] focus-visible:ring-3 focus-visible:ring-[color-mix(in_oklch,var(--snake-head)_25%,transparent)]"
-              data-testid="snake-board-size"
-              disabled={!canSelectBoardSize}
-              id="snake-board-size"
-              onChange={(event) => selectBoardSize(Number(event.target.value))}
-              value={game.boardSize}
-            >
-              {BOARD_SIZE_OPTIONS.map((boardSize) => (
-                <option
-                  key={boardSize}
-                  value={boardSize}
-                >
-                  {boardSize} x {boardSize}
-                </option>
-              ))}
-            </select>
-          </div>
 
       </GameSidebar>
 

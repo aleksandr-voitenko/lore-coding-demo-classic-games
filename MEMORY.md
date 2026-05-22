@@ -93,6 +93,9 @@ patterns and constraints here.
   failures.
 - Keep local UI consistent with the shared game layout and shadcn button
   patterns.
+- Pre-game parameters can live on launcher cards. Snake field size is owned by
+  `GameLauncher` and passed into `SnakeGame` as `initialBoardSize`; changing it
+  after opening Snake means returning to the launcher.
 - Keep per-game metrics and live status details in `GameSidebar`; do not add
   separate information strips below `GameBoardStage`. Board dimensions belong in
   board accessibility labels or real settings controls rather than decorative
