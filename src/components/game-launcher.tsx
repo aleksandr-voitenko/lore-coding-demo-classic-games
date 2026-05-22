@@ -90,26 +90,153 @@ type PlayableGameProps = {
   onBackToMenu: () => void;
 };
 
-type GameParameterKind =
-  | "snake-board-size"
-  | "tetris-board-size"
-  | "tetris-start-level"
-  | "breakout-board-size"
-  | "breakout-lives"
-  | "minesweeper-board-size"
-  | "minesweeper-mines"
-  | "space-invaders-board-size"
-  | "space-invaders-aliens"
-  | "twenty-forty-eight-board-size"
-  | "twenty-forty-eight-goal"
-  | "pong-board-size"
-  | "pong-target"
-  | "simon-target";
+type PlayableInitialProps = Omit<PlayableGameProps, "onBackToMenu">;
 
-type GameCardParameter = {
-  kind: GameParameterKind;
+type BoardSizeOption = {
+  height: number;
   label: string;
+  width: number;
 };
+
+type GameParameterSelectOption = {
+  label: string;
+  value: string;
+};
+
+type GameParameterConfig = {
+  ariaLabel?: string;
+  defaultValue: string;
+  label: string;
+  normalizeValue?: (value: string) => string;
+  options: readonly GameParameterSelectOption[];
+  toInitialProps: (value: string) => PlayableInitialProps;
+};
+
+const GAME_PARAMETER_CONFIG = defineGameParameterConfig({
+  "snake-board-size": {
+    ariaLabel: `Field size. Selectable from ${MIN_BOARD_SIZE} by ${MIN_BOARD_SIZE} to ${MAX_BOARD_SIZE} by ${MAX_BOARD_SIZE}.`,
+    defaultValue: String(DEFAULT_BOARD_SIZE),
+    label: "Field size",
+    normalizeValue: (value) => String(normalizeBoardSize(Number(value))),
+    options: BOARD_SIZE_OPTIONS.map((boardSize) => ({
+      label: `${boardSize} x ${boardSize}`,
+      value: String(boardSize),
+    })),
+    toInitialProps: (value) => ({
+      initialBoardSize: normalizeBoardSize(Number(value)),
+    }),
+  },
+  "tetris-board-size": createBoardSizeParameter({
+    defaultSize: {
+      height: TETRIS_BOARD_HEIGHT,
+      width: TETRIS_BOARD_WIDTH,
+    },
+    label: "Board",
+    options: TETRIS_BOARD_SIZE_OPTIONS,
+  }),
+  "tetris-start-level": {
+    defaultValue: String(TETRIS_START_LEVEL),
+    label: "Level",
+    options: createNumberSelectOptions(TETRIS_START_LEVEL_OPTIONS),
+    toInitialProps: (value) => ({
+      initialStartLevel: Number(value),
+    }),
+  },
+  "breakout-board-size": createBoardSizeParameter({
+    defaultSize: {
+      height: BREAKOUT_BOARD_HEIGHT,
+      width: BREAKOUT_BOARD_WIDTH,
+    },
+    label: "Board",
+    options: BREAKOUT_BOARD_SIZE_OPTIONS,
+  }),
+  "breakout-lives": {
+    defaultValue: String(BREAKOUT_STARTING_LIVES),
+    label: "Lives",
+    options: createNumberSelectOptions(BREAKOUT_LIVES_OPTIONS),
+    toInitialProps: (value) => ({
+      initialLives: Number(value),
+    }),
+  },
+  "minesweeper-board-size": createBoardSizeParameter({
+    defaultSize: {
+      height: MINESWEEPER_BOARD_HEIGHT,
+      width: MINESWEEPER_BOARD_WIDTH,
+    },
+    label: "Board",
+    options: MINESWEEPER_BOARD_SIZE_OPTIONS,
+  }),
+  "minesweeper-mines": {
+    defaultValue: String(MINESWEEPER_MINE_COUNT),
+    label: "Mines",
+    options: createNumberSelectOptions(MINESWEEPER_MINE_COUNT_OPTIONS),
+    toInitialProps: (value) => ({
+      initialMineCount: Number(value),
+    }),
+  },
+  "space-invaders-board-size": createBoardSizeParameter({
+    defaultSize: {
+      height: SPACE_INVADERS_BOARD_HEIGHT,
+      width: SPACE_INVADERS_BOARD_WIDTH,
+    },
+    label: "Board",
+    options: SPACE_INVADERS_BOARD_SIZE_OPTIONS,
+  }),
+  "space-invaders-aliens": {
+    defaultValue: String(SPACE_INVADERS_COLUMNS * SPACE_INVADERS_ROWS),
+    label: "Aliens",
+    options: SPACE_INVADERS_ALIEN_COUNT_OPTIONS.map((option) => ({
+      label: option.label,
+      value: String(option.alienCount),
+    })),
+    toInitialProps: (value) => ({
+      initialAlienCount: Number(value),
+    }),
+  },
+  "twenty-forty-eight-board-size": {
+    defaultValue: String(TWENTY_FORTY_EIGHT_BOARD_SIZE),
+    label: "Board",
+    options: createSquareSizeSelectOptions(TWENTY_FORTY_EIGHT_BOARD_SIZE_OPTIONS),
+    toInitialProps: (value) => ({
+      initialBoardSize: Number(value),
+    }),
+  },
+  "twenty-forty-eight-goal": {
+    defaultValue: String(TWENTY_FORTY_EIGHT_WIN_TILE),
+    label: "Goal",
+    options: createNumberSelectOptions(TWENTY_FORTY_EIGHT_WIN_TILE_OPTIONS),
+    toInitialProps: (value) => ({
+      initialWinTile: Number(value),
+    }),
+  },
+  "pong-board-size": createBoardSizeParameter({
+    defaultSize: {
+      height: PONG_BOARD_HEIGHT,
+      width: PONG_BOARD_WIDTH,
+    },
+    label: "Board",
+    options: PONG_BOARD_SIZE_OPTIONS,
+  }),
+  "pong-target": {
+    defaultValue: String(PONG_TARGET_SCORE),
+    label: "Target",
+    options: createNumberSelectOptions(PONG_TARGET_SCORE_OPTIONS),
+    toInitialProps: (value) => ({
+      initialTargetScore: Number(value),
+    }),
+  },
+  "simon-target": {
+    defaultValue: String(SIMON_DEFAULT_WIN_TARGET),
+    label: "Target",
+    options: createNumberSelectOptions(SIMON_WIN_TARGET_OPTIONS),
+    toInitialProps: (value) => ({
+      initialWinTarget: Number(value),
+    }),
+  },
+});
+
+type GameParameterKind = keyof typeof GAME_PARAMETER_CONFIG;
+type GameParameterValues = Record<GameParameterKind, string>;
 
 type GameCard = {
   accentClassName: string;
@@ -125,13 +252,7 @@ type GameCard = {
   description: string;
   id: GameId;
   label: string;
-  parameters: GameCardParameter[];
-};
-
-type BoardSizeOption = {
-  height: number;
-  label: string;
-  width: number;
+  parameters: readonly GameParameterKind[];
 };
 
 const GAME_CARDS: GameCard[] = [
@@ -148,7 +269,7 @@ const GAME_CARDS: GameCard[] = [
     description: "A classic score chase with obstacles, timed food, and saved best runs.",
     id: "snake",
     label: "Classic Snake",
-    parameters: [{ kind: "snake-board-size", label: "Field size" }],
+    parameters: ["snake-board-size"],
   },
   {
     accentClassName:
@@ -164,10 +285,7 @@ const GAME_CARDS: GameCard[] = [
     description: "A falling-block survival game with line clears, scoring, and rising speed.",
     id: "tetris",
     label: "Classic Tetris",
-    parameters: [
-      { kind: "tetris-board-size", label: "Board" },
-      { kind: "tetris-start-level", label: "Level" },
-    ],
+    parameters: ["tetris-board-size", "tetris-start-level"],
   },
   {
     accentClassName:
@@ -183,10 +301,7 @@ const GAME_CARDS: GameCard[] = [
     description: "A paddle-and-ball brick breaker with lives, scoring, and wall clears.",
     id: "breakout",
     label: "Classic Breakout",
-    parameters: [
-      { kind: "breakout-board-size", label: "Board" },
-      { kind: "breakout-lives", label: "Lives" },
-    ],
+    parameters: ["breakout-board-size", "breakout-lives"],
   },
   {
     accentClassName:
@@ -202,10 +317,7 @@ const GAME_CARDS: GameCard[] = [
     description: "A classic minefield puzzle with safe first clicks, flags, and flood reveals.",
     id: "minesweeper",
     label: "Classic Minesweeper",
-    parameters: [
-      { kind: "minesweeper-board-size", label: "Board" },
-      { kind: "minesweeper-mines", label: "Mines" },
-    ],
+    parameters: ["minesweeper-board-size", "minesweeper-mines"],
   },
   {
     accentClassName:
@@ -221,10 +333,7 @@ const GAME_CARDS: GameCard[] = [
     description: "A cannon defense arcade game with marching invaders, shots, and scoring.",
     id: "space-invaders",
     label: "Classic Space Invaders",
-    parameters: [
-      { kind: "space-invaders-board-size", label: "Board" },
-      { kind: "space-invaders-aliens", label: "Aliens" },
-    ],
+    parameters: ["space-invaders-board-size", "space-invaders-aliens"],
   },
   {
     accentClassName:
@@ -240,10 +349,7 @@ const GAME_CARDS: GameCard[] = [
     description: "A sliding tile puzzle with merges, score chasing, and a 2048 goal tile.",
     id: "twenty-forty-eight",
     label: "Classic 2048",
-    parameters: [
-      { kind: "twenty-forty-eight-board-size", label: "Board" },
-      { kind: "twenty-forty-eight-goal", label: "Goal" },
-    ],
+    parameters: ["twenty-forty-eight-board-size", "twenty-forty-eight-goal"],
   },
   {
     accentClassName:
@@ -259,10 +365,7 @@ const GAME_CARDS: GameCard[] = [
     description: "A paddle duel against a CPU opponent with rebounds, rallies, and scoring.",
     id: "pong",
     label: "Classic Pong",
-    parameters: [
-      { kind: "pong-board-size", label: "Board" },
-      { kind: "pong-target", label: "Target" },
-    ],
+    parameters: ["pong-board-size", "pong-target"],
   },
   {
     accentClassName: "bg-[linear-gradient(90deg,#25a75a,#d73548,#f0bd38,#1d7ed0)]",
@@ -277,133 +380,35 @@ const GAME_CARDS: GameCard[] = [
     description: "A memory pattern game with four pads, growing sequences, and strict misses.",
     id: "simon",
     label: "Classic Simon",
-    parameters: [{ kind: "simon-target", label: "Target" }],
+    parameters: ["simon-target"],
   },
 ];
 
 export function GameLauncher() {
   const [selectedGameId, setSelectedGameId] = useState<GameId | null>(null);
-  const [snakeBoardSize, setSnakeBoardSize] = useState(DEFAULT_BOARD_SIZE);
-  const [tetrisBoardSizeKey, setTetrisBoardSizeKey] = useState(
-    getBoardSizeKey({ height: TETRIS_BOARD_HEIGHT, width: TETRIS_BOARD_WIDTH }),
+  const [parameterValues, setParameterValues] = useState<GameParameterValues>(() =>
+    createDefaultParameterValues(),
   );
-  const [tetrisStartLevel, setTetrisStartLevel] = useState(TETRIS_START_LEVEL);
-  const [breakoutBoardSizeKey, setBreakoutBoardSizeKey] = useState(
-    getBoardSizeKey({ height: BREAKOUT_BOARD_HEIGHT, width: BREAKOUT_BOARD_WIDTH }),
-  );
-  const [breakoutLives, setBreakoutLives] = useState(BREAKOUT_STARTING_LIVES);
-  const [minesweeperBoardSizeKey, setMinesweeperBoardSizeKey] = useState(
-    getBoardSizeKey({ height: MINESWEEPER_BOARD_HEIGHT, width: MINESWEEPER_BOARD_WIDTH }),
-  );
-  const [minesweeperMineCount, setMinesweeperMineCount] = useState(MINESWEEPER_MINE_COUNT);
-  const [spaceInvadersBoardSizeKey, setSpaceInvadersBoardSizeKey] = useState(
-    getBoardSizeKey({
-      height: SPACE_INVADERS_BOARD_HEIGHT,
-      width: SPACE_INVADERS_BOARD_WIDTH,
-    }),
-  );
-  const [spaceInvadersAlienCount, setSpaceInvadersAlienCount] = useState(
-    SPACE_INVADERS_COLUMNS * SPACE_INVADERS_ROWS,
-  );
-  const [twentyFortyEightBoardSize, setTwentyFortyEightBoardSize] = useState(
-    TWENTY_FORTY_EIGHT_BOARD_SIZE,
-  );
-  const [twentyFortyEightGoal, setTwentyFortyEightGoal] = useState(
-    TWENTY_FORTY_EIGHT_WIN_TILE,
-  );
-  const [pongBoardSizeKey, setPongBoardSizeKey] = useState(
-    getBoardSizeKey({ height: PONG_BOARD_HEIGHT, width: PONG_BOARD_WIDTH }),
-  );
-  const [pongTargetScore, setPongTargetScore] = useState(PONG_TARGET_SCORE);
-  const [simonWinTarget, setSimonWinTarget] = useState(SIMON_DEFAULT_WIN_TARGET);
 
   const selectedGame = GAME_CARDS.find((game) => game.id === selectedGameId) ?? null;
-  const tetrisBoardSize = getBoardSizeOption(TETRIS_BOARD_SIZE_OPTIONS, tetrisBoardSizeKey, {
-    height: TETRIS_BOARD_HEIGHT,
-    label: `${TETRIS_BOARD_WIDTH} x ${TETRIS_BOARD_HEIGHT}`,
-    width: TETRIS_BOARD_WIDTH,
-  });
-  const breakoutBoardSize = getBoardSizeOption(BREAKOUT_BOARD_SIZE_OPTIONS, breakoutBoardSizeKey, {
-    height: BREAKOUT_BOARD_HEIGHT,
-    label: `${BREAKOUT_BOARD_WIDTH} x ${BREAKOUT_BOARD_HEIGHT}`,
-    width: BREAKOUT_BOARD_WIDTH,
-  });
-  const minesweeperBoardSize = getBoardSizeOption(
-    MINESWEEPER_BOARD_SIZE_OPTIONS,
-    minesweeperBoardSizeKey,
-    {
-      height: MINESWEEPER_BOARD_HEIGHT,
-      label: `${MINESWEEPER_BOARD_WIDTH} x ${MINESWEEPER_BOARD_HEIGHT}`,
-      width: MINESWEEPER_BOARD_WIDTH,
-    },
-  );
-  const spaceInvadersBoardSize = getBoardSizeOption(
-    SPACE_INVADERS_BOARD_SIZE_OPTIONS,
-    spaceInvadersBoardSizeKey,
-    {
-      height: SPACE_INVADERS_BOARD_HEIGHT,
-      label: `${SPACE_INVADERS_BOARD_WIDTH} x ${SPACE_INVADERS_BOARD_HEIGHT}`,
-      width: SPACE_INVADERS_BOARD_WIDTH,
-    },
-  );
-  const pongBoardSize = getBoardSizeOption(PONG_BOARD_SIZE_OPTIONS, pongBoardSizeKey, {
-    height: PONG_BOARD_HEIGHT,
-    label: `${PONG_BOARD_WIDTH} x ${PONG_BOARD_HEIGHT}`,
-    width: PONG_BOARD_WIDTH,
-  });
 
   const returnToMenu = useCallback(() => {
     setSelectedGameId(null);
   }, []);
 
+  const updateParameterValue = useCallback((parameterKind: GameParameterKind, value: string) => {
+    const parameter = GAME_PARAMETER_CONFIG[parameterKind];
+    const normalizedValue = parameter.normalizeValue?.(value) ?? value;
+
+    setParameterValues((currentValues) => ({
+      ...currentValues,
+      [parameterKind]: normalizedValue,
+    }));
+  }, []);
+
   if (selectedGame !== null) {
     const SelectedGame = selectedGame.component;
-    let initialGameProps: Omit<PlayableGameProps, "onBackToMenu"> = {};
-
-    if (selectedGame.id === "snake") {
-      initialGameProps = {
-        initialBoardSize: snakeBoardSize,
-      };
-    } else if (selectedGame.id === "tetris") {
-      initialGameProps = {
-        initialBoardHeight: tetrisBoardSize.height,
-        initialBoardWidth: tetrisBoardSize.width,
-        initialStartLevel: tetrisStartLevel,
-      };
-    } else if (selectedGame.id === "breakout") {
-      initialGameProps = {
-        initialBoardHeight: breakoutBoardSize.height,
-        initialBoardWidth: breakoutBoardSize.width,
-        initialLives: breakoutLives,
-      };
-    } else if (selectedGame.id === "minesweeper") {
-      initialGameProps = {
-        initialBoardHeight: minesweeperBoardSize.height,
-        initialBoardWidth: minesweeperBoardSize.width,
-        initialMineCount: minesweeperMineCount,
-      };
-    } else if (selectedGame.id === "space-invaders") {
-      initialGameProps = {
-        initialAlienCount: spaceInvadersAlienCount,
-        initialBoardHeight: spaceInvadersBoardSize.height,
-        initialBoardWidth: spaceInvadersBoardSize.width,
-      };
-    } else if (selectedGame.id === "twenty-forty-eight") {
-      initialGameProps = {
-        initialBoardSize: twentyFortyEightBoardSize,
-        initialWinTile: twentyFortyEightGoal,
-      };
-    } else if (selectedGame.id === "pong") {
-      initialGameProps = {
-        initialBoardHeight: pongBoardSize.height,
-        initialBoardWidth: pongBoardSize.width,
-        initialTargetScore: pongTargetScore,
-      };
-    } else if (selectedGame.id === "simon") {
-      initialGameProps = {
-        initialWinTarget: simonWinTarget,
-      };
-    }
+    const initialGameProps = createInitialGameProps(selectedGame, parameterValues);
 
     return (
       <SelectedGame
@@ -413,207 +418,22 @@ export function GameLauncher() {
     );
   }
 
-  function renderGameParameter(game: GameCard, parameter: GameCardParameter) {
-    const id = `${game.id}-${parameter.kind}`;
+  function renderGameParameter(game: GameCard, parameterKind: GameParameterKind) {
+    const parameter = GAME_PARAMETER_CONFIG[parameterKind];
+    const id = `${game.id}-${parameterKind}`;
 
-    switch (parameter.kind) {
-      case "snake-board-size":
-        return (
-          <GameParameterSelect
-            ariaLabel={`Field size. Selectable from ${MIN_BOARD_SIZE} by ${MIN_BOARD_SIZE} to ${MAX_BOARD_SIZE} by ${MAX_BOARD_SIZE}.`}
-            id={id}
-            key={parameter.kind}
-            label={parameter.label}
-            onChange={(value) => setSnakeBoardSize(normalizeBoardSize(Number(value)))}
-            options={BOARD_SIZE_OPTIONS.map((boardSize) => ({
-              label: `${boardSize} x ${boardSize}`,
-              value: String(boardSize),
-            }))}
-            testId={parameter.kind}
-            value={String(snakeBoardSize)}
-          />
-        );
-      case "tetris-board-size":
-        return (
-          <GameParameterSelect
-            id={id}
-            key={parameter.kind}
-            label={parameter.label}
-            onChange={setTetrisBoardSizeKey}
-            options={createBoardSizeSelectOptions(TETRIS_BOARD_SIZE_OPTIONS)}
-            testId={parameter.kind}
-            value={tetrisBoardSizeKey}
-          />
-        );
-      case "tetris-start-level":
-        return (
-          <GameParameterSelect
-            id={id}
-            key={parameter.kind}
-            label={parameter.label}
-            onChange={(value) => setTetrisStartLevel(Number(value))}
-            options={TETRIS_START_LEVEL_OPTIONS.map((level) => ({
-              label: String(level),
-              value: String(level),
-            }))}
-            testId={parameter.kind}
-            value={String(tetrisStartLevel)}
-          />
-        );
-      case "breakout-board-size":
-        return (
-          <GameParameterSelect
-            id={id}
-            key={parameter.kind}
-            label={parameter.label}
-            onChange={setBreakoutBoardSizeKey}
-            options={createBoardSizeSelectOptions(BREAKOUT_BOARD_SIZE_OPTIONS)}
-            testId={parameter.kind}
-            value={breakoutBoardSizeKey}
-          />
-        );
-      case "breakout-lives":
-        return (
-          <GameParameterSelect
-            id={id}
-            key={parameter.kind}
-            label={parameter.label}
-            onChange={(value) => setBreakoutLives(Number(value))}
-            options={BREAKOUT_LIVES_OPTIONS.map((lives) => ({
-              label: String(lives),
-              value: String(lives),
-            }))}
-            testId={parameter.kind}
-            value={String(breakoutLives)}
-          />
-        );
-      case "minesweeper-board-size":
-        return (
-          <GameParameterSelect
-            id={id}
-            key={parameter.kind}
-            label={parameter.label}
-            onChange={setMinesweeperBoardSizeKey}
-            options={createBoardSizeSelectOptions(MINESWEEPER_BOARD_SIZE_OPTIONS)}
-            testId={parameter.kind}
-            value={minesweeperBoardSizeKey}
-          />
-        );
-      case "minesweeper-mines":
-        return (
-          <GameParameterSelect
-            id={id}
-            key={parameter.kind}
-            label={parameter.label}
-            onChange={(value) => setMinesweeperMineCount(Number(value))}
-            options={MINESWEEPER_MINE_COUNT_OPTIONS.map((mineCount) => ({
-              label: String(mineCount),
-              value: String(mineCount),
-            }))}
-            testId={parameter.kind}
-            value={String(minesweeperMineCount)}
-          />
-        );
-      case "space-invaders-board-size":
-        return (
-          <GameParameterSelect
-            id={id}
-            key={parameter.kind}
-            label={parameter.label}
-            onChange={setSpaceInvadersBoardSizeKey}
-            options={createBoardSizeSelectOptions(SPACE_INVADERS_BOARD_SIZE_OPTIONS)}
-            testId={parameter.kind}
-            value={spaceInvadersBoardSizeKey}
-          />
-        );
-      case "space-invaders-aliens":
-        return (
-          <GameParameterSelect
-            id={id}
-            key={parameter.kind}
-            label={parameter.label}
-            onChange={(value) => setSpaceInvadersAlienCount(Number(value))}
-            options={SPACE_INVADERS_ALIEN_COUNT_OPTIONS.map((option) => ({
-              label: option.label,
-              value: String(option.alienCount),
-            }))}
-            testId={parameter.kind}
-            value={String(spaceInvadersAlienCount)}
-          />
-        );
-      case "twenty-forty-eight-board-size":
-        return (
-          <GameParameterSelect
-            id={id}
-            key={parameter.kind}
-            label={parameter.label}
-            onChange={(value) => setTwentyFortyEightBoardSize(Number(value))}
-            options={TWENTY_FORTY_EIGHT_BOARD_SIZE_OPTIONS.map((boardSize) => ({
-              label: `${boardSize} x ${boardSize}`,
-              value: String(boardSize),
-            }))}
-            testId={parameter.kind}
-            value={String(twentyFortyEightBoardSize)}
-          />
-        );
-      case "twenty-forty-eight-goal":
-        return (
-          <GameParameterSelect
-            id={id}
-            key={parameter.kind}
-            label={parameter.label}
-            onChange={(value) => setTwentyFortyEightGoal(Number(value))}
-            options={TWENTY_FORTY_EIGHT_WIN_TILE_OPTIONS.map((goal) => ({
-              label: String(goal),
-              value: String(goal),
-            }))}
-            testId={parameter.kind}
-            value={String(twentyFortyEightGoal)}
-          />
-        );
-      case "pong-board-size":
-        return (
-          <GameParameterSelect
-            id={id}
-            key={parameter.kind}
-            label={parameter.label}
-            onChange={setPongBoardSizeKey}
-            options={createBoardSizeSelectOptions(PONG_BOARD_SIZE_OPTIONS)}
-            testId={parameter.kind}
-            value={pongBoardSizeKey}
-          />
-        );
-      case "pong-target":
-        return (
-          <GameParameterSelect
-            id={id}
-            key={parameter.kind}
-            label={parameter.label}
-            onChange={(value) => setPongTargetScore(Number(value))}
-            options={PONG_TARGET_SCORE_OPTIONS.map((target) => ({
-              label: String(target),
-              value: String(target),
-            }))}
-            testId={parameter.kind}
-            value={String(pongTargetScore)}
-          />
-        );
-      case "simon-target":
-        return (
-          <GameParameterSelect
-            id={id}
-            key={parameter.kind}
-            label={parameter.label}
-            onChange={(value) => setSimonWinTarget(Number(value))}
-            options={SIMON_WIN_TARGET_OPTIONS.map((target) => ({
-              label: String(target),
-              value: String(target),
-            }))}
-            testId={parameter.kind}
-            value={String(simonWinTarget)}
-          />
-        );
-    }
+    return (
+      <GameParameterSelect
+        ariaLabel={parameter.ariaLabel}
+        id={id}
+        key={parameterKind}
+        label={parameter.label}
+        onChange={(value) => updateParameterValue(parameterKind, value)}
+        options={parameter.options}
+        testId={parameterKind}
+        value={parameterValues[parameterKind]}
+      />
+    );
   }
 
   return (
@@ -724,10 +544,10 @@ type GameParameterSelectProps = {
   id: string;
   label: string;
   onChange: (value: string) => void;
-  options: Array<{
+  options: readonly {
     label: string;
     value: string;
-  }>;
+  }[];
   testId: string;
   value: string;
 };
@@ -765,6 +585,77 @@ function GameParameterSelect({
       </select>
     </div>
   );
+}
+
+function defineGameParameterConfig<const ParameterConfig extends Record<string, GameParameterConfig>>(
+  parameterConfig: ParameterConfig,
+): { readonly [ParameterKind in keyof ParameterConfig]: GameParameterConfig } {
+  return parameterConfig;
+}
+
+function createDefaultParameterValues() {
+  const values = {} as GameParameterValues;
+
+  for (const parameterKind of Object.keys(GAME_PARAMETER_CONFIG) as GameParameterKind[]) {
+    values[parameterKind] = GAME_PARAMETER_CONFIG[parameterKind].defaultValue;
+  }
+
+  return values;
+}
+
+function createInitialGameProps(game: GameCard, parameterValues: GameParameterValues) {
+  return game.parameters.reduce<PlayableInitialProps>((initialProps, parameterKind) => {
+    const parameter = GAME_PARAMETER_CONFIG[parameterKind];
+
+    return {
+      ...initialProps,
+      ...parameter.toInitialProps(parameterValues[parameterKind]),
+    };
+  }, {});
+}
+
+function createBoardSizeParameter({
+  defaultSize,
+  label,
+  options,
+}: {
+  defaultSize: Pick<BoardSizeOption, "height" | "width">;
+  label: string;
+  options: readonly BoardSizeOption[];
+}): GameParameterConfig {
+  const fallback = {
+    height: defaultSize.height,
+    label: `${defaultSize.width} x ${defaultSize.height}`,
+    width: defaultSize.width,
+  };
+
+  return {
+    defaultValue: getBoardSizeKey(defaultSize),
+    label,
+    options: createBoardSizeSelectOptions(options),
+    toInitialProps: (value) => {
+      const boardSize = getBoardSizeOption(options, value, fallback);
+
+      return {
+        initialBoardHeight: boardSize.height,
+        initialBoardWidth: boardSize.width,
+      };
+    },
+  };
+}
+
+function createSquareSizeSelectOptions(options: readonly number[]) {
+  return options.map((option) => ({
+    label: `${option} x ${option}`,
+    value: String(option),
+  }));
+}
+
+function createNumberSelectOptions(options: readonly number[]) {
+  return options.map((option) => ({
+    label: String(option),
+    value: String(option),
+  }));
 }
 
 function getBoardSizeKey(option: Pick<BoardSizeOption, "height" | "width">) {

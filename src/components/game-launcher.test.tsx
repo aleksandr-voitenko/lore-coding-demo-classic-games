@@ -3,25 +3,102 @@ import { describe, expect, it } from "vitest";
 
 import { GameLauncher } from "./game-launcher";
 
+const EXPECTED_PARAMETER_SELECTS = [
+  {
+    defaultLabel: "19 x 19",
+    defaultValue: "19",
+    label: "Field size",
+    testId: "snake-board-size",
+  },
+  {
+    defaultLabel: "10 x 20",
+    defaultValue: "10x20",
+    label: "Board",
+    testId: "tetris-board-size",
+  },
+  {
+    defaultLabel: "1",
+    defaultValue: "1",
+    label: "Level",
+    testId: "tetris-start-level",
+  },
+  {
+    defaultLabel: "420 x 560",
+    defaultValue: "420x560",
+    label: "Board",
+    testId: "breakout-board-size",
+  },
+  {
+    defaultLabel: "3",
+    defaultValue: "3",
+    label: "Lives",
+    testId: "breakout-lives",
+  },
+  {
+    defaultLabel: "9 x 9",
+    defaultValue: "9x9",
+    label: "Board",
+    testId: "minesweeper-board-size",
+  },
+  {
+    defaultLabel: "10",
+    defaultValue: "10",
+    label: "Mines",
+    testId: "minesweeper-mines",
+  },
+  {
+    defaultLabel: "420 x 560",
+    defaultValue: "420x560",
+    label: "Board",
+    testId: "space-invaders-board-size",
+  },
+  {
+    defaultLabel: "55",
+    defaultValue: "55",
+    label: "Aliens",
+    testId: "space-invaders-aliens",
+  },
+  {
+    defaultLabel: "4 x 4",
+    defaultValue: "4",
+    label: "Board",
+    testId: "twenty-forty-eight-board-size",
+  },
+  {
+    defaultLabel: "2048",
+    defaultValue: "2048",
+    label: "Goal",
+    testId: "twenty-forty-eight-goal",
+  },
+  {
+    defaultLabel: "420 x 560",
+    defaultValue: "420x560",
+    label: "Board",
+    testId: "pong-board-size",
+  },
+  {
+    defaultLabel: "5",
+    defaultValue: "5",
+    label: "Target",
+    testId: "pong-target",
+  },
+  {
+    defaultLabel: "12",
+    defaultValue: "12",
+    label: "Target",
+    testId: "simon-target",
+  },
+] as const;
+
 describe("game launcher", () => {
   it("renders only configurable card parameters on the launch screen", () => {
     const markup = renderToStaticMarkup(<GameLauncher />);
 
     expect(markup).toContain('data-testid="game-menu"');
-    expect(markup).toContain('data-testid="snake-board-size"');
-    expect(markup).toContain('data-testid="tetris-board-size"');
-    expect(markup).toContain('data-testid="tetris-start-level"');
-    expect(markup).toContain('data-testid="breakout-board-size"');
-    expect(markup).toContain('data-testid="breakout-lives"');
-    expect(markup).toContain('data-testid="minesweeper-board-size"');
-    expect(markup).toContain('data-testid="minesweeper-mines"');
-    expect(markup).toContain('data-testid="space-invaders-board-size"');
-    expect(markup).toContain('data-testid="space-invaders-aliens"');
-    expect(markup).toContain('data-testid="twenty-forty-eight-board-size"');
-    expect(markup).toContain('data-testid="twenty-forty-eight-goal"');
-    expect(markup).toContain('data-testid="pong-board-size"');
-    expect(markup).toContain('data-testid="pong-target"');
-    expect(markup).toContain('data-testid="simon-target"');
+
+    for (const parameter of EXPECTED_PARAMETER_SELECTS) {
+      expect(markup).toContain('data-testid="' + parameter.testId + '"');
+    }
 
     expect(markup).not.toContain(">Mode<");
     expect(markup).not.toContain(">Records<");
@@ -29,4 +106,27 @@ describe("game launcher", () => {
     expect(markup).not.toContain(">Pieces<");
     expect(markup).not.toContain(">Pads<");
   });
+
+  it("preserves launcher parameter labels and defaults", () => {
+    const markup = renderToStaticMarkup(<GameLauncher />);
+
+    for (const parameter of EXPECTED_PARAMETER_SELECTS) {
+      const selectMarkup = getSelectMarkup(markup, parameter.testId);
+
+      expect(markup).toContain(">" + parameter.label + "</label>");
+      expect(selectMarkup).toContain(
+        'value="' + parameter.defaultValue + '" selected="">' + parameter.defaultLabel,
+      );
+    }
+  });
 });
+
+function getSelectMarkup(markup: string, testId: string) {
+  const selectMatch = markup.match(
+    new RegExp('<select(?=[^>]*data-testid="' + testId + '")[\\s\\S]*?</select>'),
+  );
+
+  expect(selectMatch).not.toBeNull();
+
+  return selectMatch?.[0] ?? "";
+}
