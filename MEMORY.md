@@ -13,8 +13,11 @@ patterns and constraints here.
   Space Invaders, Pong, 2048, and Simon.
 - Each game follows a split between pure gameplay rules in `src/lib` and browser
   orchestration in React components under `src/components`.
-- Shared UI primitives live in `src/components/game-layout.tsx`; shared keyboard
-  input filtering lives in `src/components/game-input.ts`.
+- `src/components/game-layout.tsx` is the stable shared game UI barrel. Focused
+  implementations live beside it in `game-layout-shell.tsx`,
+  `game-board-actions.tsx`, `game-help-screen.tsx`, `game-abandon-dialog.tsx`,
+  and `game-ui-hooks.ts`. Shared keyboard input filtering lives in
+  `src/components/game-input.ts`.
 - shadcn/ui is initialized with Tailwind CSS v4, the `base-nova` preset, and the
   `@/*` import alias. The shared button is `src/components/ui/button.tsx`.
 
@@ -104,6 +107,10 @@ patterns and constraints here.
   failures.
 - Keep local UI consistent with the shared game layout and shadcn button
   patterns.
+- Keep `src/components/game-layout.tsx` as the stable import surface for game
+  components. Put new shared layout, action, Help, dialog, or flow-hook
+  implementation details in focused sibling modules so the barrel does not
+  regain unrelated responsibilities.
 - Pre-game parameters live on launcher cards as real select controls, while
   fixed mode/record/count metadata is kept off the cards. `GameLauncher` owns
   the selected presets and passes them into games as `initial*` props; changing
