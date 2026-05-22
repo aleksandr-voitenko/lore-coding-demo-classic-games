@@ -6,19 +6,9 @@ export type Point = {
   y: number;
 };
 
-export type LeaderboardEntry = {
-  name: string;
-  score: number;
-};
-
 export type TimedFood = {
   expiresAt: number;
   position: Point;
-};
-
-export type PendingLeaderboardEntry = {
-  rank: number;
-  score: number;
 };
 
 export type GameState = {
@@ -28,7 +18,6 @@ export type GameState = {
   direction: Direction;
   food: Point | null;
   obstacles: Point[];
-  pendingLeaderboardEntry: PendingLeaderboardEntry | null;
   queuedDirection: Direction;
   score: number;
   shrinkFood: TimedFood | null;
@@ -89,8 +78,6 @@ type TimedFoodOptions = {
 };
 
 type AdvanceSnakeOptions = {
-  leaderboard?: LeaderboardEntry[];
-  leaderboardBestScore?: number;
   random?: RandomSource;
 };
 
@@ -105,7 +92,6 @@ export const BONUS_FOOD_SPAWN_DELAY_MAX_MS = 10_000;
 export const BONUS_FOOD_SPAWN_DELAY_MIN_MS = 4_000;
 export const BONUS_FOOD_TIMEOUT_MAX_MS = 12_000;
 export const BONUS_FOOD_TIMEOUT_MIN_MS = 6_000;
-export const LEADERBOARD_LIMIT = 3;
 export const MIN_SNAKE_LENGTH = 3;
 export const MIN_GAME_TICK_DELAY_MS = 50;
 export const MAX_GAME_SPEED = Math.round(1000 / MIN_GAME_TICK_DELAY_MS);
@@ -622,7 +608,6 @@ export function createInitialGame({
       createInitialObstacleSafeCells(normalizedBoardSize, food),
       randomSource,
     ),
-    pendingLeaderboardEntry: null,
     queuedDirection: "right",
     score: 0,
     shrinkFood: null,
@@ -673,20 +658,6 @@ export function getGameSpeed(game: Pick<GameState, "score" | "speedBoosts" | "st
   const tickDelay = getGameTickDelay(game);
 
   return tickDelay === null ? null : Math.round(1000 / tickDelay);
-}
-
-export function getLeaderboardRank(score: number, leaderboard: LeaderboardEntry[]) {
-  if (score <= 0) {
-    return null;
-  }
-
-  const nextRank = leaderboard.findIndex((entry) => score > entry.score);
-
-  if (nextRank >= 0) {
-    return nextRank;
-  }
-
-  return leaderboard.length < LEADERBOARD_LIMIT ? leaderboard.length : null;
 }
 
 export function queueGameDirection(current: GameState, nextDirection: Direction): GameState {
@@ -740,17 +711,6 @@ function getClearedTimedFoodState() {
     slowFood: null,
     speedFood: null,
   };
-}
-
-function createPendingLeaderboardEntry(score: number, leaderboard: LeaderboardEntry[]) {
-  const rank = getLeaderboardRank(score, leaderboard);
-
-  return rank === null
-    ? null
-    : {
-        rank,
-        score,
-      };
 }
 
 function getEatenTimedFoodKinds(current: GameState, nextHead: Point) {
@@ -864,11 +824,7 @@ export function expireTimedFood(
 
 export function advanceSnakeGame(
   current: GameState,
-  {
-    leaderboard = [],
-    leaderboardBestScore = 0,
-    random = Math.random,
-  }: AdvanceSnakeOptions = {},
+  { random = Math.random }: AdvanceSnakeOptions = {},
 ): GameState {
   if (current.status !== "running") {
     return current;
@@ -897,7 +853,6 @@ export function advanceSnakeGame(
     return {
       ...current,
       direction,
-      pendingLeaderboardEntry: createPendingLeaderboardEntry(current.score, leaderboard),
       queuedDirection: direction,
       ...getClearedTimedFoodState(),
       status: "lost",
@@ -923,13 +878,12 @@ export function advanceSnakeGame(
 
   if (ateFood && nextFood === null) {
     return {
-      bestScore: Math.max(current.bestScore, nextScore, leaderboardBestScore),
+      bestScore: Math.max(current.bestScore, nextScore),
       ...getClearedTimedFoodState(),
       boardSize: current.boardSize,
       direction,
       food: null,
       obstacles: current.obstacles,
-      pendingLeaderboardEntry: createPendingLeaderboardEntry(nextScore, leaderboard),
       queuedDirection: direction,
       score: nextScore,
       snake: nextSnake,
@@ -939,13 +893,12 @@ export function advanceSnakeGame(
   }
 
   return {
-    bestScore: Math.max(current.bestScore, nextScore, leaderboardBestScore),
+    bestScore: Math.max(current.bestScore, nextScore),
     ...nextTimedFoodState,
     boardSize: current.boardSize,
     direction,
     food: nextFood,
     obstacles: current.obstacles,
-    pendingLeaderboardEntry: current.pendingLeaderboardEntry,
     queuedDirection: direction,
     score: nextScore,
     snake: nextSnake,

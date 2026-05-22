@@ -827,7 +827,6 @@ describe("snake game engine", () => {
     });
 
     const nextGame = advanceSnakeGame(game, {
-      leaderboard: [],
       random: () => 0,
     });
 
@@ -837,7 +836,6 @@ describe("snake game engine", () => {
     expect(nextGame.bestScore).toBe(1);
     expect(nextGame.snake).toHaveLength(9);
     expect(nextGame.snake[0]).toEqual({ x: 2, y: 2 });
-    expect(nextGame.pendingLeaderboardEntry).toEqual({ rank: 0, score: 1 });
     expect(nextGame.bonusFood).toBeNull();
     expect(nextGame.shrinkFood).toBeNull();
     expect(nextGame.slowFood).toBeNull();

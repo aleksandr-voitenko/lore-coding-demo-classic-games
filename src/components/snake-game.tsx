@@ -187,7 +187,6 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
     game.status === "lost" || game.status === "won" ? game.score : null;
   const {
     isSavingLeaderboardScore,
-    leaderboard,
     leaderboardBestScore,
     leaderboardSlots,
     leaderboardStatusMessage,
@@ -216,13 +215,8 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
   }, []);
 
   const advanceSnake = useCallback(() => {
-    setGame((current) =>
-      advanceSnakeGame(current, {
-        leaderboard,
-        leaderboardBestScore,
-      }),
-    );
-  }, [leaderboard, leaderboardBestScore]);
+    setGame((current) => advanceSnakeGame(current));
+  }, []);
 
   const toggleRunState = useCallback(() => {
     resetLeaderboardForm();
