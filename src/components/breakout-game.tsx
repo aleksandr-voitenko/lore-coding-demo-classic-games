@@ -9,7 +9,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 
 import { BreakoutBoard, breakoutBrickClassNames } from "@/components/breakout-board";
-import { isTypingTarget } from "@/components/game-input";
+import { registerGameKeyDown, shouldIgnoreGameKeyDown } from "@/components/game-input";
 import {
   GameAbandonDialog,
   GameBoardActions,
@@ -201,7 +201,12 @@ export function BreakoutGame({
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isHelpVisible || pendingLeaderboardEntry !== null || isTypingTarget(event.target)) {
+      if (
+        shouldIgnoreGameKeyDown(event, {
+          hasPendingLeaderboardEntry: pendingLeaderboardEntry !== null,
+          isHelpVisible,
+        })
+      ) {
         return;
       }
 
@@ -229,9 +234,7 @@ export function BreakoutGame({
       }
     }
 
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return registerGameKeyDown(handleKeyDown);
   }, [
     game.status,
     isHelpVisible,

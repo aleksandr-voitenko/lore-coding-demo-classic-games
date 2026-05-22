@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { isTypingTarget } from "./game-input";
+import { isTypingTarget, registerGameKeyDown, shouldIgnoreGameKeyDown } from "./game-input";
 
 const originalHTMLElement = globalThis.HTMLElement;
 
@@ -16,6 +16,30 @@ function createElement(tagName: string, isContentEditable = false) {
   element.isContentEditable = isContentEditable;
 
   return element as unknown as HTMLElement;
+}
+
+function createKeyboardTarget() {
+  const listeners = new Set<(event: KeyboardEvent) => void>();
+  const target: NonNullable<Parameters<typeof registerGameKeyDown>[1]> = {
+    addEventListener(type, listener) {
+      expect(type).toBe("keydown");
+      listeners.add(listener);
+    },
+    removeEventListener(type, listener) {
+      expect(type).toBe("keydown");
+      listeners.delete(listener);
+    },
+  };
+
+  return {
+    dispatch(event: KeyboardEvent) {
+      listeners.forEach((listener) => listener(event));
+    },
+    get listenerCount() {
+      return listeners.size;
+    },
+    target,
+  };
 }
 
 describe("isTypingTarget", () => {
@@ -53,5 +77,78 @@ describe("isTypingTarget", () => {
   it("treats editable elements as typing targets without blocking ordinary buttons", () => {
     expect(isTypingTarget(createElement("DIV", true))).toBe(true);
     expect(isTypingTarget(createElement("BUTTON"))).toBe(false);
+  });
+});
+
+describe("shouldIgnoreGameKeyDown", () => {
+  beforeEach(() => {
+    Object.defineProperty(globalThis, "HTMLElement", {
+      configurable: true,
+      value: TestHTMLElement,
+    });
+  });
+
+  afterEach(() => {
+    if (originalHTMLElement === undefined) {
+      Reflect.deleteProperty(globalThis, "HTMLElement");
+      return;
+    }
+
+    Object.defineProperty(globalThis, "HTMLElement", {
+      configurable: true,
+      value: originalHTMLElement,
+    });
+  });
+
+  it("allows ordinary controls when no modal state is active", () => {
+    expect(
+      shouldIgnoreGameKeyDown({
+        target: createElement("BUTTON"),
+      }),
+    ).toBe(false);
+  });
+
+  it("ignores keyboard input during help, leaderboard entry, or typing targets", () => {
+    expect(
+      shouldIgnoreGameKeyDown(
+        {
+          target: createElement("BUTTON"),
+        },
+        { isHelpVisible: true },
+      ),
+    ).toBe(true);
+    expect(
+      shouldIgnoreGameKeyDown(
+        {
+          target: createElement("BUTTON"),
+        },
+        { hasPendingLeaderboardEntry: true },
+      ),
+    ).toBe(true);
+    expect(
+      shouldIgnoreGameKeyDown({
+        target: createElement("INPUT"),
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("registerGameKeyDown", () => {
+  it("registers a keydown handler and removes it during cleanup", () => {
+    const events: KeyboardEvent[] = [];
+    const keyboardTarget = createKeyboardTarget();
+    const cleanup = registerGameKeyDown((event) => events.push(event), keyboardTarget.target);
+    const handledEvent = { key: "ArrowLeft" } as KeyboardEvent;
+
+    expect(keyboardTarget.listenerCount).toBe(1);
+
+    keyboardTarget.dispatch(handledEvent);
+    expect(events).toEqual([handledEvent]);
+
+    cleanup();
+    keyboardTarget.dispatch({ key: "ArrowRight" } as KeyboardEvent);
+
+    expect(keyboardTarget.listenerCount).toBe(0);
+    expect(events).toEqual([handledEvent]);
   });
 });

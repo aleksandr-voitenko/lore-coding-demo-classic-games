@@ -107,6 +107,9 @@ patterns and constraints here.
   failures.
 - Keep local UI consistent with the shared game layout and shadcn button
   patterns.
+- Use `shouldIgnoreGameKeyDown` and `registerGameKeyDown` from
+  `src/components/game-input.ts` for game-level global keyboard handlers that
+  should ignore Help overlays, pending leaderboard entry, and typing targets.
 - Keep `src/components/game-layout.tsx` as the stable import surface for game
   components. Put new shared layout, action, Help, dialog, or flow-hook
   implementation details in focused sibling modules so the barrel does not

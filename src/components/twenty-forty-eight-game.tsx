@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { isTypingTarget } from "@/components/game-input";
+import { registerGameKeyDown, shouldIgnoreGameKeyDown } from "@/components/game-input";
 import {
   GameAbandonDialog,
   GameBoardActions,
@@ -179,7 +179,12 @@ export function TwentyFortyEightGame({
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isHelpVisible || pendingLeaderboardEntry !== null || isTypingTarget(event.target)) {
+      if (
+        shouldIgnoreGameKeyDown(event, {
+          hasPendingLeaderboardEntry: pendingLeaderboardEntry !== null,
+          isHelpVisible,
+        })
+      ) {
         return;
       }
 
@@ -205,9 +210,7 @@ export function TwentyFortyEightGame({
       moveTiles(direction);
     }
 
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return registerGameKeyDown(handleKeyDown);
   }, [game.status, isHelpVisible, moveTiles, pendingLeaderboardEntry, restartGame, startGame]);
 
   return (

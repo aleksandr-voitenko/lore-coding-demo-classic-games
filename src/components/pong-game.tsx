@@ -3,7 +3,7 @@
 import { ArrowDownIcon, ArrowUpIcon, PlayIcon, RotateCcwIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { isTypingTarget } from "@/components/game-input";
+import { registerGameKeyDown, shouldIgnoreGameKeyDown } from "@/components/game-input";
 import {
   GameAbandonDialog,
   GameBoardActions,
@@ -200,7 +200,12 @@ export function PongGame({
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isHelpVisible || pendingLeaderboardEntry !== null || isTypingTarget(event.target)) {
+      if (
+        shouldIgnoreGameKeyDown(event, {
+          hasPendingLeaderboardEntry: pendingLeaderboardEntry !== null,
+          isHelpVisible,
+        })
+      ) {
         return;
       }
 
@@ -228,9 +233,7 @@ export function PongGame({
       }
     }
 
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return registerGameKeyDown(handleKeyDown);
   }, [
     game.status,
     isHelpVisible,

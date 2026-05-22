@@ -22,7 +22,7 @@ import {
   type GameHelpSection,
 } from "@/components/game-layout";
 import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
-import { isTypingTarget } from "@/components/game-input";
+import { registerGameKeyDown, shouldIgnoreGameKeyDown } from "@/components/game-input";
 import {
   spaceInvaderClassNames,
   SpaceInvadersBoard,
@@ -210,7 +210,12 @@ export function SpaceInvadersGame({
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isHelpVisible || pendingLeaderboardEntry !== null || isTypingTarget(event.target)) {
+      if (
+        shouldIgnoreGameKeyDown(event, {
+          hasPendingLeaderboardEntry: pendingLeaderboardEntry !== null,
+          isHelpVisible,
+        })
+      ) {
         return;
       }
 
@@ -248,9 +253,7 @@ export function SpaceInvadersGame({
       }
     }
 
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return registerGameKeyDown(handleKeyDown);
   }, [
     fireShot,
     game.status,

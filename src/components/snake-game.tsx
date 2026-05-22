@@ -31,7 +31,7 @@ import {
   type GameHelpSection,
 } from "@/components/game-layout";
 import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
-import { isTypingTarget } from "@/components/game-input";
+import { registerGameKeyDown, shouldIgnoreGameKeyDown } from "@/components/game-input";
 import { SnakeBoard } from "@/components/snake-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -335,11 +335,12 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isHelpVisible) {
-        return;
-      }
-
-      if (pendingLeaderboardEntry !== null || isTypingTarget(event.target)) {
+      if (
+        shouldIgnoreGameKeyDown(event, {
+          hasPendingLeaderboardEntry: pendingLeaderboardEntry !== null,
+          isHelpVisible,
+        })
+      ) {
         return;
       }
 
@@ -362,9 +363,7 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
       }
     }
 
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return registerGameKeyDown(handleKeyDown);
   }, [
     game.status,
     isHelpVisible,
