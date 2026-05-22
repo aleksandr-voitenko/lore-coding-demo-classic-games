@@ -10,16 +10,20 @@ export type TwentyFortyEightTile = {
 
 export type TwentyFortyEightGameState = {
   bestScore: number;
+  boardSize: number;
   moveCount: number;
   nextTileId: number;
   score: number;
   status: TwentyFortyEightStatus;
   tiles: TwentyFortyEightTile[];
+  winTile: number;
 };
 
 export type CreateTwentyFortyEightGameOptions = {
   bestScore?: number;
+  boardSize?: number;
   random?: RandomSource;
+  winTile?: number;
 };
 
 export type MoveTwentyFortyEightGameOptions = {
@@ -41,18 +45,26 @@ type LineResult = {
 export const TWENTY_FORTY_EIGHT_BOARD_SIZE = 4;
 export const TWENTY_FORTY_EIGHT_STARTING_TILE_COUNT = 2;
 export const TWENTY_FORTY_EIGHT_WIN_TILE = 2048;
+export const TWENTY_FORTY_EIGHT_BOARD_SIZE_OPTIONS = [4, 5, 6] as const;
+export const TWENTY_FORTY_EIGHT_WIN_TILE_OPTIONS = [1024, 2048, 4096] as const;
 
 export function createInitialTwentyFortyEightGame({
   bestScore = 0,
+  boardSize = TWENTY_FORTY_EIGHT_BOARD_SIZE,
   random = Math.random,
+  winTile = TWENTY_FORTY_EIGHT_WIN_TILE,
 }: CreateTwentyFortyEightGameOptions = {}): TwentyFortyEightGameState {
+  const normalizedBoardSize = normalizeTwentyFortyEightBoardSize(boardSize);
+  const normalizedWinTile = normalizeTwentyFortyEightWinTile(winTile);
   let game: TwentyFortyEightGameState = {
     bestScore,
+    boardSize: normalizedBoardSize,
     moveCount: 0,
     nextTileId: 1,
     score: 0,
     status: "ready",
     tiles: [],
+    winTile: normalizedWinTile,
   };
 
   for (let tileCount = 0; tileCount < TWENTY_FORTY_EIGHT_STARTING_TILE_COUNT; tileCount += 1) {
@@ -76,12 +88,18 @@ export function startTwentyFortyEightGame(
 }
 
 export function restartTwentyFortyEightGame(
-  game: Pick<TwentyFortyEightGameState, "bestScore"> = { bestScore: 0 },
+  game: Pick<TwentyFortyEightGameState, "bestScore" | "boardSize" | "winTile"> = {
+    bestScore: 0,
+    boardSize: TWENTY_FORTY_EIGHT_BOARD_SIZE,
+    winTile: TWENTY_FORTY_EIGHT_WIN_TILE,
+  },
   { random = Math.random }: CreateTwentyFortyEightGameOptions = {},
 ) {
   return createInitialTwentyFortyEightGame({
     bestScore: game.bestScore,
+    boardSize: game.boardSize,
     random,
+    winTile: game.winTile,
   });
 }
 
@@ -101,7 +119,7 @@ export function moveTwentyFortyEightGame(
     };
   }
 
-  const { gainedScore, tiles } = slideTiles(game.tiles, direction);
+  const { gainedScore, tiles } = slideTiles(game.tiles, direction, game.boardSize);
 
   if (!didBoardChange(game.tiles, tiles)) {
     return game;
@@ -117,7 +135,7 @@ export function moveTwentyFortyEightGame(
     tiles,
   };
   const gameAfterSpawn = addRandomTwentyFortyEightTile(gameAfterMove, random);
-  const hasWon = gameAfterSpawn.tiles.some((tile) => tile.value >= TWENTY_FORTY_EIGHT_WIN_TILE);
+  const hasWon = gameAfterSpawn.tiles.some((tile) => tile.value >= game.winTile);
 
   if (hasWon) {
     return {
@@ -136,8 +154,13 @@ export function moveTwentyFortyEightGame(
   return gameAfterSpawn;
 }
 
-export function canMoveTwentyFortyEightGame(game: Pick<TwentyFortyEightGameState, "tiles">) {
-  if (game.tiles.length < TWENTY_FORTY_EIGHT_BOARD_SIZE * TWENTY_FORTY_EIGHT_BOARD_SIZE) {
+export function canMoveTwentyFortyEightGame(
+  game: Pick<TwentyFortyEightGameState, "tiles"> &
+    Partial<Pick<TwentyFortyEightGameState, "boardSize">>,
+) {
+  const boardSize = game.boardSize ?? TWENTY_FORTY_EIGHT_BOARD_SIZE;
+
+  if (game.tiles.length < boardSize * boardSize) {
     return true;
   }
 
@@ -149,9 +172,11 @@ export function canMoveTwentyFortyEightGame(game: Pick<TwentyFortyEightGameState
   });
 }
 
-export function createTwentyFortyEightBoardCells() {
-  return Array.from({ length: TWENTY_FORTY_EIGHT_BOARD_SIZE }, (_, y) =>
-    Array.from({ length: TWENTY_FORTY_EIGHT_BOARD_SIZE }, (_, x): BoardCell => ({ x, y })),
+export function createTwentyFortyEightBoardCells(
+  boardSize = TWENTY_FORTY_EIGHT_BOARD_SIZE,
+) {
+  return Array.from({ length: boardSize }, (_, y) =>
+    Array.from({ length: boardSize }, (_, x): BoardCell => ({ x, y })),
   ).flat();
 }
 
@@ -171,7 +196,7 @@ function addRandomTwentyFortyEightTile(
   game: TwentyFortyEightGameState,
   random: RandomSource,
 ): TwentyFortyEightGameState {
-  const emptyCells = createTwentyFortyEightBoardCells().filter(
+  const emptyCells = createTwentyFortyEightBoardCells(game.boardSize).filter(
     (cell) => getTwentyFortyEightTileAt(game, cell.x, cell.y) === null,
   );
 
@@ -201,8 +226,9 @@ function addRandomTwentyFortyEightTile(
 function slideTiles(
   tiles: TwentyFortyEightTile[],
   direction: TwentyFortyEightDirection,
+  boardSize = TWENTY_FORTY_EIGHT_BOARD_SIZE,
 ): LineResult {
-  return getTraversalLines(direction).reduce<LineResult>(
+  return getTraversalLines(direction, boardSize).reduce<LineResult>(
     (result, line) => {
       const tilesByPosition = new Map(tiles.map((tile) => [`${tile.x}:${tile.y}`, tile]));
       const lineTiles = line
@@ -257,9 +283,12 @@ function mergeLine(tiles: TwentyFortyEightTile[], targetCells: BoardCell[]): Lin
   };
 }
 
-function getTraversalLines(direction: TwentyFortyEightDirection): BoardCell[][] {
-  return Array.from({ length: TWENTY_FORTY_EIGHT_BOARD_SIZE }, (_, lineIndex) => {
-    const cells = Array.from({ length: TWENTY_FORTY_EIGHT_BOARD_SIZE }, (_, cellIndex) => {
+function getTraversalLines(
+  direction: TwentyFortyEightDirection,
+  boardSize = TWENTY_FORTY_EIGHT_BOARD_SIZE,
+): BoardCell[][] {
+  return Array.from({ length: boardSize }, (_, lineIndex) => {
+    const cells = Array.from({ length: boardSize }, (_, cellIndex) => {
       if (direction === "left" || direction === "right") {
         return { x: cellIndex, y: lineIndex };
       }
@@ -305,4 +334,20 @@ function sortTwentyFortyEightTiles(tiles: TwentyFortyEightTile[]) {
 
     return firstTile.x - secondTile.x;
   });
+}
+
+function normalizeTwentyFortyEightBoardSize(boardSize: number) {
+  if (!Number.isFinite(boardSize)) {
+    return TWENTY_FORTY_EIGHT_BOARD_SIZE;
+  }
+
+  return Math.max(2, Math.floor(boardSize));
+}
+
+function normalizeTwentyFortyEightWinTile(winTile: number) {
+  if (!Number.isFinite(winTile)) {
+    return TWENTY_FORTY_EIGHT_WIN_TILE;
+  }
+
+  return Math.max(4, Math.floor(winTile));
 }

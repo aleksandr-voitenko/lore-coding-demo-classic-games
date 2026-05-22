@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowDownIcon, ArrowUpIcon, PlayIcon, RotateCcwIcon } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { isTypingTarget } from "@/components/game-input";
 import {
@@ -26,7 +26,6 @@ import {
   movePongPlayerDown,
   movePongPlayerUp,
   pausePongGame,
-  PONG_TARGET_SCORE,
   restartPongGame,
   startPongGame,
   type PongGameState,
@@ -34,6 +33,9 @@ import {
 } from "@/lib/pong-game-engine";
 
 type PongGameProps = {
+  initialBoardHeight?: number;
+  initialBoardWidth?: number;
+  initialTargetScore?: number;
   onBackToMenu?: () => void;
 };
 
@@ -45,43 +47,60 @@ const statusLabels: Record<PongStatus, string> = {
   won: "You won",
 };
 
-const PONG_HELP_SECTIONS: GameHelpSection[] = [
-  {
-    title: "Controls",
-    controls: [
-      {
-        buttons: [{ text: "Enter", label: "Enter key" }],
-        label: "Start game",
-      },
-      {
-        buttons: [{ icon: ArrowUpIcon, label: "Up" }, { text: "W", label: "W key" }],
-        label: "Move paddle up",
-      },
-      {
-        buttons: [{ icon: ArrowDownIcon, label: "Down" }, { text: "S", label: "S key" }],
-        label: "Move paddle down",
-      },
-      {
-        buttons: [
-          { text: "Space", label: "Space key" },
-          { text: "P", label: "P key" },
-        ],
-        label: "Pause or resume",
-      },
-    ],
-  },
-  {
-    title: "Rules",
-    items: [
-      "Keep the ball past the CPU paddle to score.",
-      "Block the ball before it passes your paddle.",
-      `First side to ${PONG_TARGET_SCORE} points wins the match.`,
-    ],
-  },
-];
+function createPongHelpSections(targetScore: number): GameHelpSection[] {
+  return [
+    {
+      title: "Controls",
+      controls: [
+        {
+          buttons: [{ text: "Enter", label: "Enter key" }],
+          label: "Start game",
+        },
+        {
+          buttons: [{ icon: ArrowUpIcon, label: "Up" }, { text: "W", label: "W key" }],
+          label: "Move paddle up",
+        },
+        {
+          buttons: [{ icon: ArrowDownIcon, label: "Down" }, { text: "S", label: "S key" }],
+          label: "Move paddle down",
+        },
+        {
+          buttons: [
+            { text: "Space", label: "Space key" },
+            { text: "P", label: "P key" },
+          ],
+          label: "Pause or resume",
+        },
+      ],
+    },
+    {
+      title: "Rules",
+      items: [
+        "Keep the ball past the CPU paddle to score.",
+        "Block the ball before it passes your paddle.",
+        `First side to ${targetScore} points wins the match.`,
+      ],
+    },
+  ];
+}
 
-export function PongGame({ onBackToMenu }: PongGameProps = {}) {
-  const [game, setGame] = useState<PongGameState>(() => createInitialPongGame());
+export function PongGame({
+  initialBoardHeight,
+  initialBoardWidth,
+  initialTargetScore,
+  onBackToMenu,
+}: PongGameProps = {}) {
+  const [game, setGame] = useState<PongGameState>(() =>
+    createInitialPongGame({
+      boardHeight: initialBoardHeight,
+      boardWidth: initialBoardWidth,
+      targetScore: initialTargetScore,
+    }),
+  );
+  const helpSections = useMemo(
+    () => createPongHelpSections(game.targetScore),
+    [game.targetScore],
+  );
   const tickDelay = game.status === "running" ? getPongTickDelay() : null;
   const canPauseGame = game.status === "running" || game.status === "paused";
   const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
@@ -104,7 +123,7 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
   }, []);
 
   const restartGame = useCallback(() => {
-    setGame(restartPongGame());
+    setGame((current) => restartPongGame(current));
   }, []);
 
   const moveUp = useCallback(() => {
@@ -222,7 +241,7 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
           <div className="rounded-md border border-[var(--pong-border)] p-3">
             <dt className="text-xs font-medium text-[var(--pong-muted)]">Target</dt>
             <dd className="font-mono text-3xl font-semibold leading-none">
-              {PONG_TARGET_SCORE}
+              {game.targetScore}
             </dd>
           </div>
           <div className="rounded-md border border-[var(--pong-border)] p-3">
@@ -273,7 +292,7 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-3xl font-semibold tracking-normal text-balance">Classic Pong</p>
-                  <p className="text-sm font-medium text-[#9fb6c9]">First to {PONG_TARGET_SCORE}</p>
+                  <p className="text-sm font-medium text-[#9fb6c9]">First to {game.targetScore}</p>
                 </div>
               </div>
               <Button
@@ -338,7 +357,7 @@ export function PongGame({ onBackToMenu }: PongGameProps = {}) {
             <GameHelpScreen
               className="border-[#e5f2ff]/25 bg-[#081525] text-[#e5f2ff]"
               onClose={closeHelp}
-              sections={PONG_HELP_SECTIONS}
+              sections={helpSections}
               testId="pong-help-screen"
               title="Classic Pong"
             />

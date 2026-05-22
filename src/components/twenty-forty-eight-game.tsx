@@ -8,7 +8,7 @@ import {
   PlayIcon,
   RotateCcwIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { isTypingTarget } from "@/components/game-input";
 import {
@@ -39,63 +39,92 @@ import {
 import { cn } from "@/lib/utils";
 
 type TwentyFortyEightGameProps = {
+  initialBoardSize?: number;
+  initialWinTile?: number;
   onBackToMenu?: () => void;
 };
 
-const statusLabels: Record<TwentyFortyEightStatus, string> = {
+const statusLabels: Record<Exclude<TwentyFortyEightStatus, "won">, string> = {
   lost: "No moves left",
   ready: "Ready",
   running: "Running",
-  won: "2048 reached",
 };
 
-const TWENTY_FORTY_EIGHT_HELP_SECTIONS: GameHelpSection[] = [
-  {
-    title: "Controls",
-    controls: [
-      {
-        buttons: [{ text: "Enter", label: "Enter key" }],
-        label: "Start game",
-      },
-      {
-        buttons: [{ icon: ArrowUpIcon, label: "Up" }, { text: "W", label: "W key" }],
-        label: "Slide up",
-      },
-      {
-        buttons: [{ icon: ArrowLeftIcon, label: "Left" }, { text: "A", label: "A key" }],
-        label: "Slide left",
-      },
-      {
-        buttons: [{ icon: ArrowDownIcon, label: "Down" }, { text: "S", label: "S key" }],
-        label: "Slide down",
-      },
-      {
-        buttons: [{ icon: ArrowRightIcon, label: "Right" }, { text: "D", label: "D key" }],
-        label: "Slide right",
-      },
-      {
-        buttons: [{ text: "R", label: "R key" }],
-        label: "New board",
-      },
-    ],
-  },
-  {
-    title: "Rules",
-    items: [
-      "Tiles slide as far as possible in the chosen direction.",
-      "Matching tiles merge once per move and add to your score.",
-      "Reach 2048 to win; the game ends when no moves remain.",
-    ],
-  },
-];
-
-function createNewTwentyFortyEightGame() {
-  return createInitialTwentyFortyEightGame({ random: Math.random });
+function createTwentyFortyEightHelpSections(winTile: number): GameHelpSection[] {
+  return [
+    {
+      title: "Controls",
+      controls: [
+        {
+          buttons: [{ text: "Enter", label: "Enter key" }],
+          label: "Start game",
+        },
+        {
+          buttons: [{ icon: ArrowUpIcon, label: "Up" }, { text: "W", label: "W key" }],
+          label: "Slide up",
+        },
+        {
+          buttons: [{ icon: ArrowLeftIcon, label: "Left" }, { text: "A", label: "A key" }],
+          label: "Slide left",
+        },
+        {
+          buttons: [{ icon: ArrowDownIcon, label: "Down" }, { text: "S", label: "S key" }],
+          label: "Slide down",
+        },
+        {
+          buttons: [{ icon: ArrowRightIcon, label: "Right" }, { text: "D", label: "D key" }],
+          label: "Slide right",
+        },
+        {
+          buttons: [{ text: "R", label: "R key" }],
+          label: "New board",
+        },
+      ],
+    },
+    {
+      title: "Rules",
+      items: [
+        "Tiles slide as far as possible in the chosen direction.",
+        "Matching tiles merge once per move and add to your score.",
+        `Reach ${winTile} to win; the game ends when no moves remain.`,
+      ],
+    },
+  ];
 }
 
-export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps = {}) {
+function getTwentyFortyEightStatusLabel(game: TwentyFortyEightGameState) {
+  return game.status === "won" ? `${game.winTile} reached` : statusLabels[game.status];
+}
+
+function createNewTwentyFortyEightGame({
+  boardSize,
+  winTile,
+}: {
+  boardSize?: number;
+  winTile?: number;
+} = {}) {
+  return createInitialTwentyFortyEightGame({
+    boardSize,
+    random: Math.random,
+    winTile,
+  });
+}
+
+export function TwentyFortyEightGame({
+  initialBoardSize,
+  initialWinTile,
+  onBackToMenu,
+}: TwentyFortyEightGameProps = {}) {
   const [game, setGame] = useState<TwentyFortyEightGameState>(() =>
-    createNewTwentyFortyEightGame(),
+    createNewTwentyFortyEightGame({
+      boardSize: initialBoardSize,
+      winTile: initialWinTile,
+    }),
+  );
+  const statusLabel = getTwentyFortyEightStatusLabel(game);
+  const helpSections = useMemo(
+    () => createTwentyFortyEightHelpSections(game.winTile),
+    [game.winTile],
   );
   const topTile = getTwentyFortyEightTopTile(game);
   const showStartScreen = game.status === "ready";
@@ -157,7 +186,7 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
       <GameSidebar className="border-[var(--twenty-border)] bg-[var(--twenty-panel)]">
         <GameHeader
           accentClassName="bg-[linear-gradient(90deg,var(--twenty-tile-8),var(--twenty-tile-128),var(--twenty-tile-2048))]"
-          status={statusLabels[game.status]}
+          status={statusLabel}
           statusClassName="text-[var(--twenty-muted)]"
           statusTestId="twenty-forty-eight-status"
           title="Classic 2048"
@@ -220,7 +249,7 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
             />
           }
         >
-          <TwentyFortyEightBoard game={game} statusLabel={statusLabels[game.status]}>
+          <TwentyFortyEightBoard game={game} statusLabel={statusLabel}>
           {showStartScreen ? (
             <div
               className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[var(--twenty-board)] px-4 py-5 text-center text-[var(--twenty-board-text)]"
@@ -233,7 +262,7 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
                     Classic 2048
                   </p>
                   <p className="text-sm font-medium text-[color-mix(in_oklch,var(--twenty-board-text)_74%,transparent)]">
-                    {statusLabels[game.status]}
+                    {statusLabel}
                   </p>
                 </div>
               </div>
@@ -256,7 +285,7 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
             >
               <div className="flex flex-col items-center gap-1">
                 <p className="text-3xl font-semibold tracking-normal text-balance">
-                  {game.status === "won" ? "2048 reached" : "No moves left"}
+                  {game.status === "won" ? `${game.winTile} reached` : "No moves left"}
                 </p>
                 <p className="text-sm font-semibold text-[color-mix(in_oklch,var(--twenty-board-text)_76%,transparent)]">
                   Final score
@@ -280,7 +309,7 @@ export function TwentyFortyEightGame({ onBackToMenu }: TwentyFortyEightGameProps
             <GameHelpScreen
               className="border-[color-mix(in_oklch,var(--twenty-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--twenty-board)_94%,black)] text-[var(--twenty-board-text)]"
               onClose={closeHelp}
-              sections={TWENTY_FORTY_EIGHT_HELP_SECTIONS}
+              sections={helpSections}
               testId="twenty-forty-eight-help-screen"
               title="Classic 2048"
             />

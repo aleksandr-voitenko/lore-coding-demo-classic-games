@@ -39,6 +39,9 @@ import {
 import { cn } from "@/lib/utils";
 
 type BreakoutGameProps = {
+  initialBoardHeight?: number;
+  initialBoardWidth?: number;
+  initialLives?: number;
   onBackToMenu?: () => void;
 };
 
@@ -85,8 +88,19 @@ const BREAKOUT_HELP_SECTIONS: GameHelpSection[] = [
   },
 ];
 
-export function BreakoutGame({ onBackToMenu }: BreakoutGameProps = {}) {
-  const [game, setGame] = useState<BreakoutGameState>(() => createInitialBreakoutGame());
+export function BreakoutGame({
+  initialBoardHeight,
+  initialBoardWidth,
+  initialLives,
+  onBackToMenu,
+}: BreakoutGameProps = {}) {
+  const [game, setGame] = useState<BreakoutGameState>(() =>
+    createInitialBreakoutGame({
+      boardHeight: initialBoardHeight,
+      boardWidth: initialBoardWidth,
+      lives: initialLives,
+    }),
+  );
   const tickDelay = game.status === "running" ? getBreakoutTickDelay() : null;
   const activeBrickCount = game.bricks.filter((brick) => brick.isActive).length;
   const canPauseGame = game.status === "running" || game.status === "paused";
@@ -110,7 +124,7 @@ export function BreakoutGame({ onBackToMenu }: BreakoutGameProps = {}) {
   }, []);
 
   const restartGame = useCallback(() => {
-    setGame(restartBreakoutGame());
+    setGame((current) => restartBreakoutGame(current));
   }, []);
 
   const moveLeft = useCallback(() => {

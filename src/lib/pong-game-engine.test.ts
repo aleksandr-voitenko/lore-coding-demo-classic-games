@@ -10,6 +10,7 @@ import {
   PONG_BOARD_HEIGHT,
   PONG_BOARD_WIDTH,
   PONG_TARGET_SCORE,
+  restartPongGame,
   startPongGame,
   type PongGameState,
 } from "./pong-game-engine";
@@ -35,6 +36,25 @@ describe("pong game engine", () => {
     expect(game.playerPaddle.y + game.playerPaddle.height / 2).toBe(PONG_BOARD_HEIGHT / 2);
     expect(game.cpuPaddle.y + game.cpuPaddle.height / 2).toBe(PONG_BOARD_HEIGHT / 2);
     expect(game.playerPaddle.x).toBeLessThan(game.cpuPaddle.x);
+  });
+
+  it("creates configurable board sizes and target scores", () => {
+    const game = createInitialPongGame({
+      boardHeight: 640,
+      boardWidth: 480,
+      targetScore: 7,
+    });
+    const restarted = restartPongGame(game);
+
+    expect(game.boardHeight).toBe(640);
+    expect(game.boardWidth).toBe(480);
+    expect(game.targetScore).toBe(7);
+    expect(game.ball.position).toEqual({ x: 240, y: 320 });
+    expect(game.playerPaddle.y + game.playerPaddle.height / 2).toBe(320);
+    expect(restarted.boardHeight).toBe(640);
+    expect(restarted.boardWidth).toBe(480);
+    expect(restarted.targetScore).toBe(7);
+    expect(restarted.status).toBe("running");
   });
 
   it("starts, pauses, and resumes without replacing the active rally", () => {

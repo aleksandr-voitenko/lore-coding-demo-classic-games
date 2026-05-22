@@ -11,6 +11,7 @@ import {
   getBreakoutBallRadius,
   moveBreakoutPaddle,
   pauseBreakoutGame,
+  restartBreakoutGame,
   startBreakoutGame,
   type BreakoutGameState,
 } from "./breakout-game-engine";
@@ -48,6 +49,27 @@ describe("breakout game engine", () => {
       x: BREAKOUT_BOARD_WIDTH / 2,
       y: game.paddle.y - ballRadius - 1,
     });
+  });
+
+  it("creates configurable board sizes and life counts", () => {
+    const game = createInitialBreakoutGame({
+      boardHeight: 640,
+      boardWidth: 480,
+      lives: 5,
+    });
+    const restarted = restartBreakoutGame(game);
+
+    expect(game.boardHeight).toBe(640);
+    expect(game.boardWidth).toBe(480);
+    expect(game.lives).toBe(5);
+    expect(game.startingLives).toBe(5);
+    expect(game.paddle.x + game.paddle.width / 2).toBe(240);
+    expect(game.ball.position.x).toBe(240);
+    expect(restarted.boardHeight).toBe(640);
+    expect(restarted.boardWidth).toBe(480);
+    expect(restarted.lives).toBe(5);
+    expect(restarted.startingLives).toBe(5);
+    expect(restarted.status).toBe("running");
   });
 
   it("starts, pauses, and resumes without replacing the active board", () => {

@@ -7,6 +7,7 @@ import {
   getSpaceInvadersTickDelay,
   moveSpaceInvadersPlayer,
   pauseSpaceInvadersGame,
+  restartSpaceInvadersGame,
   SPACE_INVADERS_BASE_Y,
   SPACE_INVADERS_BOARD_WIDTH,
   SPACE_INVADERS_COLUMNS,
@@ -59,6 +60,27 @@ describe("space invaders game engine", () => {
       points: 10,
       row: SPACE_INVADERS_ROWS - 1,
     });
+  });
+
+  it("creates configurable board sizes and alien counts", () => {
+    const game = createInitialSpaceInvadersGame({
+      alienCount: 24,
+      boardHeight: 640,
+      boardWidth: 480,
+    });
+    const restarted = restartSpaceInvadersGame(game);
+
+    expect(game.alienCount).toBe(24);
+    expect(game.boardHeight).toBe(640);
+    expect(game.boardWidth).toBe(480);
+    expect(game.baseY).toBe(572);
+    expect(game.invaders).toHaveLength(24);
+    expect(game.player.x + game.player.width / 2).toBe(240);
+    expect(restarted.alienCount).toBe(24);
+    expect(restarted.boardHeight).toBe(640);
+    expect(restarted.boardWidth).toBe(480);
+    expect(restarted.invaders).toHaveLength(24);
+    expect(restarted.status).toBe("running");
   });
 
   it("starts, pauses, and resumes without replacing the formation", () => {

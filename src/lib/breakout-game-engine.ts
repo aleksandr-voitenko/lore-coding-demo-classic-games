@@ -31,11 +31,20 @@ export type BreakoutBrick = {
 
 export type BreakoutGameState = {
   ball: BreakoutBall;
+  boardHeight: number;
+  boardWidth: number;
   bricks: BreakoutBrick[];
   lives: number;
   paddle: BreakoutPaddle;
   score: number;
+  startingLives: number;
   status: BreakoutStatus;
+};
+
+export type CreateBreakoutGameOptions = {
+  boardHeight?: number;
+  boardWidth?: number;
+  lives?: number;
 };
 
 export const BREAKOUT_BOARD_WIDTH = 420;
@@ -44,28 +53,32 @@ export const BREAKOUT_BRICK_COLUMNS = 10;
 export const BREAKOUT_BRICK_ROWS = 5;
 export const BREAKOUT_STARTING_LIVES = 3;
 export const BREAKOUT_TICK_DELAY_MS = 16;
+export const BREAKOUT_BOARD_SIZE_OPTIONS = [
+  { height: 480, label: "360 x 480", width: 360 },
+  { height: 560, label: "420 x 560", width: 420 },
+  { height: 640, label: "480 x 640", width: 480 },
+] as const;
+export const BREAKOUT_LIVES_OPTIONS = [2, 3, 5] as const;
 
 const BALL_RADIUS = 6;
 const BRICK_GAP = 6;
 const BRICK_HEIGHT = 20;
 const BRICK_HORIZONTAL_PADDING = 24;
 const BRICK_TOP = 56;
-const BRICK_WIDTH =
-  (BREAKOUT_BOARD_WIDTH -
-    BRICK_HORIZONTAL_PADDING * 2 -
-    BRICK_GAP * (BREAKOUT_BRICK_COLUMNS - 1)) /
-  BREAKOUT_BRICK_COLUMNS;
 const INITIAL_BALL_VELOCITY: BreakoutPoint = { x: 3.2, y: -5.2 };
 const MAX_PADDLE_BOUNCE_X = 5.8;
 const PADDLE_HEIGHT = 12;
 const PADDLE_SPEED = 34;
 const PADDLE_WIDTH = 92;
-const PADDLE_Y = BREAKOUT_BOARD_HEIGHT - 40;
 
-export function createBreakoutBricks() {
+export function createBreakoutBricks(boardWidth = BREAKOUT_BOARD_WIDTH) {
+  const brickWidth =
+    (boardWidth - BRICK_HORIZONTAL_PADDING * 2 - BRICK_GAP * (BREAKOUT_BRICK_COLUMNS - 1)) /
+    BREAKOUT_BRICK_COLUMNS;
+
   return Array.from({ length: BREAKOUT_BRICK_ROWS }, (_, row) =>
     Array.from({ length: BREAKOUT_BRICK_COLUMNS }, (_, column): BreakoutBrick => {
-      const x = BRICK_HORIZONTAL_PADDING + column * (BRICK_WIDTH + BRICK_GAP);
+      const x = BRICK_HORIZONTAL_PADDING + column * (brickWidth + BRICK_GAP);
       const y = BRICK_TOP + row * (BRICK_HEIGHT + BRICK_GAP);
 
       return {
@@ -75,7 +88,7 @@ export function createBreakoutBricks() {
         isActive: true,
         points: (BREAKOUT_BRICK_ROWS - row) * 10,
         row,
-        width: BRICK_WIDTH,
+        width: brickWidth,
         x,
         y,
       };
@@ -83,15 +96,25 @@ export function createBreakoutBricks() {
   ).flat();
 }
 
-export function createInitialBreakoutGame(): BreakoutGameState {
-  const paddle = createCenteredPaddle();
+export function createInitialBreakoutGame({
+  boardHeight = BREAKOUT_BOARD_HEIGHT,
+  boardWidth = BREAKOUT_BOARD_WIDTH,
+  lives = BREAKOUT_STARTING_LIVES,
+}: CreateBreakoutGameOptions = {}): BreakoutGameState {
+  const normalizedBoardWidth = normalizeBreakoutDimension(boardWidth, BREAKOUT_BOARD_WIDTH, 240);
+  const normalizedBoardHeight = normalizeBreakoutDimension(boardHeight, BREAKOUT_BOARD_HEIGHT, 320);
+  const normalizedLives = normalizeBreakoutLives(lives);
+  const paddle = createCenteredPaddle(normalizedBoardWidth, normalizedBoardHeight);
 
   return {
     ball: createBallForPaddle(paddle),
-    bricks: createBreakoutBricks(),
-    lives: BREAKOUT_STARTING_LIVES,
+    boardHeight: normalizedBoardHeight,
+    boardWidth: normalizedBoardWidth,
+    bricks: createBreakoutBricks(normalizedBoardWidth),
+    lives: normalizedLives,
     paddle,
     score: 0,
+    startingLives: normalizedLives,
     status: "ready",
   };
 }
@@ -109,7 +132,7 @@ export function startBreakoutGame(game: BreakoutGameState): BreakoutGameState {
   }
 
   if (game.status === "lost" || game.status === "won") {
-    return restartBreakoutGame();
+    return restartBreakoutGame(game);
   }
 
   return {
@@ -129,9 +152,19 @@ export function pauseBreakoutGame(game: BreakoutGameState): BreakoutGameState {
   };
 }
 
-export function restartBreakoutGame(): BreakoutGameState {
+export function restartBreakoutGame(
+  game: Pick<BreakoutGameState, "boardHeight" | "boardWidth" | "startingLives"> = {
+    boardHeight: BREAKOUT_BOARD_HEIGHT,
+    boardWidth: BREAKOUT_BOARD_WIDTH,
+    startingLives: BREAKOUT_STARTING_LIVES,
+  },
+): BreakoutGameState {
   return {
-    ...createInitialBreakoutGame(),
+    ...createInitialBreakoutGame({
+      boardHeight: game.boardHeight,
+      boardWidth: game.boardWidth,
+      lives: game.startingLives,
+    }),
     status: "running" as const,
   };
 }
@@ -146,7 +179,7 @@ export function moveBreakoutPaddle(
 
   const paddle = {
     ...game.paddle,
-    x: clamp(game.paddle.x + deltaX, 0, BREAKOUT_BOARD_WIDTH - game.paddle.width),
+    x: clamp(game.paddle.x + deltaX, 0, game.boardWidth - game.paddle.width),
   };
 
   return {
@@ -178,9 +211,9 @@ export function advanceBreakoutGame(game: BreakoutGameState): BreakoutGameState 
     velocity: previousBall.velocity,
   };
 
-  ball = collideWithWalls(ball);
+  ball = collideWithWalls(ball, game.boardWidth);
 
-  if (ball.position.y - BALL_RADIUS > BREAKOUT_BOARD_HEIGHT) {
+  if (ball.position.y - BALL_RADIUS > game.boardHeight) {
     return loseBreakoutLife(game);
   }
 
@@ -218,12 +251,15 @@ export function getBreakoutBallRadius() {
   return BALL_RADIUS;
 }
 
-function createCenteredPaddle(): BreakoutPaddle {
+function createCenteredPaddle(
+  boardWidth = BREAKOUT_BOARD_WIDTH,
+  boardHeight = BREAKOUT_BOARD_HEIGHT,
+): BreakoutPaddle {
   return {
     height: PADDLE_HEIGHT,
     width: PADDLE_WIDTH,
-    x: (BREAKOUT_BOARD_WIDTH - PADDLE_WIDTH) / 2,
-    y: PADDLE_Y,
+    x: (boardWidth - PADDLE_WIDTH) / 2,
+    y: boardHeight - 40,
   };
 }
 
@@ -240,7 +276,7 @@ function createBallForPaddle(
   };
 }
 
-function collideWithWalls(ball: BreakoutBall): BreakoutBall {
+function collideWithWalls(ball: BreakoutBall, boardWidth: number): BreakoutBall {
   let nextBall = ball;
 
   if (nextBall.position.x - BALL_RADIUS <= 0) {
@@ -256,11 +292,11 @@ function collideWithWalls(ball: BreakoutBall): BreakoutBall {
     };
   }
 
-  if (nextBall.position.x + BALL_RADIUS >= BREAKOUT_BOARD_WIDTH) {
+  if (nextBall.position.x + BALL_RADIUS >= boardWidth) {
     nextBall = {
       position: {
         ...nextBall.position,
-        x: BREAKOUT_BOARD_WIDTH - BALL_RADIUS,
+        x: boardWidth - BALL_RADIUS,
       },
       velocity: {
         ...nextBall.velocity,
@@ -372,7 +408,7 @@ function loseBreakoutLife(game: BreakoutGameState): BreakoutGameState {
     };
   }
 
-  const paddle = createCenteredPaddle();
+  const paddle = createCenteredPaddle(game.boardWidth, game.boardHeight);
 
   return {
     ...game,
@@ -385,4 +421,20 @@ function loseBreakoutLife(game: BreakoutGameState): BreakoutGameState {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function normalizeBreakoutDimension(value: number, fallback: number, minimum: number) {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.max(minimum, Math.floor(value));
+}
+
+function normalizeBreakoutLives(lives: number) {
+  if (!Number.isFinite(lives)) {
+    return BREAKOUT_STARTING_LIVES;
+  }
+
+  return Math.max(1, Math.floor(lives));
 }

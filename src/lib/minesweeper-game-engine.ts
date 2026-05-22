@@ -37,6 +37,12 @@ type RandomSource = () => number;
 export const MINESWEEPER_BOARD_WIDTH = 9;
 export const MINESWEEPER_BOARD_HEIGHT = 9;
 export const MINESWEEPER_MINE_COUNT = 10;
+export const MINESWEEPER_BOARD_SIZE_OPTIONS = [
+  { height: 9, label: "9 x 9", width: 9 },
+  { height: 12, label: "12 x 12", width: 12 },
+  { height: 16, label: "16 x 16", width: 16 },
+] as const;
+export const MINESWEEPER_MINE_COUNT_OPTIONS = [10, 20, 40] as const;
 
 export function createInitialMinesweeperGame({
   height = MINESWEEPER_BOARD_HEIGHT,

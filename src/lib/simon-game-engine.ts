@@ -29,6 +29,7 @@ export const SIMON_PADS = ["green", "red", "yellow", "blue"] as const;
 export const SIMON_DEFAULT_WIN_TARGET = 12;
 export const SIMON_PLAYBACK_DELAY_MS = 520;
 export const SIMON_INPUT_FLASH_MS = 180;
+export const SIMON_WIN_TARGET_OPTIONS = [8, 12, 16] as const;
 
 export function createInitialSimonGame({
   winTarget = SIMON_DEFAULT_WIN_TARGET,

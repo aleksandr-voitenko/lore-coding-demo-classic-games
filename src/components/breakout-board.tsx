@@ -3,8 +3,6 @@
 import type { ReactNode } from "react";
 
 import {
-  BREAKOUT_BOARD_HEIGHT,
-  BREAKOUT_BOARD_WIDTH,
   getBreakoutBallRadius,
   type BreakoutGameState,
 } from "@/lib/breakout-game-engine";
@@ -29,9 +27,12 @@ export function BreakoutBoard({ children, game, statusLabel }: BreakoutBoardProp
   const activeBrickCount = game.bricks.filter((brick) => brick.isActive).length;
 
   return (
-    <div className="relative aspect-[3/4] overflow-hidden rounded-md border border-[var(--breakout-board-border)] bg-[var(--breakout-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--breakout-board)_26%,transparent)]">
+    <div
+      className="relative overflow-hidden rounded-md border border-[var(--breakout-board-border)] bg-[var(--breakout-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--breakout-board)_26%,transparent)]"
+      style={{ aspectRatio: `${game.boardWidth} / ${game.boardHeight}` }}
+    >
       <div
-        aria-label={`Breakout board. Field ${BREAKOUT_BOARD_WIDTH} by ${BREAKOUT_BOARD_HEIGHT}. Score ${game.score}. Lives ${game.lives}. ${activeBrickCount} bricks remaining. ${statusLabel}.`}
+        aria-label={`Breakout board. Field ${game.boardWidth} by ${game.boardHeight}. Score ${game.score}. Lives ${game.lives}. ${activeBrickCount} bricks remaining. ${statusLabel}.`}
         className="relative size-full overflow-hidden rounded-[0.375rem] bg-[radial-gradient(circle_at_50%_12%,color-mix(in_oklch,var(--breakout-grid)_62%,transparent),transparent_32%),linear-gradient(180deg,var(--breakout-grid),var(--breakout-board-cell))]"
         data-testid="breakout-board"
         role="img"
@@ -57,10 +58,10 @@ export function BreakoutBoard({ children, game, statusLabel }: BreakoutBoardProp
             data-testid={brick.isActive ? "breakout-brick" : undefined}
             key={brick.id}
             style={{
-              height: `${(brick.height / BREAKOUT_BOARD_HEIGHT) * 100}%`,
-              left: `${(brick.x / BREAKOUT_BOARD_WIDTH) * 100}%`,
-              top: `${(brick.y / BREAKOUT_BOARD_HEIGHT) * 100}%`,
-              width: `${(brick.width / BREAKOUT_BOARD_WIDTH) * 100}%`,
+              height: `${(brick.height / game.boardHeight) * 100}%`,
+              left: `${(brick.x / game.boardWidth) * 100}%`,
+              top: `${(brick.y / game.boardHeight) * 100}%`,
+              width: `${(brick.width / game.boardWidth) * 100}%`,
             }}
           />
         ))}
@@ -70,10 +71,10 @@ export function BreakoutBoard({ children, game, statusLabel }: BreakoutBoardProp
           className="absolute rounded-full bg-[var(--breakout-ball)] shadow-[0_0_22px_color-mix(in_oklch,var(--breakout-ball)_72%,transparent)]"
           data-testid="breakout-ball"
           style={{
-            height: `${((ballRadius * 2) / BREAKOUT_BOARD_HEIGHT) * 100}%`,
-            left: `${((game.ball.position.x - ballRadius) / BREAKOUT_BOARD_WIDTH) * 100}%`,
-            top: `${((game.ball.position.y - ballRadius) / BREAKOUT_BOARD_HEIGHT) * 100}%`,
-            width: `${((ballRadius * 2) / BREAKOUT_BOARD_WIDTH) * 100}%`,
+            height: `${((ballRadius * 2) / game.boardHeight) * 100}%`,
+            left: `${((game.ball.position.x - ballRadius) / game.boardWidth) * 100}%`,
+            top: `${((game.ball.position.y - ballRadius) / game.boardHeight) * 100}%`,
+            width: `${((ballRadius * 2) / game.boardWidth) * 100}%`,
           }}
         />
 
@@ -82,10 +83,10 @@ export function BreakoutBoard({ children, game, statusLabel }: BreakoutBoardProp
           className="absolute rounded-full bg-[var(--breakout-paddle)] shadow-[inset_0_-3px_0_color-mix(in_oklch,var(--breakout-board)_20%,transparent),0_0_24px_color-mix(in_oklch,var(--breakout-paddle)_42%,transparent)]"
           data-testid="breakout-paddle"
           style={{
-            height: `${(game.paddle.height / BREAKOUT_BOARD_HEIGHT) * 100}%`,
-            left: `${(game.paddle.x / BREAKOUT_BOARD_WIDTH) * 100}%`,
-            top: `${(game.paddle.y / BREAKOUT_BOARD_HEIGHT) * 100}%`,
-            width: `${(game.paddle.width / BREAKOUT_BOARD_WIDTH) * 100}%`,
+            height: `${(game.paddle.height / game.boardHeight) * 100}%`,
+            left: `${(game.paddle.x / game.boardWidth) * 100}%`,
+            top: `${(game.paddle.y / game.boardHeight) * 100}%`,
+            width: `${(game.paddle.width / game.boardWidth) * 100}%`,
           }}
         />
       </div>

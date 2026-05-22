@@ -6,8 +6,6 @@ import { useMemo } from "react";
 import {
   createTetrisBoardCells,
   renderTetrisBoard,
-  TETRIS_BOARD_HEIGHT,
-  TETRIS_BOARD_WIDTH,
   type TetrominoKind,
   type TetrisGameState,
 } from "@/lib/tetris-game-engine";
@@ -30,18 +28,24 @@ export const tetrominoCellClassNames: Record<TetrominoKind, string> = {
 };
 
 export function TetrisBoard({ children, game, statusLabel }: TetrisBoardProps) {
-  const boardCells = useMemo(() => createTetrisBoardCells(), []);
+  const boardCells = useMemo(
+    () => createTetrisBoardCells(game.boardWidth, game.boardHeight),
+    [game.boardHeight, game.boardWidth],
+  );
   const renderedBoard = useMemo(() => renderTetrisBoard(game), [game]);
 
   return (
-    <div className="relative aspect-[1/2] overflow-hidden rounded-md border border-[var(--tetris-board-border)] bg-[var(--tetris-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--tetris-board)_26%,transparent)]">
+    <div
+      className="relative overflow-hidden rounded-md border border-[var(--tetris-board-border)] bg-[var(--tetris-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--tetris-board)_26%,transparent)]"
+      style={{ aspectRatio: `${game.boardWidth} / ${game.boardHeight}` }}
+    >
       <div
-        aria-label={`Tetris board. Field ${TETRIS_BOARD_WIDTH} by ${TETRIS_BOARD_HEIGHT}. Score ${game.score}. Lines ${game.lines}. Level ${game.level}. ${statusLabel}.`}
+        aria-label={`Tetris board. Field ${game.boardWidth} by ${game.boardHeight}. Score ${game.score}. Lines ${game.lines}. Level ${game.level}. ${statusLabel}.`}
         className="grid size-full gap-px rounded-[0.375rem] bg-[var(--tetris-grid)] p-px"
         data-testid="tetris-board"
         role="img"
         style={{
-          gridTemplateColumns: `repeat(${TETRIS_BOARD_WIDTH}, minmax(0, 1fr))`,
+          gridTemplateColumns: `repeat(${game.boardWidth}, minmax(0, 1fr))`,
         }}
       >
         {boardCells.map((cell) => {

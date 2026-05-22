@@ -35,6 +35,7 @@ import {
 } from "@/lib/simon-game-engine";
 
 type SimonGameProps = {
+  initialWinTarget?: number;
   onBackToMenu?: () => void;
 };
 
@@ -105,12 +106,14 @@ const keyToSimonPad: Record<string, SimonPadId> = {
   W: "red",
 };
 
-function createReadySimonGame() {
-  return createInitialSimonGame();
+function createReadySimonGame(winTarget?: number) {
+  return createInitialSimonGame({ winTarget });
 }
 
-export function SimonGame({ onBackToMenu }: SimonGameProps = {}) {
-  const [game, setGame] = useState<SimonGameState>(() => createReadySimonGame());
+export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {}) {
+  const [game, setGame] = useState<SimonGameState>(() =>
+    createReadySimonGame(initialWinTarget),
+  );
   const playbackDelay = game.status === "showing" ? getSimonPlaybackDelay() : null;
   const canPauseGame =
     game.status === "showing" || game.status === "input" || game.status === "paused";

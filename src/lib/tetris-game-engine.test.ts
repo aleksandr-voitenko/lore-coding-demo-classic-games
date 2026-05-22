@@ -60,6 +60,35 @@ describe("tetris game engine", () => {
     expect(renderedBoard[1]?.slice(3, 7)).toEqual(["I", "I", "I", "I"]);
   });
 
+  it("creates configurable board sizes and start levels", () => {
+    const game = createInitialTetrisGame({
+      boardHeight: 22,
+      boardWidth: 12,
+      random: createRandomSequence([0, 3 / 7]),
+      startLevel: 5,
+    });
+    const restarted = startTetrisGame(
+      {
+        ...game,
+        status: "lost",
+      },
+      { random: createRandomSequence([0, 3 / 7]) },
+    );
+
+    expect(game.board).toHaveLength(22);
+    expect(game.board.every((row) => row.length === 12)).toBe(true);
+    expect(game.boardHeight).toBe(22);
+    expect(game.boardWidth).toBe(12);
+    expect(game.level).toBe(5);
+    expect(game.startLevel).toBe(5);
+    expect(renderTetrisBoard(game)[1]?.slice(4, 8)).toEqual(["I", "I", "I", "I"]);
+    expect(restarted.boardHeight).toBe(22);
+    expect(restarted.boardWidth).toBe(12);
+    expect(restarted.level).toBe(5);
+    expect(restarted.startLevel).toBe(5);
+    expect(restarted.status).toBe("running");
+  });
+
   it("exposes stable board coordinates, preview cells, and gravity timing", () => {
     const cells = createTetrisBoardCells();
 

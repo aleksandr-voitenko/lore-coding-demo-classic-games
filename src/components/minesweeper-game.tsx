@@ -31,6 +31,9 @@ import {
 import { cn } from "@/lib/utils";
 
 type MinesweeperGameProps = {
+  initialBoardHeight?: number;
+  initialBoardWidth?: number;
+  initialMineCount?: number;
   onBackToMenu?: () => void;
 };
 
@@ -69,12 +72,35 @@ const MINESWEEPER_HELP_SECTIONS: GameHelpSection[] = [
   },
 ];
 
-function createNewMinesweeperGame() {
-  return createInitialMinesweeperGame();
+function createNewMinesweeperGame({
+  boardHeight,
+  boardWidth,
+  mineCount,
+}: {
+  boardHeight?: number;
+  boardWidth?: number;
+  mineCount?: number;
+} = {}) {
+  return createInitialMinesweeperGame({
+    height: boardHeight,
+    mineCount,
+    width: boardWidth,
+  });
 }
 
-export function MinesweeperGame({ onBackToMenu }: MinesweeperGameProps = {}) {
-  const [game, setGame] = useState<MinesweeperGameState>(() => createNewMinesweeperGame());
+export function MinesweeperGame({
+  initialBoardHeight,
+  initialBoardWidth,
+  initialMineCount,
+  onBackToMenu,
+}: MinesweeperGameProps = {}) {
+  const [game, setGame] = useState<MinesweeperGameState>(() =>
+    createNewMinesweeperGame({
+      boardHeight: initialBoardHeight,
+      boardWidth: initialBoardWidth,
+      mineCount: initialMineCount,
+    }),
+  );
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isFlagMode, setIsFlagMode] = useState(false);
   const safeCellCount = game.width * game.height - game.mineCount;

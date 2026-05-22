@@ -1,12 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useMemo } from "react";
 
 import {
   createTwentyFortyEightBoardCells,
   getTwentyFortyEightTileAt,
   getTwentyFortyEightTopTile,
-  TWENTY_FORTY_EIGHT_BOARD_SIZE,
   type TwentyFortyEightGameState,
   type TwentyFortyEightTile,
 } from "@/lib/twenty-forty-eight-game-engine";
@@ -17,8 +17,6 @@ type TwentyFortyEightBoardProps = {
   game: TwentyFortyEightGameState;
   statusLabel: string;
 };
-
-const boardCells = createTwentyFortyEightBoardCells();
 
 const tileClassNames: Record<number, string> = {
   2: "bg-[var(--twenty-tile-2)] text-[var(--twenty-tile-dark)]",
@@ -39,19 +37,23 @@ export function TwentyFortyEightBoard({
   game,
   statusLabel,
 }: TwentyFortyEightBoardProps) {
+  const boardCells = useMemo(
+    () => createTwentyFortyEightBoardCells(game.boardSize),
+    [game.boardSize],
+  );
   const topTile = getTwentyFortyEightTopTile(game);
 
   return (
     <div className="relative aspect-square overflow-hidden rounded-md border border-[var(--twenty-board-border)] bg-[var(--twenty-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--twenty-board)_24%,transparent)]">
       <div
-        aria-label={`2048 board. Field ${TWENTY_FORTY_EIGHT_BOARD_SIZE} by ${TWENTY_FORTY_EIGHT_BOARD_SIZE}. Score ${game.score}. Best ${game.bestScore}. Top tile ${topTile}. ${statusLabel}.`}
-        aria-colcount={TWENTY_FORTY_EIGHT_BOARD_SIZE}
-        aria-rowcount={TWENTY_FORTY_EIGHT_BOARD_SIZE}
+        aria-label={`2048 board. Field ${game.boardSize} by ${game.boardSize}. Score ${game.score}. Best ${game.bestScore}. Top tile ${topTile}. Goal ${game.winTile}. ${statusLabel}.`}
+        aria-colcount={game.boardSize}
+        aria-rowcount={game.boardSize}
         className="grid size-full gap-2 rounded-[0.375rem] bg-[var(--twenty-grid)] p-2"
         data-testid="twenty-forty-eight-board"
         role="grid"
         style={{
-          gridTemplateColumns: `repeat(${TWENTY_FORTY_EIGHT_BOARD_SIZE}, minmax(0, 1fr))`,
+          gridTemplateColumns: `repeat(${game.boardSize}, minmax(0, 1fr))`,
         }}
       >
         {boardCells.map((cell) => {
@@ -114,5 +116,3 @@ function getCellAriaLabel(x: number, y: number, tile: TwentyFortyEightTile | nul
 
   return `${position}. Tile ${tile.value}.`;
 }
-
-export const twentyFortyEightBoardSizeLabel = `${TWENTY_FORTY_EIGHT_BOARD_SIZE} x ${TWENTY_FORTY_EIGHT_BOARD_SIZE}`;

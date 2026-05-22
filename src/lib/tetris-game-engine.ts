@@ -16,16 +16,22 @@ export type ActiveTetromino = {
 
 export type TetrisGameState = {
   board: TetrisCell[][];
+  boardHeight: number;
+  boardWidth: number;
   currentPiece: ActiveTetromino;
   level: number;
   lines: number;
   nextPieceKind: TetrominoKind;
   score: number;
+  startLevel: number;
   status: TetrisStatus;
 };
 
 export type CreateTetrisGameOptions = {
+  boardHeight?: number;
+  boardWidth?: number;
   random?: RandomSource;
+  startLevel?: number;
 };
 
 type RandomSource = () => number;
@@ -38,6 +44,12 @@ type LockPieceOptions = {
 export const TETRIS_BOARD_WIDTH = 10;
 export const TETRIS_BOARD_HEIGHT = 20;
 export const TETRIS_START_LEVEL = 1;
+export const TETRIS_BOARD_SIZE_OPTIONS = [
+  { height: 18, label: "10 x 18", width: 10 },
+  { height: 20, label: "10 x 20", width: 10 },
+  { height: 22, label: "12 x 22", width: 12 },
+] as const;
+export const TETRIS_START_LEVEL_OPTIONS = [1, 3, 5] as const;
 
 export const TETROMINO_KINDS = ["I", "J", "L", "O", "S", "T", "Z"] as const;
 
@@ -194,16 +206,22 @@ const TETROMINO_SHAPES: Record<TetrominoKind, TetrisPoint[][]> = {
 
 const ROTATION_KICKS = [0, -1, 1, -2, 2];
 
-export function createEmptyTetrisBoard() {
-  return Array.from({ length: TETRIS_BOARD_HEIGHT }, () =>
-    Array.from<TetrisCell>({ length: TETRIS_BOARD_WIDTH }).fill(null),
+export function createEmptyTetrisBoard(
+  boardWidth = TETRIS_BOARD_WIDTH,
+  boardHeight = TETRIS_BOARD_HEIGHT,
+) {
+  return Array.from({ length: boardHeight }, () =>
+    Array.from<TetrisCell>({ length: boardWidth }).fill(null),
   );
 }
 
-export function createTetrisBoardCells() {
-  return Array.from({ length: TETRIS_BOARD_WIDTH * TETRIS_BOARD_HEIGHT }, (_, index) => ({
-    x: index % TETRIS_BOARD_WIDTH,
-    y: Math.floor(index / TETRIS_BOARD_WIDTH),
+export function createTetrisBoardCells(
+  boardWidth = TETRIS_BOARD_WIDTH,
+  boardHeight = TETRIS_BOARD_HEIGHT,
+) {
+  return Array.from({ length: boardWidth * boardHeight }, (_, index) => ({
+    x: index % boardWidth,
+    y: Math.floor(index / boardWidth),
   }));
 }
 
@@ -222,20 +240,29 @@ export function getTetrominoCells(piece: ActiveTetromino) {
 }
 
 export function createInitialTetrisGame({
+  boardHeight = TETRIS_BOARD_HEIGHT,
+  boardWidth = TETRIS_BOARD_WIDTH,
   random = Math.random,
+  startLevel = TETRIS_START_LEVEL,
 }: CreateTetrisGameOptions = {}): TetrisGameState {
+  const normalizedBoardWidth = normalizeTetrisBoardDimension(boardWidth, TETRIS_BOARD_WIDTH, 4);
+  const normalizedBoardHeight = normalizeTetrisBoardDimension(boardHeight, TETRIS_BOARD_HEIGHT, 8);
+  const normalizedStartLevel = normalizeTetrisStartLevel(startLevel);
   const currentPieceKind = getRandomTetrominoKind(random);
   const nextPieceKind = getRandomTetrominoKind(random);
-  const board = createEmptyTetrisBoard();
-  const currentPiece = createSpawnedPiece(currentPieceKind);
+  const board = createEmptyTetrisBoard(normalizedBoardWidth, normalizedBoardHeight);
+  const currentPiece = createSpawnedPiece(currentPieceKind, normalizedBoardWidth);
 
   return {
     board,
+    boardHeight: normalizedBoardHeight,
+    boardWidth: normalizedBoardWidth,
     currentPiece,
-    level: TETRIS_START_LEVEL,
+    level: normalizedStartLevel,
     lines: 0,
     nextPieceKind,
     score: 0,
+    startLevel: normalizedStartLevel,
     status: canPlacePiece(board, currentPiece) ? "ready" : "lost",
   };
 }
@@ -257,7 +284,12 @@ export function startTetrisGame(
 
   if (game.status === "lost") {
     return {
-      ...createInitialTetrisGame({ random }),
+      ...createInitialTetrisGame({
+        boardHeight: game.boardHeight,
+        boardWidth: game.boardWidth,
+        random,
+        startLevel: game.startLevel,
+      }),
       status: "running" as const,
     };
   }
@@ -425,7 +457,7 @@ export function renderTetrisBoard(game: TetrisGameState) {
   const board = cloneTetrisBoard(game.board);
 
   getTetrominoCells(game.currentPiece).forEach((cell) => {
-    if (isVisibleBoardCell(cell)) {
+    if (isVisibleBoardCell(cell, game.boardWidth, game.boardHeight)) {
       board[cell.y]![cell.x] = game.currentPiece.kind;
     }
   });
@@ -443,11 +475,14 @@ function getRandomTetrominoKind(random: RandomSource) {
   ];
 }
 
-function createSpawnedPiece(kind: TetrominoKind): ActiveTetromino {
+function createSpawnedPiece(
+  kind: TetrominoKind,
+  boardWidth = TETRIS_BOARD_WIDTH,
+): ActiveTetromino {
   return {
     kind,
     position: {
-      x: Math.floor(TETRIS_BOARD_WIDTH / 2) - 2,
+      x: Math.floor(boardWidth / 2) - 2,
       y: 0,
     },
     rotation: 0,
@@ -461,15 +496,15 @@ function lockTetrisPiece(
   const lockedBoard = cloneTetrisBoard(game.board);
 
   getTetrominoCells(game.currentPiece).forEach((cell) => {
-    if (isVisibleBoardCell(cell)) {
+    if (isVisibleBoardCell(cell, game.boardWidth, game.boardHeight)) {
       lockedBoard[cell.y]![cell.x] = game.currentPiece.kind;
     }
   });
 
   const { board, clearedLines } = clearCompletedLines(lockedBoard);
   const lines = game.lines + clearedLines;
-  const level = Math.floor(lines / 10) + TETRIS_START_LEVEL;
-  const nextPiece = createSpawnedPiece(game.nextPieceKind);
+  const level = Math.floor(lines / 10) + game.startLevel;
+  const nextPiece = createSpawnedPiece(game.nextPieceKind, game.boardWidth);
   const nextPieceKind = getRandomTetrominoKind(random);
   const score =
     game.score + scoreBonus + (TETRIS_LINE_SCORES[clearedLines] ?? 0) * game.level;
@@ -487,18 +522,24 @@ function lockTetrisPiece(
 
   return {
     board,
+    boardHeight: game.boardHeight,
+    boardWidth: game.boardWidth,
     currentPiece: nextPiece,
     level,
     lines,
     nextPieceKind,
     score,
+    startLevel: game.startLevel,
     status: "running",
   };
 }
 
 function canPlacePiece(board: TetrisCell[][], piece: ActiveTetromino) {
+  const boardHeight = board.length;
+  const boardWidth = board[0]?.length ?? 0;
+
   return getTetrominoCells(piece).every((cell) => {
-    if (cell.x < 0 || cell.x >= TETRIS_BOARD_WIDTH || cell.y >= TETRIS_BOARD_HEIGHT) {
+    if (cell.x < 0 || cell.x >= boardWidth || cell.y >= boardHeight) {
       return false;
     }
 
@@ -511,10 +552,12 @@ function canPlacePiece(board: TetrisCell[][], piece: ActiveTetromino) {
 }
 
 function clearCompletedLines(board: TetrisCell[][]) {
+  const boardHeight = board.length;
+  const boardWidth = board[0]?.length ?? TETRIS_BOARD_WIDTH;
   const remainingRows = board.filter((row) => row.some((cell) => cell === null));
-  const clearedLines = TETRIS_BOARD_HEIGHT - remainingRows.length;
+  const clearedLines = boardHeight - remainingRows.length;
   const emptyRows = Array.from({ length: clearedLines }, () =>
-    Array.from<TetrisCell>({ length: TETRIS_BOARD_WIDTH }).fill(null),
+    Array.from<TetrisCell>({ length: boardWidth }).fill(null),
   );
 
   return {
@@ -527,11 +570,31 @@ function cloneTetrisBoard(board: TetrisCell[][]) {
   return board.map((row) => [...row]);
 }
 
-function isVisibleBoardCell(point: TetrisPoint) {
+function isVisibleBoardCell(
+  point: TetrisPoint,
+  boardWidth = TETRIS_BOARD_WIDTH,
+  boardHeight = TETRIS_BOARD_HEIGHT,
+) {
   return (
     point.x >= 0 &&
-    point.x < TETRIS_BOARD_WIDTH &&
+    point.x < boardWidth &&
     point.y >= 0 &&
-    point.y < TETRIS_BOARD_HEIGHT
+    point.y < boardHeight
   );
+}
+
+function normalizeTetrisBoardDimension(value: number, fallback: number, minimum: number) {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.max(minimum, Math.floor(value));
+}
+
+function normalizeTetrisStartLevel(startLevel: number) {
+  if (!Number.isFinite(startLevel)) {
+    return TETRIS_START_LEVEL;
+  }
+
+  return Math.max(TETRIS_START_LEVEL, Math.floor(startLevel));
 }

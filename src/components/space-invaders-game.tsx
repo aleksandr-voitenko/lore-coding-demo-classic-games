@@ -43,6 +43,9 @@ import {
 import { cn } from "@/lib/utils";
 
 type SpaceInvadersGameProps = {
+  initialAlienCount?: number;
+  initialBoardHeight?: number;
+  initialBoardWidth?: number;
   onBackToMenu?: () => void;
 };
 
@@ -90,9 +93,18 @@ const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
   },
 ];
 
-export function SpaceInvadersGame({ onBackToMenu }: SpaceInvadersGameProps = {}) {
+export function SpaceInvadersGame({
+  initialAlienCount,
+  initialBoardHeight,
+  initialBoardWidth,
+  onBackToMenu,
+}: SpaceInvadersGameProps = {}) {
   const [game, setGame] = useState<SpaceInvadersGameState>(() =>
-    createInitialSpaceInvadersGame(),
+    createInitialSpaceInvadersGame({
+      alienCount: initialAlienCount,
+      boardHeight: initialBoardHeight,
+      boardWidth: initialBoardWidth,
+    }),
   );
   const tickDelay = game.status === "running" ? getSpaceInvadersTickDelay() : null;
   const activeInvaderCount = game.invaders.filter((invader) => invader.isActive).length;
@@ -117,7 +129,7 @@ export function SpaceInvadersGame({ onBackToMenu }: SpaceInvadersGameProps = {})
   }, []);
 
   const restartGame = useCallback(() => {
-    setGame(restartSpaceInvadersGame());
+    setGame((current) => restartSpaceInvadersGame(current));
   }, []);
 
   const moveLeft = useCallback(() => {

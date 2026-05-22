@@ -93,9 +93,14 @@ patterns and constraints here.
   failures.
 - Keep local UI consistent with the shared game layout and shadcn button
   patterns.
-- Pre-game parameters can live on launcher cards. Snake field size is owned by
-  `GameLauncher` and passed into `SnakeGame` as `initialBoardSize`; changing it
-  after opening Snake means returning to the launcher.
+- Pre-game parameters live on launcher cards as real select controls, while
+  fixed mode/record/count metadata is kept off the cards. `GameLauncher` owns
+  the selected presets and passes them into games as `initial*` props; changing
+  parameters after opening a game means returning to the launcher.
+- Engines that expose launcher presets keep those values in game state so
+  restart, terminal-state replay, board rendering, and accessibility labels
+  preserve the selected board size, target, lives, mines, alien count, or start
+  level.
 - Keep per-game metrics and live status details in `GameSidebar`; do not add
   separate information strips below `GameBoardStage`. Board dimensions belong in
   board accessibility labels or real settings controls rather than decorative

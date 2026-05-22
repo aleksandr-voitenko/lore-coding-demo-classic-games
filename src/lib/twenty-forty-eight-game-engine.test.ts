@@ -10,6 +10,7 @@ import {
   startTwentyFortyEightGame,
   TWENTY_FORTY_EIGHT_BOARD_SIZE,
   TWENTY_FORTY_EIGHT_STARTING_TILE_COUNT,
+  TWENTY_FORTY_EIGHT_WIN_TILE,
   type TwentyFortyEightDirection,
   type TwentyFortyEightGameState,
   type TwentyFortyEightTile,
@@ -25,8 +26,12 @@ function createGame(
   tiles: Array<Pick<TwentyFortyEightTile, "value" | "x" | "y">>,
   overrides: Partial<TwentyFortyEightGameState> = {},
 ): TwentyFortyEightGameState {
+  const boardSize = overrides.boardSize ?? TWENTY_FORTY_EIGHT_BOARD_SIZE;
+  const winTile = overrides.winTile ?? TWENTY_FORTY_EIGHT_WIN_TILE;
+
   return {
     bestScore: 0,
+    boardSize,
     moveCount: 0,
     nextTileId: tiles.length + 1,
     score: 0,
@@ -35,6 +40,7 @@ function createGame(
       id: `tile-${index + 1}`,
       ...tile,
     })),
+    winTile,
     ...overrides,
   };
 }
@@ -48,9 +54,9 @@ function move(
 }
 
 function valuesByRow(game: TwentyFortyEightGameState) {
-  return Array.from({ length: TWENTY_FORTY_EIGHT_BOARD_SIZE }, (_, y) =>
+  return Array.from({ length: game.boardSize }, (_, y) =>
     Array.from(
-      { length: TWENTY_FORTY_EIGHT_BOARD_SIZE },
+      { length: game.boardSize },
       (_, x) => getTwentyFortyEightTileAt(game, x, y)?.value ?? 0,
     ),
   );
@@ -65,6 +71,7 @@ describe("twenty forty eight game engine", () => {
     expect(game.status).toBe("ready");
     expect(game.score).toBe(0);
     expect(game.bestScore).toBe(0);
+    expect(game.boardSize).toBe(TWENTY_FORTY_EIGHT_BOARD_SIZE);
     expect(game.moveCount).toBe(0);
     expect(game.nextTileId).toBe(TWENTY_FORTY_EIGHT_STARTING_TILE_COUNT + 1);
     expect(valuesByRow(game)).toEqual([
@@ -72,6 +79,24 @@ describe("twenty forty eight game engine", () => {
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
+    ]);
+  });
+
+  it("creates configurable board sizes and win targets", () => {
+    const game = createInitialTwentyFortyEightGame({
+      boardSize: 5,
+      random: randomSequence([0, 0, 0, 0.95]),
+      winTile: 4096,
+    });
+
+    expect(game.boardSize).toBe(5);
+    expect(game.winTile).toBe(4096);
+    expect(valuesByRow(game)).toEqual([
+      [2, 4, 0, 0, 0],
+      [0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0],
     ]);
   });
 
@@ -154,7 +179,7 @@ describe("twenty forty eight game engine", () => {
     expect(moved.moveCount).toBe(0);
   });
 
-  it("wins when a move creates a 2048 tile", () => {
+  it("wins when a move creates the configured goal tile", () => {
     const game = createGame([
       { value: 1024, x: 0, y: 0 },
       { value: 1024, x: 1, y: 0 },
@@ -163,6 +188,20 @@ describe("twenty forty eight game engine", () => {
 
     expect(moved.status).toBe("won");
     expect(moved.score).toBe(2048);
+    expect(getTwentyFortyEightTopTile(moved)).toBe(2048);
+  });
+
+  it("keeps running below the configured goal tile", () => {
+    const game = createGame(
+      [
+        { value: 1024, x: 0, y: 0 },
+        { value: 1024, x: 1, y: 0 },
+      ],
+      { winTile: 4096 },
+    );
+    const moved = move(game, "left", randomSequence([0, 0]));
+
+    expect(moved.status).toBe("running");
     expect(getTwentyFortyEightTopTile(moved)).toBe(2048);
   });
 
@@ -236,6 +275,8 @@ describe("twenty forty eight game engine", () => {
     expect(restarted.status).toBe("ready");
     expect(restarted.score).toBe(0);
     expect(restarted.bestScore).toBe(512);
+    expect(restarted.boardSize).toBe(game.boardSize);
+    expect(restarted.winTile).toBe(game.winTile);
     expect(restarted.moveCount).toBe(0);
     expect(valuesByRow(restarted)).toEqual([
       [2, 4, 0, 0],

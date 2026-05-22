@@ -198,6 +198,7 @@ describe("game board renderers", () => {
   it("renders 2048 cells with known, large, and fallback tile values", () => {
     const game: TwentyFortyEightGameState = {
       bestScore: 256,
+      boardSize: 4,
       moveCount: 3,
       nextTileId: 4,
       score: 128,
@@ -207,6 +208,7 @@ describe("game board renderers", () => {
         { id: "tile-2", value: 128, x: 1, y: 0 },
         { id: "tile-3", value: 4096, x: 2, y: 0 },
       ],
+      winTile: 2048,
     };
     const markup = renderToStaticMarkup(
       <TwentyFortyEightBoard game={game} statusLabel="Running" />,
@@ -214,7 +216,7 @@ describe("game board renderers", () => {
 
     expectMarkup(markup, [
       'data-testid="twenty-forty-eight-board"',
-      "2048 board. Field 4 by 4. Score 128. Best 256. Top tile 4096. Running.",
+      "2048 board. Field 4 by 4. Score 128. Best 256. Top tile 4096. Goal 2048. Running.",
       'data-testid="twenty-forty-eight-tile-2"',
       'data-testid="twenty-forty-eight-tile-128"',
       'data-testid="twenty-forty-eight-tile-4096"',

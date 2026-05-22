@@ -44,6 +44,9 @@ import {
 import { cn } from "@/lib/utils";
 
 type TetrisGameProps = {
+  initialBoardHeight?: number;
+  initialBoardWidth?: number;
+  initialStartLevel?: number;
   onBackToMenu?: () => void;
 };
 
@@ -133,9 +136,18 @@ type TetrisPreviewBlock = {
   topPercent: number;
 };
 
-function createRunningTetrisGame() {
+function createRunningTetrisGame({
+  boardHeight,
+  boardWidth,
+  startLevel,
+}: Pick<TetrisGameState, "boardHeight" | "boardWidth" | "startLevel">) {
   return {
-    ...createInitialTetrisGame({ random: Math.random }),
+    ...createInitialTetrisGame({
+      boardHeight,
+      boardWidth,
+      random: Math.random,
+      startLevel,
+    }),
     status: "running" as const,
   };
 }
@@ -168,8 +180,19 @@ function createCenteredPreviewBlocks(kind: TetrominoKind): TetrisPreviewBlock[] 
   });
 }
 
-export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
-  const [game, setGame] = useState<TetrisGameState>(() => createInitialTetrisGame());
+export function TetrisGame({
+  initialBoardHeight,
+  initialBoardWidth,
+  initialStartLevel,
+  onBackToMenu,
+}: TetrisGameProps = {}) {
+  const [game, setGame] = useState<TetrisGameState>(() =>
+    createInitialTetrisGame({
+      boardHeight: initialBoardHeight,
+      boardWidth: initialBoardWidth,
+      startLevel: initialStartLevel,
+    }),
+  );
   const nextPreviewBlocks = useMemo(
     () => createCenteredPreviewBlocks(game.nextPieceKind),
     [game.nextPieceKind],
@@ -196,7 +219,7 @@ export function TetrisGame({ onBackToMenu }: TetrisGameProps = {}) {
   }, []);
 
   const restartGame = useCallback(() => {
-    setGame(createRunningTetrisGame());
+    setGame((current) => createRunningTetrisGame(current));
   }, []);
 
   const moveLeft = useCallback(() => {

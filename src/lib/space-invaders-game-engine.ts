@@ -30,6 +30,10 @@ export type SpaceInvadersShot = {
 };
 
 export type SpaceInvadersGameState = {
+  alienCount: number;
+  baseY: number;
+  boardHeight: number;
+  boardWidth: number;
   invaders: SpaceInvader[];
   lives: number;
   marchDirection: SpaceInvadersDirection;
@@ -39,6 +43,12 @@ export type SpaceInvadersGameState = {
   status: SpaceInvadersStatus;
 };
 
+export type CreateSpaceInvadersGameOptions = {
+  alienCount?: number;
+  boardHeight?: number;
+  boardWidth?: number;
+};
+
 export const SPACE_INVADERS_BOARD_WIDTH = 420;
 export const SPACE_INVADERS_BOARD_HEIGHT = 560;
 export const SPACE_INVADERS_COLUMNS = 11;
@@ -46,6 +56,16 @@ export const SPACE_INVADERS_ROWS = 5;
 export const SPACE_INVADERS_STARTING_LIVES = 3;
 export const SPACE_INVADERS_BASE_Y = 492;
 export const SPACE_INVADERS_TICK_DELAY_MS = 85;
+export const SPACE_INVADERS_BOARD_SIZE_OPTIONS = [
+  { height: 560, label: "420 x 560", width: 420 },
+  { height: 640, label: "480 x 640", width: 480 },
+  { height: 720, label: "540 x 720", width: 540 },
+] as const;
+export const SPACE_INVADERS_ALIEN_COUNT_OPTIONS = [
+  { alienCount: 24, columns: 8, label: "24", rows: 3 },
+  { alienCount: 40, columns: 10, label: "40", rows: 4 },
+  { alienCount: 55, columns: 11, label: "55", rows: 5 },
+] as const;
 
 const INVADER_DROP_Y = 4;
 const INVADER_GAP_X = 12;
@@ -58,27 +78,61 @@ const INVADER_X = 38;
 const PLAYER_HEIGHT = 16;
 const PLAYER_SPEED = 24;
 const PLAYER_WIDTH = 42;
-const PLAYER_Y = SPACE_INVADERS_BOARD_HEIGHT - 46;
 const SHOT_HEIGHT = 14;
 const SHOT_SPEED = -16;
 const SHOT_WIDTH = 4;
 
-export function createInitialSpaceInvadersGame(): SpaceInvadersGameState {
+export function createInitialSpaceInvadersGame({
+  alienCount = SPACE_INVADERS_COLUMNS * SPACE_INVADERS_ROWS,
+  boardHeight = SPACE_INVADERS_BOARD_HEIGHT,
+  boardWidth = SPACE_INVADERS_BOARD_WIDTH,
+}: CreateSpaceInvadersGameOptions = {}): SpaceInvadersGameState {
+  const normalizedBoardWidth = normalizeSpaceInvadersDimension(
+    boardWidth,
+    SPACE_INVADERS_BOARD_WIDTH,
+    360,
+  );
+  const normalizedBoardHeight = normalizeSpaceInvadersDimension(
+    boardHeight,
+    SPACE_INVADERS_BOARD_HEIGHT,
+    480,
+  );
+  const formation = getSpaceInvadersFormationSpec(alienCount);
+
   return {
-    invaders: createSpaceInvadersFormation(),
+    alienCount: formation.alienCount,
+    baseY: normalizedBoardHeight - 68,
+    boardHeight: normalizedBoardHeight,
+    boardWidth: normalizedBoardWidth,
+    invaders: createSpaceInvadersFormation({
+      boardWidth: normalizedBoardWidth,
+      columns: formation.columns,
+      rows: formation.rows,
+    }),
     lives: SPACE_INVADERS_STARTING_LIVES,
     marchDirection: 1,
-    player: createCenteredPlayer(),
+    player: createCenteredPlayer(normalizedBoardWidth, normalizedBoardHeight),
     playerShot: null,
     score: 0,
     status: "ready",
   };
 }
 
-export function createSpaceInvadersFormation() {
-  return Array.from({ length: SPACE_INVADERS_ROWS }, (_, row) =>
-    Array.from({ length: SPACE_INVADERS_COLUMNS }, (_, column): SpaceInvader => {
-      const x = INVADER_X + column * (INVADER_WIDTH + INVADER_GAP_X);
+export function createSpaceInvadersFormation({
+  boardWidth = SPACE_INVADERS_BOARD_WIDTH,
+  columns = SPACE_INVADERS_COLUMNS,
+  rows = SPACE_INVADERS_ROWS,
+}: {
+  boardWidth?: number;
+  columns?: number;
+  rows?: number;
+} = {}) {
+  const formationWidth = columns * INVADER_WIDTH + (columns - 1) * INVADER_GAP_X;
+  const startX = Math.max(INVADER_X, (boardWidth - formationWidth) / 2);
+
+  return Array.from({ length: rows }, (_, row) =>
+    Array.from({ length: columns }, (_, column): SpaceInvader => {
+      const x = startX + column * (INVADER_WIDTH + INVADER_GAP_X);
       const y = INVADER_TOP + row * (INVADER_HEIGHT + INVADER_GAP_Y);
 
       return {
@@ -111,7 +165,7 @@ export function startSpaceInvadersGame(
   }
 
   if (game.status === "lost" || game.status === "won") {
-    return restartSpaceInvadersGame();
+    return restartSpaceInvadersGame(game);
   }
 
   return {
@@ -133,9 +187,19 @@ export function pauseSpaceInvadersGame(
   };
 }
 
-export function restartSpaceInvadersGame(): SpaceInvadersGameState {
+export function restartSpaceInvadersGame(
+  game: Pick<SpaceInvadersGameState, "alienCount" | "boardHeight" | "boardWidth"> = {
+    alienCount: SPACE_INVADERS_COLUMNS * SPACE_INVADERS_ROWS,
+    boardHeight: SPACE_INVADERS_BOARD_HEIGHT,
+    boardWidth: SPACE_INVADERS_BOARD_WIDTH,
+  },
+): SpaceInvadersGameState {
   return {
-    ...createInitialSpaceInvadersGame(),
+    ...createInitialSpaceInvadersGame({
+      alienCount: game.alienCount,
+      boardHeight: game.boardHeight,
+      boardWidth: game.boardWidth,
+    }),
     status: "running" as const,
   };
 }
@@ -152,7 +216,7 @@ export function moveSpaceInvadersPlayer(
     ...game,
     player: {
       ...game.player,
-      x: clamp(game.player.x + deltaX, 0, SPACE_INVADERS_BOARD_WIDTH - game.player.width),
+      x: clamp(game.player.x + deltaX, 0, game.boardWidth - game.player.width),
     },
   };
 }
@@ -263,7 +327,7 @@ function marchInvaders(game: SpaceInvadersGameState): SpaceInvadersGameState {
   const wouldHitWall = activeInvaders.some((invader) => {
     const nextX = invader.x + game.marchDirection * INVADER_STEP_X;
 
-    return nextX < 0 || nextX + invader.width > SPACE_INVADERS_BOARD_WIDTH;
+    return nextX < 0 || nextX + invader.width > game.boardWidth;
   });
 
   if (wouldHitWall) {
@@ -288,16 +352,19 @@ function marchInvaders(game: SpaceInvadersGameState): SpaceInvadersGameState {
 
 function hasInvaderReachedBase(game: SpaceInvadersGameState) {
   return game.invaders.some(
-    (invader) => invader.isActive && invader.y + invader.height >= SPACE_INVADERS_BASE_Y,
+    (invader) => invader.isActive && invader.y + invader.height >= game.baseY,
   );
 }
 
-function createCenteredPlayer(): SpaceInvadersPlayer {
+function createCenteredPlayer(
+  boardWidth = SPACE_INVADERS_BOARD_WIDTH,
+  boardHeight = SPACE_INVADERS_BOARD_HEIGHT,
+): SpaceInvadersPlayer {
   return {
     height: PLAYER_HEIGHT,
     width: PLAYER_WIDTH,
-    x: (SPACE_INVADERS_BOARD_WIDTH - PLAYER_WIDTH) / 2,
-    y: PLAYER_Y,
+    x: (boardWidth - PLAYER_WIDTH) / 2,
+    y: boardHeight - 46,
   };
 }
 
@@ -337,4 +404,28 @@ function rectanglesIntersect(
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function getSpaceInvadersFormationSpec(alienCount: number) {
+  const normalizedAlienCount = Number.isFinite(alienCount)
+    ? Math.max(1, Math.floor(alienCount))
+    : SPACE_INVADERS_COLUMNS * SPACE_INVADERS_ROWS;
+
+  return (
+    SPACE_INVADERS_ALIEN_COUNT_OPTIONS.find(
+      (option) => option.alienCount === normalizedAlienCount,
+    ) ??
+    SPACE_INVADERS_ALIEN_COUNT_OPTIONS.find(
+      (option) => option.alienCount === SPACE_INVADERS_COLUMNS * SPACE_INVADERS_ROWS,
+    ) ??
+    SPACE_INVADERS_ALIEN_COUNT_OPTIONS[SPACE_INVADERS_ALIEN_COUNT_OPTIONS.length - 1]
+  );
+}
+
+function normalizeSpaceInvadersDimension(value: number, fallback: number, minimum: number) {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.max(minimum, Math.floor(value));
 }
