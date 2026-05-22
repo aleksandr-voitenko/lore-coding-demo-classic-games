@@ -24,6 +24,7 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
+import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
 import { TwentyFortyEightBoard } from "@/components/twenty-forty-eight-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,7 +37,9 @@ import {
   type TwentyFortyEightGameState,
   type TwentyFortyEightStatus,
 } from "@/lib/twenty-forty-eight-game-engine";
+import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
+import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
 
 type TwentyFortyEightGameProps = {
   initialBoardSize?: number;
@@ -129,6 +132,26 @@ export function TwentyFortyEightGame({
   const topTile = getTwentyFortyEightTopTile(game);
   const showStartScreen = game.status === "ready";
   const showEndScreen = game.status === "lost" || game.status === "won";
+  const leaderboardKey = createGameLeaderboardKey("twenty-forty-eight", [
+    { name: "board", value: game.boardSize },
+    { name: "goal", value: game.winTile },
+  ]);
+  const {
+    isSavingLeaderboardScore,
+    leaderboardBestScore,
+    leaderboardSlots,
+    leaderboardStatusMessage,
+    pendingLeaderboardEntry,
+    playerName,
+    resetLeaderboardForm,
+    saveLeaderboardScore: savePendingLeaderboardScore,
+    scoreSaveFailed,
+    setPlayerName,
+  } = useGameLeaderboard({
+    leaderboardKey,
+    pendingScore: showEndScreen ? game.score : null,
+  });
+  const bestScore = Math.max(game.bestScore, leaderboardBestScore);
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen();
   const { abandonDialogProps, requestBackToMenu } = useGameEscapeToMenu({
     isDisabled: isHelpVisible,
@@ -137,20 +160,26 @@ export function TwentyFortyEightGame({
   });
 
   const startGame = useCallback(() => {
+    resetLeaderboardForm();
     setGame((current) => startTwentyFortyEightGame(current));
-  }, []);
+  }, [resetLeaderboardForm]);
 
   const restartGame = useCallback(() => {
+    resetLeaderboardForm();
     setGame((current) => restartTwentyFortyEightGame(current, { random: Math.random }));
-  }, []);
+  }, [resetLeaderboardForm]);
 
   const moveTiles = useCallback((direction: TwentyFortyEightDirection) => {
     setGame((current) => moveTwentyFortyEightGame(current, direction, { random: Math.random }));
   }, []);
 
+  const saveLeaderboardScore = useCallback(() => {
+    void savePendingLeaderboardScore();
+  }, [savePendingLeaderboardScore]);
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isHelpVisible || isTypingTarget(event.target)) {
+      if (isHelpVisible || pendingLeaderboardEntry !== null || isTypingTarget(event.target)) {
         return;
       }
 
@@ -179,7 +208,7 @@ export function TwentyFortyEightGame({
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [game.status, isHelpVisible, moveTiles, restartGame, startGame]);
+  }, [game.status, isHelpVisible, moveTiles, pendingLeaderboardEntry, restartGame, startGame]);
 
   return (
     <GameShell className="bg-[var(--twenty-page)] text-[var(--twenty-ink)]">
@@ -208,7 +237,7 @@ export function TwentyFortyEightGame({
               className="font-mono text-3xl font-semibold leading-none"
               data-testid="twenty-forty-eight-best-score"
             >
-              {game.bestScore}
+              {bestScore}
             </dd>
           </div>
         </dl>
@@ -245,6 +274,7 @@ export function TwentyFortyEightGame({
               onBackToMenu={requestBackToMenu}
               onHelp={openHelp}
               onRestart={restartGame}
+              restartDisabled={pendingLeaderboardEntry !== null}
               testIdPrefix="twenty-forty-eight"
             />
           }
@@ -277,32 +307,66 @@ export function TwentyFortyEightGame({
                 <PlayIcon data-icon="inline-start" />
                 Start
               </Button>
+              <GameLeaderboardPanel
+                slotTestIdPrefix="twenty-forty-eight-leaderboard-slot"
+                slots={leaderboardSlots}
+                statusMessage={leaderboardStatusMessage}
+                testId="twenty-forty-eight-start-leaderboard"
+              />
             </div>
           ) : showEndScreen ? (
             <div
               className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[color-mix(in_oklch,var(--twenty-board)_78%,transparent)] px-4 py-5 text-center text-[var(--twenty-board-text)] backdrop-blur-[2px]"
               data-testid="twenty-forty-eight-end-screen"
             >
-              <div className="flex flex-col items-center gap-1">
-                <p className="text-3xl font-semibold tracking-normal text-balance">
-                  {game.status === "won" ? `${game.winTile} reached` : "No moves left"}
-                </p>
-                <p className="text-sm font-semibold text-[color-mix(in_oklch,var(--twenty-board-text)_76%,transparent)]">
-                  Final score
-                </p>
-                <p className="font-mono text-5xl font-semibold leading-none">{game.score}</p>
-              </div>
-              <Button
-                className="min-w-36"
-                data-testid="twenty-forty-eight-overlay-new-game-button"
-                onClick={restartGame}
-                size="lg"
-                type="button"
-                variant="secondary"
-              >
-                <RotateCcwIcon data-icon="inline-start" />
-                New game
-              </Button>
+              {pendingLeaderboardEntry ? (
+                <>
+                  <GameLeaderboardScoreForm
+                    isSaving={isSavingLeaderboardScore}
+                    onPlayerNameChange={setPlayerName}
+                    onSaveScore={saveLeaderboardScore}
+                    pendingEntry={pendingLeaderboardEntry}
+                    playerName={playerName}
+                    saveFailed={scoreSaveFailed}
+                    testIdPrefix="twenty-forty-eight"
+                  />
+                  <GameLeaderboardPanel
+                    slotTestIdPrefix="twenty-forty-eight-final-leaderboard-slot"
+                    slots={leaderboardSlots}
+                    statusMessage={leaderboardStatusMessage}
+                    testId="twenty-forty-eight-final-leaderboard"
+                  />
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-col items-center gap-1">
+                    <p className="text-3xl font-semibold tracking-normal text-balance">
+                      {game.status === "won" ? `${game.winTile} reached` : "No moves left"}
+                    </p>
+                    <p className="text-sm font-semibold text-[color-mix(in_oklch,var(--twenty-board-text)_76%,transparent)]">
+                      Final score
+                    </p>
+                    <p className="font-mono text-5xl font-semibold leading-none">{game.score}</p>
+                  </div>
+                  <GameLeaderboardPanel
+                    slotTestIdPrefix="twenty-forty-eight-final-leaderboard-slot"
+                    slots={leaderboardSlots}
+                    statusMessage={leaderboardStatusMessage}
+                    testId="twenty-forty-eight-final-leaderboard"
+                  />
+                  <Button
+                    className="min-w-36"
+                    data-testid="twenty-forty-eight-overlay-new-game-button"
+                    onClick={restartGame}
+                    size="lg"
+                    type="button"
+                    variant="secondary"
+                  >
+                    <RotateCcwIcon data-icon="inline-start" />
+                    New game
+                  </Button>
+                </>
+              )}
             </div>
           ) : null}
           {isHelpVisible ? (

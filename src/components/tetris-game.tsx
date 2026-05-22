@@ -23,6 +23,7 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
+import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
 import { isTypingTarget } from "@/components/game-input";
 import { TetrisBoard, tetrominoCellClassNames } from "@/components/tetris-board";
 import { Button } from "@/components/ui/button";
@@ -41,7 +42,9 @@ import {
   type TetrisGameState,
   type TetrisStatus,
 } from "@/lib/tetris-game-engine";
+import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
+import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
 
 type TetrisGameProps = {
   initialBoardHeight?: number;
@@ -203,12 +206,32 @@ export function TetrisGame({
   const showStartScreen = game.status === "ready";
   const showGameOverScreen = game.status === "lost";
   const showPauseScreen = game.status === "paused";
+  const leaderboardKey = createGameLeaderboardKey("tetris", [
+    { name: "board", value: `${game.boardWidth}x${game.boardHeight}` },
+    { name: "level", value: game.startLevel },
+  ]);
+  const {
+    isSavingLeaderboardScore,
+    leaderboardSlots,
+    leaderboardStatusMessage,
+    pendingLeaderboardEntry,
+    playerName,
+    resetLeaderboardForm,
+    saveLeaderboardScore: savePendingLeaderboardScore,
+    scoreSaveFailed,
+    setPlayerName,
+  } = useGameLeaderboard({
+    leaderboardKey,
+    pendingScore: showGameOverScreen ? game.score : null,
+  });
 
   const startGame = useCallback(() => {
+    resetLeaderboardForm();
     setGame((current) => startTetrisGame(current, { random: Math.random }));
-  }, []);
+  }, [resetLeaderboardForm]);
 
   const toggleRunState = useCallback(() => {
+    resetLeaderboardForm();
     setGame((current) => {
       if (current.status === "running") {
         return pauseTetrisGame(current);
@@ -216,11 +239,12 @@ export function TetrisGame({
 
       return startTetrisGame(current, { random: Math.random });
     });
-  }, []);
+  }, [resetLeaderboardForm]);
 
   const restartGame = useCallback(() => {
+    resetLeaderboardForm();
     setGame((current) => createRunningTetrisGame(current));
-  }, []);
+  }, [resetLeaderboardForm]);
 
   const moveLeft = useCallback(() => {
     setGame((current) => moveTetrisPiece(current, -1, 0));
@@ -249,6 +273,10 @@ export function TetrisGame({
   const advanceTetris = useCallback(() => {
     setGame((current) => advanceTetrisGame(current, { random: Math.random }));
   }, []);
+
+  const saveLeaderboardScore = useCallback(() => {
+    void savePendingLeaderboardScore();
+  }, [savePendingLeaderboardScore]);
 
   const pauseGameForHelp = useCallback(() => {
     setGame((current) => pauseTetrisGame(current));
@@ -284,7 +312,7 @@ export function TetrisGame({
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isHelpVisible || isTypingTarget(event.target)) {
+      if (isHelpVisible || pendingLeaderboardEntry !== null || isTypingTarget(event.target)) {
         return;
       }
 
@@ -354,6 +382,7 @@ export function TetrisGame({
     hardDrop,
     moveLeft,
     moveRight,
+    pendingLeaderboardEntry,
     rotateClockwise,
     rotateCounterclockwise,
     softDrop,
@@ -469,7 +498,7 @@ export function TetrisGame({
                 label: pauseActionLabel,
                 onClick: toggleRunState,
               }}
-              restartDisabled={game.status === "ready"}
+              restartDisabled={game.status === "ready" || pendingLeaderboardEntry !== null}
               testIdPrefix="tetris"
             />
           }
@@ -523,34 +552,68 @@ export function TetrisGame({
                   <PlayIcon data-icon="inline-start" />
                   Start
                 </Button>
+                <GameLeaderboardPanel
+                  slotTestIdPrefix="tetris-leaderboard-slot"
+                  slots={leaderboardSlots}
+                  statusMessage={leaderboardStatusMessage}
+                  testId="tetris-start-leaderboard"
+                />
               </div>
             ) : showGameOverScreen ? (
               <div
                 className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[color-mix(in_oklch,var(--tetris-board)_80%,transparent)] px-4 py-5 text-center text-[var(--tetris-board-text)] backdrop-blur-[2px]"
                 data-testid="tetris-game-over-screen"
               >
-                <div className="flex flex-col items-center gap-1">
-                  <p className="text-3xl font-semibold tracking-normal text-balance">
-                    Game over
-                  </p>
-                  <p className="text-sm font-semibold text-[color-mix(in_oklch,var(--tetris-board-text)_76%,transparent)]">
-                    Final score
-                  </p>
-                  <p className="font-mono text-5xl font-semibold leading-none">
-                    {game.score}
-                  </p>
-                </div>
-                <Button
-                  className="min-w-36"
-                  data-testid="tetris-new-game-button"
-                  onClick={restartGame}
-                  size="lg"
-                  type="button"
-                  variant="secondary"
-                >
-                  <RotateCcwIcon data-icon="inline-start" />
-                  New game
-                </Button>
+                {pendingLeaderboardEntry ? (
+                  <>
+                    <GameLeaderboardScoreForm
+                      isSaving={isSavingLeaderboardScore}
+                      onPlayerNameChange={setPlayerName}
+                      onSaveScore={saveLeaderboardScore}
+                      pendingEntry={pendingLeaderboardEntry}
+                      playerName={playerName}
+                      saveFailed={scoreSaveFailed}
+                      testIdPrefix="tetris"
+                    />
+                    <GameLeaderboardPanel
+                      slotTestIdPrefix="tetris-final-leaderboard-slot"
+                      slots={leaderboardSlots}
+                      statusMessage={leaderboardStatusMessage}
+                      testId="tetris-final-leaderboard"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <div className="flex flex-col items-center gap-1">
+                      <p className="text-3xl font-semibold tracking-normal text-balance">
+                        Game over
+                      </p>
+                      <p className="text-sm font-semibold text-[color-mix(in_oklch,var(--tetris-board-text)_76%,transparent)]">
+                        Final score
+                      </p>
+                      <p className="font-mono text-5xl font-semibold leading-none">
+                        {game.score}
+                      </p>
+                    </div>
+                    <GameLeaderboardPanel
+                      slotTestIdPrefix="tetris-final-leaderboard-slot"
+                      slots={leaderboardSlots}
+                      statusMessage={leaderboardStatusMessage}
+                      testId="tetris-final-leaderboard"
+                    />
+                    <Button
+                      className="min-w-36"
+                      data-testid="tetris-new-game-button"
+                      onClick={restartGame}
+                      size="lg"
+                      type="button"
+                      variant="secondary"
+                    >
+                      <RotateCcwIcon data-icon="inline-start" />
+                      New game
+                    </Button>
+                  </>
+                )}
               </div>
             ) : showPauseScreen ? (
               <div

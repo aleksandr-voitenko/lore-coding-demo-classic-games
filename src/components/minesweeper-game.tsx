@@ -17,6 +17,7 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
+import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
 import { MinesweeperBoard } from "@/components/minesweeper-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,7 +29,9 @@ import {
   type MinesweeperGameState,
   type MinesweeperStatus,
 } from "@/lib/minesweeper-game-engine";
+import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
+import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
 
 type MinesweeperGameProps = {
   initialBoardHeight?: number;
@@ -106,6 +109,25 @@ export function MinesweeperGame({
   const safeCellCount = game.width * game.height - game.mineCount;
   const remainingMineCount = getMinesweeperRemainingMineCount(game);
   const showEndScreen = game.status === "lost" || game.status === "won";
+  const leaderboardKey = createGameLeaderboardKey("minesweeper", [
+    { name: "board", value: `${game.width}x${game.height}` },
+    { name: "mines", value: game.mineCount },
+  ]);
+  const {
+    isSavingLeaderboardScore,
+    leaderboardSlots,
+    leaderboardStatusMessage,
+    pendingLeaderboardEntry,
+    playerName,
+    resetLeaderboardForm,
+    saveLeaderboardScore: savePendingLeaderboardScore,
+    scoreSaveFailed,
+    setPlayerName,
+  } = useGameLeaderboard({
+    leaderboardKey,
+    pendingScore: game.status === "won" ? elapsedSeconds : null,
+    sortDirection: "asc",
+  });
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen();
   const { abandonDialogProps, requestBackToMenu } = useGameEscapeToMenu({
     isDisabled: isHelpVisible,
@@ -122,10 +144,15 @@ export function MinesweeperGame({
   }, []);
 
   const startNewGame = useCallback(() => {
+    resetLeaderboardForm();
     setElapsedSeconds(0);
     setIsFlagMode(false);
     setGame((current) => restartMinesweeperGame(current));
-  }, []);
+  }, [resetLeaderboardForm]);
+
+  const saveLeaderboardScore = useCallback(() => {
+    void savePendingLeaderboardScore();
+  }, [savePendingLeaderboardScore]);
 
   useEffect(() => {
     if (game.status !== "running" || isHelpVisible) {
@@ -141,7 +168,7 @@ export function MinesweeperGame({
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isHelpVisible || isTypingTarget(event.target)) {
+      if (isHelpVisible || pendingLeaderboardEntry !== null || isTypingTarget(event.target)) {
         return;
       }
 
@@ -160,7 +187,7 @@ export function MinesweeperGame({
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isHelpVisible, startNewGame]);
+  }, [isHelpVisible, pendingLeaderboardEntry, startNewGame]);
 
   return (
     <GameShell className="bg-[var(--minesweeper-page)] text-[var(--minesweeper-ink)]">
@@ -231,6 +258,7 @@ export function MinesweeperGame({
               onBackToMenu={requestBackToMenu}
               onHelp={openHelp}
               onRestart={startNewGame}
+              restartDisabled={pendingLeaderboardEntry !== null}
               testIdPrefix="minesweeper"
             />
           }
@@ -247,27 +275,59 @@ export function MinesweeperGame({
               className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[color-mix(in_oklch,var(--minesweeper-board)_76%,transparent)] px-4 py-5 text-center text-[var(--minesweeper-board-text)] backdrop-blur-[2px]"
               data-testid="minesweeper-end-screen"
             >
-              <div className="flex flex-col items-center gap-1">
-                <p className="text-3xl font-semibold tracking-normal text-balance">
-                  {game.status === "won" ? "Board cleared" : "Game over"}
-                </p>
-                <p className="text-sm font-semibold text-[color-mix(in_oklch,var(--minesweeper-board-text)_76%,transparent)]">
-                  Time
-                </p>
-                <p className="font-mono text-5xl font-semibold leading-none">
-                  {formatElapsedTime(elapsedSeconds)}
-                </p>
-              </div>
-              <Button
-                className="min-w-36"
-                onClick={startNewGame}
-                size="lg"
-                type="button"
-                variant="secondary"
-              >
-                <RotateCcwIcon data-icon="inline-start" />
-                New game
-              </Button>
+              {pendingLeaderboardEntry ? (
+                <>
+                  <GameLeaderboardScoreForm
+                    formatScore={formatElapsedTime}
+                    isSaving={isSavingLeaderboardScore}
+                    onPlayerNameChange={setPlayerName}
+                    onSaveScore={saveLeaderboardScore}
+                    pendingEntry={pendingLeaderboardEntry}
+                    playerName={playerName}
+                    saveFailed={scoreSaveFailed}
+                    scoreLabel="time"
+                    testIdPrefix="minesweeper"
+                  />
+                  <GameLeaderboardPanel
+                    formatScore={formatElapsedTime}
+                    slotTestIdPrefix="minesweeper-final-leaderboard-slot"
+                    slots={leaderboardSlots}
+                    statusMessage={leaderboardStatusMessage}
+                    testId="minesweeper-final-leaderboard"
+                  />
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-col items-center gap-1">
+                    <p className="text-3xl font-semibold tracking-normal text-balance">
+                      {game.status === "won" ? "Board cleared" : "Game over"}
+                    </p>
+                    <p className="text-sm font-semibold text-[color-mix(in_oklch,var(--minesweeper-board-text)_76%,transparent)]">
+                      Time
+                    </p>
+                    <p className="font-mono text-5xl font-semibold leading-none">
+                      {formatElapsedTime(elapsedSeconds)}
+                    </p>
+                  </div>
+                  <GameLeaderboardPanel
+                    formatScore={formatElapsedTime}
+                    slotTestIdPrefix="minesweeper-final-leaderboard-slot"
+                    slots={leaderboardSlots}
+                    statusMessage={leaderboardStatusMessage}
+                    testId="minesweeper-final-leaderboard"
+                  />
+                  <Button
+                    className="min-w-36"
+                    onClick={startNewGame}
+                    size="lg"
+                    type="button"
+                    variant="secondary"
+                  >
+                    <RotateCcwIcon data-icon="inline-start" />
+                    New game
+                  </Button>
+                </>
+              )}
             </div>
           ) : null}
           {isHelpVisible ? (

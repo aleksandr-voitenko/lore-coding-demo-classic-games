@@ -17,6 +17,7 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
+import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
 import { SimonBoard } from "@/components/simon-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +34,8 @@ import {
   type SimonPadId,
   type SimonStatus,
 } from "@/lib/simon-game-engine";
+import { createGameLeaderboardKey } from "@/lib/leaderboard";
+import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
 
 type SimonGameProps = {
   initialWinTarget?: number;
@@ -132,12 +135,31 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
   const showStartScreen = game.status === "ready";
   const showPauseScreen = game.status === "paused";
   const showEndScreen = game.status === "lost" || game.status === "won";
+  const leaderboardKey = createGameLeaderboardKey("simon", [
+    { name: "target", value: game.winTarget },
+  ]);
+  const {
+    isSavingLeaderboardScore,
+    leaderboardSlots,
+    leaderboardStatusMessage,
+    pendingLeaderboardEntry,
+    playerName,
+    resetLeaderboardForm,
+    saveLeaderboardScore: savePendingLeaderboardScore,
+    scoreSaveFailed,
+    setPlayerName,
+  } = useGameLeaderboard({
+    leaderboardKey,
+    pendingScore: showEndScreen ? game.score : null,
+  });
 
   const startGame = useCallback(() => {
+    resetLeaderboardForm();
     setGame((current) => startSimonGame(current, { random: Math.random }));
-  }, []);
+  }, [resetLeaderboardForm]);
 
   const toggleRunState = useCallback(() => {
+    resetLeaderboardForm();
     setGame((current) => {
       if (current.status === "showing" || current.status === "input") {
         return pauseSimonGame(current);
@@ -145,15 +167,20 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
 
       return startSimonGame(current, { random: Math.random });
     });
-  }, []);
+  }, [resetLeaderboardForm]);
 
   const restartGame = useCallback(() => {
+    resetLeaderboardForm();
     setGame((current) => restartSimonGame(current, { random: Math.random }));
-  }, []);
+  }, [resetLeaderboardForm]);
 
   const pressPad = useCallback((pad: SimonPadId) => {
     setGame((current) => playSimonPad(current, pad, { random: Math.random }));
   }, []);
+
+  const saveLeaderboardScore = useCallback(() => {
+    void savePendingLeaderboardScore();
+  }, [savePendingLeaderboardScore]);
 
   const pauseGameForHelp = useCallback(() => {
     setGame((current) => pauseSimonGame(current));
@@ -203,7 +230,7 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isHelpVisible || isTypingTarget(event.target)) {
+      if (isHelpVisible || pendingLeaderboardEntry !== null || isTypingTarget(event.target)) {
         return;
       }
 
@@ -230,7 +257,7 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [game.status, isHelpVisible, pressPad, startGame, toggleRunState]);
+  }, [game.status, isHelpVisible, pendingLeaderboardEntry, pressPad, startGame, toggleRunState]);
 
   return (
     <GameShell className="bg-[#f6f9fc] text-[#172033]">
@@ -312,7 +339,7 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
                 label: pauseActionLabel,
                 onClick: toggleRunState,
               }}
-              restartDisabled={game.status === "ready"}
+              restartDisabled={game.status === "ready" || pendingLeaderboardEntry !== null}
               testIdPrefix="simon"
             />
           }
@@ -353,30 +380,64 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
                 <PlayIcon data-icon="inline-start" />
                 Start
               </Button>
+              <GameLeaderboardPanel
+                slotTestIdPrefix="simon-leaderboard-slot"
+                slots={leaderboardSlots}
+                statusMessage={leaderboardStatusMessage}
+                testId="simon-start-leaderboard"
+              />
             </div>
           ) : showEndScreen ? (
             <div
               className="absolute inset-3 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[#f8fbff]/86 px-4 py-5 text-center text-[#172033] backdrop-blur-[2px]"
               data-testid="simon-end-screen"
             >
-              <div className="flex flex-col items-center gap-1">
-                <p className="text-3xl font-semibold tracking-normal text-balance">
-                  {game.status === "won" ? "Sequence cleared" : "Game over"}
-                </p>
-                <p className="text-sm font-semibold text-[#59687d]">Final score</p>
-                <p className="font-mono text-5xl font-semibold leading-none">{game.score}</p>
-              </div>
-              <Button
-                className="min-w-36"
-                data-testid="simon-new-game-button"
-                onClick={restartGame}
-                size="lg"
-                type="button"
-                variant="secondary"
-              >
-                <RotateCcwIcon data-icon="inline-start" />
-                New game
-              </Button>
+              {pendingLeaderboardEntry ? (
+                <>
+                  <GameLeaderboardScoreForm
+                    isSaving={isSavingLeaderboardScore}
+                    onPlayerNameChange={setPlayerName}
+                    onSaveScore={saveLeaderboardScore}
+                    pendingEntry={pendingLeaderboardEntry}
+                    playerName={playerName}
+                    saveFailed={scoreSaveFailed}
+                    testIdPrefix="simon"
+                  />
+                  <GameLeaderboardPanel
+                    slotTestIdPrefix="simon-final-leaderboard-slot"
+                    slots={leaderboardSlots}
+                    statusMessage={leaderboardStatusMessage}
+                    testId="simon-final-leaderboard"
+                  />
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-col items-center gap-1">
+                    <p className="text-3xl font-semibold tracking-normal text-balance">
+                      {game.status === "won" ? "Sequence cleared" : "Game over"}
+                    </p>
+                    <p className="text-sm font-semibold text-[#59687d]">Final score</p>
+                    <p className="font-mono text-5xl font-semibold leading-none">{game.score}</p>
+                  </div>
+                  <GameLeaderboardPanel
+                    slotTestIdPrefix="simon-final-leaderboard-slot"
+                    slots={leaderboardSlots}
+                    statusMessage={leaderboardStatusMessage}
+                    testId="simon-final-leaderboard"
+                  />
+                  <Button
+                    className="min-w-36"
+                    data-testid="simon-new-game-button"
+                    onClick={restartGame}
+                    size="lg"
+                    type="button"
+                    variant="secondary"
+                  >
+                    <RotateCcwIcon data-icon="inline-start" />
+                    New game
+                  </Button>
+                </>
+              )}
             </div>
           ) : showPauseScreen ? (
             <div

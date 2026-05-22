@@ -1,52 +1,59 @@
-import {
-  type Dispatch,
-  type SetStateAction,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  createPendingLeaderboardEntry,
+  fetchLeaderboard,
   LEADERBOARD_LIMIT,
-  type GameState,
+  submitLeaderboardScore,
   type LeaderboardEntry,
-  type PendingLeaderboardEntry,
-} from "@/lib/snake-game-engine";
-import { fetchLeaderboard, submitLeaderboardScore } from "@/lib/snake-leaderboard";
+  type LeaderboardSortDirection,
+} from "@/lib/leaderboard";
 
-type UseSnakeLeaderboardOptions = {
-  boardSize: number;
-  pendingLeaderboardEntry: PendingLeaderboardEntry | null;
-  setGame: Dispatch<SetStateAction<GameState>>;
+type UseGameLeaderboardOptions = {
+  leaderboardKey: string;
+  pendingScore: number | null;
+  sortDirection?: LeaderboardSortDirection;
 };
 
-export function useSnakeLeaderboard({
-  boardSize,
-  pendingLeaderboardEntry,
-  setGame,
-}: UseSnakeLeaderboardOptions) {
+export function useGameLeaderboard({
+  leaderboardKey,
+  pendingScore,
+  sortDirection = "desc",
+}: UseGameLeaderboardOptions) {
   const [isSavingLeaderboardScore, setIsSavingLeaderboardScore] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardLoadFailed, setLeaderboardLoadFailed] = useState(false);
   const [playerName, setPlayerName] = useState("");
   const [scoreSaveFailed, setScoreSaveFailed] = useState(false);
+  const [savedPendingScoreKey, setSavedPendingScoreKey] = useState<string | null>(null);
+  const pendingScoreKey =
+    pendingScore === null ? null : `${leaderboardKey}|sort=${sortDirection}|score=${pendingScore}`;
+  const hasSavedPendingScore =
+    pendingScoreKey !== null && savedPendingScoreKey === pendingScoreKey;
   const leaderboardBestScore = leaderboard[0]?.score ?? 0;
   const leaderboardStatusMessage = leaderboardLoadFailed ? "Leaderboard unavailable" : undefined;
   const leaderboardSlots = useMemo(
     () => Array.from({ length: LEADERBOARD_LIMIT }, (_, index) => leaderboard[index] ?? null),
     [leaderboard],
   );
+  const pendingLeaderboardEntry = useMemo(
+    () =>
+      pendingScore === null || hasSavedPendingScore
+        ? null
+        : createPendingLeaderboardEntry(pendingScore, leaderboard, sortDirection),
+    [hasSavedPendingScore, leaderboard, pendingScore, sortDirection],
+  );
 
   const resetLeaderboardForm = useCallback(() => {
     setPlayerName("");
     setScoreSaveFailed(false);
+    setSavedPendingScoreKey(null);
   }, []);
 
   useEffect(() => {
     let isCurrent = true;
 
-    fetchLeaderboard()
+    fetchLeaderboard({ leaderboardKey, sortDirection })
       .then((nextLeaderboard) => {
         if (!isCurrent) {
           return;
@@ -64,10 +71,10 @@ export function useSnakeLeaderboard({
     return () => {
       isCurrent = false;
     };
-  }, []);
+  }, [leaderboardKey, sortDirection]);
 
   const saveLeaderboardScore = useCallback(async () => {
-    if (pendingLeaderboardEntry === null || isSavingLeaderboardScore) {
+    if (pendingLeaderboardEntry === null || pendingScoreKey === null || isSavingLeaderboardScore) {
       return;
     }
 
@@ -76,19 +83,15 @@ export function useSnakeLeaderboard({
 
     try {
       const result = await submitLeaderboardScore({
-        boardSize,
+        leaderboardKey,
         name: playerName,
         score: pendingLeaderboardEntry.score,
+        sortDirection,
       });
-      const nextBestScore = result.entries[0]?.score ?? 0;
 
       setLeaderboard(result.entries);
       setLeaderboardLoadFailed(false);
-      setGame((current) => ({
-        ...current,
-        bestScore: Math.max(current.bestScore, nextBestScore),
-        pendingLeaderboardEntry: null,
-      }));
+      setSavedPendingScoreKey(pendingScoreKey);
       setPlayerName("");
     } catch {
       setLeaderboardLoadFailed(true);
@@ -96,7 +99,14 @@ export function useSnakeLeaderboard({
     } finally {
       setIsSavingLeaderboardScore(false);
     }
-  }, [boardSize, isSavingLeaderboardScore, pendingLeaderboardEntry, playerName, setGame]);
+  }, [
+    isSavingLeaderboardScore,
+    leaderboardKey,
+    pendingLeaderboardEntry,
+    pendingScoreKey,
+    playerName,
+    sortDirection,
+  ]);
 
   return {
     isSavingLeaderboardScore,
@@ -104,6 +114,7 @@ export function useSnakeLeaderboard({
     leaderboardBestScore,
     leaderboardSlots,
     leaderboardStatusMessage,
+    pendingLeaderboardEntry,
     playerName,
     resetLeaderboardForm,
     saveLeaderboardScore,

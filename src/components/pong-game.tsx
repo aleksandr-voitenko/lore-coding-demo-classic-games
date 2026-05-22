@@ -17,6 +17,7 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
+import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
 import { PongBoard } from "@/components/pong-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +32,8 @@ import {
   type PongGameState,
   type PongStatus,
 } from "@/lib/pong-game-engine";
+import { createGameLeaderboardKey } from "@/lib/leaderboard";
+import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
 
 type PongGameProps = {
   initialBoardHeight?: number;
@@ -107,12 +110,32 @@ export function PongGame({
   const showStartScreen = game.status === "ready";
   const showEndScreen = game.status === "lost" || game.status === "won";
   const showPauseScreen = game.status === "paused";
+  const leaderboardKey = createGameLeaderboardKey("pong", [
+    { name: "board", value: `${game.boardWidth}x${game.boardHeight}` },
+    { name: "target", value: game.targetScore },
+  ]);
+  const {
+    isSavingLeaderboardScore,
+    leaderboardSlots,
+    leaderboardStatusMessage,
+    pendingLeaderboardEntry,
+    playerName,
+    resetLeaderboardForm,
+    saveLeaderboardScore: savePendingLeaderboardScore,
+    scoreSaveFailed,
+    setPlayerName,
+  } = useGameLeaderboard({
+    leaderboardKey,
+    pendingScore: showEndScreen ? game.score.player : null,
+  });
 
   const startGame = useCallback(() => {
+    resetLeaderboardForm();
     setGame((current) => startPongGame(current));
-  }, []);
+  }, [resetLeaderboardForm]);
 
   const toggleRunState = useCallback(() => {
+    resetLeaderboardForm();
     setGame((current) => {
       if (current.status === "running") {
         return pausePongGame(current);
@@ -120,11 +143,12 @@ export function PongGame({
 
       return startPongGame(current);
     });
-  }, []);
+  }, [resetLeaderboardForm]);
 
   const restartGame = useCallback(() => {
+    resetLeaderboardForm();
     setGame((current) => restartPongGame(current));
-  }, []);
+  }, [resetLeaderboardForm]);
 
   const moveUp = useCallback(() => {
     setGame((current) => movePongPlayerUp(current));
@@ -137,6 +161,10 @@ export function PongGame({
   const advancePong = useCallback(() => {
     setGame((current) => advancePongGame(current));
   }, []);
+
+  const saveLeaderboardScore = useCallback(() => {
+    void savePendingLeaderboardScore();
+  }, [savePendingLeaderboardScore]);
 
   const pauseGameForHelp = useCallback(() => {
     setGame((current) => pausePongGame(current));
@@ -172,7 +200,7 @@ export function PongGame({
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isHelpVisible || isTypingTarget(event.target)) {
+      if (isHelpVisible || pendingLeaderboardEntry !== null || isTypingTarget(event.target)) {
         return;
       }
 
@@ -203,7 +231,15 @@ export function PongGame({
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [game.status, isHelpVisible, moveDown, moveUp, startGame, toggleRunState]);
+  }, [
+    game.status,
+    isHelpVisible,
+    moveDown,
+    moveUp,
+    pendingLeaderboardEntry,
+    startGame,
+    toggleRunState,
+  ]);
 
   return (
     <GameShell className="bg-[var(--pong-page)] text-[var(--pong-ink)]">
@@ -272,7 +308,7 @@ export function PongGame({
                 label: pauseActionLabel,
                 onClick: toggleRunState,
               }}
-              restartDisabled={game.status === "ready"}
+              restartDisabled={game.status === "ready" || pendingLeaderboardEntry !== null}
               testIdPrefix="pong"
             />
           }
@@ -306,32 +342,66 @@ export function PongGame({
                 <PlayIcon data-icon="inline-start" />
                 Start
               </Button>
+              <GameLeaderboardPanel
+                slotTestIdPrefix="pong-leaderboard-slot"
+                slots={leaderboardSlots}
+                statusMessage={leaderboardStatusMessage}
+                testId="pong-start-leaderboard"
+              />
             </div>
           ) : showEndScreen ? (
             <div
               className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[rgba(8,21,37,0.82)] px-4 py-5 text-center text-[#e5f2ff] backdrop-blur-[2px]"
               data-testid="pong-end-screen"
             >
-              <div className="flex flex-col items-center gap-1">
-                <p className="text-3xl font-semibold tracking-normal text-balance">
-                  {game.status === "won" ? "Match won" : "Match lost"}
-                </p>
-                <p className="text-sm font-semibold text-[#9fb6c9]">Final score</p>
-                <p className="font-mono text-5xl font-semibold leading-none">
-                  {game.score.player}-{game.score.cpu}
-                </p>
-              </div>
-              <Button
-                className="min-w-36"
-                data-testid="pong-new-game-button"
-                onClick={restartGame}
-                size="lg"
-                type="button"
-                variant="secondary"
-              >
-                <RotateCcwIcon data-icon="inline-start" />
-                New game
-              </Button>
+              {pendingLeaderboardEntry ? (
+                <>
+                  <GameLeaderboardScoreForm
+                    isSaving={isSavingLeaderboardScore}
+                    onPlayerNameChange={setPlayerName}
+                    onSaveScore={saveLeaderboardScore}
+                    pendingEntry={pendingLeaderboardEntry}
+                    playerName={playerName}
+                    saveFailed={scoreSaveFailed}
+                    testIdPrefix="pong"
+                  />
+                  <GameLeaderboardPanel
+                    slotTestIdPrefix="pong-final-leaderboard-slot"
+                    slots={leaderboardSlots}
+                    statusMessage={leaderboardStatusMessage}
+                    testId="pong-final-leaderboard"
+                  />
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-col items-center gap-1">
+                    <p className="text-3xl font-semibold tracking-normal text-balance">
+                      {game.status === "won" ? "Match won" : "Match lost"}
+                    </p>
+                    <p className="text-sm font-semibold text-[#9fb6c9]">Final score</p>
+                    <p className="font-mono text-5xl font-semibold leading-none">
+                      {game.score.player}-{game.score.cpu}
+                    </p>
+                  </div>
+                  <GameLeaderboardPanel
+                    slotTestIdPrefix="pong-final-leaderboard-slot"
+                    slots={leaderboardSlots}
+                    statusMessage={leaderboardStatusMessage}
+                    testId="pong-final-leaderboard"
+                  />
+                  <Button
+                    className="min-w-36"
+                    data-testid="pong-new-game-button"
+                    onClick={restartGame}
+                    size="lg"
+                    type="button"
+                    variant="secondary"
+                  >
+                    <RotateCcwIcon data-icon="inline-start" />
+                    New game
+                  </Button>
+                </>
+              )}
             </div>
           ) : showPauseScreen ? (
             <div

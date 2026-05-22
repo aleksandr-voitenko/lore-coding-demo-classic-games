@@ -56,15 +56,26 @@ patterns and constraints here.
 
 ## Leaderboard
 
-- `src/lib/snake-leaderboard.ts` contains shared leaderboard normalization and
-  client API helpers.
-- `src/hooks/use-snake-leaderboard.ts` owns Snake leaderboard loading,
-  submission state, failure state, player-name state, slots, and pending-score
-  completion.
-- `src/app/api/snake/leaderboard/route.ts` exposes the Snake leaderboard API.
-- `src/lib/server/sqlite-snake-leaderboard-store.ts` is the current server store.
-  The default database path is `.data/snake-leaderboard.sqlite`; set
-  `SNAKE_LEADERBOARD_SQLITE_PATH` for durable VPS storage.
+- `src/lib/leaderboard.ts` contains shared leaderboard key creation,
+  normalization, ranking, pending-entry, and client API helpers.
+- `src/hooks/use-game-leaderboard.ts` owns leaderboard loading, submission
+  state, failure state, player-name state, slots, and pending-score completion
+  for all games.
+- `src/components/game-leaderboard.tsx` renders the shared top-three list and
+  save-score form used by game overlays.
+- `src/app/api/leaderboard/route.ts` exposes the generic leaderboard API.
+- `src/lib/server/sqlite-leaderboard-store.ts` is the current server store. It
+  persists entries under stable game-and-parameter keys such as
+  `snake|board=19`, `tetris|board=10x20|level=3`, or
+  `minesweeper|board=9x9|mines=10`.
+- The default database path remains `.data/snake-leaderboard.sqlite` so existing
+  Snake deployments keep their data. `GAME_LEADERBOARD_SQLITE_PATH` is the
+  preferred durable VPS override; `SNAKE_LEADERBOARD_SQLITE_PATH` is still
+  honored as a fallback.
+- The SQLite store migrates legacy `snake_scores` rows into board-scoped
+  `leaderboard_scores` keys when the generic schema initializes.
+- Most games rank higher scores first. Minesweeper submits only won boards and
+  ranks lower elapsed times first.
 - The store boundary is intentionally small so a future Postgres adapter can
   replace SQLite without changing the client API.
 

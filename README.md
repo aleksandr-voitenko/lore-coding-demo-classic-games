@@ -6,13 +6,13 @@ Breakout, Minesweeper, Space Invaders, Pong, 2048, and Simon.
 
 ## Features
 
-- Classic Snake with SQLite-backed leaderboard persistence, timed special foods,
-  obstacle islands, and a full-board win state.
-- Classic Tetris, Breakout, Minesweeper, Space Invaders, Pong, 2048, and Simon
-  with deterministic gameplay rules and polished browser controls.
-- Closable in-game Help screens with controls and rules for every game.
-- Escape-to-menu controls that confirm before abandoning started games and pause
-  real-time games while the confirmation is open.
+- Eight classic games with deterministic gameplay rules and polished browser
+  controls.
+- Classic Snake includes timed special foods, obstacle islands, and a full-board
+  win state.
+- SQLite-backed, parameter-scoped top-three leaderboards for every game.
+  Minesweeper ranks fastest clears; the other games rank higher scores.
+- Closable in-game Help screens and Escape-to-menu abandon confirmations.
 - Local game-card artwork for every game in the launcher.
 
 ## Stack
@@ -46,52 +46,25 @@ menu.
 
 ## Persistent Storage
 
-The server leaderboard uses SQLite. By default the database is created at
-`.data/snake-leaderboard.sqlite`, which is ignored by git. On a VPS, set
-`SNAKE_LEADERBOARD_SQLITE_PATH` to a path on durable storage.
+Leaderboards use SQLite and store records under game-and-parameter keys such as
+`snake|board=19` or `tetris|board=10x20|level=3`.
+
+The default database path is `.data/snake-leaderboard.sqlite`, kept for
+compatibility with existing Snake deployments. On a VPS, set
+`GAME_LEADERBOARD_SQLITE_PATH` to durable storage. Existing
+`SNAKE_LEADERBOARD_SQLITE_PATH` deployments are honored as a fallback.
 
 ## Checks
 
-Run the deterministic test suite:
-
-```bash
-npm test
-```
-
-Generate machine-readable test and coverage reports:
-
-```bash
-npm run test:agent
-```
-
-The agent report command writes test results to `reports/vitest/results.json`
-and `reports/vitest/junit.xml`. Coverage output is written under
-`reports/coverage/`, including `coverage-final.json`, `coverage-summary.json`,
-`lcov.info`, and `cobertura-coverage.xml`.
-
-Generate a broad all-source coverage report:
-
-```bash
-npm run test:coverage
-```
-
-Run the thresholded core coverage gate:
-
-```bash
-npm run test:coverage:core
-```
-
-The core coverage command writes reports under `reports/coverage-core/` and
-checks deterministic engines, server/API helpers, pure board renderers, shared
-input filtering, and utilities separately from interactive client orchestration.
-
-Run the standard project checks:
-
-```bash
-npm run typecheck
-npm run lint
-npm run build
-```
+| Command | Purpose |
+| --- | --- |
+| `npm test` | Run the deterministic Vitest suite. |
+| `npm run test:agent` | Write JSON/JUnit results and coverage under `reports/`. |
+| `npm run test:coverage` | Generate broad all-source coverage under `reports/coverage/`. |
+| `npm run test:coverage:core` | Run the thresholded core coverage gate under `reports/coverage-core/`. |
+| `npm run typecheck` | Run TypeScript without emitting. |
+| `npm run lint` | Run ESLint. |
+| `npm run build` | Build the Next.js app. |
 
 ## UI Components
 

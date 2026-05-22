@@ -7,11 +7,9 @@ import {
   ArrowUpIcon,
   PlayIcon,
   RotateCcwIcon,
-  SaveIcon,
 } from "lucide-react";
 import {
   type Dispatch,
-  type FormEvent,
   type SetStateAction,
   useCallback,
   useEffect,
@@ -32,6 +30,7 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
+import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
 import { isTypingTarget } from "@/components/game-input";
 import { SnakeBoard } from "@/components/snake-board";
 import { Button } from "@/components/ui/button";
@@ -46,20 +45,12 @@ import {
   type Direction,
   type GameState,
   type GameStatus,
-  type LeaderboardEntry,
   type TimedFoodKind,
 } from "@/lib/snake-game-engine";
 import { createFoodFeedback, type FoodFeedback } from "@/lib/snake-food-feedback";
-import { MAX_LEADERBOARD_PLAYER_NAME_LENGTH } from "@/lib/snake-leaderboard";
+import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
-import { useSnakeLeaderboard } from "@/hooks/use-snake-leaderboard";
-
-type LeaderboardPanelProps = {
-  slotTestIdPrefix: string;
-  slots: Array<LeaderboardEntry | null>;
-  statusMessage?: string;
-  testId: string;
-};
+import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
 
 type TimedFoodLifecycleOptions = {
   gameStatus: GameStatus;
@@ -146,50 +137,6 @@ const SNAKE_HELP_SECTIONS: GameHelpSection[] = [
   },
 ];
 
-function LeaderboardPanel({
-  slotTestIdPrefix,
-  slots,
-  statusMessage,
-  testId,
-}: LeaderboardPanelProps) {
-  return (
-    <div
-      className="flex w-full max-w-xs flex-col gap-2 rounded-md border border-[color-mix(in_oklch,var(--snake-board-text)_14%,transparent)] bg-[color-mix(in_oklch,var(--snake-grid)_42%,transparent)] p-3"
-      data-testid={testId}
-    >
-      <p className="text-sm font-semibold">Leaderboard</p>
-      <ol className="flex flex-col gap-1">
-        {slots.map((entry, index) => (
-          <li
-            className="grid grid-cols-[1.75rem_minmax(0,1fr)_3rem] items-center gap-2 rounded-md bg-[color-mix(in_oklch,var(--snake-board)_70%,transparent)] px-2 py-1.5 text-sm"
-            data-testid={`${slotTestIdPrefix}-${index + 1}`}
-            key={index}
-          >
-            <span className="font-mono text-xs font-semibold text-[color-mix(in_oklch,var(--snake-board-text)_70%,transparent)]">
-              {index + 1}
-            </span>
-            <span className="truncate text-left font-medium">
-              {entry ? entry.name || "Anonymous" : "Open"}
-            </span>
-            <span className="text-right font-mono font-semibold">
-              {entry?.score ?? "-"}
-            </span>
-          </li>
-        ))}
-      </ol>
-      {statusMessage ? (
-        <p
-          aria-live="polite"
-          className="text-xs font-medium text-[color-mix(in_oklch,var(--snake-board-text)_68%,transparent)]"
-          data-testid={`${testId}-status`}
-        >
-          {statusMessage}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
 function useTimedFoodLifecycle({
   gameStatus,
   kind,
@@ -233,22 +180,26 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
   const [foodFeedbacks, setFoodFeedbacks] = useState<FoodFeedback[]>([]);
   const foodFeedbackIdRef = useRef(0);
   const previousGameRef = useRef(game);
-  const pendingLeaderboardEntry = game.pendingLeaderboardEntry;
+  const leaderboardKey = createGameLeaderboardKey("snake", [
+    { name: "board", value: game.boardSize },
+  ]);
+  const pendingLeaderboardScore =
+    game.status === "lost" || game.status === "won" ? game.score : null;
   const {
     isSavingLeaderboardScore,
     leaderboard,
     leaderboardBestScore,
     leaderboardSlots,
     leaderboardStatusMessage,
+    pendingLeaderboardEntry,
     playerName,
     resetLeaderboardForm,
     saveLeaderboardScore: savePendingLeaderboardScore,
     scoreSaveFailed,
     setPlayerName,
-  } = useSnakeLeaderboard({
-    boardSize: game.boardSize,
-    pendingLeaderboardEntry,
-    setGame,
+  } = useGameLeaderboard({
+    leaderboardKey,
+    pendingScore: pendingLeaderboardScore,
   });
   const bestScore = Math.max(game.bestScore, leaderboardBestScore);
   const speed = getGameTickDelay({
@@ -335,13 +286,9 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
     shouldPauseBeforeConfirm: canPauseGame,
   });
 
-  const saveLeaderboardScore = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      void savePendingLeaderboardScore();
-    },
-    [savePendingLeaderboardScore],
-  );
+  const saveLeaderboardScore = useCallback(() => {
+    void savePendingLeaderboardScore();
+  }, [savePendingLeaderboardScore]);
 
   useEffect(() => {
     const previousGame = previousGameRef.current;
@@ -556,7 +503,7 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
                     </p>
                   </div>
                 </div>
-                <LeaderboardPanel
+                <GameLeaderboardPanel
                   slotTestIdPrefix="snake-leaderboard-slot"
                   slots={leaderboardSlots}
                   statusMessage={leaderboardStatusMessage}
@@ -581,67 +528,16 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
               >
                 {pendingLeaderboardEntry ? (
                   <>
-                    <form
-                      className="flex w-full max-w-xs flex-col items-center gap-3"
-                      data-testid="snake-leaderboard-form"
-                      onSubmit={saveLeaderboardScore}
-                    >
-                      <div className="flex flex-col items-center gap-1">
-                        <p className="text-sm font-semibold">
-                          Top {pendingLeaderboardEntry.rank + 1} score
-                        </p>
-                        <p
-                          className="font-mono text-5xl font-semibold leading-none"
-                          data-testid="snake-qualifying-score"
-                        >
-                          {pendingLeaderboardEntry.score}
-                        </p>
-                      </div>
-                      <div className="flex w-full flex-col gap-1 text-left">
-                        <label
-                          className="text-xs font-medium text-[color-mix(in_oklch,var(--snake-board-text)_76%,transparent)]"
-                          htmlFor="snake-player-name"
-                        >
-                          Name
-                        </label>
-                        <input
-                          autoComplete="name"
-                          autoFocus
-                          className="h-9 w-full rounded-md border border-[color-mix(in_oklch,var(--snake-board-text)_22%,transparent)] bg-[color-mix(in_oklch,var(--snake-board-text)_10%,transparent)] px-3 text-sm font-medium text-[var(--snake-board-text)] outline-none transition placeholder:text-[color-mix(in_oklch,var(--snake-board-text)_54%,transparent)] focus-visible:border-[var(--snake-head)] focus-visible:ring-3 focus-visible:ring-[color-mix(in_oklch,var(--snake-head)_35%,transparent)]"
-                          data-testid="snake-player-name"
-                          disabled={isSavingLeaderboardScore}
-                          id="snake-player-name"
-                          maxLength={MAX_LEADERBOARD_PLAYER_NAME_LENGTH}
-                          onChange={(event) => setPlayerName(event.target.value)}
-                          placeholder="Player name"
-                          type="text"
-                          value={playerName}
-                        />
-                      </div>
-                      <div className="w-full">
-                        <Button
-                          className="w-full"
-                          data-testid="snake-save-score-button"
-                          disabled={isSavingLeaderboardScore}
-                          size="lg"
-                          type="submit"
-                          variant="secondary"
-                        >
-                          <SaveIcon data-icon="inline-start" />
-                          {isSavingLeaderboardScore ? "Saving" : "Save"}
-                        </Button>
-                      </div>
-                      {scoreSaveFailed ? (
-                        <p
-                          aria-live="polite"
-                          className="text-xs font-medium text-[color-mix(in_oklch,var(--snake-board-text)_76%,transparent)]"
-                          data-testid="snake-save-score-error"
-                        >
-                          Could not save score. Try again.
-                        </p>
-                      ) : null}
-                    </form>
-                    <LeaderboardPanel
+                    <GameLeaderboardScoreForm
+                      isSaving={isSavingLeaderboardScore}
+                      onPlayerNameChange={setPlayerName}
+                      onSaveScore={saveLeaderboardScore}
+                      pendingEntry={pendingLeaderboardEntry}
+                      playerName={playerName}
+                      saveFailed={scoreSaveFailed}
+                      testIdPrefix="snake"
+                    />
+                    <GameLeaderboardPanel
                       slotTestIdPrefix="snake-final-leaderboard-slot"
                       slots={leaderboardSlots}
                       statusMessage={leaderboardStatusMessage}
@@ -663,7 +559,7 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
                         </p>
                       </div>
                     </div>
-                    <LeaderboardPanel
+                    <GameLeaderboardPanel
                       slotTestIdPrefix="snake-final-leaderboard-slot"
                       slots={leaderboardSlots}
                       statusMessage={leaderboardStatusMessage}
