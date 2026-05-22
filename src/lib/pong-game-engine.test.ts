@@ -5,6 +5,8 @@ import {
   createInitialPongGame,
   getPongBallRadius,
   getPongPlayerSpeed,
+  isPongBetweenRounds,
+  isPongMatchInProgress,
   movePongPlayer,
   pausePongGame,
   PONG_BOARD_HEIGHT,
@@ -172,6 +174,39 @@ describe("pong game engine", () => {
       y: PONG_BOARD_HEIGHT / 2,
     });
     expect(advanced.ball.velocity.x).toBeGreaterThan(0);
+  });
+
+  it("distinguishes pre-match ready state from between-round ready state", () => {
+    const ballRadius = getPongBallRadius();
+    const initialGame = createInitialPongGame();
+    const runningGame = startPongGame(initialGame);
+    const pausedGame = pausePongGame(runningGame);
+    const betweenRoundsGame = advancePongGame(
+      createRunningGame({
+        ball: {
+          position: { x: PONG_BOARD_WIDTH + ballRadius + 1, y: PONG_BOARD_HEIGHT / 2 },
+          velocity: { x: 5, y: 0 },
+        },
+      }),
+    );
+    const endedGame = advancePongGame(
+      createRunningGame({
+        ball: {
+          position: { x: PONG_BOARD_WIDTH + ballRadius + 1, y: PONG_BOARD_HEIGHT / 2 },
+          velocity: { x: 5, y: 0 },
+        },
+        score: { cpu: 0, player: PONG_TARGET_SCORE - 1 },
+      }),
+    );
+
+    expect(isPongBetweenRounds(initialGame)).toBe(false);
+    expect(isPongBetweenRounds(betweenRoundsGame)).toBe(true);
+    expect(isPongBetweenRounds(endedGame)).toBe(false);
+    expect(isPongMatchInProgress(initialGame)).toBe(false);
+    expect(isPongMatchInProgress(runningGame)).toBe(true);
+    expect(isPongMatchInProgress(pausedGame)).toBe(true);
+    expect(isPongMatchInProgress(betweenRoundsGame)).toBe(true);
+    expect(isPongMatchInProgress(endedGame)).toBe(false);
   });
 
   it("ends the match when either side reaches the target score", () => {

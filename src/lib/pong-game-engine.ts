@@ -150,6 +150,14 @@ export function movePongPlayerDown(game: PongGameState): PongGameState {
   return movePongPlayer(game, PADDLE_SPEED);
 }
 
+export function isPongBetweenRounds(game: Pick<PongGameState, "score" | "status">) {
+  return game.status === "ready" && hasScoredPongPoint(game.score);
+}
+
+export function isPongMatchInProgress(game: Pick<PongGameState, "score" | "status">) {
+  return game.status === "running" || game.status === "paused" || isPongBetweenRounds(game);
+}
+
 export function advancePongGame(game: PongGameState): PongGameState {
   if (game.status !== "running") {
     return game;
@@ -255,6 +263,10 @@ function movePaddle(
     ...paddle,
     y: clamp(paddle.y + deltaY, 0, boardHeight - paddle.height),
   };
+}
+
+function hasScoredPongPoint(score: PongScore) {
+  return score.player > 0 || score.cpu > 0;
 }
 
 function moveCpuPaddle(

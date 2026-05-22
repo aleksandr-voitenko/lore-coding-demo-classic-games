@@ -24,6 +24,8 @@ import {
   advancePongGame,
   createInitialPongGame,
   getPongTickDelay,
+  isPongBetweenRounds,
+  isPongMatchInProgress,
   movePongPlayerDown,
   movePongPlayerUp,
   pausePongGame,
@@ -57,7 +59,7 @@ function createPongHelpSections(targetScore: number): GameHelpSection[] {
       controls: [
         {
           buttons: [{ text: "Enter", label: "Enter key" }],
-          label: "Start game",
+          label: "Start or serve",
         },
         {
           buttons: [{ icon: ArrowUpIcon, label: "Up" }, { text: "W", label: "W key" }],
@@ -106,8 +108,12 @@ export function PongGame({
   );
   const tickDelay = game.status === "running" ? getPongTickDelay() : null;
   const canPauseGame = game.status === "running" || game.status === "paused";
+  const isBetweenRounds = isPongBetweenRounds(game);
+  const isUnfinishedMatch = isPongMatchInProgress(game);
+  const statusLabel = isBetweenRounds ? "Next rally" : statusLabels[game.status];
   const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
-  const showStartScreen = game.status === "ready";
+  const showStartScreen = game.status === "ready" && !isBetweenRounds;
+  const showRoundReadyScreen = isBetweenRounds;
   const showEndScreen = game.status === "lost" || game.status === "won";
   const showPauseScreen = game.status === "paused";
   const leaderboardKey = createGameLeaderboardKey("pong", [
@@ -181,7 +187,7 @@ export function PongGame({
   });
   const { abandonDialogProps, requestBackToMenu } = useGameEscapeToMenu({
     isDisabled: isHelpVisible,
-    isGameStarted: canPauseGame,
+    isGameStarted: isUnfinishedMatch,
     onBackToMenu,
     onPauseGame: pauseGameForHelp,
     onResumeGame: resumeGameAfterHelp,
@@ -249,7 +255,7 @@ export function PongGame({
       <GameSidebar className="border-[var(--pong-border)] bg-[var(--pong-panel)]">
         <GameHeader
           accentClassName="bg-[linear-gradient(90deg,var(--pong-blue),var(--pong-ball),var(--pong-pink))]"
-          status={statusLabels[game.status]}
+          status={statusLabel}
           statusClassName="text-[var(--pong-muted)]"
           statusTestId="pong-status"
           title="Classic Pong"
@@ -311,12 +317,12 @@ export function PongGame({
                 label: pauseActionLabel,
                 onClick: toggleRunState,
               }}
-              restartDisabled={game.status === "ready" || pendingLeaderboardEntry !== null}
+              restartDisabled={showStartScreen || pendingLeaderboardEntry !== null}
               testIdPrefix="pong"
             />
           }
         >
-          <PongBoard game={game} statusLabel={statusLabels[game.status]}>
+          <PongBoard game={game} statusLabel={statusLabel}>
           {showStartScreen ? (
             <div
               className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[#081525] px-4 py-5 text-center text-[#e5f2ff]"
@@ -351,6 +357,37 @@ export function PongGame({
                 statusMessage={leaderboardStatusMessage}
                 testId="pong-start-leaderboard"
               />
+            </div>
+          ) : showRoundReadyScreen ? (
+            <div
+              className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[rgba(8,21,37,0.62)] px-4 py-5 text-center text-[#e5f2ff] backdrop-blur-[1px]"
+              data-testid="pong-round-ready-screen"
+            >
+              <div className="flex max-w-72 flex-col items-center gap-3 rounded-md border border-[#e5f2ff]/20 bg-[#081525]/92 p-5 shadow-[0_18px_48px_rgba(0,0,0,0.34)]">
+                <div className="flex flex-col items-center gap-1">
+                  <p className="text-xs font-semibold uppercase tracking-normal text-[#9fb6c9]">
+                    Rally complete
+                  </p>
+                  <p className="text-2xl font-semibold tracking-normal text-balance">
+                    Next rally
+                  </p>
+                  <p className="text-sm font-medium text-[#9fb6c9]">
+                    Player {game.score.player} - {game.score.cpu} CPU. First to{" "}
+                    {game.targetScore}.
+                  </p>
+                </div>
+                <Button
+                  className="min-w-32"
+                  data-testid="pong-next-rally-button"
+                  onClick={startGame}
+                  size="lg"
+                  type="button"
+                  variant="secondary"
+                >
+                  <PlayIcon data-icon="inline-start" />
+                  Serve
+                </Button>
+              </div>
             </div>
           ) : showEndScreen ? (
             <div
