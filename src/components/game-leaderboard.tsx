@@ -97,6 +97,7 @@ export function GameLeaderboardScoreForm({
 
   return (
     <form
+      autoComplete="off"
       className="flex w-full max-w-xs flex-col items-center gap-3"
       data-testid={`${testIdPrefix}-leaderboard-form`}
       onSubmit={(event) => {
@@ -120,7 +121,7 @@ export function GameLeaderboardScoreForm({
           Name
         </label>
         <input
-          autoComplete="name"
+          autoComplete="off"
           autoFocus
           className="h-9 w-full rounded-md border border-[color-mix(in_oklch,currentColor_22%,transparent)] bg-[color-mix(in_oklch,currentColor_10%,transparent)] px-3 text-sm font-medium outline-none transition placeholder:text-[color-mix(in_oklch,currentColor_54%,transparent)] focus-visible:border-current focus-visible:ring-3 focus-visible:ring-[color-mix(in_oklch,currentColor_24%,transparent)]"
           data-testid={`${testIdPrefix}-player-name`}
