@@ -57,7 +57,7 @@ const CPU_PADDLE_SPEED = 4.2;
 const MAX_PADDLE_BOUNCE_Y = 6.4;
 const PADDLE_HEIGHT = 88;
 const PADDLE_INSET = 28;
-const PADDLE_SPEED = 34;
+const PADDLE_SPEED = 7;
 const PADDLE_WIDTH = 12;
 
 type PongScorer = keyof PongScore;

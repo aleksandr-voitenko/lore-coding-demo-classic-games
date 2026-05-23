@@ -1,9 +1,13 @@
 "use client";
 
 import { ArrowDownIcon, ArrowUpIcon, PlayIcon, RotateCcwIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { registerGameKeyDown, shouldIgnoreGameKeyDown } from "@/components/game-input";
+import {
+  registerGameKeyDown,
+  registerGameKeyUp,
+  shouldIgnoreGameKeyDown,
+} from "@/components/game-input";
 import {
   GameAbandonDialog,
   GameBoardActions,
@@ -20,6 +24,15 @@ import {
   type GameHelpSection,
 } from "@/components/game-layout";
 import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
+import {
+  createPongPaddleMovementState,
+  getPongPaddleMovementKey,
+  pressPongPaddleMovementKey,
+  releasePongPaddleMovementKey,
+  resetPongPaddleMovementState,
+  type PongPaddleMovementDirection,
+  type PongPaddleMovementKey,
+} from "@/components/pong-paddle-input";
 import { PongBoard } from "@/components/pong-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,6 +67,8 @@ const statusLabels: Record<PongStatus, string> = {
   won: "You won",
 };
 
+const PONG_PADDLE_MOVE_INTERVAL_MS = getPongTickDelay();
+
 function createPongHelpSections(targetScore: number): GameHelpSection[] {
   return [
     {
@@ -65,11 +80,11 @@ function createPongHelpSections(targetScore: number): GameHelpSection[] {
         },
         {
           buttons: [{ icon: ArrowUpIcon, label: "Up" }, { text: "W", label: "W key" }],
-          label: "Move paddle up",
+          label: "Hold to move paddle up",
         },
         {
           buttons: [{ icon: ArrowDownIcon, label: "Down" }, { text: "S", label: "S key" }],
-          label: "Move paddle down",
+          label: "Hold to move paddle down",
         },
         {
           buttons: [
@@ -104,6 +119,8 @@ export function PongGame({
       targetScore: initialTargetScore,
     }),
   );
+  const paddleMovementStateRef = useRef(createPongPaddleMovementState());
+  const paddleMovementIntervalRef = useRef<number | null>(null);
   const helpSections = useMemo(
     () => createPongHelpSections(game.targetScore),
     [game.targetScore],
@@ -137,6 +154,83 @@ export function PongGame({
     pendingScore: showEndScreen ? game.score.player : null,
   });
 
+  const movePaddle = useCallback((direction: PongPaddleMovementDirection) => {
+    setGame((current) =>
+      direction === "up" ? movePongPlayerUp(current) : movePongPlayerDown(current),
+    );
+  }, []);
+
+  const stopPaddleMovementLoop = useCallback(() => {
+    if (paddleMovementIntervalRef.current === null) {
+      return;
+    }
+
+    window.clearInterval(paddleMovementIntervalRef.current);
+    paddleMovementIntervalRef.current = null;
+  }, []);
+
+  const startPaddleMovementLoop = useCallback(
+    (direction: PongPaddleMovementDirection) => {
+      paddleMovementStateRef.current.direction = direction;
+
+      if (paddleMovementIntervalRef.current !== null) {
+        return;
+      }
+
+      paddleMovementIntervalRef.current = window.setInterval(() => {
+        const currentDirection = paddleMovementStateRef.current.direction;
+
+        if (currentDirection !== null) {
+          movePaddle(currentDirection);
+        }
+      }, PONG_PADDLE_MOVE_INTERVAL_MS);
+    },
+    [movePaddle],
+  );
+
+  const beginPaddleMovement = useCallback(
+    (movementKey: PongPaddleMovementKey) => {
+      const movement = pressPongPaddleMovementKey(
+        paddleMovementStateRef.current,
+        movementKey,
+      );
+
+      startPaddleMovementLoop(movement.direction);
+
+      if (movement.shouldMoveImmediately) {
+        movePaddle(movement.direction);
+      }
+    },
+    [movePaddle, startPaddleMovementLoop],
+  );
+
+  const endPaddleMovement = useCallback(
+    (movementKey: PongPaddleMovementKey) => {
+      const movement = releasePongPaddleMovementKey(
+        paddleMovementStateRef.current,
+        movementKey,
+      );
+
+      if (!movement.handled) {
+        return false;
+      }
+
+      if (movement.direction === null) {
+        stopPaddleMovementLoop();
+      } else {
+        startPaddleMovementLoop(movement.direction);
+      }
+
+      return true;
+    },
+    [startPaddleMovementLoop, stopPaddleMovementLoop],
+  );
+
+  const resetPaddleMovement = useCallback(() => {
+    resetPongPaddleMovementState(paddleMovementStateRef.current);
+    stopPaddleMovementLoop();
+  }, [stopPaddleMovementLoop]);
+
   const startGame = useCallback(() => {
     resetLeaderboardForm();
     setGame((current) => startPongGame(current));
@@ -154,17 +248,10 @@ export function PongGame({
   }, [resetLeaderboardForm]);
 
   const restartGame = useCallback(() => {
+    resetPaddleMovement();
     resetLeaderboardForm();
     setGame((current) => restartPongGame(current));
-  }, [resetLeaderboardForm]);
-
-  const moveUp = useCallback(() => {
-    setGame((current) => movePongPlayerUp(current));
-  }, []);
-
-  const moveDown = useCallback(() => {
-    setGame((current) => movePongPlayerDown(current));
-  }, []);
+  }, [resetLeaderboardForm, resetPaddleMovement]);
 
   const advancePong = useCallback(() => {
     setGame((current) => advancePongGame(current));
@@ -195,6 +282,7 @@ export function PongGame({
     onResumeGame: resumeGameAfterHelp,
     shouldPauseBeforeConfirm: canPauseGame,
   });
+  const isAbandonDialogVisible = abandonDialogProps !== null;
 
   useEffect(() => {
     if (tickDelay === null) {
@@ -207,7 +295,38 @@ export function PongGame({
   }, [advancePong, tickDelay]);
 
   useEffect(() => {
+    if (
+      isHelpVisible ||
+      isAbandonDialogVisible ||
+      pendingLeaderboardEntry !== null ||
+      game.status === "lost" ||
+      game.status === "won"
+    ) {
+      resetPaddleMovement();
+    }
+  }, [
+    game.status,
+    isAbandonDialogVisible,
+    isHelpVisible,
+    pendingLeaderboardEntry,
+    resetPaddleMovement,
+  ]);
+
+  useEffect(() => {
+    window.addEventListener("blur", resetPaddleMovement);
+
+    return () => {
+      window.removeEventListener("blur", resetPaddleMovement);
+      resetPaddleMovement();
+    };
+  }, [resetPaddleMovement]);
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (isAbandonDialogVisible) {
+        return;
+      }
+
       if (
         shouldIgnoreGameKeyDown(event, {
           hasPendingLeaderboardEntry: pendingLeaderboardEntry !== null,
@@ -217,15 +336,15 @@ export function PongGame({
         return;
       }
 
-      if (event.key === "ArrowUp" || event.key === "w" || event.key === "W") {
-        event.preventDefault();
-        moveUp();
-        return;
-      }
+      const movementKey = getPongPaddleMovementKey(event.key);
 
-      if (event.key === "ArrowDown" || event.key === "s" || event.key === "S") {
+      if (movementKey !== null) {
         event.preventDefault();
-        moveDown();
+
+        if (game.status !== "lost" && game.status !== "won") {
+          beginPaddleMovement(movementKey);
+        }
+
         return;
       }
 
@@ -241,12 +360,31 @@ export function PongGame({
       }
     }
 
-    return registerGameKeyDown(handleKeyDown);
+    function handleKeyUp(event: KeyboardEvent) {
+      const movementKey = getPongPaddleMovementKey(event.key);
+
+      if (movementKey === null) {
+        return;
+      }
+
+      if (endPaddleMovement(movementKey)) {
+        event.preventDefault();
+      }
+    }
+
+    const unregisterKeyDown = registerGameKeyDown(handleKeyDown);
+    const unregisterKeyUp = registerGameKeyUp(handleKeyUp);
+
+    return () => {
+      unregisterKeyDown();
+      unregisterKeyUp();
+    };
   }, [
+    beginPaddleMovement,
+    endPaddleMovement,
     game.status,
+    isAbandonDialogVisible,
     isHelpVisible,
-    moveDown,
-    moveUp,
     pendingLeaderboardEntry,
     startGame,
     toggleRunState,
