@@ -16,6 +16,8 @@ import {
   GameBoardActions,
   GameBoardColumn,
   GameBoardStage,
+  GameEndScreen,
+  GameEndSummary,
   GameHeader,
   GameHelpScreen,
   GameShell,
@@ -318,10 +320,7 @@ export function TwentyFortyEightGame({
               />
             </div>
           ) : showEndScreen ? (
-            <div
-              className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[color-mix(in_oklch,var(--twenty-board)_78%,transparent)] px-4 py-5 text-center text-[var(--twenty-board-text)] backdrop-blur-[2px]"
-              data-testid="twenty-forty-eight-end-screen"
-            >
+            <GameEndScreen testId="twenty-forty-eight-end-screen">
               {pendingLeaderboardEntry ? (
                 <>
                   <GameLeaderboardScoreForm
@@ -342,15 +341,12 @@ export function TwentyFortyEightGame({
                 </>
               ) : (
                 <>
-                  <div className="flex flex-col items-center gap-1">
-                    <p className="text-3xl font-semibold tracking-normal text-balance">
-                      {game.status === "won" ? `${game.winTile} reached` : "No moves left"}
-                    </p>
-                    <p className="text-sm font-semibold text-[color-mix(in_oklch,var(--twenty-board-text)_76%,transparent)]">
-                      Final score
-                    </p>
-                    <p className="font-mono text-5xl font-semibold leading-none">{game.score}</p>
-                  </div>
+                  <GameEndSummary
+                    metricLabel="Final score"
+                    metricValue={game.score}
+                    metricValueTestId="twenty-forty-eight-final-score"
+                    title={game.status === "won" ? `${game.winTile} reached` : "No moves left"}
+                  />
                   <GameLeaderboardPanel
                     slotTestIdPrefix="twenty-forty-eight-final-leaderboard-slot"
                     slots={leaderboardSlots}
@@ -370,7 +366,7 @@ export function TwentyFortyEightGame({
                   </Button>
                 </>
               )}
-            </div>
+            </GameEndScreen>
           ) : null}
           {isHelpVisible ? (
             <GameHelpScreen

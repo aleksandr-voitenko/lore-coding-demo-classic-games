@@ -132,6 +132,11 @@ patterns and constraints here.
   Escape-to-menu handler. Realtime games provide Back, Help, Pause-or-Resume,
   and Restart, while turn-based games such as Minesweeper and 2048 provide
   Back, Help, and Restart and omit the pause action.
+- Use `GameEndScreen` and `GameEndSummary` from
+  `src/components/game-layout.tsx` for terminal won/lost overlays. They provide
+  the shared high-contrast end-screen surface and final-result typography used
+  across all games; keep per-game content limited to titles, metric labels,
+  values, leaderboard forms, leaderboard panels, and action buttons.
 - Use `GameHelpScreen` and `useGameHelpScreen` from
   `src/components/game-layout.tsx` for game Help overlays. Realtime games should
   pause when Help opens from an active run and resume only when Help caused the

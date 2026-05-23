@@ -15,6 +15,8 @@ import {
   GameBoardActions,
   GameBoardColumn,
   GameBoardStage,
+  GameEndScreen,
+  GameEndSummary,
   GameHeader,
   GameHelpScreen,
   GameShell,
@@ -370,10 +372,7 @@ export function BreakoutGame({
               />
             </div>
           ) : showEndScreen ? (
-            <div
-              className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[color-mix(in_oklch,var(--breakout-board)_78%,transparent)] px-4 py-5 text-center text-[var(--breakout-board-text)] backdrop-blur-[2px]"
-              data-testid="breakout-end-screen"
-            >
+            <GameEndScreen testId="breakout-end-screen">
               {pendingLeaderboardEntry ? (
                 <>
                   <GameLeaderboardScoreForm
@@ -394,15 +393,12 @@ export function BreakoutGame({
                 </>
               ) : (
                 <>
-                  <div className="flex flex-col items-center gap-1">
-                    <p className="text-3xl font-semibold tracking-normal text-balance">
-                      {game.status === "won" ? "Wall cleared" : "Game over"}
-                    </p>
-                    <p className="text-sm font-semibold text-[color-mix(in_oklch,var(--breakout-board-text)_76%,transparent)]">
-                      Final score
-                    </p>
-                    <p className="font-mono text-5xl font-semibold leading-none">{game.score}</p>
-                  </div>
+                  <GameEndSummary
+                    metricLabel="Final score"
+                    metricValue={game.score}
+                    metricValueTestId="breakout-final-score"
+                    title={game.status === "won" ? "Wall cleared" : "Game over"}
+                  />
                   <GameLeaderboardPanel
                     slotTestIdPrefix="breakout-final-leaderboard-slot"
                     slots={leaderboardSlots}
@@ -422,7 +418,7 @@ export function BreakoutGame({
                   </Button>
                 </>
               )}
-            </div>
+            </GameEndScreen>
           ) : showPauseScreen ? (
             <div
               className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--breakout-board)_72%,transparent)] text-center text-[var(--breakout-board-text)] backdrop-blur-[2px]"

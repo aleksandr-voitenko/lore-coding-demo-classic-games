@@ -9,6 +9,8 @@ import {
   GameBoardActions,
   GameBoardColumn,
   GameBoardStage,
+  GameEndScreen,
+  GameEndSummary,
   GameHeader,
   GameHelpScreen,
   GameShell,
@@ -274,10 +276,7 @@ export function MinesweeperGame({
             statusLabel={statusLabels[game.status]}
           >
           {showEndScreen ? (
-            <div
-              className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[color-mix(in_oklch,var(--minesweeper-board)_76%,transparent)] px-4 py-5 text-center text-[var(--minesweeper-board-text)] backdrop-blur-[2px]"
-              data-testid="minesweeper-end-screen"
-            >
+            <GameEndScreen testId="minesweeper-end-screen">
               {pendingLeaderboardEntry ? (
                 <>
                   <GameLeaderboardScoreForm
@@ -301,17 +300,12 @@ export function MinesweeperGame({
                 </>
               ) : (
                 <>
-                  <div className="flex flex-col items-center gap-1">
-                    <p className="text-3xl font-semibold tracking-normal text-balance">
-                      {game.status === "won" ? "Board cleared" : "Game over"}
-                    </p>
-                    <p className="text-sm font-semibold text-[color-mix(in_oklch,var(--minesweeper-board-text)_76%,transparent)]">
-                      Time
-                    </p>
-                    <p className="font-mono text-5xl font-semibold leading-none">
-                      {formatElapsedTime(elapsedSeconds)}
-                    </p>
-                  </div>
+                  <GameEndSummary
+                    metricLabel="Time"
+                    metricValue={formatElapsedTime(elapsedSeconds)}
+                    metricValueTestId="minesweeper-final-time"
+                    title={game.status === "won" ? "Board cleared" : "Game over"}
+                  />
                   <GameLeaderboardPanel
                     formatScore={formatElapsedTime}
                     slotTestIdPrefix="minesweeper-final-leaderboard-slot"
@@ -331,7 +325,7 @@ export function MinesweeperGame({
                   </Button>
                 </>
               )}
-            </div>
+            </GameEndScreen>
           ) : null}
           {isHelpVisible ? (
             <GameHelpScreen

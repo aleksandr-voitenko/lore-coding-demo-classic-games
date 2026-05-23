@@ -2,6 +2,7 @@
 
 export { GameAbandonDialog } from "@/components/game-abandon-dialog";
 export { GameBoardActions } from "@/components/game-board-actions";
+export { GameEndScreen, GameEndSummary } from "@/components/game-end-screen";
 export {
   GameBoardColumn,
   GameBoardStage,

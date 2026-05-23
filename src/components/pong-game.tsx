@@ -9,6 +9,8 @@ import {
   GameBoardActions,
   GameBoardColumn,
   GameBoardStage,
+  GameEndScreen,
+  GameEndSummary,
   GameHeader,
   GameHelpScreen,
   GameShell,
@@ -390,10 +392,7 @@ export function PongGame({
               </div>
             </div>
           ) : showEndScreen ? (
-            <div
-              className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[rgba(8,21,37,0.82)] px-4 py-5 text-center text-[#e5f2ff] backdrop-blur-[2px]"
-              data-testid="pong-end-screen"
-            >
+            <GameEndScreen testId="pong-end-screen">
               {pendingLeaderboardEntry ? (
                 <>
                   <GameLeaderboardScoreForm
@@ -414,15 +413,12 @@ export function PongGame({
                 </>
               ) : (
                 <>
-                  <div className="flex flex-col items-center gap-1">
-                    <p className="text-3xl font-semibold tracking-normal text-balance">
-                      {game.status === "won" ? "Match won" : "Match lost"}
-                    </p>
-                    <p className="text-sm font-semibold text-[#9fb6c9]">Final score</p>
-                    <p className="font-mono text-5xl font-semibold leading-none">
-                      {game.score.player}-{game.score.cpu}
-                    </p>
-                  </div>
+                  <GameEndSummary
+                    metricLabel="Final score"
+                    metricValue={`${game.score.player}-${game.score.cpu}`}
+                    metricValueTestId="pong-final-score"
+                    title={game.status === "won" ? "Match won" : "Match lost"}
+                  />
                   <GameLeaderboardPanel
                     slotTestIdPrefix="pong-final-leaderboard-slot"
                     slots={leaderboardSlots}
@@ -442,7 +438,7 @@ export function PongGame({
                   </Button>
                 </>
               )}
-            </div>
+            </GameEndScreen>
           ) : showPauseScreen ? (
             <div
               className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[rgba(8,21,37,0.76)] text-center text-[#e5f2ff] backdrop-blur-[2px]"
