@@ -31,9 +31,9 @@ patterns and constraints here.
   win/loss states, and state transitions.
 - `src/lib/*.test.ts` contains deterministic Vitest coverage for engines,
   leaderboard behavior, API routes, SQLite persistence, and Snake pickup
-  feedback. `src/components/*.test.tsx` can use `react-dom/server` static
-  markup assertions for pure board renderer coverage without a browser DOM
-  harness.
+  feedback. Avoid adding new `src/components/*.test.tsx` tests until the project
+  has Playwright support or another accepted component/UI testing approach;
+  static markup assertions have proven too fragile for new UI behavior.
 
 ## Game Modules
 
