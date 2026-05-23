@@ -6,7 +6,7 @@ import {
   PlayIcon,
   RotateCcwIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   GameAbandonDialog,
@@ -24,11 +24,24 @@ import {
   type GameHelpSection,
 } from "@/components/game-layout";
 import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
-import { registerGameKeyDown, shouldIgnoreGameKeyDown } from "@/components/game-input";
+import {
+  registerGameKeyDown,
+  registerGameKeyUp,
+  shouldIgnoreGameKeyDown,
+} from "@/components/game-input";
 import {
   spaceInvaderClassNames,
   SpaceInvadersBoard,
 } from "@/components/space-invaders-board";
+import {
+  createSpaceInvadersPlayerMovementState,
+  getSpaceInvadersPlayerMovementKey,
+  pressSpaceInvadersPlayerMovementKey,
+  releaseSpaceInvadersPlayerMovementKey,
+  resetSpaceInvadersPlayerMovementState,
+  type SpaceInvadersPlayerMovementDirection,
+  type SpaceInvadersPlayerMovementKey,
+} from "@/components/space-invaders-player-input";
 import { Button } from "@/components/ui/button";
 import {
   advanceSpaceInvadersGame,
@@ -72,11 +85,11 @@ const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
       },
       {
         buttons: [{ icon: ArrowLeftIcon, label: "Left" }, { text: "A", label: "A key" }],
-        label: "Move cannon left",
+        label: "Hold to move cannon left",
       },
       {
         buttons: [{ icon: ArrowRightIcon, label: "Right" }, { text: "D", label: "D key" }],
-        label: "Move cannon right",
+        label: "Hold to move cannon right",
       },
       {
         buttons: [{ text: "Space", label: "Space key" }],
@@ -98,6 +111,8 @@ const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
   },
 ];
 
+const SPACE_INVADERS_PLAYER_MOVE_INTERVAL_MS = getSpaceInvadersTickDelay();
+
 export function SpaceInvadersGame({
   initialAlienCount,
   initialBoardHeight,
@@ -111,6 +126,8 @@ export function SpaceInvadersGame({
       boardWidth: initialBoardWidth,
     }),
   );
+  const playerMovementStateRef = useRef(createSpaceInvadersPlayerMovementState());
+  const playerMovementIntervalRef = useRef<number | null>(null);
   const tickDelay = game.status === "running" ? getSpaceInvadersTickDelay() : null;
   const activeInvaderCount = game.invaders.filter((invader) => invader.isActive).length;
   const canPauseGame = game.status === "running" || game.status === "paused";
@@ -158,13 +175,84 @@ export function SpaceInvadersGame({
     setGame((current) => restartSpaceInvadersGame(current));
   }, [resetLeaderboardForm]);
 
-  const moveLeft = useCallback(() => {
-    setGame((current) => moveSpaceInvadersPlayerLeft(current));
+  const movePlayer = useCallback((direction: SpaceInvadersPlayerMovementDirection) => {
+    setGame((current) =>
+      direction === "left"
+        ? moveSpaceInvadersPlayerLeft(current)
+        : moveSpaceInvadersPlayerRight(current),
+    );
   }, []);
 
-  const moveRight = useCallback(() => {
-    setGame((current) => moveSpaceInvadersPlayerRight(current));
+  const stopPlayerMovementLoop = useCallback(() => {
+    if (playerMovementIntervalRef.current === null) {
+      return;
+    }
+
+    window.clearInterval(playerMovementIntervalRef.current);
+    playerMovementIntervalRef.current = null;
   }, []);
+
+  const startPlayerMovementLoop = useCallback(
+    (direction: SpaceInvadersPlayerMovementDirection) => {
+      playerMovementStateRef.current.direction = direction;
+
+      if (playerMovementIntervalRef.current !== null) {
+        return;
+      }
+
+      playerMovementIntervalRef.current = window.setInterval(() => {
+        const currentDirection = playerMovementStateRef.current.direction;
+
+        if (currentDirection !== null) {
+          movePlayer(currentDirection);
+        }
+      }, SPACE_INVADERS_PLAYER_MOVE_INTERVAL_MS);
+    },
+    [movePlayer],
+  );
+
+  const beginPlayerMovement = useCallback(
+    (movementKey: SpaceInvadersPlayerMovementKey) => {
+      const movement = pressSpaceInvadersPlayerMovementKey(
+        playerMovementStateRef.current,
+        movementKey,
+      );
+
+      startPlayerMovementLoop(movement.direction);
+
+      if (movement.shouldMoveImmediately) {
+        movePlayer(movement.direction);
+      }
+    },
+    [movePlayer, startPlayerMovementLoop],
+  );
+
+  const endPlayerMovement = useCallback(
+    (movementKey: SpaceInvadersPlayerMovementKey) => {
+      const movement = releaseSpaceInvadersPlayerMovementKey(
+        playerMovementStateRef.current,
+        movementKey,
+      );
+
+      if (!movement.handled) {
+        return false;
+      }
+
+      if (movement.direction === null) {
+        stopPlayerMovementLoop();
+      } else {
+        startPlayerMovementLoop(movement.direction);
+      }
+
+      return true;
+    },
+    [startPlayerMovementLoop, stopPlayerMovementLoop],
+  );
+
+  const resetPlayerMovement = useCallback(() => {
+    resetSpaceInvadersPlayerMovementState(playerMovementStateRef.current);
+    stopPlayerMovementLoop();
+  }, [stopPlayerMovementLoop]);
 
   const fireShot = useCallback(() => {
     setGame((current) => fireSpaceInvadersShot(current));
@@ -211,6 +299,21 @@ export function SpaceInvadersGame({
   }, [advanceSpaceInvaders, tickDelay]);
 
   useEffect(() => {
+    if (isHelpVisible || pendingLeaderboardEntry !== null || game.status !== "running") {
+      resetPlayerMovement();
+    }
+  }, [game.status, isHelpVisible, pendingLeaderboardEntry, resetPlayerMovement]);
+
+  useEffect(() => {
+    window.addEventListener("blur", resetPlayerMovement);
+
+    return () => {
+      window.removeEventListener("blur", resetPlayerMovement);
+      resetPlayerMovement();
+    };
+  }, [resetPlayerMovement]);
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (
         shouldIgnoreGameKeyDown(event, {
@@ -237,15 +340,11 @@ export function SpaceInvadersGame({
         return;
       }
 
-      if (event.key === "ArrowLeft" || event.key === "a" || event.key === "A") {
-        event.preventDefault();
-        moveLeft();
-        return;
-      }
+      const movementKey = getSpaceInvadersPlayerMovementKey(event.key);
 
-      if (event.key === "ArrowRight" || event.key === "d" || event.key === "D") {
+      if (movementKey !== null) {
         event.preventDefault();
-        moveRight();
+        beginPlayerMovement(movementKey);
         return;
       }
 
@@ -255,13 +354,31 @@ export function SpaceInvadersGame({
       }
     }
 
-    return registerGameKeyDown(handleKeyDown);
+    function handleKeyUp(event: KeyboardEvent) {
+      const movementKey = getSpaceInvadersPlayerMovementKey(event.key);
+
+      if (movementKey === null) {
+        return;
+      }
+
+      if (endPlayerMovement(movementKey)) {
+        event.preventDefault();
+      }
+    }
+
+    const unregisterKeyDown = registerGameKeyDown(handleKeyDown);
+    const unregisterKeyUp = registerGameKeyUp(handleKeyUp);
+
+    return () => {
+      unregisterKeyDown();
+      unregisterKeyUp();
+    };
   }, [
+    beginPlayerMovement,
+    endPlayerMovement,
     fireShot,
     game.status,
     isHelpVisible,
-    moveLeft,
-    moveRight,
     pendingLeaderboardEntry,
     startGame,
     toggleRunState,
