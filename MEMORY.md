@@ -16,8 +16,8 @@ patterns and constraints here.
 - `src/components/game-layout.tsx` is the stable shared game UI barrel. Focused
   implementations live beside it in `game-layout-shell.tsx`,
   `game-board-actions.tsx`, `game-help-screen.tsx`, `game-abandon-dialog.tsx`,
-  and `game-ui-hooks.ts`. Shared keyboard input filtering lives in
-  `src/components/game-input.ts`.
+  and `game-ui-hooks.ts`. Shared keyboard input filtering and keydown/keyup
+  listener registration live in `src/components/game-input.ts`.
 - shadcn/ui is initialized with Tailwind CSS v4, the `base-nova` preset, and the
   `@/*` import alias. The shared button is `src/components/ui/button.tsx`.
 
@@ -107,9 +107,14 @@ patterns and constraints here.
   failures.
 - Keep local UI consistent with the shared game layout and shadcn button
   patterns.
-- Use `shouldIgnoreGameKeyDown` and `registerGameKeyDown` from
-  `src/components/game-input.ts` for game-level global keyboard handlers that
-  should ignore Help overlays, pending leaderboard entry, and typing targets.
+- Use `shouldIgnoreGameKeyDown`, `registerGameKeyDown`, and
+  `registerGameKeyUp` from `src/components/game-input.ts` for game-level global
+  keyboard handlers that should ignore Help overlays, pending leaderboard entry,
+  and typing targets.
+- For held-key movement, keep transient key state out of React render state and
+  drive movement through engine helpers on an interval until keyup/blur/modal
+  cleanup. Breakout's paddle uses the pure
+  `src/components/breakout-paddle-input.ts` state helper for this pattern.
 - Keep `src/components/game-layout.tsx` as the stable import surface for game
   components. Put new shared layout, action, Help, dialog, or flow-hook
   implementation details in focused sibling modules so the barrel does not

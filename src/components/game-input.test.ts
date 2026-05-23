@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { isTypingTarget, registerGameKeyDown, shouldIgnoreGameKeyDown } from "./game-input";
+import {
+  isTypingTarget,
+  registerGameKeyDown,
+  registerGameKeyUp,
+  shouldIgnoreGameKeyDown,
+} from "./game-input";
 
 const originalHTMLElement = globalThis.HTMLElement;
 
@@ -18,15 +23,15 @@ function createElement(tagName: string, isContentEditable = false) {
   return element as unknown as HTMLElement;
 }
 
-function createKeyboardTarget() {
+function createKeyboardTarget(expectedType: "keydown" | "keyup") {
   const listeners = new Set<(event: KeyboardEvent) => void>();
   const target: NonNullable<Parameters<typeof registerGameKeyDown>[1]> = {
     addEventListener(type, listener) {
-      expect(type).toBe("keydown");
+      expect(type).toBe(expectedType);
       listeners.add(listener);
     },
     removeEventListener(type, listener) {
-      expect(type).toBe("keydown");
+      expect(type).toBe(expectedType);
       listeners.delete(listener);
     },
   };
@@ -136,8 +141,28 @@ describe("shouldIgnoreGameKeyDown", () => {
 describe("registerGameKeyDown", () => {
   it("registers a keydown handler and removes it during cleanup", () => {
     const events: KeyboardEvent[] = [];
-    const keyboardTarget = createKeyboardTarget();
+    const keyboardTarget = createKeyboardTarget("keydown");
     const cleanup = registerGameKeyDown((event) => events.push(event), keyboardTarget.target);
+    const handledEvent = { key: "ArrowLeft" } as KeyboardEvent;
+
+    expect(keyboardTarget.listenerCount).toBe(1);
+
+    keyboardTarget.dispatch(handledEvent);
+    expect(events).toEqual([handledEvent]);
+
+    cleanup();
+    keyboardTarget.dispatch({ key: "ArrowRight" } as KeyboardEvent);
+
+    expect(keyboardTarget.listenerCount).toBe(0);
+    expect(events).toEqual([handledEvent]);
+  });
+});
+
+describe("registerGameKeyUp", () => {
+  it("registers a keyup handler and removes it during cleanup", () => {
+    const events: KeyboardEvent[] = [];
+    const keyboardTarget = createKeyboardTarget("keyup");
+    const cleanup = registerGameKeyUp((event) => events.push(event), keyboardTarget.target);
     const handledEvent = { key: "ArrowLeft" } as KeyboardEvent;
 
     expect(keyboardTarget.listenerCount).toBe(1);

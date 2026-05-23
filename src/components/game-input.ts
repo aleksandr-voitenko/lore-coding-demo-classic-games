@@ -1,6 +1,8 @@
+type GameKeyboardEventType = "keydown" | "keyup";
+
 type GameKeyboardEventTarget = {
-  addEventListener(type: "keydown", listener: (event: KeyboardEvent) => void): void;
-  removeEventListener(type: "keydown", listener: (event: KeyboardEvent) => void): void;
+  addEventListener(type: GameKeyboardEventType, listener: (event: KeyboardEvent) => void): void;
+  removeEventListener(type: GameKeyboardEventType, listener: (event: KeyboardEvent) => void): void;
 };
 
 type GameKeyboardGuardOptions = {
@@ -35,4 +37,13 @@ export function registerGameKeyDown(
   target.addEventListener("keydown", listener);
 
   return () => target.removeEventListener("keydown", listener);
+}
+
+export function registerGameKeyUp(
+  listener: (event: KeyboardEvent) => void,
+  target: GameKeyboardEventTarget = window,
+) {
+  target.addEventListener("keyup", listener);
+
+  return () => target.removeEventListener("keyup", listener);
 }

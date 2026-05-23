@@ -68,7 +68,7 @@ const BRICK_TOP = 56;
 const INITIAL_BALL_VELOCITY: BreakoutPoint = { x: 3.2, y: -5.2 };
 const MAX_PADDLE_BOUNCE_X = 5.8;
 const PADDLE_HEIGHT = 12;
-const PADDLE_SPEED = 34;
+const PADDLE_SPEED = 7;
 const PADDLE_WIDTH = 92;
 
 export function createBreakoutBricks(boardWidth = BREAKOUT_BOARD_WIDTH) {

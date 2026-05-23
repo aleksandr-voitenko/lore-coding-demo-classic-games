@@ -6,10 +6,23 @@ import {
   PlayIcon,
   RotateCcwIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { BreakoutBoard, breakoutBrickClassNames } from "@/components/breakout-board";
-import { registerGameKeyDown, shouldIgnoreGameKeyDown } from "@/components/game-input";
+import {
+  createBreakoutPaddleMovementState,
+  getBreakoutPaddleMovementKey,
+  pressBreakoutPaddleMovementKey,
+  releaseBreakoutPaddleMovementKey,
+  resetBreakoutPaddleMovementState,
+  type BreakoutPaddleMovementDirection,
+  type BreakoutPaddleMovementKey,
+} from "@/components/breakout-paddle-input";
+import {
+  registerGameKeyDown,
+  registerGameKeyUp,
+  shouldIgnoreGameKeyDown,
+} from "@/components/game-input";
 import {
   GameAbandonDialog,
   GameBoardActions,
@@ -68,11 +81,11 @@ const BREAKOUT_HELP_SECTIONS: GameHelpSection[] = [
       },
       {
         buttons: [{ icon: ArrowLeftIcon, label: "Left" }, { text: "A", label: "A key" }],
-        label: "Move paddle left",
+        label: "Hold to move paddle left",
       },
       {
         buttons: [{ icon: ArrowRightIcon, label: "Right" }, { text: "D", label: "D key" }],
-        label: "Move paddle right",
+        label: "Hold to move paddle right",
       },
       {
         buttons: [
@@ -93,6 +106,8 @@ const BREAKOUT_HELP_SECTIONS: GameHelpSection[] = [
   },
 ];
 
+const BREAKOUT_PADDLE_MOVE_INTERVAL_MS = getBreakoutTickDelay();
+
 export function BreakoutGame({
   initialBoardHeight,
   initialBoardWidth,
@@ -106,6 +121,8 @@ export function BreakoutGame({
       lives: initialLives,
     }),
   );
+  const paddleMovementStateRef = useRef(createBreakoutPaddleMovementState());
+  const paddleMovementIntervalRef = useRef<number | null>(null);
   const tickDelay = game.status === "running" ? getBreakoutTickDelay() : null;
   const activeBrickCount = game.bricks.filter((brick) => brick.isActive).length;
   const canPauseGame = game.status === "running" || game.status === "paused";
@@ -153,13 +170,82 @@ export function BreakoutGame({
     setGame((current) => restartBreakoutGame(current));
   }, [resetLeaderboardForm]);
 
-  const moveLeft = useCallback(() => {
-    setGame((current) => moveBreakoutPaddleLeft(current));
+  const movePaddle = useCallback((direction: BreakoutPaddleMovementDirection) => {
+    setGame((current) =>
+      direction === "left" ? moveBreakoutPaddleLeft(current) : moveBreakoutPaddleRight(current),
+    );
   }, []);
 
-  const moveRight = useCallback(() => {
-    setGame((current) => moveBreakoutPaddleRight(current));
+  const stopPaddleMovementLoop = useCallback(() => {
+    if (paddleMovementIntervalRef.current === null) {
+      return;
+    }
+
+    window.clearInterval(paddleMovementIntervalRef.current);
+    paddleMovementIntervalRef.current = null;
   }, []);
+
+  const startPaddleMovementLoop = useCallback(
+    (direction: BreakoutPaddleMovementDirection) => {
+      paddleMovementStateRef.current.direction = direction;
+
+      if (paddleMovementIntervalRef.current !== null) {
+        return;
+      }
+
+      paddleMovementIntervalRef.current = window.setInterval(() => {
+        const currentDirection = paddleMovementStateRef.current.direction;
+
+        if (currentDirection !== null) {
+          movePaddle(currentDirection);
+        }
+      }, BREAKOUT_PADDLE_MOVE_INTERVAL_MS);
+    },
+    [movePaddle],
+  );
+
+  const beginPaddleMovement = useCallback(
+    (movementKey: BreakoutPaddleMovementKey) => {
+      const movement = pressBreakoutPaddleMovementKey(
+        paddleMovementStateRef.current,
+        movementKey,
+      );
+
+      startPaddleMovementLoop(movement.direction);
+
+      if (movement.shouldMoveImmediately) {
+        movePaddle(movement.direction);
+      }
+    },
+    [movePaddle, startPaddleMovementLoop],
+  );
+
+  const endPaddleMovement = useCallback(
+    (movementKey: BreakoutPaddleMovementKey) => {
+      const movement = releaseBreakoutPaddleMovementKey(
+        paddleMovementStateRef.current,
+        movementKey,
+      );
+
+      if (!movement.handled) {
+        return false;
+      }
+
+      if (movement.direction === null) {
+        stopPaddleMovementLoop();
+      } else {
+        startPaddleMovementLoop(movement.direction);
+      }
+
+      return true;
+    },
+    [startPaddleMovementLoop, stopPaddleMovementLoop],
+  );
+
+  const resetPaddleMovement = useCallback(() => {
+    resetBreakoutPaddleMovementState(paddleMovementStateRef.current);
+    stopPaddleMovementLoop();
+  }, [stopPaddleMovementLoop]);
 
   const advanceBreakout = useCallback(() => {
     setGame((current) => advanceBreakoutGame(current));
@@ -202,6 +288,26 @@ export function BreakoutGame({
   }, [advanceBreakout, tickDelay]);
 
   useEffect(() => {
+    if (
+      isHelpVisible ||
+      pendingLeaderboardEntry !== null ||
+      game.status === "lost" ||
+      game.status === "won"
+    ) {
+      resetPaddleMovement();
+    }
+  }, [game.status, isHelpVisible, pendingLeaderboardEntry, resetPaddleMovement]);
+
+  useEffect(() => {
+    window.addEventListener("blur", resetPaddleMovement);
+
+    return () => {
+      window.removeEventListener("blur", resetPaddleMovement);
+      resetPaddleMovement();
+    };
+  }, [resetPaddleMovement]);
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (
         shouldIgnoreGameKeyDown(event, {
@@ -212,15 +318,15 @@ export function BreakoutGame({
         return;
       }
 
-      if (event.key === "ArrowLeft" || event.key === "a" || event.key === "A") {
-        event.preventDefault();
-        moveLeft();
-        return;
-      }
+      const movementKey = getBreakoutPaddleMovementKey(event.key);
 
-      if (event.key === "ArrowRight" || event.key === "d" || event.key === "D") {
+      if (movementKey !== null) {
         event.preventDefault();
-        moveRight();
+
+        if (game.status !== "lost" && game.status !== "won") {
+          beginPaddleMovement(movementKey);
+        }
+
         return;
       }
 
@@ -236,12 +342,30 @@ export function BreakoutGame({
       }
     }
 
-    return registerGameKeyDown(handleKeyDown);
+    function handleKeyUp(event: KeyboardEvent) {
+      const movementKey = getBreakoutPaddleMovementKey(event.key);
+
+      if (movementKey === null) {
+        return;
+      }
+
+      if (endPaddleMovement(movementKey)) {
+        event.preventDefault();
+      }
+    }
+
+    const unregisterKeyDown = registerGameKeyDown(handleKeyDown);
+    const unregisterKeyUp = registerGameKeyUp(handleKeyUp);
+
+    return () => {
+      unregisterKeyDown();
+      unregisterKeyUp();
+    };
   }, [
+    beginPaddleMovement,
+    endPaddleMovement,
     game.status,
     isHelpVisible,
-    moveLeft,
-    moveRight,
     pendingLeaderboardEntry,
     startGame,
     toggleRunState,
