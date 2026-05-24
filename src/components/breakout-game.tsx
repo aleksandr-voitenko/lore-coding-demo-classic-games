@@ -127,9 +127,11 @@ export function BreakoutGame({
   const activeBrickCount = game.bricks.filter((brick) => brick.isActive).length;
   const canPauseGame = game.status === "running" || game.status === "paused";
   const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
-  const showStartScreen = game.status === "ready";
+  const showLifeLostScreen = game.status === "ready" && game.lives < game.startingLives;
+  const showStartScreen = game.status === "ready" && !showLifeLostScreen;
   const showEndScreen = game.status === "lost" || game.status === "won";
   const showPauseScreen = game.status === "paused";
+  const remainingLifeLabel = game.lives === 1 ? "1 life left" : `${game.lives} lives left`;
   const leaderboardKey = createGameLeaderboardKey("breakout", [
     { name: "board", value: `${game.boardWidth}x${game.boardHeight}` },
     { name: "lives", value: game.startingLives },
@@ -494,6 +496,34 @@ export function BreakoutGame({
                 statusMessage={leaderboardStatusMessage}
                 testId="breakout-start-leaderboard"
               />
+            </div>
+          ) : showLifeLostScreen ? (
+            <div
+              className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-transparent px-4 py-5 text-center text-[var(--breakout-board-text)]"
+              data-testid="breakout-life-lost-screen"
+            >
+              <div className="flex w-full max-w-[18rem] flex-col items-center gap-3 rounded-md border border-[color-mix(in_oklch,var(--breakout-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--breakout-board)_54%,transparent)] p-4 shadow-[0_18px_42px_rgba(0,0,0,0.28)] backdrop-blur-[1px]">
+                <div className="flex flex-col items-center gap-1">
+                  <p className="text-2xl font-semibold tracking-normal">Life lost</p>
+                  <p
+                    className="text-sm font-semibold text-[color-mix(in_oklch,var(--breakout-board-text)_80%,transparent)]"
+                    data-testid="breakout-lives-remaining"
+                  >
+                    {remainingLifeLabel}
+                  </p>
+                </div>
+                <Button
+                  className="min-w-36"
+                  data-testid="breakout-continue-button"
+                  onClick={startGame}
+                  size="lg"
+                  type="button"
+                  variant="secondary"
+                >
+                  <PlayIcon data-icon="inline-start" />
+                  Serve next ball
+                </Button>
+              </div>
             </div>
           ) : showEndScreen ? (
             <GameEndScreen testId="breakout-end-screen">
