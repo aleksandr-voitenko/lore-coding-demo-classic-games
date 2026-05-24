@@ -9,6 +9,7 @@ export {
   GameHeader,
   GameShell,
   GameSidebar,
+  GameStatCard,
 } from "@/components/game-layout-shell";
 export {
   GameHelpScreen,

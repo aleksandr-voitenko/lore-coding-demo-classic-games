@@ -28,6 +28,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStatCard,
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
@@ -391,52 +392,36 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
           title="Classic Snake"
         />
 
-          <dl className="grid grid-cols-2 gap-3">
-            <div className="rounded-md border border-[var(--snake-border)] p-3">
-              <dt className="text-xs font-medium text-[var(--snake-muted)]">
-                Score
-              </dt>
-              <dd
-                className="font-mono text-3xl font-semibold leading-none"
-                data-testid="snake-score"
-              >
-                {game.score}
-              </dd>
-            </div>
-            <div className="rounded-md border border-[var(--snake-border)] p-3">
-              <dt className="text-xs font-medium text-[var(--snake-muted)]">
-                Best
-              </dt>
-              <dd
-                className="font-mono text-3xl font-semibold leading-none"
-                data-testid="snake-best"
-              >
-                {bestScore}
-              </dd>
-            </div>
-            <div className="rounded-md border border-[var(--snake-border)] p-3">
-              <dt className="text-xs font-medium text-[var(--snake-muted)]">
-                Length
-              </dt>
-              <dd
-                className="font-mono text-3xl font-semibold leading-none"
-                data-testid="snake-length"
-              >
-                {game.snake.length}
-              </dd>
-            </div>
-            <div className="rounded-md border border-[var(--snake-border)] p-3">
-              <dt className="text-xs font-medium text-[var(--snake-muted)]">
-                Speed
-              </dt>
-              <dd
-                className="font-mono text-3xl font-semibold leading-none"
-                data-testid="snake-speed"
-              >
-                {speed === null ? "0" : `${Math.round(1000 / speed)}`}
-              </dd>
-            </div>
-          </dl>
+        <dl className="grid grid-cols-2 gap-3">
+          <GameStatCard
+            className="border-[var(--snake-border)]"
+            label="Score"
+            labelClassName="text-[var(--snake-muted)]"
+            value={game.score}
+            valueTestId="snake-score"
+          />
+          <GameStatCard
+            className="border-[var(--snake-border)]"
+            label="Best"
+            labelClassName="text-[var(--snake-muted)]"
+            value={bestScore}
+            valueTestId="snake-best"
+          />
+          <GameStatCard
+            className="border-[var(--snake-border)]"
+            label="Length"
+            labelClassName="text-[var(--snake-muted)]"
+            value={game.snake.length}
+            valueTestId="snake-length"
+          />
+          <GameStatCard
+            className="border-[var(--snake-border)]"
+            label="Speed"
+            labelClassName="text-[var(--snake-muted)]"
+            value={speed === null ? "0" : `${Math.round(1000 / speed)}`}
+            valueTestId="snake-speed"
+          />
+        </dl>
 
       </GameSidebar>
 

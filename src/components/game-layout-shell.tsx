@@ -32,6 +32,15 @@ type GameHeaderProps = {
   title: string;
 };
 
+type GameStatCardProps = {
+  className: string;
+  label: ReactNode;
+  labelClassName: string;
+  value: ReactNode;
+  valueClassName?: string;
+  valueTestId?: string;
+};
+
 export function GameShell({ children, className }: GameShellProps) {
   return (
     <main className={cn("min-h-svh px-4 py-6 sm:px-6 lg:py-8", className)}>
@@ -83,6 +92,27 @@ export function GameHeader({
           {status}
         </p>
       </div>
+    </div>
+  );
+}
+
+export function GameStatCard({
+  className,
+  label,
+  labelClassName,
+  value,
+  valueClassName,
+  valueTestId,
+}: GameStatCardProps) {
+  return (
+    <div className={cn("rounded-md border p-3", className)}>
+      <dt className={cn("text-xs font-medium", labelClassName)}>{label}</dt>
+      <dd
+        className={cn("font-mono text-3xl font-semibold leading-none", valueClassName)}
+        data-testid={valueTestId}
+      >
+        {value}
+      </dd>
     </div>
   );
 }

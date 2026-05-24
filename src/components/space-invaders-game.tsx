@@ -19,6 +19,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStatCard,
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
@@ -396,49 +397,37 @@ export function SpaceInvadersGame({
         />
 
         <dl className="grid grid-cols-2 gap-3">
-          <div className="rounded-md border border-[var(--invaders-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--invaders-muted)]">
-              Score
-            </dt>
-            <dd
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="space-invaders-score"
-            >
-              {game.score}
-            </dd>
-          </div>
-          <div className="rounded-md border border-[var(--invaders-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--invaders-muted)]">
-              Lives
-            </dt>
-            <dd
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="space-invaders-lives"
-            >
-              {game.lives}
-            </dd>
-          </div>
+          <GameStatCard
+            className="border-[var(--invaders-border)]"
+            label="Score"
+            labelClassName="text-[var(--invaders-muted)]"
+            value={game.score}
+            valueTestId="space-invaders-score"
+          />
+          <GameStatCard
+            className="border-[var(--invaders-border)]"
+            label="Lives"
+            labelClassName="text-[var(--invaders-muted)]"
+            value={game.lives}
+            valueTestId="space-invaders-lives"
+          />
         </dl>
 
         <dl className="grid grid-cols-2 gap-3">
-          <div className="rounded-md border border-[var(--invaders-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--invaders-muted)]">Invaders</dt>
-            <dd
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="space-invaders-remaining"
-            >
-              {activeInvaderCount}
-            </dd>
-          </div>
-          <div className="rounded-md border border-[var(--invaders-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--invaders-muted)]">Speed</dt>
-            <dd
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="space-invaders-speed"
-            >
-              {tickDelay === null ? "0" : Math.round(1000 / tickDelay)}
-            </dd>
-          </div>
+          <GameStatCard
+            className="border-[var(--invaders-border)]"
+            label="Invaders"
+            labelClassName="text-[var(--invaders-muted)]"
+            value={activeInvaderCount}
+            valueTestId="space-invaders-remaining"
+          />
+          <GameStatCard
+            className="border-[var(--invaders-border)]"
+            label="Speed"
+            labelClassName="text-[var(--invaders-muted)]"
+            value={tickDelay === null ? "0" : Math.round(1000 / tickDelay)}
+            valueTestId="space-invaders-speed"
+          />
         </dl>
 
       </GameSidebar>

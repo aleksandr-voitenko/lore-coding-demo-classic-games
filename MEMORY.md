@@ -133,6 +133,10 @@ patterns and constraints here.
   separate information strips below `GameBoardStage`. Board dimensions belong in
   board accessibility labels or real settings controls rather than decorative
   visible metadata.
+- Use `GameStatCard` from `src/components/game-layout.tsx` for simple sidebar
+  metric cards so repeated border, label, and value typography stays consistent.
+  Keep specialized panels such as Tetris next-piece preview or Minesweeper mode
+  local when they need custom content.
 - Use `GameBoardStage` and `GameBoardActions` from
   `src/components/game-layout.tsx` for the right-side action rail beside game
   boards. The Back action belongs at the top of that rail and uses the shared

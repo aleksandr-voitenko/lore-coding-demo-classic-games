@@ -19,6 +19,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStatCard,
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
@@ -402,42 +403,36 @@ export function PongGame({
         />
 
         <dl className="grid grid-cols-2 gap-3">
-          <div className="rounded-md border border-[var(--pong-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--pong-muted)]">Player</dt>
-            <dd
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="pong-player-score"
-            >
-              {game.score.player}
-            </dd>
-          </div>
-          <div className="rounded-md border border-[var(--pong-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--pong-muted)]">Computer</dt>
-            <dd
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="pong-cpu-score"
-            >
-              {game.score.cpu}
-            </dd>
-          </div>
+          <GameStatCard
+            className="border-[var(--pong-border)]"
+            label="Player"
+            labelClassName="text-[var(--pong-muted)]"
+            value={game.score.player}
+            valueTestId="pong-player-score"
+          />
+          <GameStatCard
+            className="border-[var(--pong-border)]"
+            label="Computer"
+            labelClassName="text-[var(--pong-muted)]"
+            value={game.score.cpu}
+            valueTestId="pong-cpu-score"
+          />
         </dl>
 
         <dl className="grid grid-cols-2 gap-3">
-          <div className="rounded-md border border-[var(--pong-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--pong-muted)]">Target</dt>
-            <dd className="font-mono text-3xl font-semibold leading-none">
-              {game.targetScore}
-            </dd>
-          </div>
-          <div className="rounded-md border border-[var(--pong-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--pong-muted)]">Speed</dt>
-            <dd
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="pong-speed"
-            >
-              {tickDelay === null ? "0" : Math.round(1000 / tickDelay)}
-            </dd>
-          </div>
+          <GameStatCard
+            className="border-[var(--pong-border)]"
+            label="Target"
+            labelClassName="text-[var(--pong-muted)]"
+            value={game.targetScore}
+          />
+          <GameStatCard
+            className="border-[var(--pong-border)]"
+            label="Speed"
+            labelClassName="text-[var(--pong-muted)]"
+            value={tickDelay === null ? "0" : Math.round(1000 / tickDelay)}
+            valueTestId="pong-speed"
+          />
         </dl>
 
       </GameSidebar>

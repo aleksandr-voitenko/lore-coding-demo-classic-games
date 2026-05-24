@@ -21,6 +21,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStatCard,
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
@@ -407,58 +408,43 @@ export function TetrisGame({
           title="Classic Tetris"
         />
 
-          <dl className="grid grid-cols-2 gap-3">
-            <div className="rounded-md border border-[var(--tetris-border)] p-3">
-              <dt className="text-xs font-medium text-[var(--tetris-muted)]">
-                Score
-              </dt>
-              <dd
-                className="font-mono text-3xl font-semibold leading-none"
-                data-testid="tetris-score"
-              >
-                {game.score}
-              </dd>
-            </div>
-            <div className="rounded-md border border-[var(--tetris-border)] p-3">
-              <dt className="text-xs font-medium text-[var(--tetris-muted)]">
-                Lines
-              </dt>
-              <dd
-                className="font-mono text-3xl font-semibold leading-none"
-                data-testid="tetris-lines"
-              >
-                {game.lines}
-              </dd>
-            </div>
-          </dl>
+        <dl className="grid grid-cols-2 gap-3">
+          <GameStatCard
+            className="border-[var(--tetris-border)]"
+            label="Score"
+            labelClassName="text-[var(--tetris-muted)]"
+            value={game.score}
+            valueTestId="tetris-score"
+          />
+          <GameStatCard
+            className="border-[var(--tetris-border)]"
+            label="Lines"
+            labelClassName="text-[var(--tetris-muted)]"
+            value={game.lines}
+            valueTestId="tetris-lines"
+          />
+        </dl>
 
-          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_5rem] gap-3">
-            <div className="rounded-md border border-[var(--tetris-border)] p-3">
-              <p className="text-xs font-medium text-[var(--tetris-muted)]">
-                Level
-              </p>
-              <p
-                className="font-mono text-3xl font-semibold leading-none"
-                data-testid="tetris-level"
-              >
-                {game.level}
-              </p>
-            </div>
-            <div className="rounded-md border border-[var(--tetris-border)] p-3">
-              <p className="text-xs font-medium text-[var(--tetris-muted)]">
-                Speed
-              </p>
-              <p
-                className="font-mono text-3xl font-semibold leading-none"
-                data-testid="tetris-speed"
-              >
-                {tickDelay === null ? "0" : `${Math.round(1000 / tickDelay)}`}
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 rounded-md border border-[var(--tetris-border)] p-3">
-              <p className="text-xs font-medium text-[var(--tetris-muted)]">
-                Next
-              </p>
+        <dl className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_5rem] gap-3">
+          <GameStatCard
+            className="border-[var(--tetris-border)]"
+            label="Level"
+            labelClassName="text-[var(--tetris-muted)]"
+            value={game.level}
+            valueTestId="tetris-level"
+          />
+          <GameStatCard
+            className="border-[var(--tetris-border)]"
+            label="Speed"
+            labelClassName="text-[var(--tetris-muted)]"
+            value={tickDelay === null ? "0" : `${Math.round(1000 / tickDelay)}`}
+            valueTestId="tetris-speed"
+          />
+          <div className="flex flex-col gap-2 rounded-md border border-[var(--tetris-border)] p-3">
+            <dt className="text-xs font-medium text-[var(--tetris-muted)]">
+              Next
+            </dt>
+            <dd>
               <div
                 aria-label={`Next piece ${game.nextPieceKind}`}
                 className="relative aspect-square overflow-hidden rounded-[0.375rem] bg-[var(--tetris-board)] p-1"
@@ -483,8 +469,9 @@ export function TetrisGame({
                   ))}
                 </div>
               </div>
-            </div>
+            </dd>
           </div>
+        </dl>
 
       </GameSidebar>
 

@@ -15,6 +15,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStatCard,
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
@@ -276,56 +277,48 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
         />
 
         <dl className="grid grid-cols-2 gap-3">
-          <div className="rounded-md border border-[#d6dfeb] p-3">
-            <dt className="text-xs font-medium text-[#59687d]">Score</dt>
-            <dd
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="simon-score"
-            >
-              {game.score}
-            </dd>
-          </div>
-          <div className="rounded-md border border-[#d6dfeb] p-3">
-            <dt className="text-xs font-medium text-[#59687d]">Round</dt>
-            <dd
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="simon-round"
-            >
-              {game.round}
-            </dd>
-          </div>
+          <GameStatCard
+            className="border-[#d6dfeb]"
+            label="Score"
+            labelClassName="text-[#59687d]"
+            value={game.score}
+            valueTestId="simon-score"
+          />
+          <GameStatCard
+            className="border-[#d6dfeb]"
+            label="Round"
+            labelClassName="text-[#59687d]"
+            value={game.round}
+            valueTestId="simon-round"
+          />
         </dl>
 
-        <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-3">
-          <div className="rounded-md border border-[#d6dfeb] p-3">
-            <p className="text-xs font-medium text-[#59687d]">Progress</p>
-            <p
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="simon-progress"
-            >
-              {progressLabel}
-            </p>
-          </div>
-          <div className="rounded-md border border-[#d6dfeb] p-3">
-            <p className="text-xs font-medium text-[#59687d]">Target</p>
-            <p
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="simon-target"
-            >
-              {game.winTarget}
-            </p>
-          </div>
-        </div>
+        <dl className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-3">
+          <GameStatCard
+            className="border-[#d6dfeb]"
+            label="Progress"
+            labelClassName="text-[#59687d]"
+            value={progressLabel}
+            valueTestId="simon-progress"
+          />
+          <GameStatCard
+            className="border-[#d6dfeb]"
+            label="Target"
+            labelClassName="text-[#59687d]"
+            value={game.winTarget}
+            valueTestId="simon-target"
+          />
+        </dl>
 
-        <div className="rounded-md border border-[#d6dfeb] p-3">
-          <p className="text-xs font-medium text-[#59687d]">Speed</p>
-          <p
-            className="font-mono text-3xl font-semibold leading-none"
-            data-testid="simon-speed"
-          >
-            {playbackDelay === null ? "0" : Math.round(1000 / playbackDelay)}
-          </p>
-        </div>
+        <dl>
+          <GameStatCard
+            className="border-[#d6dfeb]"
+            label="Speed"
+            labelClassName="text-[#59687d]"
+            value={playbackDelay === null ? "0" : Math.round(1000 / playbackDelay)}
+            valueTestId="simon-speed"
+          />
+        </dl>
 
       </GameSidebar>
 

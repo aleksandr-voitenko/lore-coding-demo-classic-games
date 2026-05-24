@@ -34,6 +34,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStatCard,
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
@@ -385,45 +386,37 @@ export function BreakoutGame({
         />
 
         <dl className="grid grid-cols-2 gap-3">
-          <div className="rounded-md border border-[var(--breakout-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--breakout-muted)]">Score</dt>
-            <dd
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="breakout-score"
-            >
-              {game.score}
-            </dd>
-          </div>
-          <div className="rounded-md border border-[var(--breakout-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--breakout-muted)]">Lives</dt>
-            <dd
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="breakout-lives"
-            >
-              {game.lives}
-            </dd>
-          </div>
+          <GameStatCard
+            className="border-[var(--breakout-border)]"
+            label="Score"
+            labelClassName="text-[var(--breakout-muted)]"
+            value={game.score}
+            valueTestId="breakout-score"
+          />
+          <GameStatCard
+            className="border-[var(--breakout-border)]"
+            label="Lives"
+            labelClassName="text-[var(--breakout-muted)]"
+            value={game.lives}
+            valueTestId="breakout-lives"
+          />
         </dl>
 
         <dl className="grid grid-cols-2 gap-3">
-          <div className="rounded-md border border-[var(--breakout-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--breakout-muted)]">Bricks</dt>
-            <dd
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="breakout-bricks-remaining"
-            >
-              {activeBrickCount}
-            </dd>
-          </div>
-          <div className="rounded-md border border-[var(--breakout-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--breakout-muted)]">Speed</dt>
-            <dd
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="breakout-speed"
-            >
-              {tickDelay === null ? "0" : Math.round(1000 / tickDelay)}
-            </dd>
-          </div>
+          <GameStatCard
+            className="border-[var(--breakout-border)]"
+            label="Bricks"
+            labelClassName="text-[var(--breakout-muted)]"
+            value={activeBrickCount}
+            valueTestId="breakout-bricks-remaining"
+          />
+          <GameStatCard
+            className="border-[var(--breakout-border)]"
+            label="Speed"
+            labelClassName="text-[var(--breakout-muted)]"
+            value={tickDelay === null ? "0" : Math.round(1000 / tickDelay)}
+            valueTestId="breakout-speed"
+          />
         </dl>
 
       </GameSidebar>

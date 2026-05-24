@@ -15,6 +15,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStatCard,
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
@@ -206,36 +207,30 @@ export function MinesweeperGame({
         />
 
         <dl className="grid grid-cols-2 gap-3">
-          <div className="rounded-md border border-[var(--minesweeper-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--minesweeper-muted)]">Mines</dt>
-            <dd
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="minesweeper-mines-remaining"
-            >
-              {remainingMineCount}
-            </dd>
-          </div>
-          <div className="rounded-md border border-[var(--minesweeper-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--minesweeper-muted)]">Time</dt>
-            <dd
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="minesweeper-time"
-            >
-              {formatElapsedTime(elapsedSeconds)}
-            </dd>
-          </div>
+          <GameStatCard
+            className="border-[var(--minesweeper-border)]"
+            label="Mines"
+            labelClassName="text-[var(--minesweeper-muted)]"
+            value={remainingMineCount}
+            valueTestId="minesweeper-mines-remaining"
+          />
+          <GameStatCard
+            className="border-[var(--minesweeper-border)]"
+            label="Time"
+            labelClassName="text-[var(--minesweeper-muted)]"
+            value={formatElapsedTime(elapsedSeconds)}
+            valueTestId="minesweeper-time"
+          />
         </dl>
 
         <dl className="grid grid-cols-2 gap-3">
-          <div className="rounded-md border border-[var(--minesweeper-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--minesweeper-muted)]">Safe cells</dt>
-            <dd
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="minesweeper-safe-cells"
-            >
-              {game.revealedSafeCellCount}/{safeCellCount}
-            </dd>
-          </div>
+          <GameStatCard
+            className="border-[var(--minesweeper-border)]"
+            label="Safe cells"
+            labelClassName="text-[var(--minesweeper-muted)]"
+            value={`${game.revealedSafeCellCount}/${safeCellCount}`}
+            valueTestId="minesweeper-safe-cells"
+          />
           <div className="rounded-md border border-[var(--minesweeper-border)] p-3">
             <dt className="text-xs font-medium text-[var(--minesweeper-muted)]">Mode</dt>
             <dd

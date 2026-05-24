@@ -22,6 +22,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStatCard,
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
@@ -227,46 +228,38 @@ export function TwentyFortyEightGame({
         />
 
         <dl className="grid grid-cols-2 gap-3">
-          <div className="rounded-md border border-[var(--twenty-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--twenty-muted)]">Score</dt>
-            <dd
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="twenty-forty-eight-score"
-            >
-              {game.score}
-            </dd>
-          </div>
-          <div className="rounded-md border border-[var(--twenty-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--twenty-muted)]">Best</dt>
-            <dd
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="twenty-forty-eight-best-score"
-            >
-              {bestScore}
-            </dd>
-          </div>
+          <GameStatCard
+            className="border-[var(--twenty-border)]"
+            label="Score"
+            labelClassName="text-[var(--twenty-muted)]"
+            value={game.score}
+            valueTestId="twenty-forty-eight-score"
+          />
+          <GameStatCard
+            className="border-[var(--twenty-border)]"
+            label="Best"
+            labelClassName="text-[var(--twenty-muted)]"
+            value={bestScore}
+            valueTestId="twenty-forty-eight-best-score"
+          />
         </dl>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-md border border-[var(--twenty-border)] p-3">
-            <p className="text-xs font-medium text-[var(--twenty-muted)]">Top tile</p>
-            <p
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="twenty-forty-eight-top-tile"
-            >
-              {topTile}
-            </p>
-          </div>
-          <div className="rounded-md border border-[var(--twenty-border)] p-3">
-            <p className="text-xs font-medium text-[var(--twenty-muted)]">Moves</p>
-            <p
-              className="font-mono text-3xl font-semibold leading-none"
-              data-testid="twenty-forty-eight-moves"
-            >
-              {game.moveCount}
-            </p>
-          </div>
-        </div>
+        <dl className="grid grid-cols-2 gap-3">
+          <GameStatCard
+            className="border-[var(--twenty-border)]"
+            label="Top tile"
+            labelClassName="text-[var(--twenty-muted)]"
+            value={topTile}
+            valueTestId="twenty-forty-eight-top-tile"
+          />
+          <GameStatCard
+            className="border-[var(--twenty-border)]"
+            label="Moves"
+            labelClassName="text-[var(--twenty-muted)]"
+            value={game.moveCount}
+            valueTestId="twenty-forty-eight-moves"
+          />
+        </dl>
 
       </GameSidebar>
 
