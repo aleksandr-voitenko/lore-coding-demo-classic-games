@@ -2,8 +2,9 @@
 
 Lore Coding Demo is a Next.js App Router game collection used to demonstrate
 [agentic-lore-coding](https://github.com/aleksandr-voitenko/agentic-lore-coding).
-It opens to a card-based menu with Classic Snake, Tetris, Breakout, Minesweeper,
-Space Invaders, Pong, 2048, and Simon.
+It opens to a card-based menu with Classic games like Snake, Tetris, Breakout, Minesweeper and many others.
+
+All the code in this repository was created using AI agents and the Lore Coding Method. The code was reviewed, but never edited in an IDE. Instead, all edits were performed using an AI agent while working on a specific task.
 
 ## Features
 
