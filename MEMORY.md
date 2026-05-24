@@ -31,9 +31,11 @@ patterns and constraints here.
   win/loss states, and state transitions.
 - `src/lib/*.test.ts` contains deterministic Vitest coverage for engines,
   leaderboard behavior, API routes, SQLite persistence, and Snake pickup
-  feedback. Avoid adding new `src/components/*.test.tsx` tests until the project
-  has Playwright support or another accepted component/UI testing approach;
-  static markup assertions have proven too fragile for new UI behavior.
+  feedback. Playwright owns rendered browser flow coverage in `e2e/`; prefer it
+  for new UI behavior such as launcher handoff, Help/Escape flows, real input,
+  responsive overlay checks, and leaderboard client/server integration. Avoid
+  adding new `src/components/*.test.tsx` tests unless static markup is the
+  clearest fit, because broad TSX markup assertions have proven fragile.
 
 ## Game Modules
 
@@ -165,6 +167,11 @@ patterns and constraints here.
 ## Verification Commands
 
 - `npm test` runs deterministic Vitest coverage.
+- `npm run test:e2e:install` installs the Chromium browser used by Playwright.
+- `npm run test:e2e` runs the focused Chromium Playwright smoke suite. The
+  config starts the Next dev server on `127.0.0.1:3100`, stores Playwright
+  artifacts under `reports/playwright/`, and points
+  `GAME_LEADERBOARD_SQLITE_PATH` at an isolated temp SQLite database.
 - `npm run test:coverage` runs Vitest with V8 coverage and writes reports under
   `reports/coverage/`. This is the broad all-source diagnostic report, so it
   includes currently untested interactive client orchestration.

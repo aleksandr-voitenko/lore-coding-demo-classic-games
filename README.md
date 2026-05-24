@@ -26,6 +26,7 @@ Space Invaders, Pong, 2048, and Simon.
 - Tailwind CSS v4
 - shadcn/ui
 - Vitest
+- Playwright
 - ESLint
 
 ## Getting Started
@@ -63,6 +64,10 @@ compatibility with existing Snake deployments. On a VPS, set
 | `npm run test:agent` | Write JSON/JUnit results and coverage under `reports/`. |
 | `npm run test:coverage` | Generate broad all-source coverage under `reports/coverage/`. |
 | `npm run test:coverage:core` | Run the thresholded core coverage gate under `reports/coverage-core/`. |
+| `npm run test:e2e:install` | Install the Chromium browser used by Playwright. |
+| `npm run test:e2e` | Run the focused Chromium Playwright smoke suite. |
+| `npm run test:e2e:headed` | Run the Playwright suite in a visible browser. |
+| `npm run test:e2e:ui` | Open Playwright's interactive test runner. |
 | `npm run typecheck` | Run TypeScript without emitting. |
 | `npm run lint` | Run ESLint. |
 | `npm run build` | Build the Next.js app. |
