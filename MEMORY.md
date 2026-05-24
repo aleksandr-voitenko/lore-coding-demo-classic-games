@@ -189,4 +189,6 @@ patterns and constraints here.
 - `.github/workflows/ci.yml` runs on pushes to `main` and pull requests. The
   single CI job uses `.node-version`, installs with `npm ci`, then runs build,
   lint, typecheck, the thresholded core coverage gate, and the Playwright e2e
-  suite after installing Chromium with Linux dependencies.
+  suite after installing Chromium with Linux dependencies. The workflow uses
+  `paths-ignore` so documentation-only changes such as Markdown, `docs/**`, and
+  `LICENSE` do not start the CI run.
