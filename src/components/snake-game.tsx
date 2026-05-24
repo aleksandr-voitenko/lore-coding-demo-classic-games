@@ -385,9 +385,7 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
     <GameShell className="bg-[var(--snake-page)] text-[var(--snake-ink)]">
       <GameSidebar className="border-[var(--snake-border)] bg-[var(--snake-panel)]">
         <GameHeader
-          accentClassName="bg-[var(--snake-accent)]"
           status={statusLabels[game.status]}
-          statusClassName="text-[var(--snake-muted)]"
           statusTestId="snake-status"
           title="Classic Snake"
         />
@@ -425,7 +423,7 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
 
       </GameSidebar>
 
-      <GameBoardColumn className="max-w-[min(92vw,41.25rem)]">
+      <GameBoardColumn className="w-[min(92vw,41.25rem)]">
         <GameBoardStage
           actions={
             <GameBoardActions

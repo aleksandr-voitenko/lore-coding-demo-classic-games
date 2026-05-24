@@ -133,6 +133,15 @@ patterns and constraints here.
   separate information strips below `GameBoardStage`. Board dimensions belong in
   board accessibility labels or real settings controls rather than decorative
   visible metadata.
+- `GameShell` centers the game board column in the desktop viewport and places
+  `GameSidebar` immediately to the board's left with the normal layout gap,
+  aligned to the board stage's top edge. Per-game `GameBoardColumn` usages should
+  provide an explicit responsive width such as `w-[min(92vw,37.25rem)]` so the
+  shared auto-width center column can measure and center the board consistently.
+- `GameHeader` is intentionally screen-reader-only status/title structure for
+  accessibility and existing status test IDs. Keep visible game titles and
+  statuses inside board overlays, Help screens, and end screens rather than
+  reintroducing a visible header block in the sidebar.
 - Use `GameStatCard` from `src/components/game-layout.tsx` for simple sidebar
   metric cards so repeated border, label, and value typography stays consistent.
   Keep specialized panels such as Tetris next-piece preview or Minesweeper mode

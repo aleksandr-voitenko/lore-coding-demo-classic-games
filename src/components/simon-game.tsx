@@ -269,9 +269,7 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
     <GameShell className="bg-[#f6f9fc] text-[#172033]">
       <GameSidebar className="border-[#d6dfeb] bg-white">
         <GameHeader
-          accentClassName="bg-[linear-gradient(90deg,#25a75a,#d73548,#f0bd38,#1d7ed0)]"
           status={statusLabels[game.status]}
-          statusClassName="text-[#59687d]"
           statusTestId="simon-status"
           title="Classic Simon"
         />
@@ -322,7 +320,7 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
 
       </GameSidebar>
 
-      <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">
+      <GameBoardColumn className="w-[min(92vw,37.25rem)]">
         <GameBoardStage
           actions={
             <GameBoardActions

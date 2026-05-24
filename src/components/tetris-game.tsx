@@ -401,9 +401,7 @@ export function TetrisGame({
     <GameShell className="bg-[var(--tetris-page)] text-[var(--tetris-ink)]">
       <GameSidebar className="border-[var(--tetris-border)] bg-[var(--tetris-panel)]">
         <GameHeader
-          accentClassName="bg-[linear-gradient(90deg,var(--tetris-cyan),var(--tetris-yellow),var(--tetris-purple))]"
           status={statusLabels[game.status]}
-          statusClassName="text-[var(--tetris-muted)]"
           statusTestId="tetris-status"
           title="Classic Tetris"
         />
@@ -475,7 +473,7 @@ export function TetrisGame({
 
       </GameSidebar>
 
-      <GameBoardColumn className="max-w-[min(86vw,22.25rem)]">
+      <GameBoardColumn className="w-[min(86vw,22.25rem)]">
         <GameBoardStage
           actions={
             <GameBoardActions

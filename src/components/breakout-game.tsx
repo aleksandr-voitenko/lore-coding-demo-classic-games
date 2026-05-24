@@ -378,9 +378,7 @@ export function BreakoutGame({
     <GameShell className="bg-[var(--breakout-page)] text-[var(--breakout-ink)]">
       <GameSidebar className="border-[var(--breakout-border)] bg-[var(--breakout-panel)]">
         <GameHeader
-          accentClassName="bg-[linear-gradient(90deg,var(--breakout-red),var(--breakout-yellow),var(--breakout-blue))]"
           status={statusLabels[game.status]}
-          statusClassName="text-[var(--breakout-muted)]"
           statusTestId="breakout-status"
           title="Classic Breakout"
         />
@@ -421,7 +419,7 @@ export function BreakoutGame({
 
       </GameSidebar>
 
-      <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">
+      <GameBoardColumn className="w-[min(92vw,37.25rem)]">
         <GameBoardStage
           actions={
             <GameBoardActions

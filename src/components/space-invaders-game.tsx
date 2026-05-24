@@ -389,9 +389,7 @@ export function SpaceInvadersGame({
     <GameShell className="bg-[var(--invaders-page)] text-[var(--invaders-ink)]">
       <GameSidebar className="border-[var(--invaders-border)] bg-[var(--invaders-panel)]">
         <GameHeader
-          accentClassName="bg-[linear-gradient(90deg,var(--invaders-lime),var(--invaders-cyan),var(--invaders-magenta))]"
           status={statusLabels[game.status]}
-          statusClassName="text-[var(--invaders-muted)]"
           statusTestId="space-invaders-status"
           title="Classic Space Invaders"
         />
@@ -432,7 +430,7 @@ export function SpaceInvadersGame({
 
       </GameSidebar>
 
-      <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">
+      <GameBoardColumn className="w-[min(92vw,37.25rem)]">
         <GameBoardStage
           actions={
             <GameBoardActions

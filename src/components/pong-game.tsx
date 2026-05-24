@@ -395,9 +395,7 @@ export function PongGame({
     <GameShell className="bg-[var(--pong-page)] text-[var(--pong-ink)]">
       <GameSidebar className="border-[var(--pong-border)] bg-[var(--pong-panel)]">
         <GameHeader
-          accentClassName="bg-[linear-gradient(90deg,var(--pong-blue),var(--pong-ball),var(--pong-pink))]"
           status={statusLabel}
-          statusClassName="text-[var(--pong-muted)]"
           statusTestId="pong-status"
           title="Classic Pong"
         />
@@ -437,7 +435,7 @@ export function PongGame({
 
       </GameSidebar>
 
-      <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">
+      <GameBoardColumn className="w-[min(92vw,37.25rem)]">
         <GameBoardStage
           actions={
             <GameBoardActions

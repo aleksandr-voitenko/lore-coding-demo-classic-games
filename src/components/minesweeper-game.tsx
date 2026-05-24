@@ -199,9 +199,7 @@ export function MinesweeperGame({
     <GameShell className="bg-[var(--minesweeper-page)] text-[var(--minesweeper-ink)]">
       <GameSidebar className="border-[var(--minesweeper-border)] bg-[var(--minesweeper-panel)]">
         <GameHeader
-          accentClassName="bg-[linear-gradient(90deg,var(--minesweeper-flag),var(--minesweeper-one),var(--minesweeper-two))]"
           status={statusLabels[game.status]}
-          statusClassName="text-[var(--minesweeper-muted)]"
           statusTestId="minesweeper-status"
           title="Classic Minesweeper"
         />
@@ -249,7 +247,7 @@ export function MinesweeperGame({
 
       </GameSidebar>
 
-      <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">
+      <GameBoardColumn className="w-[min(92vw,37.25rem)]">
         <GameBoardStage
           actions={
             <GameBoardActions

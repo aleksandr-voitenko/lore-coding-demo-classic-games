@@ -220,9 +220,7 @@ export function TwentyFortyEightGame({
     <GameShell className="bg-[var(--twenty-page)] text-[var(--twenty-ink)]">
       <GameSidebar className="border-[var(--twenty-border)] bg-[var(--twenty-panel)]">
         <GameHeader
-          accentClassName="bg-[linear-gradient(90deg,var(--twenty-tile-8),var(--twenty-tile-128),var(--twenty-tile-2048))]"
           status={statusLabel}
-          statusClassName="text-[var(--twenty-muted)]"
           statusTestId="twenty-forty-eight-status"
           title="Classic 2048"
         />
@@ -263,7 +261,7 @@ export function TwentyFortyEightGame({
 
       </GameSidebar>
 
-      <GameBoardColumn className="max-w-[min(92vw,37.25rem)]">
+      <GameBoardColumn className="w-[min(92vw,37.25rem)]">
         <GameBoardStage
           actions={
             <GameBoardActions
