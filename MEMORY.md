@@ -186,3 +186,7 @@ patterns and constraints here.
 - `npm run typecheck` runs TypeScript without emitting.
 - `npm run lint` runs ESLint.
 - `npm run build` builds the Next.js app.
+- `.github/workflows/ci.yml` runs on pushes to `main` and pull requests. The
+  single CI job uses `.node-version`, installs with `npm ci`, then runs build,
+  lint, typecheck, the thresholded core coverage gate, and the Playwright e2e
+  suite after installing Chromium with Linux dependencies.

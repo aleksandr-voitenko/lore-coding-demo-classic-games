@@ -72,6 +72,10 @@ compatibility with existing Snake deployments. On a VPS, set
 | `npm run lint` | Run ESLint. |
 | `npm run build` | Build the Next.js app. |
 
+GitHub Actions runs these checks on pushes to `main` and pull requests:
+`npm ci`, `npm run build`, `npm run lint`, `npm run typecheck`,
+`npm run test:coverage:core`, and `npm run test:e2e`.
+
 ## UI Components
 
 shadcn/ui is initialized with Tailwind CSS v4, the `base-nova` preset, and the
