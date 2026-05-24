@@ -362,7 +362,7 @@ const GAME_CARDS: GameCard[] = [
       width: 250,
     },
     component: PongGame,
-    description: "A paddle duel against a CPU opponent with rebounds, rallies, and scoring.",
+    description: "A paddle duel against a computer opponent with rebounds, rallies, and scoring.",
     id: "pong",
     label: "Classic Pong",
     parameters: ["pong-board-size", "pong-target"],

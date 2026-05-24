@@ -60,7 +60,7 @@ type PongGameProps = {
 };
 
 const statusLabels: Record<PongStatus, string> = {
-  lost: "CPU wins",
+  lost: "Computer wins",
   paused: "Paused",
   ready: "Ready",
   running: "Running",
@@ -98,7 +98,7 @@ function createPongHelpSections(targetScore: number): GameHelpSection[] {
     {
       title: "Rules",
       items: [
-        "Keep the ball past the CPU paddle to score.",
+        "Keep the ball past the computer paddle to score.",
         "Block the ball before it passes your paddle.",
         `First side to ${targetScore} points wins the match.`,
       ],
@@ -412,7 +412,7 @@ export function PongGame({
             </dd>
           </div>
           <div className="rounded-md border border-[var(--pong-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--pong-muted)]">CPU</dt>
+            <dt className="text-xs font-medium text-[var(--pong-muted)]">Computer</dt>
             <dd
               className="font-mono text-3xl font-semibold leading-none"
               data-testid="pong-cpu-score"
@@ -505,15 +505,11 @@ export function PongGame({
             >
               <div className="flex max-w-72 flex-col items-center gap-3 rounded-md border border-[#e5f2ff]/20 bg-[#081525]/92 p-5 shadow-[0_18px_48px_rgba(0,0,0,0.34)]">
                 <div className="flex flex-col items-center gap-1">
-                  <p className="text-xs font-semibold uppercase tracking-normal text-[#9fb6c9]">
+                  <p className="text-2xl font-semibold tracking-normal text-balance">
                     Rally complete
                   </p>
-                  <p className="text-2xl font-semibold tracking-normal text-balance">
-                    Next rally
-                  </p>
-                  <p className="text-sm font-medium text-[#9fb6c9]">
-                    Player {game.score.player} - {game.score.cpu} CPU. First to{" "}
-                    {game.targetScore}.
+                  <p className="text-base font-medium text-[#9fb6c9]">
+                    Player {game.score.player} - {game.score.cpu} Computer
                   </p>
                 </div>
                 <Button

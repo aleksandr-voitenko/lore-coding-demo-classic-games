@@ -188,7 +188,7 @@ describe("game board renderers", () => {
 
     expectMarkup(markup, [
       'data-testid="pong-board"',
-      "Pong board. Field 420 by 560. Player 0. CPU 0. First to 5. Ready.",
+      "Pong board. Field 420 by 560. Player 0. Computer 0. First to 5. Ready.",
       'data-testid="pong-ball"',
       'data-testid="pong-player-paddle"',
       'data-testid="pong-cpu-paddle"',
