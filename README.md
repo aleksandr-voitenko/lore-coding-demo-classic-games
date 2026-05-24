@@ -1,8 +1,9 @@
-# Task Workflow Test
+# Lore Coding Demo
 
-Task Workflow Test is a Next.js App Router game collection used for task-based
-development practice. It opens to a card-based menu with Classic Snake, Tetris,
-Breakout, Minesweeper, Space Invaders, Pong, 2048, and Simon.
+Lore Coding Demo is a Next.js App Router game collection used to demonstrate
+[agentic-lore-coding](https://github.com/aleksandr-voitenko/agentic-lore-coding).
+It opens to a card-based menu with Classic Snake, Tetris, Breakout, Minesweeper,
+Space Invaders, Pong, 2048, and Simon.
 
 ## Features
 
