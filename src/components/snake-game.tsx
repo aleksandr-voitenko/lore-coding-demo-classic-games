@@ -35,7 +35,7 @@ import {
 } from "@/components/game-layout";
 import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
 import { registerGameKeyDown, shouldIgnoreGameKeyDown } from "@/components/game-input";
-import { SnakeBoard } from "@/components/snake-board";
+import { SnakeBoard, snakeSpriteSources } from "@/components/snake-board";
 import { Button } from "@/components/ui/button";
 import {
   advanceSnakeGame,
@@ -52,7 +52,6 @@ import {
 } from "@/lib/snake-game-engine";
 import { createFoodFeedback, type FoodFeedback } from "@/lib/snake-food-feedback";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
-import { cn } from "@/lib/utils";
 import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
 
 type TimedFoodLifecycleOptions = {
@@ -67,10 +66,32 @@ type SnakeGameProps = {
   onBackToMenu?: () => void;
 };
 
-const START_SCREEN_CELLS = Array.from({ length: 15 }, (_, index) => ({
-  index,
-  isSnake: [2, 7, 8, 9, 14].includes(index),
-}));
+const START_SCREEN_CELLS: Array<{
+  className?: string;
+  rotationDeg?: number;
+  spriteSrc: string;
+}> = [
+  {
+    rotationDeg: 90,
+    spriteSrc: snakeSpriteSources.tail,
+  },
+  {
+    rotationDeg: 90,
+    spriteSrc: snakeSpriteSources.bodyStraight,
+  },
+  {
+    rotationDeg: 90,
+    spriteSrc: snakeSpriteSources.bodyStraight,
+  },
+  {
+    rotationDeg: 90,
+    spriteSrc: snakeSpriteSources.head,
+  },
+  {
+    className: "scale-90",
+    spriteSrc: snakeSpriteSources.foodRedApple,
+  },
+];
 
 const keyDirections: Record<string, Direction> = {
   ArrowUp: "up",
@@ -455,18 +476,26 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
                 data-testid="snake-start-screen"
               >
                 <div className="flex flex-col items-center gap-3">
-                  <div
-                    className="grid grid-cols-5 gap-1"
-                    aria-hidden="true"
-                  >
-                    {START_SCREEN_CELLS.map(({ index, isSnake }) => (
+                  <div className="grid grid-cols-5 gap-1" aria-hidden="true">
+                    {START_SCREEN_CELLS.map(({ className, rotationDeg = 0, spriteSrc }, index) => (
                       <span
-                        className={cn(
-                          "size-3 rounded-[0.18rem] bg-[var(--snake-grid)]",
-                          isSnake && "bg-[var(--snake-head)]",
-                        )}
-                        key={index}
-                      />
+                        className="relative size-9 overflow-visible rounded-[0.18rem] bg-[var(--snake-board-cell)] bg-cover bg-center bg-no-repeat shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--snake-grid)_60%,transparent)] sm:size-10"
+                        key={`${spriteSrc}-${index}`}
+                        style={{ backgroundImage: `url("${snakeSpriteSources.floorCell}")` }}
+                      >
+                        <span
+                          className={[
+                            "absolute inset-0 bg-contain bg-center bg-no-repeat drop-shadow-[0_3px_5px_color-mix(in_oklch,black_28%,transparent)]",
+                            className,
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          style={{
+                            backgroundImage: `url("${spriteSrc}")`,
+                            transform: rotationDeg === 0 ? undefined : `rotate(${rotationDeg}deg)`,
+                          }}
+                        />
+                      </span>
                     ))}
                   </div>
                   <div className="flex flex-col items-center gap-1">

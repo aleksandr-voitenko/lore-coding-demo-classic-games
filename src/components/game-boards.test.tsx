@@ -33,12 +33,29 @@ describe("game board renderers", () => {
         position: { x: 4, y: 4 },
       },
       food: { x: 5, y: 5 },
-      obstacles: [{ x: 2, y: 2 }],
+      obstacles: [
+        { x: 2, y: 2 },
+        { x: 3, y: 2 },
+      ],
       score: 7,
+      shrinkFood: {
+        expiresAt: 1_000,
+        position: { x: 8, y: 4 },
+      },
+      slowFood: {
+        expiresAt: 1_000,
+        position: { x: 7, y: 4 },
+      },
       snake: [
         { x: 3, y: 3 },
         { x: 2, y: 3 },
+        { x: 2, y: 4 },
+        { x: 2, y: 5 },
       ],
+      speedFood: {
+        expiresAt: 1_000,
+        position: { x: 6, y: 4 },
+      },
       status: "running" as const,
     };
     const markup = renderToStaticMarkup(
@@ -54,9 +71,22 @@ describe("game board renderers", () => {
 
     expectMarkup(markup, [
       'data-testid="snake-board"',
-      "Snake board. Field 11 by 11. Score 7. Running. 1 obstacle blocks. Yellow apple active.",
+      "Snake board. Field 11 by 11. Score 7. Running. 2 obstacle blocks. Yellow apple active. Purple diamond active. Blue triangle active. Cyan hexagon active.",
       'data-testid="snake-food-feedback"',
       'data-testid="snake-overlay"',
+      "/images/snake/floor-cell.png?v=sprite-art-v7",
+      "/images/snake/snake-head.png?v=sprite-art-v7",
+      "/images/snake/snake-body-straight.png?v=sprite-art-v7",
+      "/images/snake/snake-body-corner.png?v=sprite-art-v7",
+      "/images/snake/snake-tail.png?v=sprite-art-v7",
+      "/images/snake/food-red-apple.png?v=sprite-art-v7",
+      "/images/snake/food-yellow-apple.png?v=sprite-art-v7",
+      "/images/snake/food-purple-diamond.png?v=sprite-art-v7",
+      "/images/snake/food-blue-triangle.png?v=sprite-art-v7",
+      "/images/snake/food-cyan-hexagon.png?v=sprite-art-v7",
+      "/images/snake/obstacle-stone-a.png?v=sprite-art-v7",
+      "/images/snake/obstacle-stone-b.png?v=sprite-art-v7",
+      "transform:rotate(90deg)",
     ]);
   });
 

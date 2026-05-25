@@ -93,13 +93,16 @@ patterns and constraints here.
   optimized `/_next/image` URLs so replacing an image file does not leave stale
   optimized variants in the blurred background or foreground preview.
 - Board artwork is generally code-native inside board components rather than
-  external sprite sheets. Space Invaders is the current exception: its board
-  background and transparent PNG sprites live under
-  `public/images/space-invaders/` and are referenced by versioned public URLs
-  from `src/components/space-invaders-board.tsx`. Space Invaders moving sprites
-  render with board-relative `translate3d(...)` transforms using container query
-  units, while the pure engine keeps a faster fixed tick with scaled per-tick
-  horizontal, shot, and player movement.
+  external sprite sheets. Space Invaders and Snake are the current exceptions:
+  Space Invaders uses board background and transparent PNG sprites under
+  `public/images/space-invaders/`, while Snake uses 128x128 cell sprites under
+  `public/images/snake/` for floor cells, snake segments, foods, and obstacles.
+  Snake segment sprites use four base 128x128 assets for head, tail, straight
+  body, and corner, with direction handled by CSS rotation. Both boards reference
+  assets with versioned public URLs from their board components. Space Invaders
+  moving sprites render with board-relative `translate3d(...)` transforms using
+  container query units, while the pure engine keeps a faster fixed tick with
+  scaled per-tick horizontal, shot, and player movement.
 
 ## Implementation Patterns
 
