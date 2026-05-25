@@ -4,6 +4,7 @@ import {
   advanceSpaceInvadersGame,
   createInitialSpaceInvadersGame,
   fireSpaceInvadersShot,
+  getSpaceInvadersPlayerSpeed,
   getSpaceInvadersTickDelay,
   moveSpaceInvadersPlayer,
   pauseSpaceInvadersGame,
@@ -104,6 +105,19 @@ describe("space invaders game engine", () => {
     expect(movedRight.player.x).toBe(SPACE_INVADERS_BOARD_WIDTH - movedRight.player.width);
   });
 
+  it("uses a smoother tick cadence with scaled per-tick movement", () => {
+    const runningGame = createRunningGame();
+    const firstInvader = runningGame.invaders[0]!;
+    const advancedGame = advanceSpaceInvadersGame(runningGame);
+    const movedInvader = advancedGame.invaders.find(
+      (invader) => invader.id === firstInvader.id,
+    );
+
+    expect(getSpaceInvadersTickDelay()).toBe(34);
+    expect(getSpaceInvadersPlayerSpeed()).toBeCloseTo(9.6);
+    expect(movedInvader?.x).toBeCloseTo(firstInvader.x + 0.8);
+  });
+
   it("fires one player shot while running", () => {
     const runningGame = createRunningGame();
     const firedGame = fireSpaceInvadersShot(runningGame);
@@ -121,39 +135,30 @@ describe("space invaders game engine", () => {
   });
 
   it("moves the player shot upward and clears it after it leaves the board", () => {
-    const movingShotGame = createRunningGame({
-      playerShot: {
-        height: 14,
-        velocityY: -16,
-        width: 4,
-        x: 3,
-        y: 120,
-      },
-    });
+    const movingShotGame = fireSpaceInvadersShot(createRunningGame());
+    const movingShot = movingShotGame.playerShot!;
     const clearedShotGame = createRunningGame({
       playerShot: {
-        height: 14,
-        velocityY: -16,
-        width: 4,
-        x: 3,
-        y: -15,
+        ...movingShot,
+        y: -movingShot.height + movingShot.velocityY - 1,
       },
     });
 
-    expect(advanceSpaceInvadersGame(movingShotGame).playerShot?.y).toBe(104);
+    expect(advanceSpaceInvadersGame(movingShotGame).playerShot?.y).toBeCloseTo(
+      movingShot.y + movingShot.velocityY,
+    );
     expect(advanceSpaceInvadersGame(clearedShotGame).playerShot).toBeNull();
   });
 
   it("removes a hit invader, clears the shot, and adds the invader score", () => {
     const game = createInitialSpaceInvadersGame();
     const targetInvader = game.invaders[0]!;
+    const shot = fireSpaceInvadersShot(createRunningGame()).playerShot!;
     const runningGame = createRunningGame({
       invaders: game.invaders,
       playerShot: {
-        height: 14,
-        velocityY: -16,
-        width: 4,
-        x: targetInvader.x + targetInvader.width / 2 - 2,
+        ...shot,
+        x: targetInvader.x + targetInvader.width / 2 - shot.width / 2,
         y: targetInvader.y + targetInvader.height + 2,
       },
     });
@@ -169,7 +174,7 @@ describe("space invaders game engine", () => {
     const game = createInitialSpaceInvadersGame();
     const targetInvader = {
       ...game.invaders[0]!,
-      x: SPACE_INVADERS_BOARD_WIDTH - game.invaders[0]!.width - 1,
+      x: SPACE_INVADERS_BOARD_WIDTH - game.invaders[0]!.width - 0.1,
       y: 100,
     };
     const runningGame = withOnlyActiveInvader(
@@ -186,8 +191,8 @@ describe("space invaders game engine", () => {
 
     expect(marchedInvader).toMatchObject({
       x: targetInvader.x,
-      y: targetInvader.y + 4,
     });
+    expect(marchedInvader?.y).toBeCloseTo(targetInvader.y + 4);
     expect(advanced.marchDirection).toBe(-1);
   });
 
@@ -239,14 +244,13 @@ describe("space invaders game engine", () => {
   it("wins when the final active invader is cleared", () => {
     const game = createInitialSpaceInvadersGame();
     const targetInvader = game.invaders[0]!;
+    const shot = fireSpaceInvadersShot(createRunningGame()).playerShot!;
     const runningGame = withOnlyActiveInvader(
       createRunningGame({
         invaders: game.invaders,
         playerShot: {
-          height: 14,
-          velocityY: -16,
-          width: 4,
-          x: targetInvader.x + targetInvader.width / 2 - 2,
+          ...shot,
+          x: targetInvader.x + targetInvader.width / 2 - shot.width / 2,
           y: targetInvader.y + targetInvader.height + 2,
         },
       }),

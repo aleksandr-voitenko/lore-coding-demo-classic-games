@@ -26,6 +26,7 @@ const spaceInvadersBoardBackgroundStyle: CSSProperties = {
   backgroundImage: `url("${spaceInvadersBackgroundSrc}")`,
   backgroundPosition: "center",
   backgroundSize: "cover",
+  containerType: "size",
 };
 
 const spaceInvadersBoardShadeStyle: CSSProperties = {
@@ -63,6 +64,28 @@ export const spaceInvaderSprites = [
 
 export function getSpaceInvaderSprite(row: number) {
   return spaceInvaderSprites[row % spaceInvaderSprites.length];
+}
+
+function getBoardEntityStyle({
+  boardHeight,
+  boardWidth,
+  height,
+  width,
+  x,
+  y,
+}: {
+  boardHeight: number;
+  boardWidth: number;
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+}): CSSProperties {
+  return {
+    height: `${(height / boardHeight) * 100}%`,
+    transform: `translate3d(${(x / boardWidth) * 100}cqw, ${(y / boardHeight) * 100}cqh, 0)`,
+    width: `${(width / boardWidth) * 100}%`,
+  };
 }
 
 export function SpaceInvadersBoard({
@@ -104,15 +127,20 @@ export function SpaceInvadersBoard({
           return (
             <span
               aria-hidden="true"
-              className={cn("absolute transition-opacity", !invader.isActive && "opacity-0")}
+              className={cn(
+                "absolute left-0 top-0 transition-opacity will-change-transform",
+                !invader.isActive && "opacity-0",
+              )}
               data-testid={invader.isActive ? "space-invaders-invader" : undefined}
               key={invader.id}
-              style={{
-                height: `${(invader.height / game.boardHeight) * 100}%`,
-                left: `${(invader.x / game.boardWidth) * 100}%`,
-                top: `${(invader.y / game.boardHeight) * 100}%`,
-                width: `${(invader.width / game.boardWidth) * 100}%`,
-              }}
+              style={getBoardEntityStyle({
+                boardHeight: game.boardHeight,
+                boardWidth: game.boardWidth,
+                height: invader.height,
+                width: invader.width,
+                x: invader.x,
+                y: invader.y,
+              })}
             >
               <span
                 className={cn(
@@ -128,28 +156,36 @@ export function SpaceInvadersBoard({
         {game.playerShot ? (
           <span
             aria-hidden="true"
-            className="absolute bg-contain bg-center bg-no-repeat drop-shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-shot)_72%,transparent)] [image-rendering:pixelated]"
+            className="absolute left-0 top-0 bg-contain bg-center bg-no-repeat drop-shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-shot)_72%,transparent)] will-change-transform [image-rendering:pixelated]"
             data-testid="space-invaders-player-shot"
             style={{
               backgroundImage: `url("${playerShotSpriteSrc}")`,
-              height: `${(game.playerShot.height / game.boardHeight) * 100}%`,
-              left: `${(game.playerShot.x / game.boardWidth) * 100}%`,
-              top: `${(game.playerShot.y / game.boardHeight) * 100}%`,
-              width: `${(game.playerShot.width / game.boardWidth) * 100}%`,
+              ...getBoardEntityStyle({
+                boardHeight: game.boardHeight,
+                boardWidth: game.boardWidth,
+                height: game.playerShot.height,
+                width: game.playerShot.width,
+                x: game.playerShot.x,
+                y: game.playerShot.y,
+              }),
             }}
           />
         ) : null}
 
         <span
           aria-hidden="true"
-          className="absolute bg-contain bg-center bg-no-repeat drop-shadow-[0_0_18px_color-mix(in_oklch,var(--invaders-player)_56%,transparent)] [image-rendering:pixelated]"
+          className="absolute left-0 top-0 bg-contain bg-center bg-no-repeat drop-shadow-[0_0_18px_color-mix(in_oklch,var(--invaders-player)_56%,transparent)] will-change-transform [image-rendering:pixelated]"
           data-testid="space-invaders-player"
           style={{
             backgroundImage: `url("${playerShipSpriteSrc}")`,
-            height: `${(game.player.height / game.boardHeight) * 100}%`,
-            left: `${(game.player.x / game.boardWidth) * 100}%`,
-            top: `${(game.player.y / game.boardHeight) * 100}%`,
-            width: `${(game.player.width / game.boardWidth) * 100}%`,
+            ...getBoardEntityStyle({
+              boardHeight: game.boardHeight,
+              boardWidth: game.boardWidth,
+              height: game.player.height,
+              width: game.player.width,
+              x: game.player.x,
+              y: game.player.y,
+            }),
           }}
         />
       </div>

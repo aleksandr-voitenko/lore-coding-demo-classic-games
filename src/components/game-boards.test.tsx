@@ -183,6 +183,7 @@ describe("game board renderers", () => {
       "/images/space-invaders/alien-purple.png?v=sprite-art-v1",
       "/images/space-invaders/player-shot.png?v=sprite-art-v1",
       "/images/space-invaders/player-ship.png?v=sprite-art-v1",
+      "transform:translate3d(",
     ]);
   });
 

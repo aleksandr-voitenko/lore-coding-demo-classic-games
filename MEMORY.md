@@ -96,7 +96,10 @@ patterns and constraints here.
   external sprite sheets. Space Invaders is the current exception: its board
   background and transparent PNG sprites live under
   `public/images/space-invaders/` and are referenced by versioned public URLs
-  from `src/components/space-invaders-board.tsx`.
+  from `src/components/space-invaders-board.tsx`. Space Invaders moving sprites
+  render with board-relative `translate3d(...)` transforms using container query
+  units, while the pure engine keeps a faster fixed tick with scaled per-tick
+  horizontal, shot, and player movement.
 
 ## Implementation Patterns
 

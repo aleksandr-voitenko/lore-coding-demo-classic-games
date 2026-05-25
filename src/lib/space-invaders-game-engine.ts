@@ -55,7 +55,7 @@ export const SPACE_INVADERS_COLUMNS = 11;
 export const SPACE_INVADERS_ROWS = 5;
 export const SPACE_INVADERS_STARTING_LIVES = 3;
 export const SPACE_INVADERS_BASE_Y = 492;
-export const SPACE_INVADERS_TICK_DELAY_MS = 85;
+export const SPACE_INVADERS_TICK_DELAY_MS = 34;
 export const SPACE_INVADERS_BOARD_SIZE_OPTIONS = [
   { height: 560, label: "420 x 560", width: 420 },
   { height: 640, label: "480 x 640", width: 480 },
@@ -71,16 +71,16 @@ const INVADER_DROP_Y = 4;
 const INVADER_GAP_X = 5;
 const INVADER_GAP_Y = 14;
 const INVADER_HEIGHT = 23;
-const INVADER_STEP_X = 2;
+const INVADER_STEP_X = 0.8;
 const INVADER_TOP = 64;
 const INVADER_WIDTH = 28;
 const PLAYER_BOTTOM_MARGIN = 10;
 const INVADER_X = 38;
 const PLAYER_HEIGHT = 50;
-const PLAYER_SPEED = 24;
+const PLAYER_SPEED = 9.6;
 const PLAYER_WIDTH = 62;
 const SHOT_HEIGHT = 22;
-const SHOT_SPEED = -16;
+const SHOT_SPEED = -6.4;
 const SHOT_WIDTH = 6;
 
 export function createInitialSpaceInvadersGame({
