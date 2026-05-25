@@ -28,6 +28,7 @@ export type PongGameState = {
   boardWidth: number;
   cpuPaddle: PongPaddle;
   playerPaddle: PongPaddle;
+  remainingScore: number;
   score: PongScore;
   status: PongStatus;
   targetScore: number;
@@ -43,6 +44,7 @@ export const PONG_BOARD_WIDTH = 420;
 export const PONG_BOARD_HEIGHT = 560;
 export const PONG_TARGET_SCORE = 5;
 export const PONG_TICK_DELAY_MS = 16;
+export const PONG_SCORE_TICK_DELAY_MS = 1_000;
 export const PONG_BOARD_SIZE_OPTIONS = [
   { height: 480, label: "360 x 480", width: 360 },
   { height: 560, label: "420 x 560", width: 420 },
@@ -59,8 +61,21 @@ const PADDLE_HEIGHT = 88;
 const PADDLE_INSET = 28;
 const PADDLE_SPEED = 7;
 const PADDLE_WIDTH = 12;
+const POINTS_PER_TARGET = 200;
+const SCORE_SECOND_PENALTY = 5;
+const OPPONENT_RALLY_PENALTY = 100;
 
 type PongScorer = keyof PongScore;
+
+type CreatePongRoundStateOptions = {
+  boardHeight?: number;
+  boardWidth?: number;
+  remainingScore?: number;
+  score: PongScore;
+  serveDirection: -1 | 1;
+  status: PongStatus;
+  targetScore?: number;
+};
 
 export function createInitialPongGame({
   boardHeight = PONG_BOARD_HEIGHT,
@@ -71,14 +86,15 @@ export function createInitialPongGame({
   const normalizedBoardHeight = normalizePongDimension(boardHeight, PONG_BOARD_HEIGHT, 320);
   const normalizedTargetScore = normalizePongTargetScore(targetScore);
 
-  return createRoundState(
-    { cpu: 0, player: 0 },
-    "ready",
-    1,
-    normalizedBoardWidth,
-    normalizedBoardHeight,
-    normalizedTargetScore,
-  );
+  return createRoundState({
+    boardHeight: normalizedBoardHeight,
+    boardWidth: normalizedBoardWidth,
+    remainingScore: getPongMaximumScore(normalizedTargetScore),
+    score: { cpu: 0, player: 0 },
+    serveDirection: 1,
+    status: "ready",
+    targetScore: normalizedTargetScore,
+  });
 }
 
 export function startPongGame(game: PongGameState): PongGameState {
@@ -158,6 +174,10 @@ export function isPongMatchInProgress(game: Pick<PongGameState, "score" | "statu
   return game.status === "running" || game.status === "paused" || isPongBetweenRounds(game);
 }
 
+export function isPongScoreCountingDown(game: Pick<PongGameState, "status">) {
+  return game.status === "running";
+}
+
 export function advancePongGame(game: PongGameState): PongGameState {
   if (game.status !== "running") {
     return game;
@@ -196,6 +216,10 @@ export function getPongTickDelay() {
   return PONG_TICK_DELAY_MS;
 }
 
+export function getPongScoreTickDelay() {
+  return PONG_SCORE_TICK_DELAY_MS;
+}
+
 export function getPongBallRadius() {
   return BALL_RADIUS;
 }
@@ -204,20 +228,34 @@ export function getPongPlayerSpeed() {
   return PADDLE_SPEED;
 }
 
-function createRoundState(
-  score: PongScore,
-  status: PongStatus,
-  serveDirection: -1 | 1,
-  boardWidth = PONG_BOARD_WIDTH,
+export function getPongMaximumScore(targetScore = PONG_TARGET_SCORE) {
+  return normalizePongTargetScore(targetScore) * POINTS_PER_TARGET;
+}
+
+export function decrementPongRemainingScore(game: PongGameState): PongGameState {
+  if (!isPongScoreCountingDown(game)) {
+    return game;
+  }
+
+  return deductPongRemainingScore(game, SCORE_SECOND_PENALTY);
+}
+
+function createRoundState({
   boardHeight = PONG_BOARD_HEIGHT,
+  boardWidth = PONG_BOARD_WIDTH,
   targetScore = PONG_TARGET_SCORE,
-): PongGameState {
+  remainingScore = getPongMaximumScore(targetScore),
+  score,
+  serveDirection,
+  status,
+}: CreatePongRoundStateOptions): PongGameState {
   return {
     ball: createCenteredBall(serveDirection, boardWidth, boardHeight),
     boardHeight,
     boardWidth,
     cpuPaddle: createPaddle("cpu", boardWidth, boardHeight),
     playerPaddle: createPaddle("player", boardWidth, boardHeight),
+    remainingScore,
     score,
     status,
     targetScore,
@@ -352,43 +390,57 @@ function scorePongPoint(game: PongGameState, scorer: PongScorer): PongGameState 
     ...game.score,
     [scorer]: game.score[scorer] + 1,
   };
+  const remainingScore =
+    scorer === "cpu"
+      ? Math.max(0, game.remainingScore - OPPONENT_RALLY_PENALTY)
+      : game.remainingScore;
 
   if (score.player >= game.targetScore) {
-    return {
-      ...createRoundState(
-        score,
-        "won",
-        -1,
-        game.boardWidth,
-        game.boardHeight,
-        game.targetScore,
-      ),
+    return createRoundState({
+      boardHeight: game.boardHeight,
+      boardWidth: game.boardWidth,
+      remainingScore,
       score,
-    };
+      serveDirection: -1,
+      status: "won",
+      targetScore: game.targetScore,
+    });
   }
 
   if (score.cpu >= game.targetScore) {
-    return {
-      ...createRoundState(
-        score,
-        "lost",
-        1,
-        game.boardWidth,
-        game.boardHeight,
-        game.targetScore,
-      ),
+    return createRoundState({
+      boardHeight: game.boardHeight,
+      boardWidth: game.boardWidth,
+      remainingScore,
       score,
-    };
+      serveDirection: 1,
+      status: "lost",
+      targetScore: game.targetScore,
+    });
   }
 
-  return createRoundState(
+  return createRoundState({
+    boardHeight: game.boardHeight,
+    boardWidth: game.boardWidth,
+    remainingScore,
     score,
-    "ready",
-    scorer === "player" ? 1 : -1,
-    game.boardWidth,
-    game.boardHeight,
-    game.targetScore,
-  );
+    serveDirection: scorer === "player" ? 1 : -1,
+    status: "ready",
+    targetScore: game.targetScore,
+  });
+}
+
+function deductPongRemainingScore(game: PongGameState, points: number): PongGameState {
+  const remainingScore = Math.max(0, game.remainingScore - points);
+
+  if (remainingScore === game.remainingScore) {
+    return game;
+  }
+
+  return {
+    ...game,
+    remainingScore,
+  };
 }
 
 function clamp(value: number, min: number, max: number) {

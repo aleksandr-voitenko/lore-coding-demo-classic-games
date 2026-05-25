@@ -3,10 +3,14 @@ import { describe, expect, it } from "vitest";
 import {
   advancePongGame,
   createInitialPongGame,
+  decrementPongRemainingScore,
   getPongBallRadius,
+  getPongMaximumScore,
   getPongPlayerSpeed,
+  getPongScoreTickDelay,
   isPongBetweenRounds,
   isPongMatchInProgress,
+  isPongScoreCountingDown,
   movePongPlayer,
   pausePongGame,
   PONG_BOARD_HEIGHT,
@@ -26,11 +30,12 @@ function createRunningGame(overrides: Partial<PongGameState> = {}): PongGameStat
 }
 
 describe("pong game engine", () => {
-  it("creates a ready game with centered paddles, centered ball, and empty score", () => {
+  it("creates a ready game with centered paddles, centered ball, and maximum score", () => {
     const game = createInitialPongGame();
 
     expect(game.status).toBe("ready");
     expect(game.score).toEqual({ cpu: 0, player: 0 });
+    expect(game.remainingScore).toBe(getPongMaximumScore(PONG_TARGET_SCORE));
     expect(game.ball.position).toEqual({
       x: PONG_BOARD_WIDTH / 2,
       y: PONG_BOARD_HEIGHT / 2,
@@ -51,11 +56,13 @@ describe("pong game engine", () => {
     expect(game.boardHeight).toBe(640);
     expect(game.boardWidth).toBe(480);
     expect(game.targetScore).toBe(7);
+    expect(game.remainingScore).toBe(1_400);
     expect(game.ball.position).toEqual({ x: 240, y: 320 });
     expect(game.playerPaddle.y + game.playerPaddle.height / 2).toBe(320);
     expect(restarted.boardHeight).toBe(640);
     expect(restarted.boardWidth).toBe(480);
     expect(restarted.targetScore).toBe(7);
+    expect(restarted.remainingScore).toBe(1_400);
     expect(restarted.status).toBe("running");
   });
 
@@ -69,6 +76,21 @@ describe("pong game engine", () => {
     expect(pausedGame.status).toBe("paused");
     expect(resumedGame.status).toBe("running");
     expect(resumedGame.ball).toBe(pausedGame.ball);
+  });
+
+  it("counts the remaining score down once per active match second", () => {
+    const initialGame = createInitialPongGame();
+    const runningGame = startPongGame(initialGame);
+    const decrementedRunningGame = decrementPongRemainingScore(runningGame);
+    const pausedGame = pausePongGame(decrementedRunningGame);
+
+    expect(getPongScoreTickDelay()).toBe(1_000);
+    expect(isPongScoreCountingDown(initialGame)).toBe(false);
+    expect(isPongScoreCountingDown(runningGame)).toBe(true);
+    expect(isPongScoreCountingDown(pausedGame)).toBe(false);
+    expect(decrementedRunningGame.remainingScore).toBe(initialGame.remainingScore - 5);
+    expect(decrementPongRemainingScore(initialGame)).toBe(initialGame);
+    expect(decrementPongRemainingScore(pausedGame)).toBe(pausedGame);
   });
 
   it("moves the player paddle within the top and bottom walls", () => {
@@ -169,11 +191,52 @@ describe("pong game engine", () => {
 
     expect(advanced.status).toBe("ready");
     expect(advanced.score).toEqual({ cpu: 1, player: 3 });
+    expect(advanced.remainingScore).toBe(runningGame.remainingScore);
     expect(advanced.ball.position).toEqual({
       x: PONG_BOARD_WIDTH / 2,
       y: PONG_BOARD_HEIGHT / 2,
     });
     expect(advanced.ball.velocity.x).toBeGreaterThan(0);
+  });
+
+  it("subtracts points when the computer wins a rally", () => {
+    const ballRadius = getPongBallRadius();
+    const runningGame = createRunningGame({
+      ball: {
+        position: { x: -ballRadius - 1, y: PONG_BOARD_HEIGHT / 2 },
+        velocity: { x: -5, y: 0 },
+      },
+      remainingScore: 750,
+      score: { cpu: 1, player: 2 },
+    });
+    const advanced = advancePongGame(runningGame);
+
+    expect(advanced.status).toBe("ready");
+    expect(advanced.score).toEqual({ cpu: 2, player: 2 });
+    expect(advanced.remainingScore).toBe(650);
+  });
+
+  it("pauses remaining score between rallies and clamps running countdown at zero", () => {
+    const ballRadius = getPongBallRadius();
+    const betweenRoundsGame = advancePongGame(
+      createRunningGame({
+        ball: {
+          position: { x: PONG_BOARD_WIDTH + ballRadius + 1, y: PONG_BOARD_HEIGHT / 2 },
+          velocity: { x: 5, y: 0 },
+        },
+        remainingScore: 1,
+      }),
+    );
+    const attemptedBetweenRoundsDecrement = decrementPongRemainingScore(betweenRoundsGame);
+    const resumedGame = startPongGame(attemptedBetweenRoundsDecrement);
+    const zeroScoreGame = decrementPongRemainingScore(resumedGame);
+    const clampedZeroScoreGame = decrementPongRemainingScore(zeroScoreGame);
+
+    expect(isPongBetweenRounds(betweenRoundsGame)).toBe(true);
+    expect(isPongScoreCountingDown(betweenRoundsGame)).toBe(false);
+    expect(attemptedBetweenRoundsDecrement).toBe(betweenRoundsGame);
+    expect(zeroScoreGame.remainingScore).toBe(0);
+    expect(clampedZeroScoreGame.remainingScore).toBe(0);
   });
 
   it("distinguishes pre-match ready state from between-round ready state", () => {
@@ -207,6 +270,8 @@ describe("pong game engine", () => {
     expect(isPongMatchInProgress(pausedGame)).toBe(true);
     expect(isPongMatchInProgress(betweenRoundsGame)).toBe(true);
     expect(isPongMatchInProgress(endedGame)).toBe(false);
+    expect(isPongScoreCountingDown(betweenRoundsGame)).toBe(false);
+    expect(isPongScoreCountingDown(endedGame)).toBe(false);
   });
 
   it("ends the match when either side reaches the target score", () => {
@@ -232,8 +297,12 @@ describe("pong game engine", () => {
 
     expect(playerWin.status).toBe("won");
     expect(playerWin.score.player).toBe(PONG_TARGET_SCORE);
+    expect(playerWin.remainingScore).toBe(getPongMaximumScore(PONG_TARGET_SCORE));
     expect(cpuWin.status).toBe("lost");
     expect(cpuWin.score.cpu).toBe(PONG_TARGET_SCORE);
+    expect(cpuWin.remainingScore).toBe(
+      getPongMaximumScore(PONG_TARGET_SCORE) - 100,
+    );
   });
 
   it("restarts from an ended match with a fresh running game", () => {
@@ -245,6 +314,7 @@ describe("pong game engine", () => {
 
     expect(restartedGame.status).toBe("running");
     expect(restartedGame.score).toEqual({ cpu: 0, player: 0 });
+    expect(restartedGame.remainingScore).toBe(getPongMaximumScore(PONG_TARGET_SCORE));
     expect(restartedGame.ball.position).toEqual({
       x: PONG_BOARD_WIDTH / 2,
       y: PONG_BOARD_HEIGHT / 2,

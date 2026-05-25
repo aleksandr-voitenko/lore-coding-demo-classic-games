@@ -22,7 +22,7 @@ export function PongBoard({ children, game, statusLabel }: PongBoardProps) {
       style={{ aspectRatio: `${game.boardWidth} / ${game.boardHeight}` }}
     >
       <div
-        aria-label={`Pong board. Field ${game.boardWidth} by ${game.boardHeight}. Player ${game.score.player}. Computer ${game.score.cpu}. First to ${game.targetScore}. ${statusLabel}.`}
+        aria-label={`Pong board. Field ${game.boardWidth} by ${game.boardHeight}. Score ${game.remainingScore}. Player ${game.score.player}. Computer ${game.score.cpu}. First to ${game.targetScore}. ${statusLabel}.`}
         className="relative size-full overflow-hidden rounded-[0.375rem] bg-[radial-gradient(circle_at_50%_48%,color-mix(in_oklch,var(--pong-blue)_16%,transparent),transparent_34%),linear-gradient(180deg,var(--pong-board-cell),var(--pong-board))]"
         data-testid="pong-board"
         role="img"

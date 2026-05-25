@@ -114,9 +114,10 @@ const launcherParameterHandoffCases: LauncherParameterHandoffCase[] = [
   {
     assertGameSeeded: async (page) => {
       await expect(page.getByTestId("pong-status")).toHaveText("Ready");
+      await expect(page.getByTestId("pong-remaining-score")).toHaveText("1400");
       await expect(page.getByTestId("pong-board")).toHaveAttribute(
         "aria-label",
-        /Pong board\. Field 480 by 640\. Player 0\. Computer 0\. First to 7\. Ready\./,
+        /Pong board\. Field 480 by 640\. Score 1400\. Player 0\. Computer 0\. First to 7\. Ready\./,
       );
     },
     gameId: "pong",

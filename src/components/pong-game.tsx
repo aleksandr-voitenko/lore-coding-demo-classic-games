@@ -39,9 +39,13 @@ import { Button } from "@/components/ui/button";
 import {
   advancePongGame,
   createInitialPongGame,
+  decrementPongRemainingScore,
+  getPongMaximumScore,
+  getPongScoreTickDelay,
   getPongTickDelay,
   isPongBetweenRounds,
   isPongMatchInProgress,
+  isPongScoreCountingDown,
   movePongPlayerDown,
   movePongPlayerUp,
   pausePongGame,
@@ -70,7 +74,10 @@ const statusLabels: Record<PongStatus, string> = {
 
 const PONG_PADDLE_MOVE_INTERVAL_MS = getPongTickDelay();
 
-function createPongHelpSections(targetScore: number): GameHelpSection[] {
+function createPongHelpSections(
+  maximumScore: number,
+  targetScore: number,
+): GameHelpSection[] {
   return [
     {
       title: "Controls",
@@ -102,6 +109,7 @@ function createPongHelpSections(targetScore: number): GameHelpSection[] {
         "Keep the ball past the computer paddle to score.",
         "Block the ball before it passes your paddle.",
         `First side to ${targetScore} points wins the match.`,
+        `You start with ${maximumScore} points; each active second costs 5 and each computer rally costs 100.`,
       ],
     },
   ];
@@ -122,11 +130,13 @@ export function PongGame({
   );
   const paddleMovementStateRef = useRef(createPongPaddleMovementState());
   const paddleMovementIntervalRef = useRef<number | null>(null);
+  const maximumScore = getPongMaximumScore(game.targetScore);
   const helpSections = useMemo(
-    () => createPongHelpSections(game.targetScore),
-    [game.targetScore],
+    () => createPongHelpSections(maximumScore, game.targetScore),
+    [game.targetScore, maximumScore],
   );
   const tickDelay = game.status === "running" ? getPongTickDelay() : null;
+  const scoreTickDelay = isPongScoreCountingDown(game) ? getPongScoreTickDelay() : null;
   const canPauseGame = game.status === "running" || game.status === "paused";
   const isBetweenRounds = isPongBetweenRounds(game);
   const isUnfinishedMatch = isPongMatchInProgress(game);
@@ -152,7 +162,7 @@ export function PongGame({
     setPlayerName,
   } = useGameLeaderboard({
     leaderboardKey,
-    pendingScore: showEndScreen ? game.score.player : null,
+    pendingScore: showEndScreen ? game.remainingScore : null,
   });
 
   const movePaddle = useCallback((direction: PongPaddleMovementDirection) => {
@@ -258,6 +268,10 @@ export function PongGame({
     setGame((current) => advancePongGame(current));
   }, []);
 
+  const decrementRemainingScore = useCallback(() => {
+    setGame((current) => decrementPongRemainingScore(current));
+  }, []);
+
   const saveLeaderboardScore = useCallback(() => {
     void savePendingLeaderboardScore();
   }, [savePendingLeaderboardScore]);
@@ -294,6 +308,16 @@ export function PongGame({
 
     return () => window.clearInterval(tick);
   }, [advancePong, tickDelay]);
+
+  useEffect(() => {
+    if (scoreTickDelay === null) {
+      return;
+    }
+
+    const scoreTick = window.setInterval(decrementRemainingScore, scoreTickDelay);
+
+    return () => window.clearInterval(scoreTick);
+  }, [decrementRemainingScore, scoreTickDelay]);
 
   useEffect(() => {
     if (
@@ -403,6 +427,22 @@ export function PongGame({
         <dl className="grid grid-cols-2 gap-3">
           <GameStatCard
             className="border-[var(--pong-border)]"
+            label="Score"
+            labelClassName="text-[var(--pong-muted)]"
+            value={game.remainingScore}
+            valueTestId="pong-remaining-score"
+          />
+          <GameStatCard
+            className="border-[var(--pong-border)]"
+            label="Target"
+            labelClassName="text-[var(--pong-muted)]"
+            value={game.targetScore}
+          />
+        </dl>
+
+        <dl className="grid grid-cols-2 gap-3">
+          <GameStatCard
+            className="border-[var(--pong-border)]"
             label="Player"
             labelClassName="text-[var(--pong-muted)]"
             value={game.score.player}
@@ -414,22 +454,6 @@ export function PongGame({
             labelClassName="text-[var(--pong-muted)]"
             value={game.score.cpu}
             valueTestId="pong-cpu-score"
-          />
-        </dl>
-
-        <dl className="grid grid-cols-2 gap-3">
-          <GameStatCard
-            className="border-[var(--pong-border)]"
-            label="Target"
-            labelClassName="text-[var(--pong-muted)]"
-            value={game.targetScore}
-          />
-          <GameStatCard
-            className="border-[var(--pong-border)]"
-            label="Speed"
-            labelClassName="text-[var(--pong-muted)]"
-            value={tickDelay === null ? "0" : Math.round(1000 / tickDelay)}
-            valueTestId="pong-speed"
           />
         </dl>
 
@@ -541,8 +565,8 @@ export function PongGame({
               ) : (
                 <>
                   <GameEndSummary
-                    metricLabel="Final score"
-                    metricValue={`${game.score.player}-${game.score.cpu}`}
+                    metricLabel="Remaining score"
+                    metricValue={game.remainingScore}
                     metricValueTestId="pong-final-score"
                     title={game.status === "won" ? "Match won" : "Match lost"}
                   />
