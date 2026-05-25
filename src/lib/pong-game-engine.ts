@@ -53,6 +53,7 @@ export const PONG_BOARD_SIZE_OPTIONS = [
 export const PONG_TARGET_SCORE_OPTIONS = [3, 5, 7] as const;
 
 const BALL_RADIUS = 7;
+const BALL_COLLISION_SPEED_MULTIPLIER = 1.01;
 const BALL_SPEED_X = 4.8;
 const BALL_SPEED_Y = 2.4;
 const CPU_PADDLE_SPEED = 4.2;
@@ -325,10 +326,10 @@ function collideWithHorizontalWalls(ball: PongBall, boardHeight = PONG_BOARD_HEI
         ...ball.position,
         y: BALL_RADIUS,
       },
-      velocity: {
+      velocity: increaseBallSpeed({
         ...ball.velocity,
         y: Math.abs(ball.velocity.y),
-      },
+      }),
     };
   }
 
@@ -338,10 +339,10 @@ function collideWithHorizontalWalls(ball: PongBall, boardHeight = PONG_BOARD_HEI
         ...ball.position,
         y: boardHeight - BALL_RADIUS,
       },
-      velocity: {
+      velocity: increaseBallSpeed({
         ...ball.velocity,
         y: -Math.abs(ball.velocity.y),
-      },
+      }),
     };
   }
 
@@ -378,10 +379,17 @@ function collideWithPaddle(
       x: isPlayerPaddle ? paddleFaceX + BALL_RADIUS : paddleFaceX - BALL_RADIUS,
       y: ball.position.y,
     },
-    velocity: {
+    velocity: increaseBallSpeed({
       x: isPlayerPaddle ? Math.abs(ball.velocity.x) : -Math.abs(ball.velocity.x),
       y: clamp(hitOffset, -1, 1) * MAX_PADDLE_BOUNCE_Y,
-    },
+    }),
+  };
+}
+
+function increaseBallSpeed(velocity: PongPoint): PongPoint {
+  return {
+    x: velocity.x * BALL_COLLISION_SPEED_MULTIPLIER,
+    y: velocity.y * BALL_COLLISION_SPEED_MULTIPLIER,
   };
 }
 

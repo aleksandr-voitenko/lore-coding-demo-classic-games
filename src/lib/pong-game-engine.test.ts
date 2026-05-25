@@ -21,12 +21,18 @@ import {
   type PongGameState,
 } from "./pong-game-engine";
 
+const COLLISION_SPEED_MULTIPLIER = 1.01;
+
 function createRunningGame(overrides: Partial<PongGameState> = {}): PongGameState {
   return {
     ...createInitialPongGame(),
     status: "running",
     ...overrides,
   };
+}
+
+function getVelocitySpeed(velocity: { x: number; y: number }) {
+  return Math.hypot(velocity.x, velocity.y);
 }
 
 describe("pong game engine", () => {
@@ -120,8 +126,17 @@ describe("pong game engine", () => {
       },
     });
 
-    expect(advancePongGame(topWallGame).ball.velocity.y).toBeGreaterThan(0);
-    expect(advancePongGame(bottomWallGame).ball.velocity.y).toBeLessThan(0);
+    const topWallAdvanced = advancePongGame(topWallGame);
+    const bottomWallAdvanced = advancePongGame(bottomWallGame);
+
+    expect(topWallAdvanced.ball.velocity.y).toBeGreaterThan(0);
+    expect(bottomWallAdvanced.ball.velocity.y).toBeLessThan(0);
+    expect(getVelocitySpeed(topWallAdvanced.ball.velocity)).toBeCloseTo(
+      getVelocitySpeed(topWallGame.ball.velocity) * COLLISION_SPEED_MULTIPLIER,
+    );
+    expect(getVelocitySpeed(bottomWallAdvanced.ball.velocity)).toBeCloseTo(
+      getVelocitySpeed(bottomWallGame.ball.velocity) * COLLISION_SPEED_MULTIPLIER,
+    );
   });
 
   it("bounces the ball from the player paddle when it crosses the paddle face", () => {
@@ -143,6 +158,7 @@ describe("pong game engine", () => {
       game.playerPaddle.x + game.playerPaddle.width + ballRadius,
     );
     expect(advanced.ball.velocity.x).toBeGreaterThan(0);
+    expect(getVelocitySpeed(advanced.ball.velocity)).toBeCloseTo(5 * COLLISION_SPEED_MULTIPLIER);
   });
 
   it("bounces the ball from the CPU paddle when it crosses the paddle face", () => {
@@ -162,6 +178,7 @@ describe("pong game engine", () => {
 
     expect(advanced.ball.position.x).toBe(game.cpuPaddle.x - ballRadius);
     expect(advanced.ball.velocity.x).toBeLessThan(0);
+    expect(getVelocitySpeed(advanced.ball.velocity)).toBeCloseTo(5 * COLLISION_SPEED_MULTIPLIER);
   });
 
   it("moves the CPU paddle toward the ball during a running rally", () => {
