@@ -86,10 +86,12 @@ patterns and constraints here.
 
 ## Assets
 
-- `public/images/snake-game-card.png` contains Classic Snake menu artwork sourced
-  from Clear_code's CC0 Snake game assets on OpenGameArt.
-- The other launcher cards use local SVG artwork in `public/images`, named
-  `<game>-game-card.svg`.
+- Launcher cards use local PNG key-art images in `public/images`, named
+  `<game>-game-card.png`. Keep the artwork wide, centered, and text-free so the
+  shared card frame can crop it cleanly behind each game title.
+- The launcher renders card art with direct, versioned public URLs instead of
+  optimized `/_next/image` URLs so replacing an image file does not leave stale
+  optimized variants in the blurred background or foreground preview.
 - Board artwork is generally code-native inside board components rather than
   external sprite sheets.
 

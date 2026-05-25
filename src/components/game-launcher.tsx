@@ -2,7 +2,7 @@
 
 import { Gamepad2Icon, PlayIcon, TrophyIcon } from "lucide-react";
 import Image from "next/image";
-import { type ComponentType, useCallback, useState } from "react";
+import { type ComponentType, type ReactNode, useCallback, useState } from "react";
 
 import { BreakoutGame } from "@/components/breakout-game";
 import { MinesweeperGame } from "@/components/minesweeper-game";
@@ -245,7 +245,6 @@ type GameCard = {
     loading?: "eager" | "lazy";
     priority?: boolean;
     src: string;
-    unoptimized?: boolean;
     width: number;
   };
   component: ComponentType<PlayableGameProps>;
@@ -255,15 +254,17 @@ type GameCard = {
   parameters: readonly GameParameterKind[];
 };
 
+const GAME_CARD_ARTWORK_VERSION = "ai-key-art-v2";
+
 const GAME_CARDS: GameCard[] = [
   {
     accentClassName:
       "bg-[linear-gradient(90deg,var(--snake-head),var(--snake-bonus-food),var(--snake-speed-food),var(--snake-slow-food),var(--snake-shrink-food))]",
     artwork: {
-      height: 249,
+      height: 941,
       priority: true,
       src: "/images/snake-game-card.png",
-      width: 250,
+      width: 1672,
     },
     component: SnakeGame,
     description: "A classic score chase with obstacles, timed food, and saved best runs.",
@@ -275,11 +276,10 @@ const GAME_CARDS: GameCard[] = [
     accentClassName:
       "bg-[linear-gradient(90deg,var(--tetris-cyan),var(--tetris-yellow),var(--tetris-purple),var(--tetris-red))]",
     artwork: {
-      height: 250,
+      height: 941,
       loading: "eager",
-      src: "/images/tetris-game-card.svg",
-      unoptimized: true,
-      width: 250,
+      src: "/images/tetris-game-card.png",
+      width: 1672,
     },
     component: TetrisGame,
     description: "A falling-block survival game with line clears, scoring, and rising speed.",
@@ -291,11 +291,10 @@ const GAME_CARDS: GameCard[] = [
     accentClassName:
       "bg-[linear-gradient(90deg,var(--breakout-red),var(--breakout-yellow),var(--breakout-green),var(--breakout-blue))]",
     artwork: {
-      height: 250,
+      height: 941,
       loading: "eager",
-      src: "/images/breakout-game-card.svg",
-      unoptimized: true,
-      width: 250,
+      src: "/images/breakout-game-card.png",
+      width: 1672,
     },
     component: BreakoutGame,
     description: "A paddle-and-ball brick breaker with lives, scoring, and wall clears.",
@@ -307,11 +306,10 @@ const GAME_CARDS: GameCard[] = [
     accentClassName:
       "bg-[linear-gradient(90deg,var(--minesweeper-flag),var(--minesweeper-one),var(--minesweeper-two),var(--minesweeper-three))]",
     artwork: {
-      height: 250,
+      height: 941,
       loading: "eager",
-      src: "/images/minesweeper-game-card.svg",
-      unoptimized: true,
-      width: 250,
+      src: "/images/minesweeper-game-card.png",
+      width: 1672,
     },
     component: MinesweeperGame,
     description: "A classic minefield puzzle with safe first clicks, flags, and flood reveals.",
@@ -323,11 +321,10 @@ const GAME_CARDS: GameCard[] = [
     accentClassName:
       "bg-[linear-gradient(90deg,var(--invaders-lime),var(--invaders-cyan),var(--invaders-magenta),var(--invaders-yellow))]",
     artwork: {
-      height: 250,
+      height: 941,
       loading: "eager",
-      src: "/images/space-invaders-game-card.svg",
-      unoptimized: true,
-      width: 250,
+      src: "/images/space-invaders-game-card.png",
+      width: 1672,
     },
     component: SpaceInvadersGame,
     description: "A cannon defense arcade game with marching invaders, shots, and scoring.",
@@ -339,11 +336,10 @@ const GAME_CARDS: GameCard[] = [
     accentClassName:
       "bg-[linear-gradient(90deg,var(--twenty-tile-8),var(--twenty-tile-128),var(--twenty-tile-2048))]",
     artwork: {
-      height: 250,
+      height: 941,
       loading: "eager",
-      src: "/images/twenty-forty-eight-game-card.svg",
-      unoptimized: true,
-      width: 250,
+      src: "/images/twenty-forty-eight-game-card.png",
+      width: 1672,
     },
     component: TwentyFortyEightGame,
     description: "A sliding tile puzzle with merges, score chasing, and a 2048 goal tile.",
@@ -355,11 +351,10 @@ const GAME_CARDS: GameCard[] = [
     accentClassName:
       "bg-[linear-gradient(90deg,var(--pong-blue),var(--pong-ball),var(--pong-pink))]",
     artwork: {
-      height: 250,
+      height: 941,
       loading: "eager",
-      src: "/images/pong-game-card.svg",
-      unoptimized: true,
-      width: 250,
+      src: "/images/pong-game-card.png",
+      width: 1672,
     },
     component: PongGame,
     description: "A paddle duel against a computer opponent with rebounds, rallies, and scoring.",
@@ -370,11 +365,10 @@ const GAME_CARDS: GameCard[] = [
   {
     accentClassName: "bg-[linear-gradient(90deg,#25a75a,#d73548,#f0bd38,#1d7ed0)]",
     artwork: {
-      height: 250,
+      height: 941,
       loading: "eager",
-      src: "/images/simon-game-card.svg",
-      unoptimized: true,
-      width: 250,
+      src: "/images/simon-game-card.png",
+      width: 1672,
     },
     component: SimonGame,
     description: "A memory pattern game with four pads, growing sequences, and strict misses.",
@@ -418,6 +412,10 @@ export function GameLauncher() {
     );
   }
 
+  function getVersionedArtworkSrc(game: GameCard) {
+    return `${game.artwork.src}?v=${GAME_CARD_ARTWORK_VERSION}`;
+  }
+
   function renderGameParameter(game: GameCard, parameterKind: GameParameterKind) {
     const parameter = GAME_PARAMETER_CONFIG[parameterKind];
     const id = `${game.id}-${parameterKind}`;
@@ -456,73 +454,13 @@ export function GameLauncher() {
 
         <div className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))]">
           {GAME_CARDS.map((game) => (
-            <article
-              className="group flex min-h-72 w-full flex-col overflow-hidden rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[color-mix(in_oklch,var(--snake-head)_45%,var(--snake-border))] hover:shadow-[0_22px_70px_color-mix(in_oklch,var(--snake-board)_14%,transparent)] focus-within:border-[var(--snake-head)] focus-within:ring-3 focus-within:ring-[color-mix(in_oklch,var(--snake-head)_25%,transparent)]"
+            <GameCardArticle
+              game={game}
               key={game.id}
-            >
-              <button
-                aria-label={`Play ${game.label}`}
-                className="flex flex-1 flex-col text-left focus-visible:outline-none"
-                data-testid={`game-card-${game.id}`}
-                onClick={() => setSelectedGameId(game.id)}
-                type="button"
-              >
-                <span className="relative block h-40 w-full overflow-hidden bg-[var(--snake-board)]">
-                  <span
-                    className={`absolute inset-x-0 top-0 h-1 ${game.accentClassName}`}
-                    aria-hidden="true"
-                  />
-                  <Image
-                    alt=""
-                    aria-hidden="true"
-                    className="scale-110 object-cover opacity-55 blur-[2px]"
-                    fill
-                    loading={game.artwork.loading}
-                    priority={game.artwork.priority}
-                    sizes="(min-width: 640px) 24rem, calc(100vw - 2rem)"
-                    src={game.artwork.src}
-                    unoptimized={game.artwork.unoptimized}
-                  />
-                  <span className="absolute inset-0 bg-[color-mix(in_oklch,var(--snake-board)_38%,transparent)]" />
-                  <span className="absolute inset-3 flex items-center justify-center">
-                    <Image
-                      alt=""
-                      aria-hidden="true"
-                      className="h-full w-auto rounded-md border border-[color-mix(in_oklch,var(--snake-board)_16%,white)] object-contain shadow-[0_18px_50px_color-mix(in_oklch,var(--snake-board)_34%,transparent)]"
-                      height={game.artwork.height}
-                      loading={game.artwork.loading}
-                      priority={game.artwork.priority}
-                      src={game.artwork.src}
-                      unoptimized={game.artwork.unoptimized}
-                      width={game.artwork.width}
-                    />
-                  </span>
-                </span>
-
-                <span className="flex flex-1 flex-col p-4 pb-0">
-                  <span className="flex items-start justify-between gap-3">
-                    <span className="flex min-w-0 flex-col gap-1">
-                      <span className="text-2xl font-semibold tracking-normal">
-                        {game.label}
-                      </span>
-                      <span className="text-sm font-medium text-[var(--snake-muted)]">
-                        {game.description}
-                      </span>
-                    </span>
-                    <span
-                      className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[color-mix(in_oklch,var(--snake-head)_16%,white)] text-[var(--snake-ink)] transition group-hover:bg-[var(--snake-head)]"
-                      aria-hidden="true"
-                    >
-                      <PlayIcon className="size-4" />
-                    </span>
-                  </span>
-                </span>
-              </button>
-
-              <div className="mt-auto grid grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-2 p-4">
-                {game.parameters.map((parameter) => renderGameParameter(game, parameter))}
-              </div>
-            </article>
+              onSelectGame={() => setSelectedGameId(game.id)}
+              renderGameParameter={renderGameParameter}
+              versionedArtworkSrc={getVersionedArtworkSrc(game)}
+            />
           ))}
         </div>
 
@@ -536,6 +474,87 @@ export function GameLauncher() {
         </div>
       </section>
     </main>
+  );
+}
+
+type GameCardArticleProps = {
+  game: GameCard;
+  onSelectGame: () => void;
+  renderGameParameter: (game: GameCard, parameterKind: GameParameterKind) => ReactNode;
+  versionedArtworkSrc: string;
+};
+
+function GameCardArticle({
+  game,
+  onSelectGame,
+  renderGameParameter,
+  versionedArtworkSrc,
+}: GameCardArticleProps) {
+  return (
+    <article className="group flex min-h-72 w-full flex-col overflow-hidden rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[color-mix(in_oklch,var(--snake-head)_45%,var(--snake-border))] hover:shadow-[0_22px_70px_color-mix(in_oklch,var(--snake-board)_14%,transparent)] focus-within:border-[var(--snake-head)] focus-within:ring-3 focus-within:ring-[color-mix(in_oklch,var(--snake-head)_25%,transparent)]">
+      <button
+        aria-label={`Play ${game.label}`}
+        className="flex flex-1 flex-col text-left focus-visible:outline-none"
+        data-testid={`game-card-${game.id}`}
+        onClick={onSelectGame}
+        type="button"
+      >
+        <span className="relative block h-40 w-full overflow-hidden bg-[var(--snake-board)]">
+          <span
+            className={`absolute inset-x-0 top-0 h-1 ${game.accentClassName}`}
+            aria-hidden="true"
+          />
+          <Image
+            alt=""
+            aria-hidden="true"
+            className="scale-110 object-cover opacity-55 blur-[2px]"
+            fill
+            loading={game.artwork.loading}
+            priority={game.artwork.priority}
+            sizes="(min-width: 640px) 24rem, calc(100vw - 2rem)"
+            src={versionedArtworkSrc}
+            unoptimized
+          />
+          <span className="absolute inset-0 bg-[color-mix(in_oklch,var(--snake-board)_38%,transparent)]" />
+          <span className="absolute inset-3 flex items-center justify-center">
+            <Image
+              alt=""
+              aria-hidden="true"
+              className="h-full w-auto rounded-md border border-[color-mix(in_oklch,var(--snake-board)_16%,white)] object-contain shadow-[0_18px_50px_color-mix(in_oklch,var(--snake-board)_34%,transparent)]"
+              height={game.artwork.height}
+              loading={game.artwork.loading}
+              priority={game.artwork.priority}
+              src={versionedArtworkSrc}
+              unoptimized
+              width={game.artwork.width}
+            />
+          </span>
+        </span>
+
+        <span className="flex flex-1 flex-col p-4 pb-0">
+          <span className="flex items-start justify-between gap-3">
+            <span className="flex min-w-0 flex-col gap-1">
+              <span className="text-2xl font-semibold tracking-normal">
+                {game.label}
+              </span>
+              <span className="text-sm font-medium text-[var(--snake-muted)]">
+                {game.description}
+              </span>
+            </span>
+            <span
+              className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[color-mix(in_oklch,var(--snake-head)_16%,white)] text-[var(--snake-ink)] transition group-hover:bg-[var(--snake-head)]"
+              aria-hidden="true"
+            >
+              <PlayIcon className="size-4" />
+            </span>
+          </span>
+        </span>
+      </button>
+
+      <div className="mt-auto grid grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-2 p-4">
+        {game.parameters.map((parameter) => renderGameParameter(game, parameter))}
+      </div>
+    </article>
   );
 }
 
