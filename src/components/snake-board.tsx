@@ -32,7 +32,7 @@ type SnakeBoardProps = {
   statusLabel: string;
 };
 
-const SNAKE_ASSET_VERSION = "sprite-art-v7";
+const SNAKE_ASSET_VERSION = "sprite-art-v10";
 const SNAKE_ASSET_ROOT = "/images/snake";
 
 function getSnakeAssetSrc(fileName: string) {
