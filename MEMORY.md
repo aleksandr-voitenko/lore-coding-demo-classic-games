@@ -93,7 +93,10 @@ patterns and constraints here.
   optimized `/_next/image` URLs so replacing an image file does not leave stale
   optimized variants in the blurred background or foreground preview.
 - Board artwork is generally code-native inside board components rather than
-  external sprite sheets.
+  external sprite sheets. Space Invaders is the current exception: its board
+  background and transparent PNG sprites live under
+  `public/images/space-invaders/` and are referenced by versioned public URLs
+  from `src/components/space-invaders-board.tsx`.
 
 ## Implementation Patterns
 

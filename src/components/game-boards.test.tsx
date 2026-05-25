@@ -179,6 +179,10 @@ describe("game board renderers", () => {
       'data-testid="space-invaders-invader"',
       'data-testid="space-invaders-player-shot"',
       'data-testid="space-invaders-player"',
+      "/images/space-invaders/background.png?v=sprite-art-v1",
+      "/images/space-invaders/alien-purple.png?v=sprite-art-v1",
+      "/images/space-invaders/player-shot.png?v=sprite-art-v1",
+      "/images/space-invaders/player-ship.png?v=sprite-art-v1",
     ]);
   });
 

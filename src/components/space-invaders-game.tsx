@@ -31,7 +31,7 @@ import {
   shouldIgnoreGameKeyDown,
 } from "@/components/game-input";
 import {
-  spaceInvaderClassNames,
+  getSpaceInvaderSprite,
   SpaceInvadersBoard,
 } from "@/components/space-invaders-board";
 import {
@@ -459,19 +459,16 @@ export function SpaceInvadersGame({
               <div className="flex flex-col items-center gap-3">
                 <div className="grid grid-cols-6 gap-1" aria-hidden="true">
                   {Array.from({ length: 24 }, (_, index) => {
-                    const row = Math.floor(index / 6) % spaceInvaderClassNames.length;
+                    const sprite = getSpaceInvaderSprite(Math.floor(index / 6));
 
                     return (
                       <span
                         className={cn(
-                          "h-3 w-5 rounded-[0.18rem]",
-                          spaceInvaderClassNames[row],
+                          "h-4 w-6 bg-contain bg-center bg-no-repeat [image-rendering:pixelated]",
+                          sprite.glowClassName,
                         )}
                         key={index}
-                        style={{
-                          clipPath:
-                            "polygon(12% 34%, 24% 8%, 76% 8%, 88% 34%, 100% 34%, 100% 72%, 82% 72%, 82% 100%, 64% 100%, 64% 72%, 36% 72%, 36% 100%, 18% 100%, 18% 72%, 0 72%, 0 34%)",
-                        }}
+                        style={{ backgroundImage: `url("${sprite.src}")` }}
                       />
                     );
                   })}

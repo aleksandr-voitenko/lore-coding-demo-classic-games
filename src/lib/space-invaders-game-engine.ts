@@ -68,19 +68,20 @@ export const SPACE_INVADERS_ALIEN_COUNT_OPTIONS = [
 ] as const;
 
 const INVADER_DROP_Y = 4;
-const INVADER_GAP_X = 12;
-const INVADER_GAP_Y = 18;
-const INVADER_HEIGHT = 18;
+const INVADER_GAP_X = 5;
+const INVADER_GAP_Y = 14;
+const INVADER_HEIGHT = 23;
 const INVADER_STEP_X = 2;
 const INVADER_TOP = 64;
-const INVADER_WIDTH = 22;
+const INVADER_WIDTH = 28;
+const PLAYER_BOTTOM_MARGIN = 10;
 const INVADER_X = 38;
-const PLAYER_HEIGHT = 16;
+const PLAYER_HEIGHT = 50;
 const PLAYER_SPEED = 24;
-const PLAYER_WIDTH = 42;
-const SHOT_HEIGHT = 14;
+const PLAYER_WIDTH = 62;
+const SHOT_HEIGHT = 22;
 const SHOT_SPEED = -16;
-const SHOT_WIDTH = 4;
+const SHOT_WIDTH = 6;
 
 export function createInitialSpaceInvadersGame({
   alienCount = SPACE_INVADERS_COLUMNS * SPACE_INVADERS_ROWS,
@@ -364,7 +365,7 @@ function createCenteredPlayer(
     height: PLAYER_HEIGHT,
     width: PLAYER_WIDTH,
     x: (boardWidth - PLAYER_WIDTH) / 2,
-    y: boardHeight - 46,
+    y: boardHeight - PLAYER_HEIGHT - PLAYER_BOTTOM_MARGIN,
   };
 }
 

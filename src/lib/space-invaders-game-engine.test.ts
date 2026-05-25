@@ -109,10 +109,13 @@ describe("space invaders game engine", () => {
     const firedGame = fireSpaceInvadersShot(runningGame);
     const secondFireGame = fireSpaceInvadersShot(firedGame);
 
+    expect(firedGame.playerShot).not.toBeNull();
     expect(firedGame.playerShot).toMatchObject({
       velocityY: expect.any(Number),
-      x: firedGame.player.x + firedGame.player.width / 2 - 2,
     });
+    expect(firedGame.playerShot?.x).toBe(
+      firedGame.player.x + firedGame.player.width / 2 - firedGame.playerShot!.width / 2,
+    );
     expect(firedGame.playerShot?.y).toBeLessThan(firedGame.player.y);
     expect(secondFireGame.playerShot).toBe(firedGame.playerShot);
   });

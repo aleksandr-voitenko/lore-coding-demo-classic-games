@@ -152,6 +152,7 @@
   --invaders-page: oklch(0.985 0.01 245);
   --invaders-panel: oklch(1 0 0);
   --invaders-player: oklch(0.86 0.17 140);
+  --invaders-red: oklch(0.68 0.22 31);
   --invaders-shot: oklch(0.96 0.15 96);
   --invaders-star: oklch(0.88 0.04 230 / 60%);
   --invaders-yellow: oklch(0.88 0.16 92);
