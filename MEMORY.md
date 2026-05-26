@@ -140,6 +140,9 @@ patterns and constraints here.
   fixed mode/record/count metadata is kept off the cards. `GameLauncher` owns
   the selected presets and passes them into games as `initial*` props; changing
   parameters after opening a game means returning to the launcher.
+- `GameLauncher` also preserves the window viewport when opening a game and
+  restores it when the launcher remounts, so returning from a lower card keeps
+  the menu at the same scroll position instead of jumping to the top.
 - Engines that expose launcher presets keep those values in game state so
   restart, terminal-state replay, board rendering, and accessibility labels
   preserve the selected board size, target, lives, mines, alien count, or start

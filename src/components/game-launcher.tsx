@@ -2,7 +2,7 @@
 
 import { Gamepad2Icon, PlayIcon, TrophyIcon } from "lucide-react";
 import Image from "next/image";
-import { type ComponentType, type ReactNode, useCallback, useState } from "react";
+import { type ComponentType, type ReactNode, useCallback, useRef, useState } from "react";
 
 import { BreakoutGame } from "@/components/breakout-game";
 import { MinesweeperGame } from "@/components/minesweeper-game";
@@ -238,6 +238,11 @@ const GAME_PARAMETER_CONFIG = defineGameParameterConfig({
 type GameParameterKind = keyof typeof GAME_PARAMETER_CONFIG;
 type GameParameterValues = Record<GameParameterKind, string>;
 
+type MenuViewport = {
+  scrollX: number;
+  scrollY: number;
+};
+
 type GameCard = {
   accentClassName: string;
   artwork: {
@@ -383,11 +388,34 @@ export function GameLauncher() {
   const [parameterValues, setParameterValues] = useState<GameParameterValues>(() =>
     createDefaultParameterValues(),
   );
+  const menuViewportRef = useRef<MenuViewport>({ scrollX: 0, scrollY: 0 });
+  const shouldRestoreMenuViewportRef = useRef(false);
 
   const selectedGame = GAME_CARDS.find((game) => game.id === selectedGameId) ?? null;
 
+  const selectGame = useCallback((gameId: GameId) => {
+    menuViewportRef.current = {
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+    };
+    shouldRestoreMenuViewportRef.current = false;
+
+    setSelectedGameId(gameId);
+  }, []);
+
   const returnToMenu = useCallback(() => {
+    shouldRestoreMenuViewportRef.current = true;
     setSelectedGameId(null);
+  }, []);
+
+  const restoreMenuViewport = useCallback((element: HTMLElement | null) => {
+    if (element === null || !shouldRestoreMenuViewportRef.current) {
+      return;
+    }
+
+    shouldRestoreMenuViewportRef.current = false;
+
+    window.scrollTo(menuViewportRef.current.scrollX, menuViewportRef.current.scrollY);
   }, []);
 
   const updateParameterValue = useCallback((parameterKind: GameParameterKind, value: string) => {
@@ -438,6 +466,7 @@ export function GameLauncher() {
     <main
       className="min-h-svh bg-[var(--snake-page)] px-4 py-6 text-[var(--snake-ink)] sm:px-6 lg:py-8"
       data-testid="game-menu"
+      ref={restoreMenuViewport}
     >
       <section className="mx-auto flex min-h-[calc(100svh-3rem)] w-full max-w-6xl flex-col justify-center gap-6">
         <header className="flex max-w-2xl items-center gap-4">
@@ -457,7 +486,7 @@ export function GameLauncher() {
             <GameCardArticle
               game={game}
               key={game.id}
-              onSelectGame={() => setSelectedGameId(game.id)}
+              onSelectGame={() => selectGame(game.id)}
               renderGameParameter={renderGameParameter}
               versionedArtworkSrc={getVersionedArtworkSrc(game)}
             />

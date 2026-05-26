@@ -171,6 +171,32 @@ test("launcher-selected Tetris parameters seed the opened game", async ({ page }
   );
 });
 
+test("launcher restores its scroll position after returning from a game", async ({
+  page,
+}) => {
+  await openLauncher(page);
+
+  await page.getByTestId("game-card-simon").scrollIntoViewIfNeeded();
+  const menuScrollY = await page.evaluate(() => window.scrollY);
+
+  expect(menuScrollY).toBeGreaterThan(0);
+
+  await openGame(page, "simon");
+  await expect(page.getByTestId("simon-status")).toHaveText("Ready");
+
+  await page.getByTestId("simon-back-to-menu").click();
+  await expect(page.getByTestId("game-menu")).toBeVisible();
+  await page.waitForFunction(
+    (targetY) => Math.abs(window.scrollY - targetY) <= 1,
+    menuScrollY,
+  );
+
+  const restoredScrollY = await page.evaluate(() => window.scrollY);
+
+  expect(restoredScrollY).toBeGreaterThanOrEqual(menuScrollY - 1);
+  expect(restoredScrollY).toBeLessThanOrEqual(menuScrollY + 1);
+});
+
 for (const handoffCase of launcherParameterHandoffCases) {
   test(`launcher-selected ${handoffCase.name} parameters seed the opened game`, async ({
     page,
