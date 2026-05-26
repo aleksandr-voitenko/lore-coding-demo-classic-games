@@ -34,7 +34,11 @@ import {
   type GameHelpSection,
 } from "@/components/game-layout";
 import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
-import { registerGameKeyDown, shouldIgnoreGameKeyDown } from "@/components/game-input";
+import {
+  isGamePauseKey,
+  registerGameKeyDown,
+  shouldIgnoreGameKeyDown,
+} from "@/components/game-input";
 import { SnakeBoard, snakeSpriteSources } from "@/components/snake-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -125,7 +129,7 @@ const SNAKE_HELP_SECTIONS: GameHelpSection[] = [
         label: "Start game",
       },
       {
-        buttons: [{ text: "Space", label: "Space key" }],
+        buttons: [{ text: "P", label: "P key" }],
         label: "Pause or resume",
       },
       {
@@ -376,7 +380,13 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
         return;
       }
 
-      if (event.key === " ") {
+      if (isGamePauseKey(event.key)) {
+        event.preventDefault();
+        toggleRunState();
+        return;
+      }
+
+      if (event.key === " " && game.status === "ready") {
         event.preventDefault();
         toggleRunState();
       }

@@ -30,6 +30,10 @@ export function shouldIgnoreGameKeyDown(
   return isHelpVisible || hasPendingLeaderboardEntry || isTypingTarget(event.target);
 }
 
+export function isGamePauseKey(key: string) {
+  return key === "p" || key === "P";
+}
+
 export function registerGameKeyDown(
   listener: (event: KeyboardEvent) => void,
   target: GameKeyboardEventTarget = window,

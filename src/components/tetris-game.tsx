@@ -27,7 +27,11 @@ import {
   type GameHelpSection,
 } from "@/components/game-layout";
 import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
-import { registerGameKeyDown, shouldIgnoreGameKeyDown } from "@/components/game-input";
+import {
+  isGamePauseKey,
+  registerGameKeyDown,
+  shouldIgnoreGameKeyDown,
+} from "@/components/game-input";
 import { TetrisBoard, tetrominoCellClassNames } from "@/components/tetris-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -330,7 +334,7 @@ export function TetrisGame({
         return;
       }
 
-      if (event.key === "p" || event.key === "P") {
+      if (isGamePauseKey(event.key)) {
         event.preventDefault();
         toggleRunState();
         return;

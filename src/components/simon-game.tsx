@@ -3,7 +3,11 @@
 import { PlayIcon, RotateCcwIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { registerGameKeyDown, shouldIgnoreGameKeyDown } from "@/components/game-input";
+import {
+  isGamePauseKey,
+  registerGameKeyDown,
+  shouldIgnoreGameKeyDown,
+} from "@/components/game-input";
 import {
   GameAbandonDialog,
   GameBoardActions,
@@ -79,10 +83,7 @@ const SIMON_HELP_SECTIONS: GameHelpSection[] = [
         label: "Blue pad",
       },
       {
-        buttons: [
-          { text: "Space", label: "Space key" },
-          { text: "P", label: "P key" },
-        ],
+        buttons: [{ text: "P", label: "P key" }],
         label: "Pause or resume",
       },
     ],
@@ -248,7 +249,7 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
         return;
       }
 
-      if (event.key === " " || event.key === "p" || event.key === "P") {
+      if (isGamePauseKey(event.key)) {
         event.preventDefault();
         toggleRunState();
         return;

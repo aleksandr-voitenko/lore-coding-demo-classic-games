@@ -19,6 +19,7 @@ import {
   type BreakoutPaddleMovementKey,
 } from "@/components/breakout-paddle-input";
 import {
+  isGamePauseKey,
   registerGameKeyDown,
   registerGameKeyUp,
   shouldIgnoreGameKeyDown,
@@ -89,10 +90,7 @@ const BREAKOUT_HELP_SECTIONS: GameHelpSection[] = [
         label: "Hold to move paddle right",
       },
       {
-        buttons: [
-          { text: "Space", label: "Space key" },
-          { text: "P", label: "P key" },
-        ],
+        buttons: [{ text: "P", label: "P key" }],
         label: "Pause or resume",
       },
     ],
@@ -339,7 +337,7 @@ export function BreakoutGame({
         return;
       }
 
-      if (event.key === " " || event.key === "p" || event.key === "P") {
+      if (isGamePauseKey(event.key)) {
         event.preventDefault();
         toggleRunState();
       }

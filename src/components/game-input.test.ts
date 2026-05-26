@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  isGamePauseKey,
   isTypingTarget,
   registerGameKeyDown,
   registerGameKeyUp,
@@ -135,6 +136,15 @@ describe("shouldIgnoreGameKeyDown", () => {
         target: createElement("INPUT"),
       }),
     ).toBe(true);
+  });
+});
+
+describe("isGamePauseKey", () => {
+  it("only treats P as the direct keyboard pause key", () => {
+    expect(isGamePauseKey("p")).toBe(true);
+    expect(isGamePauseKey("P")).toBe(true);
+    expect(isGamePauseKey(" ")).toBe(false);
+    expect(isGamePauseKey("Escape")).toBe(false);
   });
 });
 

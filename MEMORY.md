@@ -124,6 +124,10 @@ patterns and constraints here.
   `registerGameKeyUp` from `src/components/game-input.ts` for game-level global
   keyboard handlers that should ignore Help overlays, pending leaderboard entry,
   and typing targets.
+- Direct game-level keyboard pause/resume shortcuts should use
+  `isGamePauseKey` from `src/components/game-input.ts`; `P` is the only direct
+  keyboard pause key, while Space remains available for game-specific actions
+  such as start, hard drop, or fire.
 - For held-key movement, keep transient key state out of React render state and
   drive movement through engine helpers on an interval until keyup/blur/modal
   cleanup. Breakout's paddle uses the pure
