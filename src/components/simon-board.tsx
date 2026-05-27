@@ -42,12 +42,14 @@ const simonPadClassNames: Record<SimonPadId, string> = {
 };
 
 const simonPadActiveClassNames: Record<SimonPadId, string> = {
-  blue: "bg-[#65b7ff] shadow-[inset_0_-4px_0_rgba(10,35,70,0.22),0_0_42px_rgba(101,183,255,0.72)]",
+  blue:
+    "border-white/95 bg-[#7dccff] brightness-125 saturate-150 shadow-[inset_0_0_0_4px_rgba(255,255,255,0.94),inset_0_0_0_9px_rgba(101,183,255,0.62),inset_0_-2px_0_rgba(10,35,70,0.16),0_0_18px_rgba(255,255,255,0.82),0_0_72px_rgba(101,183,255,0.95)]",
   green:
-    "bg-[#62e78f] shadow-[inset_0_-4px_0_rgba(13,63,33,0.22),0_0_42px_rgba(98,231,143,0.72)]",
-  red: "bg-[#ff7a87] shadow-[inset_0_-4px_0_rgba(89,16,28,0.22),0_0_42px_rgba(255,122,135,0.72)]",
+    "border-white/95 bg-[#79f7a2] brightness-125 saturate-150 shadow-[inset_0_0_0_4px_rgba(255,255,255,0.94),inset_0_0_0_9px_rgba(98,231,143,0.62),inset_0_-2px_0_rgba(13,63,33,0.16),0_0_18px_rgba(255,255,255,0.82),0_0_72px_rgba(98,231,143,0.95)]",
+  red:
+    "border-white/95 bg-[#ff8f9a] brightness-125 saturate-150 shadow-[inset_0_0_0_4px_rgba(255,255,255,0.94),inset_0_0_0_9px_rgba(255,122,135,0.62),inset_0_-2px_0_rgba(89,16,28,0.16),0_0_18px_rgba(255,255,255,0.82),0_0_72px_rgba(255,122,135,0.95)]",
   yellow:
-    "bg-[#ffe27a] shadow-[inset_0_-4px_0_rgba(107,78,16,0.22),0_0_42px_rgba(255,226,122,0.72)]",
+    "border-white/95 bg-[#fff08f] brightness-125 saturate-150 shadow-[inset_0_0_0_4px_rgba(255,255,255,0.94),inset_0_0_0_9px_rgba(255,226,122,0.62),inset_0_-2px_0_rgba(107,78,16,0.16),0_0_18px_rgba(255,255,255,0.82),0_0_72px_rgba(255,226,122,0.95)]",
 };
 
 export function SimonBoard({ children, game, onPadPress, statusLabel }: SimonBoardProps) {
@@ -67,10 +69,12 @@ export function SimonBoard({ children, game, onPadPress, statusLabel }: SimonBoa
             <button
               aria-label={`${simonPadLabels[pad]} pad. Key ${simonPadKeys[pad]}.`}
               className={cn(
-                "min-h-0 border-2 transition duration-150 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/85 disabled:cursor-not-allowed disabled:opacity-80",
+                "min-h-0 border-2 transition duration-150 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/85 disabled:cursor-not-allowed",
                 simonPadClassNames[pad],
                 isActive && simonPadActiveClassNames[pad],
-                isInputReady && "hover:brightness-110 active:translate-y-px",
+                !isActive && !isInputReady && "opacity-80",
+                isInputReady && !isActive && "hover:brightness-110",
+                isInputReady && "active:translate-y-px",
               )}
               data-testid={`simon-pad-${pad}`}
               disabled={!isInputReady}

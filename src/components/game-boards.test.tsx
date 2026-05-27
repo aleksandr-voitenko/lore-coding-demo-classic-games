@@ -277,6 +277,9 @@ describe("game board renderers", () => {
       "Simon board. Round 2. Score 1. Target 4. Repeat.",
       'data-testid="simon-pad-green"',
       'data-testid="simon-pad-red"',
+      "border-white/95",
+      "brightness-125",
+      "inset_0_0_0_4px_rgba(255,255,255,0.94)",
       "Red pad. Key 2 or W.",
       ">2</div>",
     ]);
