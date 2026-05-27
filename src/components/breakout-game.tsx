@@ -6,19 +6,17 @@ import {
   PlayIcon,
   RotateCcwIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { BreakoutBoard, breakoutBrickClassNames } from "@/components/breakout-board";
 import {
   createBreakoutPaddleMovementState,
   getBreakoutPaddleMovementKey,
-  pressBreakoutPaddleMovementKey,
-  releaseBreakoutPaddleMovementKey,
-  resetBreakoutPaddleMovementState,
   type BreakoutPaddleMovementDirection,
   type BreakoutPaddleMovementKey,
 } from "@/components/breakout-paddle-input";
 import {
+  createHeldDirectionMovementController,
   isGamePauseKey,
   registerGameKeyDown,
   registerGameKeyUp,
@@ -120,8 +118,6 @@ export function BreakoutGame({
       lives: initialLives,
     }),
   );
-  const paddleMovementStateRef = useRef(createBreakoutPaddleMovementState());
-  const paddleMovementIntervalRef = useRef<number | null>(null);
   const tickDelay = game.status === "running" ? getBreakoutTickDelay() : null;
   const activeBrickCount = game.bricks.filter((brick) => brick.isActive).length;
   const canPauseGame = game.status === "running" || game.status === "paused";
@@ -177,76 +173,33 @@ export function BreakoutGame({
     );
   }, []);
 
-  const stopPaddleMovementLoop = useCallback(() => {
-    if (paddleMovementIntervalRef.current === null) {
-      return;
-    }
-
-    window.clearInterval(paddleMovementIntervalRef.current);
-    paddleMovementIntervalRef.current = null;
-  }, []);
-
-  const startPaddleMovementLoop = useCallback(
-    (direction: BreakoutPaddleMovementDirection) => {
-      paddleMovementStateRef.current.direction = direction;
-
-      if (paddleMovementIntervalRef.current !== null) {
-        return;
-      }
-
-      paddleMovementIntervalRef.current = window.setInterval(() => {
-        const currentDirection = paddleMovementStateRef.current.direction;
-
-        if (currentDirection !== null) {
-          movePaddle(currentDirection);
-        }
-      }, BREAKOUT_PADDLE_MOVE_INTERVAL_MS);
-    },
+  const paddleMovementController = useMemo(
+    () =>
+      createHeldDirectionMovementController({
+        intervalMs: BREAKOUT_PADDLE_MOVE_INTERVAL_MS,
+        move: movePaddle,
+        state: createBreakoutPaddleMovementState(),
+      }),
     [movePaddle],
   );
 
   const beginPaddleMovement = useCallback(
     (movementKey: BreakoutPaddleMovementKey) => {
-      const movement = pressBreakoutPaddleMovementKey(
-        paddleMovementStateRef.current,
-        movementKey,
-      );
-
-      startPaddleMovementLoop(movement.direction);
-
-      if (movement.shouldMoveImmediately) {
-        movePaddle(movement.direction);
-      }
+      paddleMovementController.beginMovement(movementKey);
     },
-    [movePaddle, startPaddleMovementLoop],
+    [paddleMovementController],
   );
 
   const endPaddleMovement = useCallback(
     (movementKey: BreakoutPaddleMovementKey) => {
-      const movement = releaseBreakoutPaddleMovementKey(
-        paddleMovementStateRef.current,
-        movementKey,
-      );
-
-      if (!movement.handled) {
-        return false;
-      }
-
-      if (movement.direction === null) {
-        stopPaddleMovementLoop();
-      } else {
-        startPaddleMovementLoop(movement.direction);
-      }
-
-      return true;
+      return paddleMovementController.endMovement(movementKey);
     },
-    [startPaddleMovementLoop, stopPaddleMovementLoop],
+    [paddleMovementController],
   );
 
   const resetPaddleMovement = useCallback(() => {
-    resetBreakoutPaddleMovementState(paddleMovementStateRef.current);
-    stopPaddleMovementLoop();
-  }, [stopPaddleMovementLoop]);
+    paddleMovementController.resetMovement();
+  }, [paddleMovementController]);
 
   const advanceBreakout = useCallback(() => {
     setGame((current) => advanceBreakoutGame(current));

@@ -1,104 +1,46 @@
-export type PongPaddleMovementDirection = "up" | "down";
+import {
+  createHeldDirectionMovementKeyGetter,
+  createHeldDirectionMovementState,
+  pressHeldDirectionMovementKey,
+  releaseHeldDirectionMovementKey,
+  resetHeldDirectionMovementState,
+  type HeldDirectionMovementKey,
+  type HeldDirectionMovementState,
+} from "./game-input";
 
-export type PongPaddleMovementKey = {
-  direction: PongPaddleMovementDirection;
-  key: string;
-};
+const PONG_PADDLE_MOVEMENT_DIRECTIONS = ["up", "down"] as const;
 
-export type PongPaddleMovementState = {
-  direction: PongPaddleMovementDirection | null;
-  heldKeys: Record<PongPaddleMovementDirection, Set<string>>;
-  lastDirection: PongPaddleMovementDirection | null;
-};
+export type PongPaddleMovementDirection =
+  (typeof PONG_PADDLE_MOVEMENT_DIRECTIONS)[number];
+
+export type PongPaddleMovementKey = HeldDirectionMovementKey<PongPaddleMovementDirection>;
+
+export type PongPaddleMovementState =
+  HeldDirectionMovementState<PongPaddleMovementDirection>;
 
 export function createPongPaddleMovementState(): PongPaddleMovementState {
-  return {
-    direction: null,
-    heldKeys: {
-      down: new Set<string>(),
-      up: new Set<string>(),
-    },
-    lastDirection: null,
-  };
+  return createHeldDirectionMovementState(PONG_PADDLE_MOVEMENT_DIRECTIONS);
 }
 
-export function getPongPaddleMovementKey(key: string): PongPaddleMovementKey | null {
-  const normalizedKey = key.length === 1 ? key.toLowerCase() : key;
-
-  if (normalizedKey === "ArrowUp" || normalizedKey === "w") {
-    return { direction: "up", key: normalizedKey };
-  }
-
-  if (normalizedKey === "ArrowDown" || normalizedKey === "s") {
-    return { direction: "down", key: normalizedKey };
-  }
-
-  return null;
-}
+export const getPongPaddleMovementKey = createHeldDirectionMovementKeyGetter({
+  down: ["ArrowDown", "s"],
+  up: ["ArrowUp", "w"],
+});
 
 export function pressPongPaddleMovementKey(
   state: PongPaddleMovementState,
-  { direction, key }: PongPaddleMovementKey,
-): {
-  direction: PongPaddleMovementDirection;
-  shouldMoveImmediately: boolean;
-} {
-  const wasAlreadyHeld = state.heldKeys[direction].has(key);
-
-  state.heldKeys[direction].add(key);
-  state.lastDirection = direction;
-  state.direction = direction;
-
-  return {
-    direction,
-    shouldMoveImmediately: !wasAlreadyHeld,
-  };
+  movementKey: PongPaddleMovementKey,
+) {
+  return pressHeldDirectionMovementKey(state, movementKey);
 }
 
 export function releasePongPaddleMovementKey(
   state: PongPaddleMovementState,
-  { direction, key }: PongPaddleMovementKey,
-): {
-  direction: PongPaddleMovementDirection | null;
-  handled: boolean;
-} {
-  if (!state.heldKeys[direction].has(key)) {
-    return {
-      direction: state.direction,
-      handled: false,
-    };
-  }
-
-  state.heldKeys[direction].delete(key);
-
-  if (state.heldKeys[direction].size > 0 || state.lastDirection !== direction) {
-    return {
-      direction: state.direction,
-      handled: true,
-    };
-  }
-
-  const fallbackDirection =
-    direction === "up"
-      ? state.heldKeys.down.size > 0
-        ? "down"
-        : null
-      : state.heldKeys.up.size > 0
-        ? "up"
-        : null;
-
-  state.lastDirection = fallbackDirection;
-  state.direction = fallbackDirection;
-
-  return {
-    direction: fallbackDirection,
-    handled: true,
-  };
+  movementKey: PongPaddleMovementKey,
+) {
+  return releaseHeldDirectionMovementKey(state, movementKey);
 }
 
 export function resetPongPaddleMovementState(state: PongPaddleMovementState) {
-  state.heldKeys.down.clear();
-  state.heldKeys.up.clear();
-  state.lastDirection = null;
-  state.direction = null;
+  resetHeldDirectionMovementState(state);
 }

@@ -69,8 +69,9 @@ This file covers React component ownership and shared game UI conventions under
   game-specific actions such as start, hard drop, or fire.
 - For held-key movement, keep transient key state out of React render state and
   drive movement through engine/helper functions on an interval until
-  keyup/blur/modal cleanup. `breakout-paddle-input.ts` and `pong-paddle-input.ts`
-  are the local pure helper pattern.
+  keyup/blur/modal cleanup. Use the shared held-direction movement state and
+  controller in `game-input.ts`, with small game-specific key-map wrappers beside
+  the game components.
 - Component tests are useful for static board renderers, shared input filtering,
   and focused shared UI behavior. Prefer Playwright for broad rendered flows and
   browser interactions.

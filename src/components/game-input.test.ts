@@ -1,11 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  createHeldDirectionMovementController,
+  createHeldDirectionMovementKeyGetter,
+  createHeldDirectionMovementState,
   isGamePauseKey,
   isTypingTarget,
+  pressHeldDirectionMovementKey,
   registerGameKeyDown,
   registerGameKeyUp,
+  releaseHeldDirectionMovementKey,
+  resetHeldDirectionMovementState,
   shouldIgnoreGameKeyDown,
+  type HeldDirectionMovementTimers,
 } from "./game-input";
 
 const originalHTMLElement = globalThis.HTMLElement;
@@ -45,6 +52,48 @@ function createKeyboardTarget(expectedType: "keydown" | "keyup") {
       return listeners.size;
     },
     target,
+  };
+}
+
+type TestMovementDirection = "left" | "right";
+
+const TEST_MOVEMENT_DIRECTIONS = ["left", "right"] as const;
+
+function createTestMovementState() {
+  return createHeldDirectionMovementState(TEST_MOVEMENT_DIRECTIONS);
+}
+
+function createTestMovementTimers() {
+  let nextIntervalId = 1;
+  const listeners = new Map<number, () => void>();
+  const delays: number[] = [];
+  const clearedIntervals: number[] = [];
+  const timers: HeldDirectionMovementTimers = {
+    clearInterval(intervalId) {
+      clearedIntervals.push(intervalId);
+      listeners.delete(intervalId);
+    },
+    setInterval(listener, intervalMs) {
+      const intervalId = nextIntervalId;
+
+      nextIntervalId += 1;
+      delays.push(intervalMs);
+      listeners.set(intervalId, listener);
+
+      return intervalId;
+    },
+  };
+
+  return {
+    get activeIntervalCount() {
+      return listeners.size;
+    },
+    clearedIntervals,
+    delays,
+    runActiveIntervals() {
+      Array.from(listeners.values()).forEach((listener) => listener());
+    },
+    timers,
   };
 }
 
@@ -136,6 +185,142 @@ describe("shouldIgnoreGameKeyDown", () => {
         target: createElement("INPUT"),
       }),
     ).toBe(true);
+  });
+});
+
+describe("held direction movement input", () => {
+  const getMovementKey = createHeldDirectionMovementKeyGetter<TestMovementDirection>({
+    left: ["ArrowLeft", "a"],
+    right: ["ArrowRight", "D"],
+  });
+
+  it("maps configured keys with single-character case normalization", () => {
+    expect(getMovementKey("ArrowLeft")).toEqual({
+      direction: "left",
+      key: "ArrowLeft",
+    });
+    expect(getMovementKey("A")).toEqual({ direction: "left", key: "a" });
+    expect(getMovementKey("d")).toEqual({ direction: "right", key: "d" });
+    expect(getMovementKey("Enter")).toBeNull();
+  });
+
+  it("tracks latest pressed direction without duplicate immediate moves for a repeated key", () => {
+    const state = createTestMovementState();
+    const rightKey = getMovementKey("ArrowRight");
+
+    expect(rightKey).not.toBeNull();
+    expect(pressHeldDirectionMovementKey(state, rightKey!)).toEqual({
+      direction: "right",
+      shouldMoveImmediately: true,
+    });
+    expect(state.direction).toBe("right");
+    expect(pressHeldDirectionMovementKey(state, rightKey!)).toEqual({
+      direction: "right",
+      shouldMoveImmediately: false,
+    });
+  });
+
+  it("falls back to the opposite still-held key when the latest key is released", () => {
+    const state = createTestMovementState();
+    const leftKey = getMovementKey("ArrowLeft");
+    const rightKey = getMovementKey("ArrowRight");
+
+    expect(leftKey).not.toBeNull();
+    expect(rightKey).not.toBeNull();
+    pressHeldDirectionMovementKey(state, leftKey!);
+    pressHeldDirectionMovementKey(state, rightKey!);
+
+    expect(state.direction).toBe("right");
+    expect(releaseHeldDirectionMovementKey(state, rightKey!)).toEqual({
+      direction: "left",
+      handled: true,
+    });
+    expect(releaseHeldDirectionMovementKey(state, leftKey!)).toEqual({
+      direction: null,
+      handled: true,
+    });
+  });
+
+  it("keeps a direction active until every physical key for it is released", () => {
+    const state = createTestMovementState();
+    const arrowLeftKey = getMovementKey("ArrowLeft");
+    const aKey = getMovementKey("a");
+
+    expect(arrowLeftKey).not.toBeNull();
+    expect(aKey).not.toBeNull();
+    pressHeldDirectionMovementKey(state, arrowLeftKey!);
+    pressHeldDirectionMovementKey(state, aKey!);
+
+    expect(releaseHeldDirectionMovementKey(state, aKey!)).toEqual({
+      direction: "left",
+      handled: true,
+    });
+    expect(releaseHeldDirectionMovementKey(state, arrowLeftKey!)).toEqual({
+      direction: null,
+      handled: true,
+    });
+  });
+
+  it("reports unhandled releases without changing the active direction", () => {
+    const state = createTestMovementState();
+    const leftKey = getMovementKey("ArrowLeft");
+
+    expect(leftKey).not.toBeNull();
+    expect(releaseHeldDirectionMovementKey(state, leftKey!)).toEqual({
+      direction: null,
+      handled: false,
+    });
+  });
+
+  it("resets held keys and the active movement direction", () => {
+    const state = createTestMovementState();
+    const leftKey = getMovementKey("ArrowLeft");
+
+    expect(leftKey).not.toBeNull();
+    pressHeldDirectionMovementKey(state, leftKey!);
+    resetHeldDirectionMovementState(state);
+
+    expect(state.direction).toBeNull();
+    expect(state.heldKeys.left.size).toBe(0);
+    expect(state.heldKeys.right.size).toBe(0);
+  });
+
+  it("runs continuous movement on one interval and clears it during reset", () => {
+    const state = createTestMovementState();
+    const testTimers = createTestMovementTimers();
+    const moves: TestMovementDirection[] = [];
+    const controller = createHeldDirectionMovementController({
+      intervalMs: 16,
+      move: (direction) => moves.push(direction),
+      state,
+      timers: testTimers.timers,
+    });
+    const rightKey = getMovementKey("ArrowRight");
+
+    expect(rightKey).not.toBeNull();
+    controller.beginMovement(rightKey!);
+
+    expect(moves).toEqual(["right"]);
+    expect(testTimers.activeIntervalCount).toBe(1);
+    expect(testTimers.delays).toEqual([16]);
+
+    controller.beginMovement(rightKey!);
+    expect(moves).toEqual(["right"]);
+    expect(testTimers.activeIntervalCount).toBe(1);
+
+    testTimers.runActiveIntervals();
+    expect(moves).toEqual(["right", "right"]);
+
+    controller.resetMovement();
+
+    expect(state.direction).toBeNull();
+    expect(state.heldKeys.left.size).toBe(0);
+    expect(state.heldKeys.right.size).toBe(0);
+    expect(testTimers.activeIntervalCount).toBe(0);
+    expect(testTimers.clearedIntervals).toEqual([1]);
+
+    testTimers.runActiveIntervals();
+    expect(moves).toEqual(["right", "right"]);
   });
 });
 

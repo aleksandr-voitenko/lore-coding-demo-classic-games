@@ -1,9 +1,10 @@
 "use client";
 
 import { ArrowDownIcon, ArrowUpIcon, PlayIcon, RotateCcwIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  createHeldDirectionMovementController,
   isGamePauseKey,
   registerGameKeyDown,
   registerGameKeyUp,
@@ -29,9 +30,6 @@ import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/gam
 import {
   createPongPaddleMovementState,
   getPongPaddleMovementKey,
-  pressPongPaddleMovementKey,
-  releasePongPaddleMovementKey,
-  resetPongPaddleMovementState,
   type PongPaddleMovementDirection,
   type PongPaddleMovementKey,
 } from "@/components/pong-paddle-input";
@@ -126,8 +124,6 @@ export function PongGame({
       targetScore: initialTargetScore,
     }),
   );
-  const paddleMovementStateRef = useRef(createPongPaddleMovementState());
-  const paddleMovementIntervalRef = useRef<number | null>(null);
   const maximumScore = getPongMaximumScore(game.targetScore);
   const helpSections = useMemo(
     () => createPongHelpSections(maximumScore, game.targetScore),
@@ -169,76 +165,33 @@ export function PongGame({
     );
   }, []);
 
-  const stopPaddleMovementLoop = useCallback(() => {
-    if (paddleMovementIntervalRef.current === null) {
-      return;
-    }
-
-    window.clearInterval(paddleMovementIntervalRef.current);
-    paddleMovementIntervalRef.current = null;
-  }, []);
-
-  const startPaddleMovementLoop = useCallback(
-    (direction: PongPaddleMovementDirection) => {
-      paddleMovementStateRef.current.direction = direction;
-
-      if (paddleMovementIntervalRef.current !== null) {
-        return;
-      }
-
-      paddleMovementIntervalRef.current = window.setInterval(() => {
-        const currentDirection = paddleMovementStateRef.current.direction;
-
-        if (currentDirection !== null) {
-          movePaddle(currentDirection);
-        }
-      }, PONG_PADDLE_MOVE_INTERVAL_MS);
-    },
+  const paddleMovementController = useMemo(
+    () =>
+      createHeldDirectionMovementController({
+        intervalMs: PONG_PADDLE_MOVE_INTERVAL_MS,
+        move: movePaddle,
+        state: createPongPaddleMovementState(),
+      }),
     [movePaddle],
   );
 
   const beginPaddleMovement = useCallback(
     (movementKey: PongPaddleMovementKey) => {
-      const movement = pressPongPaddleMovementKey(
-        paddleMovementStateRef.current,
-        movementKey,
-      );
-
-      startPaddleMovementLoop(movement.direction);
-
-      if (movement.shouldMoveImmediately) {
-        movePaddle(movement.direction);
-      }
+      paddleMovementController.beginMovement(movementKey);
     },
-    [movePaddle, startPaddleMovementLoop],
+    [paddleMovementController],
   );
 
   const endPaddleMovement = useCallback(
     (movementKey: PongPaddleMovementKey) => {
-      const movement = releasePongPaddleMovementKey(
-        paddleMovementStateRef.current,
-        movementKey,
-      );
-
-      if (!movement.handled) {
-        return false;
-      }
-
-      if (movement.direction === null) {
-        stopPaddleMovementLoop();
-      } else {
-        startPaddleMovementLoop(movement.direction);
-      }
-
-      return true;
+      return paddleMovementController.endMovement(movementKey);
     },
-    [startPaddleMovementLoop, stopPaddleMovementLoop],
+    [paddleMovementController],
   );
 
   const resetPaddleMovement = useCallback(() => {
-    resetPongPaddleMovementState(paddleMovementStateRef.current);
-    stopPaddleMovementLoop();
-  }, [stopPaddleMovementLoop]);
+    paddleMovementController.resetMovement();
+  }, [paddleMovementController]);
 
   const startGame = useCallback(() => {
     resetLeaderboardForm();

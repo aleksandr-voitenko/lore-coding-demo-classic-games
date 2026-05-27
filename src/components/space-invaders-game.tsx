@@ -6,7 +6,7 @@ import {
   PlayIcon,
   RotateCcwIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   GameAbandonDialog,
@@ -26,6 +26,7 @@ import {
 } from "@/components/game-layout";
 import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
 import {
+  createHeldDirectionMovementController,
   isGamePauseKey,
   registerGameKeyDown,
   registerGameKeyUp,
@@ -38,9 +39,6 @@ import {
 import {
   createSpaceInvadersPlayerMovementState,
   getSpaceInvadersPlayerMovementKey,
-  pressSpaceInvadersPlayerMovementKey,
-  releaseSpaceInvadersPlayerMovementKey,
-  resetSpaceInvadersPlayerMovementState,
   type SpaceInvadersPlayerMovementDirection,
   type SpaceInvadersPlayerMovementKey,
 } from "@/components/space-invaders-player-input";
@@ -128,8 +126,6 @@ export function SpaceInvadersGame({
       boardWidth: initialBoardWidth,
     }),
   );
-  const playerMovementStateRef = useRef(createSpaceInvadersPlayerMovementState());
-  const playerMovementIntervalRef = useRef<number | null>(null);
   const tickDelay = game.status === "running" ? getSpaceInvadersTickDelay() : null;
   const activeInvaderCount = game.invaders.filter((invader) => invader.isActive).length;
   const canPauseGame = game.status === "running" || game.status === "paused";
@@ -185,76 +181,33 @@ export function SpaceInvadersGame({
     );
   }, []);
 
-  const stopPlayerMovementLoop = useCallback(() => {
-    if (playerMovementIntervalRef.current === null) {
-      return;
-    }
-
-    window.clearInterval(playerMovementIntervalRef.current);
-    playerMovementIntervalRef.current = null;
-  }, []);
-
-  const startPlayerMovementLoop = useCallback(
-    (direction: SpaceInvadersPlayerMovementDirection) => {
-      playerMovementStateRef.current.direction = direction;
-
-      if (playerMovementIntervalRef.current !== null) {
-        return;
-      }
-
-      playerMovementIntervalRef.current = window.setInterval(() => {
-        const currentDirection = playerMovementStateRef.current.direction;
-
-        if (currentDirection !== null) {
-          movePlayer(currentDirection);
-        }
-      }, SPACE_INVADERS_PLAYER_MOVE_INTERVAL_MS);
-    },
+  const playerMovementController = useMemo(
+    () =>
+      createHeldDirectionMovementController({
+        intervalMs: SPACE_INVADERS_PLAYER_MOVE_INTERVAL_MS,
+        move: movePlayer,
+        state: createSpaceInvadersPlayerMovementState(),
+      }),
     [movePlayer],
   );
 
   const beginPlayerMovement = useCallback(
     (movementKey: SpaceInvadersPlayerMovementKey) => {
-      const movement = pressSpaceInvadersPlayerMovementKey(
-        playerMovementStateRef.current,
-        movementKey,
-      );
-
-      startPlayerMovementLoop(movement.direction);
-
-      if (movement.shouldMoveImmediately) {
-        movePlayer(movement.direction);
-      }
+      playerMovementController.beginMovement(movementKey);
     },
-    [movePlayer, startPlayerMovementLoop],
+    [playerMovementController],
   );
 
   const endPlayerMovement = useCallback(
     (movementKey: SpaceInvadersPlayerMovementKey) => {
-      const movement = releaseSpaceInvadersPlayerMovementKey(
-        playerMovementStateRef.current,
-        movementKey,
-      );
-
-      if (!movement.handled) {
-        return false;
-      }
-
-      if (movement.direction === null) {
-        stopPlayerMovementLoop();
-      } else {
-        startPlayerMovementLoop(movement.direction);
-      }
-
-      return true;
+      return playerMovementController.endMovement(movementKey);
     },
-    [startPlayerMovementLoop, stopPlayerMovementLoop],
+    [playerMovementController],
   );
 
   const resetPlayerMovement = useCallback(() => {
-    resetSpaceInvadersPlayerMovementState(playerMovementStateRef.current);
-    stopPlayerMovementLoop();
-  }, [stopPlayerMovementLoop]);
+    playerMovementController.resetMovement();
+  }, [playerMovementController]);
 
   const fireShot = useCallback(() => {
     setGame((current) => fireSpaceInvadersShot(current));
