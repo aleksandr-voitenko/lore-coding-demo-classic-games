@@ -13,8 +13,8 @@ import {
   GameBoardActions,
   GameBoardColumn,
   GameBoardStage,
+  GameEndLeaderboardContent,
   GameEndScreen,
-  GameEndSummary,
   GameHeader,
   GameHelpScreen,
   GameShell,
@@ -24,7 +24,7 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
-import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
+import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import {
   createHeldDirectionMovementController,
   isGamePauseKey,
@@ -456,38 +456,8 @@ export function SpaceInvadersGame({
             </div>
           ) : showEndScreen ? (
             <GameEndScreen testId="space-invaders-end-screen">
-              {pendingLeaderboardEntry ? (
-                <>
-                  <GameLeaderboardScoreForm
-                    isSaving={isSavingLeaderboardScore}
-                    onPlayerNameChange={setPlayerName}
-                    onSaveScore={saveLeaderboardScore}
-                    pendingEntry={pendingLeaderboardEntry}
-                    playerName={playerName}
-                    saveFailed={scoreSaveFailed}
-                    testIdPrefix="space-invaders"
-                  />
-                  <GameLeaderboardPanel
-                    slotTestIdPrefix="space-invaders-final-leaderboard-slot"
-                    slots={leaderboardSlots}
-                    statusMessage={leaderboardStatusMessage}
-                    testId="space-invaders-final-leaderboard"
-                  />
-                </>
-              ) : (
-                <>
-                  <GameEndSummary
-                    metricLabel="Final score"
-                    metricValue={game.score}
-                    metricValueTestId="space-invaders-final-score"
-                    title={game.status === "won" ? "Earth defended" : "Game over"}
-                  />
-                  <GameLeaderboardPanel
-                    slotTestIdPrefix="space-invaders-final-leaderboard-slot"
-                    slots={leaderboardSlots}
-                    statusMessage={leaderboardStatusMessage}
-                    testId="space-invaders-final-leaderboard"
-                  />
+              <GameEndLeaderboardContent
+                action={
                   <Button
                     className="min-w-36"
                     data-testid="space-invaders-new-game-button"
@@ -499,8 +469,29 @@ export function SpaceInvadersGame({
                     <RotateCcwIcon data-icon="inline-start" />
                     New game
                   </Button>
-                </>
-              )}
+                }
+                leaderboard={{
+                  slotTestIdPrefix: "space-invaders-final-leaderboard-slot",
+                  slots: leaderboardSlots,
+                  statusMessage: leaderboardStatusMessage,
+                  testId: "space-invaders-final-leaderboard",
+                }}
+                pendingLeaderboardEntry={pendingLeaderboardEntry}
+                scoreForm={{
+                  isSaving: isSavingLeaderboardScore,
+                  onPlayerNameChange: setPlayerName,
+                  onSaveScore: saveLeaderboardScore,
+                  playerName,
+                  saveFailed: scoreSaveFailed,
+                  testIdPrefix: "space-invaders",
+                }}
+                summary={{
+                  metricLabel: "Final score",
+                  metricValue: game.score,
+                  metricValueTestId: "space-invaders-final-score",
+                  title: game.status === "won" ? "Earth defended" : "Game over",
+                }}
+              />
             </GameEndScreen>
           ) : showPauseScreen ? (
             <div

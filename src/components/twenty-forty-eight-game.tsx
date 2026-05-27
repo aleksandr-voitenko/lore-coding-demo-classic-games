@@ -16,8 +16,8 @@ import {
   GameBoardActions,
   GameBoardColumn,
   GameBoardStage,
+  GameEndLeaderboardContent,
   GameEndScreen,
-  GameEndSummary,
   GameHeader,
   GameHelpScreen,
   GameShell,
@@ -27,7 +27,7 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
-import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
+import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { TwentyFortyEightBoard } from "@/components/twenty-forty-eight-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -312,38 +312,8 @@ export function TwentyFortyEightGame({
             </div>
           ) : showEndScreen ? (
             <GameEndScreen testId="twenty-forty-eight-end-screen">
-              {pendingLeaderboardEntry ? (
-                <>
-                  <GameLeaderboardScoreForm
-                    isSaving={isSavingLeaderboardScore}
-                    onPlayerNameChange={setPlayerName}
-                    onSaveScore={saveLeaderboardScore}
-                    pendingEntry={pendingLeaderboardEntry}
-                    playerName={playerName}
-                    saveFailed={scoreSaveFailed}
-                    testIdPrefix="twenty-forty-eight"
-                  />
-                  <GameLeaderboardPanel
-                    slotTestIdPrefix="twenty-forty-eight-final-leaderboard-slot"
-                    slots={leaderboardSlots}
-                    statusMessage={leaderboardStatusMessage}
-                    testId="twenty-forty-eight-final-leaderboard"
-                  />
-                </>
-              ) : (
-                <>
-                  <GameEndSummary
-                    metricLabel="Final score"
-                    metricValue={game.score}
-                    metricValueTestId="twenty-forty-eight-final-score"
-                    title={game.status === "won" ? `${game.winTile} reached` : "No moves left"}
-                  />
-                  <GameLeaderboardPanel
-                    slotTestIdPrefix="twenty-forty-eight-final-leaderboard-slot"
-                    slots={leaderboardSlots}
-                    statusMessage={leaderboardStatusMessage}
-                    testId="twenty-forty-eight-final-leaderboard"
-                  />
+              <GameEndLeaderboardContent
+                action={
                   <Button
                     className="min-w-36"
                     data-testid="twenty-forty-eight-overlay-new-game-button"
@@ -355,8 +325,29 @@ export function TwentyFortyEightGame({
                     <RotateCcwIcon data-icon="inline-start" />
                     New game
                   </Button>
-                </>
-              )}
+                }
+                leaderboard={{
+                  slotTestIdPrefix: "twenty-forty-eight-final-leaderboard-slot",
+                  slots: leaderboardSlots,
+                  statusMessage: leaderboardStatusMessage,
+                  testId: "twenty-forty-eight-final-leaderboard",
+                }}
+                pendingLeaderboardEntry={pendingLeaderboardEntry}
+                scoreForm={{
+                  isSaving: isSavingLeaderboardScore,
+                  onPlayerNameChange: setPlayerName,
+                  onSaveScore: saveLeaderboardScore,
+                  playerName,
+                  saveFailed: scoreSaveFailed,
+                  testIdPrefix: "twenty-forty-eight",
+                }}
+                summary={{
+                  metricLabel: "Final score",
+                  metricValue: game.score,
+                  metricValueTestId: "twenty-forty-eight-final-score",
+                  title: game.status === "won" ? `${game.winTile} reached` : "No moves left",
+                }}
+              />
             </GameEndScreen>
           ) : null}
           {isHelpVisible ? (

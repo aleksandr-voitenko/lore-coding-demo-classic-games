@@ -22,8 +22,8 @@ import {
   GameBoardActions,
   GameBoardColumn,
   GameBoardStage,
+  GameEndLeaderboardContent,
   GameEndScreen,
-  GameEndSummary,
   GameHeader,
   GameHelpScreen,
   GameShell,
@@ -33,7 +33,7 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
-import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
+import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import {
   isGamePauseKey,
   registerGameKeyDown,
@@ -540,38 +540,8 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
               </div>
             ) : showGameOverScreen ? (
               <GameEndScreen testId="snake-game-over-screen">
-                {pendingLeaderboardEntry ? (
-                  <>
-                    <GameLeaderboardScoreForm
-                      isSaving={isSavingLeaderboardScore}
-                      onPlayerNameChange={setPlayerName}
-                      onSaveScore={saveLeaderboardScore}
-                      pendingEntry={pendingLeaderboardEntry}
-                      playerName={playerName}
-                      saveFailed={scoreSaveFailed}
-                      testIdPrefix="snake"
-                    />
-                    <GameLeaderboardPanel
-                      slotTestIdPrefix="snake-final-leaderboard-slot"
-                      slots={leaderboardSlots}
-                      statusMessage={leaderboardStatusMessage}
-                      testId="snake-final-leaderboard"
-                    />
-                  </>
-                ) : (
-                  <>
-                    <GameEndSummary
-                      metricLabel="Your score:"
-                      metricValue={game.score}
-                      metricValueTestId="snake-final-score"
-                      title={statusLabels[game.status]}
-                    />
-                    <GameLeaderboardPanel
-                      slotTestIdPrefix="snake-final-leaderboard-slot"
-                      slots={leaderboardSlots}
-                      statusMessage={leaderboardStatusMessage}
-                      testId="snake-final-leaderboard"
-                    />
+                <GameEndLeaderboardContent
+                  action={
                     <Button
                       className="min-w-36"
                       data-testid="snake-new-game-button"
@@ -583,8 +553,29 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
                       <RotateCcwIcon data-icon="inline-start" />
                       New game
                     </Button>
-                  </>
-                )}
+                  }
+                  leaderboard={{
+                    slotTestIdPrefix: "snake-final-leaderboard-slot",
+                    slots: leaderboardSlots,
+                    statusMessage: leaderboardStatusMessage,
+                    testId: "snake-final-leaderboard",
+                  }}
+                  pendingLeaderboardEntry={pendingLeaderboardEntry}
+                  scoreForm={{
+                    isSaving: isSavingLeaderboardScore,
+                    onPlayerNameChange: setPlayerName,
+                    onSaveScore: saveLeaderboardScore,
+                    playerName,
+                    saveFailed: scoreSaveFailed,
+                    testIdPrefix: "snake",
+                  }}
+                  summary={{
+                    metricLabel: "Your score:",
+                    metricValue: game.score,
+                    metricValueTestId: "snake-final-score",
+                    title: statusLabels[game.status],
+                  }}
+                />
               </GameEndScreen>
             ) : showBoardState ? (
               <div

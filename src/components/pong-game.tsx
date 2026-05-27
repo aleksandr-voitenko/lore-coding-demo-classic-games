@@ -15,8 +15,8 @@ import {
   GameBoardActions,
   GameBoardColumn,
   GameBoardStage,
+  GameEndLeaderboardContent,
   GameEndScreen,
-  GameEndSummary,
   GameHeader,
   GameHelpScreen,
   GameShell,
@@ -26,7 +26,7 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
-import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
+import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import {
   createPongPaddleMovementState,
   getPongPaddleMovementKey,
@@ -495,38 +495,8 @@ export function PongGame({
             </div>
           ) : showEndScreen ? (
             <GameEndScreen testId="pong-end-screen">
-              {pendingLeaderboardEntry ? (
-                <>
-                  <GameLeaderboardScoreForm
-                    isSaving={isSavingLeaderboardScore}
-                    onPlayerNameChange={setPlayerName}
-                    onSaveScore={saveLeaderboardScore}
-                    pendingEntry={pendingLeaderboardEntry}
-                    playerName={playerName}
-                    saveFailed={scoreSaveFailed}
-                    testIdPrefix="pong"
-                  />
-                  <GameLeaderboardPanel
-                    slotTestIdPrefix="pong-final-leaderboard-slot"
-                    slots={leaderboardSlots}
-                    statusMessage={leaderboardStatusMessage}
-                    testId="pong-final-leaderboard"
-                  />
-                </>
-              ) : (
-                <>
-                  <GameEndSummary
-                    metricLabel="Remaining score"
-                    metricValue={game.remainingScore}
-                    metricValueTestId="pong-final-score"
-                    title={game.status === "won" ? "Match won" : "Match lost"}
-                  />
-                  <GameLeaderboardPanel
-                    slotTestIdPrefix="pong-final-leaderboard-slot"
-                    slots={leaderboardSlots}
-                    statusMessage={leaderboardStatusMessage}
-                    testId="pong-final-leaderboard"
-                  />
+              <GameEndLeaderboardContent
+                action={
                   <Button
                     className="min-w-36"
                     data-testid="pong-new-game-button"
@@ -538,8 +508,29 @@ export function PongGame({
                     <RotateCcwIcon data-icon="inline-start" />
                     New game
                   </Button>
-                </>
-              )}
+                }
+                leaderboard={{
+                  slotTestIdPrefix: "pong-final-leaderboard-slot",
+                  slots: leaderboardSlots,
+                  statusMessage: leaderboardStatusMessage,
+                  testId: "pong-final-leaderboard",
+                }}
+                pendingLeaderboardEntry={pendingLeaderboardEntry}
+                scoreForm={{
+                  isSaving: isSavingLeaderboardScore,
+                  onPlayerNameChange: setPlayerName,
+                  onSaveScore: saveLeaderboardScore,
+                  playerName,
+                  saveFailed: scoreSaveFailed,
+                  testIdPrefix: "pong",
+                }}
+                summary={{
+                  metricLabel: "Remaining score",
+                  metricValue: game.remainingScore,
+                  metricValueTestId: "pong-final-score",
+                  title: game.status === "won" ? "Match won" : "Match lost",
+                }}
+              />
             </GameEndScreen>
           ) : showPauseScreen ? (
             <div

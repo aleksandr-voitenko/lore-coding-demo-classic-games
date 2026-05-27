@@ -9,8 +9,8 @@ import {
   GameBoardActions,
   GameBoardColumn,
   GameBoardStage,
+  GameEndLeaderboardContent,
   GameEndScreen,
-  GameEndSummary,
   GameHeader,
   GameHelpScreen,
   GameShell,
@@ -20,7 +20,6 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
-import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
 import { MinesweeperBoard } from "@/components/minesweeper-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -270,42 +269,8 @@ export function MinesweeperGame({
           >
           {showEndScreen ? (
             <GameEndScreen testId="minesweeper-end-screen">
-              {pendingLeaderboardEntry ? (
-                <>
-                  <GameLeaderboardScoreForm
-                    formatScore={formatElapsedTime}
-                    isSaving={isSavingLeaderboardScore}
-                    onPlayerNameChange={setPlayerName}
-                    onSaveScore={saveLeaderboardScore}
-                    pendingEntry={pendingLeaderboardEntry}
-                    playerName={playerName}
-                    saveFailed={scoreSaveFailed}
-                    scoreLabel="time"
-                    testIdPrefix="minesweeper"
-                  />
-                  <GameLeaderboardPanel
-                    formatScore={formatElapsedTime}
-                    slotTestIdPrefix="minesweeper-final-leaderboard-slot"
-                    slots={leaderboardSlots}
-                    statusMessage={leaderboardStatusMessage}
-                    testId="minesweeper-final-leaderboard"
-                  />
-                </>
-              ) : (
-                <>
-                  <GameEndSummary
-                    metricLabel="Time"
-                    metricValue={formatElapsedTime(elapsedSeconds)}
-                    metricValueTestId="minesweeper-final-time"
-                    title={game.status === "won" ? "Board cleared" : "Game over"}
-                  />
-                  <GameLeaderboardPanel
-                    formatScore={formatElapsedTime}
-                    slotTestIdPrefix="minesweeper-final-leaderboard-slot"
-                    slots={leaderboardSlots}
-                    statusMessage={leaderboardStatusMessage}
-                    testId="minesweeper-final-leaderboard"
-                  />
+              <GameEndLeaderboardContent
+                action={
                   <Button
                     className="min-w-36"
                     onClick={startNewGame}
@@ -316,8 +281,32 @@ export function MinesweeperGame({
                     <RotateCcwIcon data-icon="inline-start" />
                     New game
                   </Button>
-                </>
-              )}
+                }
+                leaderboard={{
+                  formatScore: formatElapsedTime,
+                  slotTestIdPrefix: "minesweeper-final-leaderboard-slot",
+                  slots: leaderboardSlots,
+                  statusMessage: leaderboardStatusMessage,
+                  testId: "minesweeper-final-leaderboard",
+                }}
+                pendingLeaderboardEntry={pendingLeaderboardEntry}
+                scoreForm={{
+                  formatScore: formatElapsedTime,
+                  isSaving: isSavingLeaderboardScore,
+                  onPlayerNameChange: setPlayerName,
+                  onSaveScore: saveLeaderboardScore,
+                  playerName,
+                  saveFailed: scoreSaveFailed,
+                  scoreLabel: "time",
+                  testIdPrefix: "minesweeper",
+                }}
+                summary={{
+                  metricLabel: "Time",
+                  metricValue: formatElapsedTime(elapsedSeconds),
+                  metricValueTestId: "minesweeper-final-time",
+                  title: game.status === "won" ? "Board cleared" : "Game over",
+                }}
+              />
             </GameEndScreen>
           ) : null}
           {isHelpVisible ? (

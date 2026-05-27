@@ -15,8 +15,8 @@ import {
   GameBoardActions,
   GameBoardColumn,
   GameBoardStage,
+  GameEndLeaderboardContent,
   GameEndScreen,
-  GameEndSummary,
   GameHeader,
   GameHelpScreen,
   GameShell,
@@ -26,7 +26,7 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
-import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
+import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import {
   isGamePauseKey,
   registerGameKeyDown,
@@ -555,38 +555,8 @@ export function TetrisGame({
               </div>
             ) : showGameOverScreen ? (
               <GameEndScreen testId="tetris-game-over-screen">
-                {pendingLeaderboardEntry ? (
-                  <>
-                    <GameLeaderboardScoreForm
-                      isSaving={isSavingLeaderboardScore}
-                      onPlayerNameChange={setPlayerName}
-                      onSaveScore={saveLeaderboardScore}
-                      pendingEntry={pendingLeaderboardEntry}
-                      playerName={playerName}
-                      saveFailed={scoreSaveFailed}
-                      testIdPrefix="tetris"
-                    />
-                    <GameLeaderboardPanel
-                      slotTestIdPrefix="tetris-final-leaderboard-slot"
-                      slots={leaderboardSlots}
-                      statusMessage={leaderboardStatusMessage}
-                      testId="tetris-final-leaderboard"
-                    />
-                  </>
-                ) : (
-                  <>
-                    <GameEndSummary
-                      metricLabel="Final score"
-                      metricValue={game.score}
-                      metricValueTestId="tetris-final-score"
-                      title="Game over"
-                    />
-                    <GameLeaderboardPanel
-                      slotTestIdPrefix="tetris-final-leaderboard-slot"
-                      slots={leaderboardSlots}
-                      statusMessage={leaderboardStatusMessage}
-                      testId="tetris-final-leaderboard"
-                    />
+                <GameEndLeaderboardContent
+                  action={
                     <Button
                       className="min-w-36"
                       data-testid="tetris-new-game-button"
@@ -598,8 +568,29 @@ export function TetrisGame({
                       <RotateCcwIcon data-icon="inline-start" />
                       New game
                     </Button>
-                  </>
-                )}
+                  }
+                  leaderboard={{
+                    slotTestIdPrefix: "tetris-final-leaderboard-slot",
+                    slots: leaderboardSlots,
+                    statusMessage: leaderboardStatusMessage,
+                    testId: "tetris-final-leaderboard",
+                  }}
+                  pendingLeaderboardEntry={pendingLeaderboardEntry}
+                  scoreForm={{
+                    isSaving: isSavingLeaderboardScore,
+                    onPlayerNameChange: setPlayerName,
+                    onSaveScore: saveLeaderboardScore,
+                    playerName,
+                    saveFailed: scoreSaveFailed,
+                    testIdPrefix: "tetris",
+                  }}
+                  summary={{
+                    metricLabel: "Final score",
+                    metricValue: game.score,
+                    metricValueTestId: "tetris-final-score",
+                    title: "Game over",
+                  }}
+                />
               </GameEndScreen>
             ) : showPauseScreen ? (
               <div

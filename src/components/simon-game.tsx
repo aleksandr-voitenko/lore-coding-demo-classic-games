@@ -13,8 +13,8 @@ import {
   GameBoardActions,
   GameBoardColumn,
   GameBoardStage,
+  GameEndLeaderboardContent,
   GameEndScreen,
-  GameEndSummary,
   GameHeader,
   GameHelpScreen,
   GameShell,
@@ -24,7 +24,7 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
-import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
+import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { SimonBoard } from "@/components/simon-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -386,38 +386,8 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
             </div>
           ) : showEndScreen ? (
             <GameEndScreen testId="simon-end-screen">
-              {pendingLeaderboardEntry ? (
-                <>
-                  <GameLeaderboardScoreForm
-                    isSaving={isSavingLeaderboardScore}
-                    onPlayerNameChange={setPlayerName}
-                    onSaveScore={saveLeaderboardScore}
-                    pendingEntry={pendingLeaderboardEntry}
-                    playerName={playerName}
-                    saveFailed={scoreSaveFailed}
-                    testIdPrefix="simon"
-                  />
-                  <GameLeaderboardPanel
-                    slotTestIdPrefix="simon-final-leaderboard-slot"
-                    slots={leaderboardSlots}
-                    statusMessage={leaderboardStatusMessage}
-                    testId="simon-final-leaderboard"
-                  />
-                </>
-              ) : (
-                <>
-                  <GameEndSummary
-                    metricLabel="Final score"
-                    metricValue={game.score}
-                    metricValueTestId="simon-final-score"
-                    title={game.status === "won" ? "Sequence cleared" : "Game over"}
-                  />
-                  <GameLeaderboardPanel
-                    slotTestIdPrefix="simon-final-leaderboard-slot"
-                    slots={leaderboardSlots}
-                    statusMessage={leaderboardStatusMessage}
-                    testId="simon-final-leaderboard"
-                  />
+              <GameEndLeaderboardContent
+                action={
                   <Button
                     className="min-w-36"
                     data-testid="simon-new-game-button"
@@ -429,8 +399,29 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
                     <RotateCcwIcon data-icon="inline-start" />
                     New game
                   </Button>
-                </>
-              )}
+                }
+                leaderboard={{
+                  slotTestIdPrefix: "simon-final-leaderboard-slot",
+                  slots: leaderboardSlots,
+                  statusMessage: leaderboardStatusMessage,
+                  testId: "simon-final-leaderboard",
+                }}
+                pendingLeaderboardEntry={pendingLeaderboardEntry}
+                scoreForm={{
+                  isSaving: isSavingLeaderboardScore,
+                  onPlayerNameChange: setPlayerName,
+                  onSaveScore: saveLeaderboardScore,
+                  playerName,
+                  saveFailed: scoreSaveFailed,
+                  testIdPrefix: "simon",
+                }}
+                summary={{
+                  metricLabel: "Final score",
+                  metricValue: game.score,
+                  metricValueTestId: "simon-final-score",
+                  title: game.status === "won" ? "Sequence cleared" : "Game over",
+                }}
+              />
             </GameEndScreen>
           ) : showPauseScreen ? (
             <div

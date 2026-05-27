@@ -27,8 +27,8 @@ import {
   GameBoardActions,
   GameBoardColumn,
   GameBoardStage,
+  GameEndLeaderboardContent,
   GameEndScreen,
-  GameEndSummary,
   GameHeader,
   GameHelpScreen,
   GameShell,
@@ -38,7 +38,7 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
-import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
+import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { Button } from "@/components/ui/button";
 import {
   advanceBreakoutGame,
@@ -469,38 +469,8 @@ export function BreakoutGame({
             </div>
           ) : showEndScreen ? (
             <GameEndScreen testId="breakout-end-screen">
-              {pendingLeaderboardEntry ? (
-                <>
-                  <GameLeaderboardScoreForm
-                    isSaving={isSavingLeaderboardScore}
-                    onPlayerNameChange={setPlayerName}
-                    onSaveScore={saveLeaderboardScore}
-                    pendingEntry={pendingLeaderboardEntry}
-                    playerName={playerName}
-                    saveFailed={scoreSaveFailed}
-                    testIdPrefix="breakout"
-                  />
-                  <GameLeaderboardPanel
-                    slotTestIdPrefix="breakout-final-leaderboard-slot"
-                    slots={leaderboardSlots}
-                    statusMessage={leaderboardStatusMessage}
-                    testId="breakout-final-leaderboard"
-                  />
-                </>
-              ) : (
-                <>
-                  <GameEndSummary
-                    metricLabel="Final score"
-                    metricValue={game.score}
-                    metricValueTestId="breakout-final-score"
-                    title={game.status === "won" ? "Wall cleared" : "Game over"}
-                  />
-                  <GameLeaderboardPanel
-                    slotTestIdPrefix="breakout-final-leaderboard-slot"
-                    slots={leaderboardSlots}
-                    statusMessage={leaderboardStatusMessage}
-                    testId="breakout-final-leaderboard"
-                  />
+              <GameEndLeaderboardContent
+                action={
                   <Button
                     className="min-w-36"
                     data-testid="breakout-new-game-button"
@@ -512,8 +482,29 @@ export function BreakoutGame({
                     <RotateCcwIcon data-icon="inline-start" />
                     New game
                   </Button>
-                </>
-              )}
+                }
+                leaderboard={{
+                  slotTestIdPrefix: "breakout-final-leaderboard-slot",
+                  slots: leaderboardSlots,
+                  statusMessage: leaderboardStatusMessage,
+                  testId: "breakout-final-leaderboard",
+                }}
+                pendingLeaderboardEntry={pendingLeaderboardEntry}
+                scoreForm={{
+                  isSaving: isSavingLeaderboardScore,
+                  onPlayerNameChange: setPlayerName,
+                  onSaveScore: saveLeaderboardScore,
+                  playerName,
+                  saveFailed: scoreSaveFailed,
+                  testIdPrefix: "breakout",
+                }}
+                summary={{
+                  metricLabel: "Final score",
+                  metricValue: game.score,
+                  metricValueTestId: "breakout-final-score",
+                  title: game.status === "won" ? "Wall cleared" : "Game over",
+                }}
+              />
             </GameEndScreen>
           ) : showPauseScreen ? (
             <div

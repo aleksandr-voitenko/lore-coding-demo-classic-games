@@ -1,6 +1,8 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { type ComponentProps, type ReactNode } from "react";
+
+import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "@/components/game-leaderboard";
 
 import { cn } from "@/lib/utils";
 
@@ -17,6 +19,14 @@ type GameEndSummaryProps = {
   title: ReactNode;
 };
 
+type GameEndLeaderboardContentProps = {
+  action: ReactNode;
+  leaderboard: ComponentProps<typeof GameLeaderboardPanel>;
+  pendingLeaderboardEntry: ComponentProps<typeof GameLeaderboardScoreForm>["pendingEntry"] | null;
+  scoreForm: Omit<ComponentProps<typeof GameLeaderboardScoreForm>, "pendingEntry">;
+  summary: GameEndSummaryProps;
+};
+
 export function GameEndScreen({ children, className, testId }: GameEndScreenProps) {
   return (
     <div
@@ -28,6 +38,31 @@ export function GameEndScreen({ children, className, testId }: GameEndScreenProp
     >
       {children}
     </div>
+  );
+}
+
+export function GameEndLeaderboardContent({
+  action,
+  leaderboard,
+  pendingLeaderboardEntry,
+  scoreForm,
+  summary,
+}: GameEndLeaderboardContentProps) {
+  if (pendingLeaderboardEntry) {
+    return (
+      <>
+        <GameLeaderboardScoreForm {...scoreForm} pendingEntry={pendingLeaderboardEntry} />
+        <GameLeaderboardPanel {...leaderboard} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <GameEndSummary {...summary} />
+      <GameLeaderboardPanel {...leaderboard} />
+      {action}
+    </>
   );
 }
 
