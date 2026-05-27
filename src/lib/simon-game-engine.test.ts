@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  advanceSimonMiss,
   advanceSimonPlayback,
+  advanceSimonRound,
   clearSimonActivePad,
   createInitialSimonGame,
+  getSimonMissFeedbackDelay,
+  getSimonRoundCompleteDelay,
   getRandomSimonPad,
   pauseSimonGame,
   playSimonPad,
@@ -122,16 +126,27 @@ describe("simon game engine", () => {
     expect(clearedInput.activePad).toBeNull();
   });
 
-  it("adds a deterministic pad and advances the round after the full sequence is repeated", () => {
+  it("pauses on a correct round before adding the next deterministic pad", () => {
     const game = createInputGame({
       inputIndex: 2,
       score: 1,
       sequence: ["green", "red", "blue"],
     });
-    const nextRound = playSimonPad(game, "blue", {
+    const correctGame = playSimonPad(game, "blue");
+    const nextRound = advanceSimonRound(correctGame, {
       random: createRandomSource([0.26]),
     });
 
+    expect(getSimonRoundCompleteDelay()).toBe(1_000);
+    expect(correctGame).toMatchObject({
+      activePad: "blue",
+      inputIndex: 3,
+      playbackIndex: 0,
+      round: 3,
+      score: 3,
+      sequence: ["green", "red", "blue"],
+      status: "correct",
+    });
     expect(nextRound).toMatchObject({
       activePad: "green",
       inputIndex: 0,
@@ -143,15 +158,43 @@ describe("simon game engine", () => {
     });
   });
 
-  it("strictly ends the game on the first wrong input and restart begins at round one", () => {
+  it("clears the final correct input flash while preserving the round pause", () => {
+    const correctGame = {
+      ...createInputGame({
+        activePad: "red",
+        inputIndex: 2,
+        sequence: ["green", "red"],
+      }),
+      status: "correct" as const,
+    };
+    const clearedGame = clearSimonActivePad(correctGame);
+
+    expect(clearedGame).toMatchObject({
+      activePad: null,
+      inputIndex: 2,
+      sequence: ["green", "red"],
+      status: "correct",
+    });
+  });
+
+  it("shows a miss state before ending the game on the first wrong input", () => {
     const game = createInputGame({ score: 2 });
-    const lostGame = playSimonPad(game, "yellow");
+    const missedGame = playSimonPad(game, "yellow");
+    const lostGame = advanceSimonMiss(missedGame);
     const restartedGame = restartSimonGame(lostGame, {
       random: createRandomSource([0.75]),
     });
 
-    expect(lostGame).toMatchObject({
+    expect(getSimonMissFeedbackDelay()).toBe(1_000);
+    expect(missedGame).toMatchObject({
       activePad: "yellow",
+      inputIndex: 0,
+      playbackIndex: 0,
+      score: 2,
+      status: "missed",
+    });
+    expect(lostGame).toMatchObject({
+      activePad: null,
       inputIndex: 0,
       playbackIndex: 0,
       score: 2,
@@ -162,6 +205,23 @@ describe("simon game engine", () => {
       score: 0,
       sequence: ["blue"],
       status: "showing",
+    });
+  });
+
+  it("clears the wrong input flash while preserving the miss state", () => {
+    const missedGame = {
+      ...createInputGame({
+        activePad: "yellow",
+        score: 2,
+      }),
+      status: "missed" as const,
+    };
+    const clearedGame = clearSimonActivePad(missedGame);
+
+    expect(clearedGame).toMatchObject({
+      activePad: null,
+      score: 2,
+      status: "missed",
     });
   });
 
@@ -204,6 +264,32 @@ describe("simon game engine", () => {
     expect(resumedGame.sequence).toBe(pausedGame.sequence);
   });
 
+  it("pauses and resumes the correct-round pause without replacing the sequence", () => {
+    const correctGame = {
+      ...createInputGame({
+        inputIndex: 1,
+        score: 1,
+        sequence: ["green"],
+      }),
+      status: "correct" as const,
+    };
+    const pausedGame = pauseSimonGame(correctGame);
+    const resumedGame = startSimonGame(pausedGame);
+
+    expect(pausedGame).toMatchObject({
+      activePad: null,
+      pausedFrom: "correct",
+      sequence: ["green"],
+      status: "paused",
+    });
+    expect(resumedGame).toMatchObject({
+      pausedFrom: null,
+      sequence: ["green"],
+      status: "correct",
+    });
+    expect(resumedGame.sequence).toBe(correctGame.sequence);
+  });
+
   it("ignores playback and pad input outside their active phases", () => {
     const readyGame = createInitialSimonGame();
     const showingGame = startSimonGame(readyGame, {
@@ -211,6 +297,8 @@ describe("simon game engine", () => {
     });
 
     expect(advanceSimonPlayback(readyGame)).toBe(readyGame);
+    expect(advanceSimonMiss(readyGame)).toBe(readyGame);
+    expect(advanceSimonRound(readyGame)).toBe(readyGame);
     expect(playSimonPad(showingGame, "green")).toBe(showingGame);
   });
 
@@ -219,7 +307,8 @@ describe("simon game engine", () => {
       random: createRandomSource([0, 0.75]),
     });
     const firstInput = finishShowing(startedGame);
-    const secondShowing = playSimonPad(firstInput, "green", {
+    const firstCorrect = playSimonPad(firstInput, "green");
+    const secondShowing = advanceSimonRound(firstCorrect, {
       random: createRandomSource([0.75]),
     });
     const secondInput = finishShowing(secondShowing);

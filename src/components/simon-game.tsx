@@ -28,11 +28,15 @@ import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { SimonBoard } from "@/components/simon-board";
 import { Button } from "@/components/ui/button";
 import {
+  advanceSimonMiss,
+  advanceSimonRound,
   advanceSimonPlayback,
   clearSimonActivePad,
   createInitialSimonGame,
   getSimonInputFlashDelay,
+  getSimonMissFeedbackDelay,
   getSimonPlaybackDelay,
+  getSimonRoundCompleteDelay,
   pauseSimonGame,
   playSimonPad,
   restartSimonGame,
@@ -50,8 +54,10 @@ type SimonGameProps = {
 };
 
 const statusLabels: Record<SimonStatus, string> = {
+  correct: "Correct",
   input: "Repeat",
   lost: "Game over",
+  missed: "Miss",
   paused: "Paused",
   ready: "Ready",
   showing: "Watch",
@@ -122,8 +128,20 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
     createReadySimonGame(initialWinTarget),
   );
   const playbackDelay = game.status === "showing" ? getSimonPlaybackDelay() : null;
+  const roundCompleteDelay =
+    game.status === "correct" && game.activePad === null
+      ? getSimonRoundCompleteDelay()
+      : null;
+  const missFeedbackDelay =
+    game.status === "missed" && game.activePad === null
+      ? getSimonMissFeedbackDelay()
+      : null;
   const canPauseGame =
-    game.status === "showing" || game.status === "input" || game.status === "paused";
+    game.status === "showing" ||
+    game.status === "input" ||
+    game.status === "correct" ||
+    game.status === "missed" ||
+    game.status === "paused";
   const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
   const progressLabel = useMemo(() => {
     if (game.status === "input") {
@@ -136,7 +154,12 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
 
     return `${game.score}/${game.winTarget}`;
   }, [game.inputIndex, game.playbackIndex, game.score, game.sequence.length, game.status, game.winTarget]);
+  const isTurnFeedbackWaitingForFlash =
+    (game.status === "correct" || game.status === "missed") && game.activePad !== null;
+  const statusLabel = isTurnFeedbackWaitingForFlash ? statusLabels.input : statusLabels[game.status];
   const showStartScreen = game.status === "ready";
+  const showCorrectFeedback = game.status === "correct" && game.activePad === null;
+  const showMissFeedback = game.status === "missed" && game.activePad === null;
   const showPauseScreen = game.status === "paused";
   const showEndScreen = game.status === "lost" || game.status === "won";
   const leaderboardKey = createGameLeaderboardKey("simon", [
@@ -165,7 +188,12 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
   const toggleRunState = useCallback(() => {
     resetLeaderboardForm();
     setGame((current) => {
-      if (current.status === "showing" || current.status === "input") {
+      if (
+        current.status === "showing" ||
+        current.status === "input" ||
+        current.status === "correct" ||
+        current.status === "missed"
+      ) {
         return pauseSimonGame(current);
       }
 
@@ -179,7 +207,7 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
   }, [resetLeaderboardForm]);
 
   const pressPad = useCallback((pad: SimonPadId) => {
-    setGame((current) => playSimonPad(current, pad, { random: Math.random }));
+    setGame((current) => playSimonPad(current, pad));
   }, []);
 
   const saveLeaderboardScore = useCallback(() => {
@@ -195,7 +223,11 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
   }, []);
 
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({
-    isGameActive: game.status === "showing" || game.status === "input",
+    isGameActive:
+      game.status === "showing" ||
+      game.status === "input" ||
+      game.status === "correct" ||
+      game.status === "missed",
     onPauseGame: pauseGameForHelp,
     onResumeGame: resumeGameAfterHelp,
   });
@@ -221,7 +253,12 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
   }, [game.activePad, game.playbackIndex, playbackDelay]);
 
   useEffect(() => {
-    if (game.status !== "input" || game.activePad === null) {
+    if (
+      (game.status !== "input" &&
+        game.status !== "correct" &&
+        game.status !== "missed") ||
+      game.activePad === null
+    ) {
       return;
     }
 
@@ -231,6 +268,30 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
 
     return () => window.clearTimeout(flashTimer);
   }, [game.activePad, game.status]);
+
+  useEffect(() => {
+    if (roundCompleteDelay === null) {
+      return;
+    }
+
+    const roundCompleteTimer = window.setTimeout(() => {
+      setGame((current) => advanceSimonRound(current, { random: Math.random }));
+    }, roundCompleteDelay);
+
+    return () => window.clearTimeout(roundCompleteTimer);
+  }, [roundCompleteDelay]);
+
+  useEffect(() => {
+    if (missFeedbackDelay === null) {
+      return;
+    }
+
+    const missFeedbackTimer = window.setTimeout(() => {
+      setGame((current) => advanceSimonMiss(current));
+    }, missFeedbackDelay);
+
+    return () => window.clearTimeout(missFeedbackTimer);
+  }, [missFeedbackDelay]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -243,7 +304,13 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
         return;
       }
 
-      if (event.key === "Enter" && game.status !== "showing" && game.status !== "input") {
+      if (
+        event.key === "Enter" &&
+        game.status !== "showing" &&
+        game.status !== "input" &&
+        game.status !== "correct" &&
+        game.status !== "missed"
+      ) {
         event.preventDefault();
         startGame();
         return;
@@ -270,7 +337,7 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
     <GameShell className="bg-[#f6f9fc] text-[#172033]">
       <GameSidebar className="border-[#d6dfeb] bg-white">
         <GameHeader
-          status={statusLabels[game.status]}
+          status={statusLabel}
           statusTestId="simon-status"
           title="Classic Simon"
         />
@@ -341,7 +408,7 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
             />
           }
         >
-          <SimonBoard game={game} onPadPress={pressPad} statusLabel={statusLabels[game.status]}>
+          <SimonBoard game={game} onPadPress={pressPad} statusLabel={statusLabel}>
           {showStartScreen ? (
             <div
               className="absolute inset-3 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[#f8fbff]/92 px-4 py-5 text-center text-[#172033] backdrop-blur-[2px]"
@@ -383,6 +450,26 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
                 statusMessage={leaderboardStatusMessage}
                 testId="simon-start-leaderboard"
               />
+            </div>
+          ) : showCorrectFeedback ? (
+            <div
+              className="pointer-events-none absolute inset-3 flex items-center justify-center rounded-[0.375rem] text-center text-[#172033]"
+              data-testid="simon-correct-feedback"
+              role="status"
+            >
+              <p className="simon-turn-feedback rounded-md border border-[#172033]/10 bg-[#f8fbff]/88 px-5 py-3 text-3xl font-black tracking-normal shadow-[0_18px_46px_rgba(15,23,42,0.22)] backdrop-blur-[2px] sm:text-4xl">
+                CORRECT!
+              </p>
+            </div>
+          ) : showMissFeedback ? (
+            <div
+              className="pointer-events-none absolute inset-3 flex items-center justify-center rounded-[0.375rem] text-center text-[#172033]"
+              data-testid="simon-miss-feedback"
+              role="status"
+            >
+              <p className="simon-turn-feedback rounded-md border border-[#8a2431]/20 bg-[#fff5f6]/90 px-5 py-3 text-3xl font-black tracking-normal text-[#8a2431] shadow-[0_18px_46px_rgba(138,36,49,0.24)] backdrop-blur-[2px] sm:text-4xl">
+                MISS!
+              </p>
             </div>
           ) : showEndScreen ? (
             <GameEndScreen testId="simon-end-screen">

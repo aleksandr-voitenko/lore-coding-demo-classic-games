@@ -1,5 +1,13 @@
 export type SimonPadId = "green" | "red" | "yellow" | "blue";
-export type SimonStatus = "ready" | "showing" | "input" | "paused" | "lost" | "won";
+export type SimonStatus =
+  | "ready"
+  | "showing"
+  | "input"
+  | "correct"
+  | "missed"
+  | "paused"
+  | "lost"
+  | "won";
 
 export type SimonPlayableStatus = Exclude<SimonStatus, "ready" | "paused" | "lost" | "won">;
 
@@ -29,6 +37,8 @@ export const SIMON_PADS = ["green", "red", "yellow", "blue"] as const;
 export const SIMON_DEFAULT_WIN_TARGET = 12;
 export const SIMON_PLAYBACK_DELAY_MS = 520;
 export const SIMON_INPUT_FLASH_MS = 180;
+export const SIMON_ROUND_COMPLETE_DELAY_MS = 1_000;
+export const SIMON_MISS_FEEDBACK_DELAY_MS = 1_000;
 export const SIMON_WIN_TARGET_OPTIONS = [8, 12, 16] as const;
 
 export function createInitialSimonGame({
@@ -51,7 +61,12 @@ export function startSimonGame(
   game: SimonGameState,
   { random = Math.random }: SimonRandomOptions = {},
 ): SimonGameState {
-  if (game.status === "showing" || game.status === "input") {
+  if (
+    game.status === "showing" ||
+    game.status === "input" ||
+    game.status === "correct" ||
+    game.status === "missed"
+  ) {
     return game;
   }
 
@@ -68,7 +83,12 @@ export function startSimonGame(
 }
 
 export function pauseSimonGame(game: SimonGameState): SimonGameState {
-  if (game.status !== "showing" && game.status !== "input") {
+  if (
+    game.status !== "showing" &&
+    game.status !== "input" &&
+    game.status !== "correct" &&
+    game.status !== "missed"
+  ) {
     return game;
   }
 
@@ -118,10 +138,46 @@ export function advanceSimonPlayback(game: SimonGameState): SimonGameState {
   };
 }
 
+export function advanceSimonRound(
+  game: SimonGameState,
+  { random = Math.random }: SimonRandomOptions = {},
+): SimonGameState {
+  if (game.status !== "correct") {
+    return game;
+  }
+
+  const sequence = appendRandomSimonPad(game.sequence, random);
+
+  return {
+    ...game,
+    activePad: sequence[0] ?? null,
+    inputIndex: 0,
+    pausedFrom: null,
+    playbackIndex: 0,
+    round: sequence.length,
+    sequence,
+    status: "showing",
+  };
+}
+
+export function advanceSimonMiss(game: SimonGameState): SimonGameState {
+  if (game.status !== "missed") {
+    return game;
+  }
+
+  return {
+    ...game,
+    activePad: null,
+    inputIndex: 0,
+    pausedFrom: null,
+    playbackIndex: 0,
+    status: "lost",
+  };
+}
+
 export function playSimonPad(
   game: SimonGameState,
   pad: SimonPadId,
-  { random = Math.random }: SimonRandomOptions = {},
 ): SimonGameState {
   if (game.status !== "input") {
     return game;
@@ -134,7 +190,7 @@ export function playSimonPad(
       inputIndex: 0,
       pausedFrom: null,
       playbackIndex: 0,
-      status: "lost",
+      status: "missed",
     };
   }
 
@@ -159,23 +215,24 @@ export function playSimonPad(
     };
   }
 
-  const sequence = appendRandomSimonPad(game.sequence, random);
-
   return {
     ...game,
-    activePad: sequence[0] ?? null,
-    inputIndex: 0,
+    activePad: pad,
+    inputIndex: nextInputIndex,
     pausedFrom: null,
     playbackIndex: 0,
-    round: sequence.length,
     score: game.sequence.length,
-    sequence,
-    status: "showing",
+    status: "correct",
   };
 }
 
 export function clearSimonActivePad(game: SimonGameState): SimonGameState {
-  if (game.status !== "input" || game.activePad === null) {
+  if (
+    (game.status !== "input" &&
+      game.status !== "correct" &&
+      game.status !== "missed") ||
+    game.activePad === null
+  ) {
     return game;
   }
 
@@ -191,6 +248,14 @@ export function getSimonPlaybackDelay() {
 
 export function getSimonInputFlashDelay() {
   return SIMON_INPUT_FLASH_MS;
+}
+
+export function getSimonRoundCompleteDelay() {
+  return SIMON_ROUND_COMPLETE_DELAY_MS;
+}
+
+export function getSimonMissFeedbackDelay() {
+  return SIMON_MISS_FEEDBACK_DELAY_MS;
 }
 
 export function getRandomSimonPad(random: RandomSource = Math.random): SimonPadId {
