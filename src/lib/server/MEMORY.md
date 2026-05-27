@@ -1,0 +1,39 @@
+# Server Library Memory
+
+This file covers Node-only server helpers and storage adapters under
+`src/lib/server/`.
+
+## Leaderboard Store Boundary
+
+- `leaderboard-store.ts` defines the small `LeaderboardStore` interface used by
+  the API route and tests. Keep parsing, validation, normalized submissions, JSON
+  response shaping, and rank calculation behind this boundary.
+- `sqlite-leaderboard-store.ts` is the current production store. It uses
+  `better-sqlite3`, creates the database directory when needed, initializes the
+  schema, and exposes `getLeaderboardStore()` as the default singleton.
+- Keep this adapter boundary small so a future Postgres store can replace SQLite
+  without changing the client API or game components.
+
+## SQLite Assumptions
+
+- `GAME_LEADERBOARD_SQLITE_PATH` is the preferred durable override.
+  `SNAKE_LEADERBOARD_SQLITE_PATH` is still honored as a fallback.
+- The default path is `.data/snake-leaderboard.sqlite`, intentionally preserved
+  for existing Snake deployments.
+- `:memory:` is supported for isolated tests and should not trigger directory
+  creation.
+- The generic schema stores rows in `leaderboard_scores` with stable
+  game-and-parameter keys. It maintains separate ascending and descending indexes
+  for high-score and low-time rankings.
+- Schema initialization migrates legacy `snake_scores` rows into
+  `leaderboard_scores` as `snake|board=<size>` keys.
+- Ranking ties use score order, then earlier `created_at`, then `id`, preserving
+  deterministic earlier-entry behavior.
+
+## Tests
+
+- `sqlite-leaderboard-store.test.ts` should cover persistence, parameter
+  isolation, sort direction, tie ordering, path/env behavior, and legacy Snake
+  migration with deterministic ids and timestamps.
+- Route tests can inject a `LeaderboardStore` through
+  `createLeaderboardRouteHandlers` instead of reaching for the singleton store.

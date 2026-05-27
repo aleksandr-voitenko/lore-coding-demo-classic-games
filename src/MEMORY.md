@@ -1,0 +1,50 @@
+# Source Memory
+
+This file covers source-wide architecture under `src/`. More detailed local
+rules live in child memory files for `src/app`, `src/components`, `src/lib`, and
+`src/lib/server`.
+
+## Source Boundaries
+
+- `src/app/` owns Next.js App Router routes, global CSS import, metadata, and API
+  route entry points. See `src/app/MEMORY.md`.
+- `src/components/` owns client-side game orchestration, board rendering, shared
+  game layout primitives, launcher UI, leaderboard UI, keyboard input helpers,
+  and shadcn UI wrappers. See `src/components/MEMORY.md`.
+- `src/hooks/` is for reusable React state hooks that are shared across game
+  components. It currently contains `use-game-leaderboard.ts`, which centralizes
+  client leaderboard loading, submission, failure, player-name, slot, and
+  pending-score state for all games.
+- `src/lib/` owns deterministic game engines and pure/shared logic. See
+  `src/lib/MEMORY.md`.
+- `src/lib/server/` owns Node-only server storage adapters and parsing helpers.
+  See `src/lib/server/MEMORY.md`.
+
+## Game Module Pattern
+
+- Each game keeps reusable rules in `src/lib/<game>-game-engine.ts`, browser
+  orchestration in `src/components/<game>-game.tsx`, and board rendering in
+  `src/components/<game>-board.tsx`.
+- Engine modules expose launcher preset constants/options when the launcher needs
+  configurable parameters such as board size, mine count, target score, lives,
+  alien count, start level, or win target.
+- Snake has additional shared pickup feedback logic in
+  `src/lib/snake-food-feedback.ts`. Keep that effect metadata pure so game
+  components can render feedback without moving animation rules into the engine.
+- Use the `@/*` alias for source imports. Vitest resolves the same alias to
+  `src/`, matching the app import pattern.
+
+## Source-Wide Conventions
+
+- Keep game state transitions deterministic and testable in `src/lib`; components
+  should apply DOM events, timers, focus, images, and accessibility labels around
+  those transitions.
+- Do not add parallel shared UI or leaderboard paths when the existing
+  `game-layout`, `game-input`, `leaderboard`, and `use-game-leaderboard`
+  surfaces fit.
+- Prefer meaningful whole-state or structured-output assertions in tests. Use
+  field-by-field assertions only when they produce clearer failures.
+- Prefer Playwright for new rendered UI behavior such as launcher handoff,
+  Help/Escape flows, real keyboard/pointer input, responsive overlays, and
+  leaderboard client/server integration. Add component tests mainly for static
+  markup or pure board-renderer behavior.

@@ -1,0 +1,27 @@
+# E2E Memory
+
+This file covers Playwright browser-flow coverage under `e2e/`.
+
+## Strategy
+
+- Playwright owns rendered browser behavior that is too user-facing or fragile
+  for broad TSX markup assertions: launcher handoff, configurable parameters,
+  Help/Escape flows, real keyboard/pointer input, responsive overlays, and
+  leaderboard client/server integration.
+- Keep the suite focused as a smoke/regression layer over the browser experience.
+  Deterministic game rules and pure helpers belong in Vitest near `src/lib`.
+- `support/app.ts` contains small route and interaction helpers such as
+  `openLauncher`, `openGame`, and `selectGameParameter`.
+- `support/fixtures.ts` extends Playwright with automatic console error and
+  page-error collection; tests should finish with no captured browser issues.
+
+## Local Server And Artifacts
+
+- `playwright.config.ts` starts the Next dev server on `127.0.0.1:3100` and does
+  not reuse an existing server.
+- The Playwright run sets `GAME_LEADERBOARD_SQLITE_PATH` to an isolated temp
+  SQLite database so local leaderboard data is not touched.
+- Artifacts live under `reports/playwright/`: failure screenshots, retained
+  traces/videos, and the HTML report.
+- The configured project is focused Chromium with one worker. Keep this narrow
+  unless a task specifically needs broader browser coverage.
