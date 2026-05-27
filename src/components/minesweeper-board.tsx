@@ -15,6 +15,7 @@ type MinesweeperBoardProps = {
   children?: ReactNode;
   game: MinesweeperGameState;
   isFlagMode: boolean;
+  isInputDisabled?: boolean;
   onRevealCell: (cellId: string) => void;
   onToggleFlag: (cellId: string) => void;
   statusLabel: string;
@@ -36,6 +37,7 @@ export function MinesweeperBoard({
   children,
   game,
   isFlagMode,
+  isInputDisabled = false,
   onRevealCell,
   onToggleFlag,
   statusLabel,
@@ -54,7 +56,7 @@ export function MinesweeperBoard({
         {game.cells.map((cell) => (
           <MinesweeperCellButton
             cell={cell}
-            disabled={game.status === "lost" || game.status === "won"}
+            disabled={isInputDisabled || game.status === "lost" || game.status === "won"}
             isFlagMode={isFlagMode}
             key={cell.id}
             onRevealCell={onRevealCell}

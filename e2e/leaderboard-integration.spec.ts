@@ -13,12 +13,15 @@ type LauncherParameter = {
 type StartLeaderboardIsolationCase = {
   alternateKey: string;
   alternateParameters: LauncherParameter[];
+  alternateScore?: number;
   gameId: string;
   leaderboardTestId: string;
   name: string;
   playerSuffix: string;
   selectedKey: string;
   selectedParameters: LauncherParameter[];
+  selectedScore?: number;
+  sortDirection?: LeaderboardSortDirection;
 };
 
 const startLeaderboardIsolationCases: StartLeaderboardIsolationCase[] = [
@@ -47,6 +50,25 @@ const startLeaderboardIsolationCases: StartLeaderboardIsolationCase[] = [
       { testId: "breakout-board-size", value: "480x640" },
       { testId: "breakout-lives", value: "5" },
     ],
+  },
+  {
+    alternateKey: "minesweeper|board=9x9|mines=10",
+    alternateParameters: [
+      { testId: "minesweeper-board-size", value: "9x9" },
+      { testId: "minesweeper-mines", value: "10" },
+    ],
+    alternateScore: 73,
+    gameId: "minesweeper",
+    leaderboardTestId: "minesweeper-start-leaderboard",
+    name: "Minesweeper",
+    playerSuffix: "MS",
+    selectedKey: "minesweeper|board=12x12|mines=20",
+    selectedParameters: [
+      { testId: "minesweeper-board-size", value: "12x12" },
+      { testId: "minesweeper-mines", value: "20" },
+    ],
+    selectedScore: 41,
+    sortDirection: "asc",
   },
   {
     alternateKey: "space-invaders|board=420x560|aliens=55",
@@ -205,12 +227,14 @@ for (const leaderboardCase of startLeaderboardIsolationCases) {
     await seedLeaderboardRecord(request, {
       leaderboardKey: leaderboardCase.selectedKey,
       name: selectedPlayer,
-      score: 900,
+      score: leaderboardCase.selectedScore ?? 900,
+      sortDirection: leaderboardCase.sortDirection,
     });
     await seedLeaderboardRecord(request, {
       leaderboardKey: leaderboardCase.alternateKey,
       name: alternatePlayer,
-      score: 600,
+      score: leaderboardCase.alternateScore ?? 600,
+      sortDirection: leaderboardCase.sortDirection,
     });
 
     await openLauncher(page);

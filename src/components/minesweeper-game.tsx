@@ -1,6 +1,6 @@
 "use client";
 
-import { RotateCcwIcon } from "lucide-react";
+import { PlayIcon, RotateCcwIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { registerGameKeyDown, shouldIgnoreGameKeyDown } from "@/components/game-input";
@@ -20,7 +20,8 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
-import { MinesweeperBoard } from "@/components/minesweeper-board";
+import { GameLeaderboardPanel } from "@/components/game-leaderboard";
+import { MinesweeperBoard, MinesweeperStartPreview } from "@/components/minesweeper-board";
 import { Button } from "@/components/ui/button";
 import {
   createInitialMinesweeperGame,
@@ -53,6 +54,10 @@ const MINESWEEPER_HELP_SECTIONS: GameHelpSection[] = [
   {
     title: "Controls",
     controls: [
+      {
+        buttons: [{ text: "Enter", label: "Enter key" }],
+        label: "Start board",
+      },
       {
         buttons: [{ text: "Click", label: "Click" }],
         label: "Reveal square",
@@ -108,8 +113,10 @@ export function MinesweeperGame({
   );
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isFlagMode, setIsFlagMode] = useState(false);
+  const [isStartScreenVisible, setIsStartScreenVisible] = useState(true);
   const safeCellCount = game.width * game.height - game.mineCount;
   const remainingMineCount = getMinesweeperRemainingMineCount(game);
+  const showStartScreen = isStartScreenVisible && game.status === "ready";
   const showEndScreen = game.status === "lost" || game.status === "won";
   const leaderboardKey = createGameLeaderboardKey("minesweeper", [
     { name: "board", value: `${game.width}x${game.height}` },
@@ -137,6 +144,11 @@ export function MinesweeperGame({
     onBackToMenu,
   });
 
+  const startGame = useCallback(() => {
+    resetLeaderboardForm();
+    setIsStartScreenVisible(false);
+  }, [resetLeaderboardForm]);
+
   const revealCell = useCallback((cellId: string) => {
     setGame((current) => revealMinesweeperCell(current, cellId, { random: Math.random }));
   }, []);
@@ -149,6 +161,7 @@ export function MinesweeperGame({
     resetLeaderboardForm();
     setElapsedSeconds(0);
     setIsFlagMode(false);
+    setIsStartScreenVisible(true);
     setGame((current) => restartMinesweeperGame(current));
   }, [resetLeaderboardForm]);
 
@@ -179,6 +192,16 @@ export function MinesweeperGame({
         return;
       }
 
+      if (event.key === "Enter" && showStartScreen) {
+        event.preventDefault();
+        startGame();
+        return;
+      }
+
+      if (showStartScreen) {
+        return;
+      }
+
       if (event.key === "r" || event.key === "R") {
         event.preventDefault();
         startNewGame();
@@ -192,7 +215,7 @@ export function MinesweeperGame({
     }
 
     return registerGameKeyDown(handleKeyDown);
-  }, [isHelpVisible, pendingLeaderboardEntry, startNewGame]);
+  }, [isHelpVisible, pendingLeaderboardEntry, showStartScreen, startGame, startNewGame]);
 
   return (
     <GameShell className="bg-[var(--minesweeper-page)] text-[var(--minesweeper-ink)]">
@@ -262,62 +285,98 @@ export function MinesweeperGame({
         >
           <MinesweeperBoard
             game={game}
+            isInputDisabled={showStartScreen}
             isFlagMode={isFlagMode}
             onRevealCell={revealCell}
             onToggleFlag={toggleFlag}
             statusLabel={statusLabels[game.status]}
           >
-          {showEndScreen ? (
-            <GameEndScreen testId="minesweeper-end-screen">
-              <GameEndLeaderboardContent
-                action={
-                  <Button
-                    className="min-w-36"
-                    onClick={startNewGame}
-                    size="lg"
-                    type="button"
-                    variant="secondary"
-                  >
-                    <RotateCcwIcon data-icon="inline-start" />
-                    New game
-                  </Button>
-                }
-                leaderboard={{
-                  formatScore: formatElapsedTime,
-                  slotTestIdPrefix: "minesweeper-final-leaderboard-slot",
-                  slots: leaderboardSlots,
-                  statusMessage: leaderboardStatusMessage,
-                  testId: "minesweeper-final-leaderboard",
-                }}
-                pendingLeaderboardEntry={pendingLeaderboardEntry}
-                scoreForm={{
-                  formatScore: formatElapsedTime,
-                  isSaving: isSavingLeaderboardScore,
-                  onPlayerNameChange: setPlayerName,
-                  onSaveScore: saveLeaderboardScore,
-                  playerName,
-                  saveFailed: scoreSaveFailed,
-                  scoreLabel: "time",
-                  testIdPrefix: "minesweeper",
-                }}
-                summary={{
-                  metricLabel: "Time",
-                  metricValue: formatElapsedTime(elapsedSeconds),
-                  metricValueTestId: "minesweeper-final-time",
-                  title: game.status === "won" ? "Board cleared" : "Game over",
-                }}
+            {showStartScreen ? (
+              <div
+                className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[var(--minesweeper-board)] px-4 py-5 text-center text-[var(--minesweeper-board-text)]"
+                data-testid="minesweeper-start-screen"
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <MinesweeperStartPreview />
+                  <div className="flex flex-col items-center gap-1">
+                    <p className="text-3xl font-semibold tracking-normal text-balance">
+                      Classic Minesweeper
+                    </p>
+                    <p className="text-sm font-medium text-[color-mix(in_oklch,var(--minesweeper-board-text)_74%,transparent)]">
+                      {statusLabels[game.status]}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  className="min-w-32"
+                  data-testid="minesweeper-start-button"
+                  onClick={startGame}
+                  size="lg"
+                  type="button"
+                  variant="secondary"
+                >
+                  <PlayIcon data-icon="inline-start" />
+                  Start
+                </Button>
+                <GameLeaderboardPanel
+                  formatScore={formatElapsedTime}
+                  slotTestIdPrefix="minesweeper-leaderboard-slot"
+                  slots={leaderboardSlots}
+                  statusMessage={leaderboardStatusMessage}
+                  testId="minesweeper-start-leaderboard"
+                />
+              </div>
+            ) : showEndScreen ? (
+              <GameEndScreen testId="minesweeper-end-screen">
+                <GameEndLeaderboardContent
+                  action={
+                    <Button
+                      className="min-w-36"
+                      onClick={startNewGame}
+                      size="lg"
+                      type="button"
+                      variant="secondary"
+                    >
+                      <RotateCcwIcon data-icon="inline-start" />
+                      New game
+                    </Button>
+                  }
+                  leaderboard={{
+                    formatScore: formatElapsedTime,
+                    slotTestIdPrefix: "minesweeper-final-leaderboard-slot",
+                    slots: leaderboardSlots,
+                    statusMessage: leaderboardStatusMessage,
+                    testId: "minesweeper-final-leaderboard",
+                  }}
+                  pendingLeaderboardEntry={pendingLeaderboardEntry}
+                  scoreForm={{
+                    formatScore: formatElapsedTime,
+                    isSaving: isSavingLeaderboardScore,
+                    onPlayerNameChange: setPlayerName,
+                    onSaveScore: saveLeaderboardScore,
+                    playerName,
+                    saveFailed: scoreSaveFailed,
+                    scoreLabel: "time",
+                    testIdPrefix: "minesweeper",
+                  }}
+                  summary={{
+                    metricLabel: "Time",
+                    metricValue: formatElapsedTime(elapsedSeconds),
+                    metricValueTestId: "minesweeper-final-time",
+                    title: game.status === "won" ? "Board cleared" : "Game over",
+                  }}
+                />
+              </GameEndScreen>
+            ) : null}
+            {isHelpVisible ? (
+              <GameHelpScreen
+                className="border-[color-mix(in_oklch,var(--minesweeper-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--minesweeper-mine)_92%,black)] text-[var(--minesweeper-board-text)]"
+                onClose={closeHelp}
+                sections={MINESWEEPER_HELP_SECTIONS}
+                testId="minesweeper-help-screen"
+                title="Classic Minesweeper"
               />
-            </GameEndScreen>
-          ) : null}
-          {isHelpVisible ? (
-            <GameHelpScreen
-              className="border-[color-mix(in_oklch,var(--minesweeper-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--minesweeper-mine)_92%,black)] text-[var(--minesweeper-board-text)]"
-              onClose={closeHelp}
-              sections={MINESWEEPER_HELP_SECTIONS}
-              testId="minesweeper-help-screen"
-              title="Classic Minesweeper"
-            />
-          ) : null}
+            ) : null}
           </MinesweeperBoard>
         </GameBoardStage>
       </GameBoardColumn>

@@ -100,6 +100,13 @@ test("Minesweeper supports flagging and blocks keyboard mode changes while Help 
 
   await expect(page.getByTestId("minesweeper-status")).toHaveText("Ready");
   await expect(page.getByTestId("minesweeper-mines-remaining")).toHaveText("10");
+  await expect(page.getByTestId("minesweeper-start-screen")).toBeVisible();
+  await expect(page.getByTestId("minesweeper-start-leaderboard")).toBeVisible();
+  await expect(page.getByTestId("minesweeper-cell-0:0")).toBeDisabled();
+
+  await page.getByTestId("minesweeper-start-button").click();
+  await expect(page.getByTestId("minesweeper-start-screen")).toBeHidden();
+  await expect(page.getByTestId("minesweeper-cell-0:0")).toBeEnabled();
 
   await page.getByTestId("minesweeper-cell-0:0").click({ button: "right" });
   await expect(page.getByTestId("minesweeper-cell-0:0")).toHaveAccessibleName(

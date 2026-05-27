@@ -84,6 +84,15 @@ test("Minesweeper keyboard input toggles active mode", async ({ page }) => {
 
   await expect(page.getByTestId("minesweeper-status")).toHaveText("Ready");
   await expect(page.getByTestId("minesweeper-active-mode")).toHaveText("Reveal");
+  await expect(page.getByTestId("minesweeper-start-screen")).toBeVisible();
+
+  await page.keyboard.press("m");
+
+  await expect(page.getByTestId("minesweeper-active-mode")).toHaveText("Reveal");
+
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByTestId("minesweeper-start-screen")).toBeHidden();
 
   await page.keyboard.press("m");
 
