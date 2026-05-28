@@ -35,9 +35,22 @@ export type CreateInitialGameOptions = {
   random?: RandomSource;
 };
 
-export const TIMED_FOOD_KINDS = ["bonusFood", "speedFood", "slowFood", "shrinkFood"] as const;
+export const PICKUPS_PER_ITEM_INTRODUCTION = 3;
+export const SNAKE_PICKUP_INTRODUCTION_ORDER = [
+  "food",
+  "bonusFood",
+  "speedFood",
+  "slowFood",
+  "shrinkFood",
+] as const;
 
-export type TimedFoodKind = (typeof TIMED_FOOD_KINDS)[number];
+export type SnakePickupKind = (typeof SNAKE_PICKUP_INTRODUCTION_ORDER)[number];
+export type TimedFoodKind = Exclude<SnakePickupKind, "food">;
+
+export const TIMED_FOOD_KINDS: readonly TimedFoodKind[] =
+  SNAKE_PICKUP_INTRODUCTION_ORDER.filter(
+    (kind): kind is TimedFoodKind => kind !== "food",
+  );
 
 type RandomSource = () => number;
 
@@ -207,6 +220,21 @@ export function getRandomDuration(
 
 export function isTimedFoodKind(value: unknown): value is TimedFoodKind {
   return typeof value === "string" && (TIMED_FOOD_KINDS as readonly string[]).includes(value);
+}
+
+export function getPickupIntroductionThreshold(kind: SnakePickupKind) {
+  return (
+    SNAKE_PICKUP_INTRODUCTION_ORDER.findIndex((candidateKind) => candidateKind === kind) *
+    PICKUPS_PER_ITEM_INTRODUCTION
+  );
+}
+
+export function isPickupIntroduced(kind: SnakePickupKind, pickedUpObjects: number) {
+  return pickedUpObjects >= getPickupIntroductionThreshold(kind);
+}
+
+export function getIntroducedTimedFoodKinds(pickedUpObjects: number) {
+  return TIMED_FOOD_KINDS.filter((kind) => isPickupIntroduced(kind, pickedUpObjects));
 }
 
 export function getTimedFoodSpawnDelay(
@@ -783,7 +811,11 @@ export function spawnTimedFood(
   kind: TimedFoodKind,
   options: TimedFoodOptions = {},
 ): GameState {
-  if (current.status !== "running" || current[kind] !== null) {
+  if (
+    current.status !== "running" ||
+    current[kind] !== null ||
+    !isPickupIntroduced(kind, current.pickedUpObjects)
+  ) {
     return current;
   }
 

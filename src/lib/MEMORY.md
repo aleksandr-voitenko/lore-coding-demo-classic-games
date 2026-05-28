@@ -27,6 +27,9 @@ This file covers deterministic game engines and shared source logic under
   and only apply effects such as pause, resume, or back-to-menu callbacks.
 - `snake-food-feedback.ts` keeps Snake pickup feedback metadata outside both the
   engine and React rendering code.
+- Snake pickup progression order lives in
+  `SNAKE_PICKUP_INTRODUCTION_ORDER` in `snake-game-engine.ts`; timed-food kinds
+  and introduction thresholds are derived from that single order.
 - `utils.ts` provides shared utility glue such as class-name merging for shadcn
   and Tailwind components.
 

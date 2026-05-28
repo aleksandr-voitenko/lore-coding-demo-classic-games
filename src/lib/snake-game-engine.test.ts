@@ -15,24 +15,30 @@ import {
   generateTimedFoodPosition,
   getGameSpeed,
   getGameTickDelay,
+  getIntroducedTimedFoodKinds,
   getManhattanDistance,
+  getPickupIntroductionThreshold,
   getPointKey,
   getTimedFoodSpawnDelay,
+  isPickupIntroduced,
   isSamePoint,
   MIN_SNAKE_LENGTH,
   OBSTACLE_CLUSTER_MAX_SIZE,
   OBSTACLE_CLUSTER_MIN_SIZE,
   OBSTACLE_FIELD_COVERAGE_RATIO,
+  PICKUPS_PER_ITEM_INTRODUCTION,
   PICKUPS_PER_BASE_SPEED_INCREASE,
   SHRINK_FOOD_SCORE,
   SHRINK_FOOD_TAIL_TRIM,
   SLOW_FOOD_TIMEOUT_MIN_MS,
+  SNAKE_PICKUP_INTRODUCTION_ORDER,
   spawnTimedFood,
   STARTING_GAME_SPEED,
   TIMED_FOOD_KINDS,
   TIMED_FOOD_RULES,
   type GameState,
   type Point,
+  type TimedFoodKind,
 } from "./snake-game-engine";
 
 function createRandomSequence(values: number[]) {
@@ -48,6 +54,16 @@ function createRunningGame(overrides: Partial<GameState> = {}): GameState {
     status: "running",
     ...overrides,
   };
+}
+
+function createRunningGameWithIntroducedTimedFood(
+  kind: TimedFoodKind,
+  overrides: Partial<GameState> = {},
+): GameState {
+  return createRunningGame({
+    pickedUpObjects: getPickupIntroductionThreshold(kind),
+    ...overrides,
+  });
 }
 
 function expectPoint(point: Point | null): asserts point is Point {
@@ -164,6 +180,35 @@ describe("snake game engine", () => {
     expect(getTimedFoodSpawnDelay("shrinkFood", () => 0)).toBe(
       BONUS_FOOD_SPAWN_DELAY_MIN_MS,
     );
+  });
+
+  it("introduces pickups every three collected objects in historical order", () => {
+    expect(SNAKE_PICKUP_INTRODUCTION_ORDER).toEqual([
+      "food",
+      "bonusFood",
+      "speedFood",
+      "slowFood",
+      "shrinkFood",
+    ]);
+    expect(getPickupIntroductionThreshold("food")).toBe(0);
+    TIMED_FOOD_KINDS.forEach((kind, index) => {
+      const introductionThreshold = (index + 1) * PICKUPS_PER_ITEM_INTRODUCTION;
+
+      expect(getPickupIntroductionThreshold(kind)).toBe(introductionThreshold);
+      expect(isPickupIntroduced(kind, introductionThreshold - 1)).toBe(false);
+      expect(isPickupIntroduced(kind, introductionThreshold)).toBe(true);
+    });
+    expect(isPickupIntroduced("food", 0)).toBe(true);
+    expect(getIntroducedTimedFoodKinds(0)).toEqual([]);
+    expect(getIntroducedTimedFoodKinds(3)).toEqual(["bonusFood"]);
+    expect(getIntroducedTimedFoodKinds(6)).toEqual(["bonusFood", "speedFood"]);
+    expect(getIntroducedTimedFoodKinds(9)).toEqual(["bonusFood", "speedFood", "slowFood"]);
+    expect(getIntroducedTimedFoodKinds(12)).toEqual([
+      "bonusFood",
+      "speedFood",
+      "slowFood",
+      "shrinkFood",
+    ]);
   });
 
   it("randomizes the first red food with the initial-game random source", () => {
@@ -343,9 +388,31 @@ describe("snake game engine", () => {
     ).toBe(true);
   });
 
+  it("spawns timed foods only after their introduction threshold", () => {
+    TIMED_FOOD_KINDS.forEach((kind) => {
+      const blockedGame = createRunningGame({
+        pickedUpObjects: getPickupIntroductionThreshold(kind) - 1,
+      });
+      const introducedGame = createRunningGameWithIntroducedTimedFood(kind);
+
+      expect(
+        spawnTimedFood(blockedGame, kind, {
+          now: () => 1_000,
+          random: createRandomSequence([0, 0]),
+        }),
+      ).toBe(blockedGame);
+      expect(
+        spawnTimedFood(introducedGame, kind, {
+          now: () => 1_000,
+          random: createRandomSequence([0, 0]),
+        })[kind],
+      ).not.toBeNull();
+    });
+  });
+
   it("spawns yellow apples next to obstacle islands when possible", () => {
     const obstacle = { x: 8, y: 2 };
-    const game = createRunningGame({
+    const game = createRunningGameWithIntroducedTimedFood("bonusFood", {
       obstacles: [obstacle],
     });
 
@@ -366,7 +433,7 @@ describe("snake game engine", () => {
 
   it("spawns yellow apples near obstacle islands without requiring contact", () => {
     const obstacle = { x: 8, y: 2 };
-    const game = createRunningGame({
+    const game = createRunningGameWithIntroducedTimedFood("bonusFood", {
       obstacles: [obstacle],
     });
 
@@ -389,7 +456,7 @@ describe("snake game engine", () => {
 
   it("falls back to generic yellow apple placement when near-obstacle cells are unsafe", () => {
     const obstacle = { x: 5, y: 4 };
-    const game = createRunningGame({
+    const game = createRunningGameWithIntroducedTimedFood("bonusFood", {
       obstacles: [obstacle],
     });
 
@@ -407,7 +474,7 @@ describe("snake game engine", () => {
 
   it("keeps purple diamonds on generic timed food placement near obstacle islands", () => {
     const obstacle = { x: 8, y: 2 };
-    const game = createRunningGame({
+    const game = createRunningGameWithIntroducedTimedFood("speedFood", {
       obstacles: [obstacle],
     });
 
@@ -422,7 +489,7 @@ describe("snake game engine", () => {
   });
 
   it("spawns purple diamonds with deterministic timing and avoids active yellow apples", () => {
-    const game = createRunningGame();
+    const game = createRunningGameWithIntroducedTimedFood("speedFood");
     const firstEligiblePosition = generateTimedFoodPosition(
       game.boardSize,
       game.snake,
@@ -456,7 +523,7 @@ describe("snake game engine", () => {
   });
 
   it("spawns blue triangles briefly and avoids active timed foods", () => {
-    const game = createRunningGame();
+    const game = createRunningGameWithIntroducedTimedFood("slowFood");
     const firstEligiblePosition = generateTimedFoodPosition(
       game.boardSize,
       game.snake,
@@ -507,7 +574,7 @@ describe("snake game engine", () => {
   });
 
   it("spawns cyan hexagons with deterministic timing and avoids active timed foods", () => {
-    const game = createRunningGame();
+    const game = createRunningGameWithIntroducedTimedFood("shrinkFood");
     const firstEligiblePosition = generateTimedFoodPosition(
       game.boardSize,
       game.snake,
@@ -597,7 +664,7 @@ describe("snake game engine", () => {
   });
 
   it("keeps timed food from spawning over obstacle islands", () => {
-    const game = createRunningGame();
+    const game = createRunningGameWithIntroducedTimedFood("bonusFood");
     const blockedPosition = generateTimedFoodPosition(
       game.boardSize,
       game.snake,

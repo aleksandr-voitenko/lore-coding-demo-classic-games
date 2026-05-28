@@ -47,6 +47,7 @@ import {
   expireTimedFood,
   getGameTickDelay,
   getTimedFoodSpawnDelay,
+  isPickupIntroduced,
   queueGameDirection,
   spawnTimedFood,
   type Direction,
@@ -60,6 +61,7 @@ import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
 
 type TimedFoodLifecycleOptions = {
   gameStatus: GameStatus;
+  isIntroduced: boolean;
   kind: TimedFoodKind;
   setGame: Dispatch<SetStateAction<GameState>>;
   timedFood: GameState[TimedFoodKind];
@@ -167,12 +169,13 @@ const SNAKE_HELP_SECTIONS: GameHelpSection[] = [
 
 function useTimedFoodLifecycle({
   gameStatus,
+  isIntroduced,
   kind,
   setGame,
   timedFood,
 }: TimedFoodLifecycleOptions) {
   useEffect(() => {
-    if (gameStatus !== "running" || timedFood !== null) {
+    if (gameStatus !== "running" || timedFood !== null || !isIntroduced) {
       return;
     }
 
@@ -181,7 +184,7 @@ function useTimedFoodLifecycle({
     }, getTimedFoodSpawnDelay(kind));
 
     return () => window.clearTimeout(spawn);
-  }, [gameStatus, kind, setGame, timedFood]);
+  }, [gameStatus, isIntroduced, kind, setGame, timedFood]);
 
   const expiresAt = timedFood?.expiresAt ?? null;
 
@@ -328,24 +331,28 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
 
   useTimedFoodLifecycle({
     gameStatus: game.status,
+    isIntroduced: isPickupIntroduced("bonusFood", game.pickedUpObjects),
     kind: "bonusFood",
     setGame,
     timedFood: game.bonusFood,
   });
   useTimedFoodLifecycle({
     gameStatus: game.status,
+    isIntroduced: isPickupIntroduced("speedFood", game.pickedUpObjects),
     kind: "speedFood",
     setGame,
     timedFood: game.speedFood,
   });
   useTimedFoodLifecycle({
     gameStatus: game.status,
+    isIntroduced: isPickupIntroduced("slowFood", game.pickedUpObjects),
     kind: "slowFood",
     setGame,
     timedFood: game.slowFood,
   });
   useTimedFoodLifecycle({
     gameStatus: game.status,
+    isIntroduced: isPickupIntroduced("shrinkFood", game.pickedUpObjects),
     kind: "shrinkFood",
     setGame,
     timedFood: game.shrinkFood,
