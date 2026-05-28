@@ -20,6 +20,7 @@ import {
   type GameParameterKind,
   type GameParameterValues,
 } from "@/components/game-launcher-config";
+import { UserAccountControls } from "@/components/user-account-controls";
 
 type MenuViewport = {
   scrollX: number;
@@ -108,16 +109,19 @@ export function GameLauncher() {
       ref={restoreMenuViewport}
     >
       <section className="mx-auto flex min-h-[calc(100svh-3rem)] w-full max-w-6xl flex-col justify-center gap-6">
-        <header className="flex max-w-2xl items-center gap-4">
-          <div
-            className="flex size-11 shrink-0 items-center justify-center rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] text-[var(--snake-muted)] shadow-sm"
-            aria-hidden="true"
-          >
-            <Gamepad2Icon className="size-5" />
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex max-w-2xl items-center gap-4">
+            <div
+              className="flex size-11 shrink-0 items-center justify-center rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] text-[var(--snake-muted)] shadow-sm"
+              aria-hidden="true"
+            >
+              <Gamepad2Icon className="size-5" />
+            </div>
+            <h1 className="text-3xl font-semibold tracking-normal text-black sm:text-4xl">
+              Game Library
+            </h1>
           </div>
-          <h1 className="text-3xl font-semibold tracking-normal text-black sm:text-4xl">
-            Game Library
-          </h1>
+          <UserAccountControls />
         </header>
 
         <div className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))]">

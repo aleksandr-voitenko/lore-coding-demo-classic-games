@@ -55,6 +55,7 @@ import {
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
 import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
+import { useGameSession } from "@/hooks/use-game-session";
 
 type BreakoutGameProps = {
   initialBoardHeight?: number;
@@ -131,6 +132,17 @@ export function BreakoutGame({
     { name: "board", value: `${game.boardWidth}x${game.boardHeight}` },
     { name: "lives", value: game.startingLives },
   ]);
+  const isBreakoutStarted =
+    game.status !== "ready" || game.lives < game.startingLives || game.score > 0;
+  const { completedSessionId } = useGameSession({
+    active: game.status === "running",
+    finalResult:
+      game.status === "lost" || game.status === "won" ? game.status : null,
+    finalScore: game.score,
+    gameId: "breakout",
+    leaderboardKey,
+    started: isBreakoutStarted,
+  });
   const {
     isSavingLeaderboardScore,
     leaderboardSlots,
@@ -142,6 +154,7 @@ export function BreakoutGame({
     scoreSaveFailed,
     setPlayerName,
   } = useGameLeaderboard({
+    gameSessionId: completedSessionId,
     leaderboardKey,
     pendingScore: showEndScreen ? game.score : null,
   });

@@ -47,6 +47,7 @@ import {
 } from "@/lib/simon-game-engine";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
+import { useGameSession } from "@/hooks/use-game-session";
 
 type SimonGameProps = {
   initialWinTarget?: number;
@@ -165,6 +166,20 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
   const leaderboardKey = createGameLeaderboardKey("simon", [
     { name: "target", value: game.winTarget },
   ]);
+  const isSimonActive =
+    game.status === "showing" ||
+    game.status === "input" ||
+    game.status === "correct" ||
+    game.status === "missed";
+  const { completedSessionId } = useGameSession({
+    active: isSimonActive,
+    finalResult:
+      game.status === "lost" || game.status === "won" ? game.status : null,
+    finalScore: game.score,
+    gameId: "simon",
+    leaderboardKey,
+    started: canPauseGame || showEndScreen,
+  });
   const {
     isSavingLeaderboardScore,
     leaderboardSlots,
@@ -176,6 +191,7 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
     scoreSaveFailed,
     setPlayerName,
   } = useGameLeaderboard({
+    gameSessionId: completedSessionId,
     leaderboardKey,
     pendingScore: showEndScreen ? game.score : null,
   });
@@ -223,11 +239,7 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
   }, []);
 
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({
-    isGameActive:
-      game.status === "showing" ||
-      game.status === "input" ||
-      game.status === "correct" ||
-      game.status === "missed",
+    isGameActive: isSimonActive,
     onPauseGame: pauseGameForHelp,
     onResumeGame: resumeGameAfterHelp,
   });

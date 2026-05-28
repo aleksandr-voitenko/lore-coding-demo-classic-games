@@ -1,7 +1,5 @@
 import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
-import { mkdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
 
 import type { LeaderboardEntry, LeaderboardSortDirection } from "../leaderboard";
 import {
@@ -11,8 +9,12 @@ import {
   type LeaderboardStore,
   type NormalizedLeaderboardScoreSubmission,
 } from "./leaderboard-store";
-
-type SqliteDatabase = InstanceType<typeof Database>;
+import {
+  getDefaultSqlitePath,
+  initializeAppSchema,
+  prepareSqliteDatabasePath,
+  type SqliteDatabase,
+} from "./sqlite-app-schema";
 
 type CreateSqliteLeaderboardStoreOptions = {
   createId?: () => string;
@@ -22,10 +24,12 @@ type CreateSqliteLeaderboardStoreOptions = {
 
 type InsertScoreParameters = {
   createdAt: string;
+  gameSessionId: string | null;
   id: string;
   leaderboardKey: string;
   name: string;
   score: number;
+  userId: string | null;
 };
 
 type SelectTopScoresParameters = {
@@ -37,67 +41,6 @@ type LeaderboardRow = {
   name: string;
   score: number;
 };
-
-const DEFAULT_SQLITE_FILENAME = "snake-leaderboard.sqlite";
-const SCHEMA_VERSION = 2;
-
-function prepareDatabaseDirectory(databasePath: string) {
-  if (databasePath === ":memory:") {
-    return databasePath;
-  }
-
-  const resolvedPath = resolve(databasePath);
-  mkdirSync(dirname(resolvedPath), { recursive: true });
-
-  return resolvedPath;
-}
-
-function hasTable(database: SqliteDatabase, tableName: string) {
-  const row = database
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
-    .get(tableName);
-
-  return row !== undefined;
-}
-
-function initializeSchema(database: SqliteDatabase) {
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS leaderboard_scores (
-      id TEXT PRIMARY KEY,
-      leaderboard_key TEXT NOT NULL,
-      player_name TEXT NOT NULL,
-      score INTEGER NOT NULL CHECK (score > 0),
-      created_at TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS leaderboard_scores_desc_idx
-      ON leaderboard_scores (leaderboard_key, score DESC, created_at ASC, id ASC);
-
-    CREATE INDEX IF NOT EXISTS leaderboard_scores_asc_idx
-      ON leaderboard_scores (leaderboard_key, score ASC, created_at ASC, id ASC);
-
-    PRAGMA user_version = ${SCHEMA_VERSION};
-  `);
-
-  if (hasTable(database, "snake_scores")) {
-    database.exec(`
-      INSERT OR IGNORE INTO leaderboard_scores (
-        id,
-        leaderboard_key,
-        player_name,
-        score,
-        created_at
-      )
-      SELECT
-        id,
-        'snake|board=' || board_size,
-        player_name,
-        score,
-        created_at
-      FROM snake_scores;
-    `);
-  }
-}
 
 export class SqliteLeaderboardStore implements LeaderboardStore {
   readonly #createId: () => string;
@@ -114,10 +57,10 @@ export class SqliteLeaderboardStore implements LeaderboardStore {
     now = () => new Date(),
   }: CreateSqliteLeaderboardStoreOptions) {
     this.#createId = createId;
-    this.#database = new Database(prepareDatabaseDirectory(databasePath));
+    this.#database = new Database(prepareSqliteDatabasePath(databasePath));
     this.#now = now;
 
-    initializeSchema(this.#database);
+    initializeAppSchema(this.#database);
 
     this.#selectTopScoresDesc = this.#database.prepare<SelectTopScoresParameters>(`
       SELECT player_name AS name, score
@@ -134,8 +77,24 @@ export class SqliteLeaderboardStore implements LeaderboardStore {
       LIMIT @limit
     `);
     this.#insertScore = this.#database.prepare<InsertScoreParameters>(`
-      INSERT INTO leaderboard_scores (id, leaderboard_key, player_name, score, created_at)
-      VALUES (@id, @leaderboardKey, @name, @score, @createdAt)
+      INSERT INTO leaderboard_scores (
+        id,
+        leaderboard_key,
+        player_name,
+        score,
+        created_at,
+        user_id,
+        game_session_id
+      )
+      VALUES (
+        @id,
+        @leaderboardKey,
+        @name,
+        @score,
+        @createdAt,
+        @userId,
+        @gameSessionId
+      )
     `);
     this.#submitScoreTransaction = this.#database.transaction(
       (submission: NormalizedLeaderboardScoreSubmission) => {
@@ -155,10 +114,12 @@ export class SqliteLeaderboardStore implements LeaderboardStore {
 
         this.#insertScore.run({
           createdAt: this.#now().toISOString(),
+          gameSessionId: submission.gameSessionId ?? null,
           id: this.#createId(),
           leaderboardKey: submission.leaderboardKey,
           name: submission.name,
           score: submission.score,
+          userId: submission.userId ?? null,
         });
 
         return createSubmissionResult(
@@ -210,7 +171,7 @@ export function getLeaderboardSqlitePath() {
 
   return configuredPath && configuredPath.length > 0
     ? configuredPath
-    : join(process.cwd(), ".data", DEFAULT_SQLITE_FILENAME);
+    : getDefaultSqlitePath();
 }
 
 export function getLeaderboardStore() {

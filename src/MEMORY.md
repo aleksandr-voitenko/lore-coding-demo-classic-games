@@ -12,9 +12,11 @@ rules live in child memory files for `src/app`, `src/components`, `src/lib`, and
   game layout primitives, launcher UI, leaderboard UI, keyboard input helpers,
   and shadcn UI wrappers. See `src/components/MEMORY.md`.
 - `src/hooks/` is for reusable React state hooks that are shared across game
-  components. It currently contains `use-game-leaderboard.ts`, which centralizes
-  client leaderboard loading, submission, failure, player-name, slot, and
-  pending-score state for all games.
+  components. It contains `use-game-leaderboard.ts`, which centralizes client
+  leaderboard loading, submission, failure, player-name, slot, and pending-score
+  state for all games; `use-current-user.tsx`, which owns the demo signed-in
+  user context; and `use-game-session.ts`, which records signed-in play sessions
+  without moving timing logic into deterministic engines.
 - `src/lib/` owns deterministic game engines and pure/shared logic. See
   `src/lib/MEMORY.md`.
 - `src/lib/server/` owns Node-only server storage adapters and parsing helpers.
@@ -42,6 +44,10 @@ rules live in child memory files for `src/app`, `src/components`, `src/lib`, and
 - Do not add parallel shared UI or leaderboard paths when the existing
   `game-layout`, `game-input`, `leaderboard`, and `use-game-leaderboard`
   surfaces fit.
+- Profile stats must be recorded through the shared game-session hook and server
+  store. Keep guest play as a no-op for profile stats, and do not trust client
+  submissions for user identity; server routes derive the user from the session
+  cookie.
 - Prefer meaningful whole-state or structured-output assertions in tests. Use
   field-by-field assertions only when they produce clearer failures.
 - Prefer Playwright for new rendered UI behavior such as launcher handoff,

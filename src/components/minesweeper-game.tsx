@@ -35,6 +35,7 @@ import {
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
 import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
+import { useGameSession } from "@/hooks/use-game-session";
 
 type MinesweeperGameProps = {
   initialBoardHeight?: number;
@@ -122,6 +123,17 @@ export function MinesweeperGame({
     { name: "board", value: `${game.width}x${game.height}` },
     { name: "mines", value: game.mineCount },
   ]);
+  const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen();
+  const { completedSessionId } = useGameSession({
+    active: game.status === "running" && !isHelpVisible,
+    finalResult:
+      game.status === "lost" || game.status === "won" ? game.status : null,
+    finalScore: elapsedSeconds,
+    gameId: "minesweeper",
+    leaderboardKey,
+    sortDirection: "asc",
+    started: game.status !== "ready",
+  });
   const {
     isSavingLeaderboardScore,
     leaderboardSlots,
@@ -133,11 +145,11 @@ export function MinesweeperGame({
     scoreSaveFailed,
     setPlayerName,
   } = useGameLeaderboard({
+    gameSessionId: completedSessionId,
     leaderboardKey,
     pendingScore: game.status === "won" ? elapsedSeconds : null,
     sortDirection: "asc",
   });
-  const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen();
   const { abandonDialogProps, requestBackToMenu } = useGameEscapeToMenu({
     isDisabled: isHelpVisible,
     isGameStarted: game.status === "running",

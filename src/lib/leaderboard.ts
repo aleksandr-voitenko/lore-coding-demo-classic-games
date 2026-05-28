@@ -11,6 +11,7 @@ export type PendingLeaderboardEntry = {
 };
 
 export type LeaderboardScoreSubmission = {
+  gameSessionId?: string | null;
   leaderboardKey: string;
   name: string;
   score: number;

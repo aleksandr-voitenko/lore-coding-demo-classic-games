@@ -8,9 +8,14 @@ This file covers Node-only server helpers and storage adapters under
 - `leaderboard-store.ts` defines the small `LeaderboardStore` interface used by
   the API route and tests. Keep parsing, validation, normalized submissions, JSON
   response shaping, and rank calculation behind this boundary.
-- `sqlite-leaderboard-store.ts` is the current production store. It uses
-  `better-sqlite3`, creates the database directory when needed, initializes the
-  schema, and exposes `getLeaderboardStore()` as the default singleton.
+- `sqlite-app-schema.ts` owns shared SQLite path preparation and schema
+  initialization for leaderboards, demo users, user sessions, and signed-in game
+  sessions.
+- `sqlite-leaderboard-store.ts` is the current production leaderboard store. It
+  uses `better-sqlite3`, initializes the shared schema, and exposes
+  `getLeaderboardStore()` as the default singleton.
+- `sqlite-user-profile-store.ts` owns demo user/session persistence,
+  signed-in game-session recording, and aggregate profile stats.
 - Keep this adapter boundary small so a future Postgres store can replace SQLite
   without changing the client API or game components.
 
@@ -25,6 +30,13 @@ This file covers Node-only server helpers and storage adapters under
 - The generic schema stores rows in `leaderboard_scores` with stable
   game-and-parameter keys. It maintains separate ascending and descending indexes
   for high-score and low-time rankings.
+- `leaderboard_scores` can optionally link to `users` and `game_sessions`, but
+  profile stats are derived from `game_sessions`, not from top-three leaderboard
+  rows.
+- `users` are keyed by normalized display name for the demo sign-in flow.
+  `user_sessions` stores hashed cookie tokens, and `game_sessions` stores only
+  signed-in play sessions with active duration, final score, result, sort
+  direction, game id, and leaderboard key.
 - Schema initialization migrates legacy `snake_scores` rows into
   `leaderboard_scores` as `snake|board=<size>` keys.
 - Ranking ties use score order, then earlier `created_at`, then `id`, preserving

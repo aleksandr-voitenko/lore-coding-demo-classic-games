@@ -86,4 +86,43 @@ describe("leaderboard route", () => {
       version: 1,
     });
   });
+
+  it("attaches the signed-in user and game session to score submissions", async () => {
+    const store = {
+      listTopScores: vi.fn(),
+      submitScore: vi.fn(async () => ({
+        accepted: true,
+        entries: [{ name: "Ada", score: 9 }],
+        rank: 0,
+      })),
+    };
+    const userStore = {
+      getUserBySessionToken: vi.fn(async () => ({ displayName: "Ada", id: "user-1" })),
+    };
+    const handlers = createLeaderboardRouteHandlers(store, userStore);
+    const request = new Request("http://localhost/api/leaderboard", {
+      body: JSON.stringify({
+        gameSessionId: "session-1",
+        leaderboardKey: "snake|board=19",
+        name: "Ada",
+        score: 9,
+      }),
+      headers: {
+        cookie: "game_user_session=session-token",
+      },
+      method: "POST",
+    });
+    const response = await handlers.POST(request);
+
+    expect(response.status).toBe(201);
+    expect(userStore.getUserBySessionToken).toHaveBeenCalledWith("session-token");
+    expect(store.submitScore).toHaveBeenCalledWith({
+      gameSessionId: "session-1",
+      leaderboardKey: "snake|board=19",
+      name: "Ada",
+      score: 9,
+      sortDirection: "desc",
+      userId: "user-1",
+    });
+  });
 });

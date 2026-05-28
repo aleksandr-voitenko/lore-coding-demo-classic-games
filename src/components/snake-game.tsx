@@ -58,6 +58,7 @@ import {
 import { createFoodFeedback, type FoodFeedback } from "@/lib/snake-food-feedback";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
+import { useGameSession } from "@/hooks/use-game-session";
 
 type TimedFoodLifecycleOptions = {
   gameStatus: GameStatus;
@@ -216,6 +217,15 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
   ]);
   const pendingLeaderboardScore =
     game.status === "lost" || game.status === "won" ? game.score : null;
+  const { completedSessionId } = useGameSession({
+    active: game.status === "running",
+    finalResult:
+      game.status === "lost" || game.status === "won" ? game.status : null,
+    finalScore: game.score,
+    gameId: "snake",
+    leaderboardKey,
+    started: game.status !== "ready",
+  });
   const {
     isSavingLeaderboardScore,
     leaderboardBestScore,
@@ -228,6 +238,7 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
     scoreSaveFailed,
     setPlayerName,
   } = useGameLeaderboard({
+    gameSessionId: completedSessionId,
     leaderboardKey,
     pendingScore: pendingLeaderboardScore,
   });

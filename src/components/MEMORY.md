@@ -13,13 +13,16 @@ This file covers React component ownership and shared game UI conventions under
   mapping, launcher artwork metadata/versioning, parameter registry, and pure
   default-value/initial-prop helpers.
 - `game-launcher.tsx` owns selected game state, launcher card parameter state,
-  menu rendering, and menu viewport preservation. Keep browser-only `window`
-  access in this client component; it snapshots `window.scrollX` and
-  `window.scrollY` before opening a game and restores the viewport when
-  returning to the launcher.
+  menu rendering, menu viewport preservation, and placement of the shared
+  `UserAccountControls`. Keep browser-only `window` access in this client
+  component; it snapshots `window.scrollX` and `window.scrollY` before opening a
+  game and restores the viewport when returning to the launcher.
 - `game-leaderboard.tsx` renders the shared top-three panel and save-score form.
   `use-game-leaderboard.ts` in `src/hooks/` owns the client state feeding those
-  components.
+  components and pre-fills the signed-in display name when available.
+- `user-account-controls.tsx` renders the launcher sign-in/profile/sign-out
+  controls against `useCurrentUser`; keep account state in the provider rather
+  than local launcher state.
 
 ## Shared Layout
 
@@ -47,6 +50,10 @@ This file covers React component ownership and shared game UI conventions under
 - Realtime games provide Back, Help, Pause-or-Resume, and Restart actions.
   Turn-based games such as Minesweeper and 2048 provide Back, Help, and Restart
   and omit Pause.
+- Games that should contribute to profile stats call `useGameSession` with their
+  `gameId`, `leaderboardKey`, active/started state, terminal result, final score,
+  and sort direction. The hook is a signed-in-only boundary; guest sessions are
+  intentionally ignored.
 - Use `GameEndScreen` for terminal won/lost overlays. Use
   `GameEndLeaderboardContent` when a terminal overlay needs the shared pending
   leaderboard branch; pass per-game summary text, leaderboard props, score-form

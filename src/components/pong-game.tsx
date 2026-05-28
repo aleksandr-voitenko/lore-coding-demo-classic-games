@@ -55,6 +55,7 @@ import {
 } from "@/lib/pong-game-engine";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
+import { useGameSession } from "@/hooks/use-game-session";
 
 type PongGameProps = {
   initialBoardHeight?: number;
@@ -144,6 +145,15 @@ export function PongGame({
     { name: "board", value: `${game.boardWidth}x${game.boardHeight}` },
     { name: "target", value: game.targetScore },
   ]);
+  const { completedSessionId } = useGameSession({
+    active: game.status === "running",
+    finalResult:
+      game.status === "lost" || game.status === "won" ? game.status : null,
+    finalScore: game.remainingScore,
+    gameId: "pong",
+    leaderboardKey,
+    started: isUnfinishedMatch || showEndScreen,
+  });
   const {
     isSavingLeaderboardScore,
     leaderboardSlots,
@@ -155,6 +165,7 @@ export function PongGame({
     scoreSaveFailed,
     setPlayerName,
   } = useGameLeaderboard({
+    gameSessionId: completedSessionId,
     leaderboardKey,
     pendingScore: showEndScreen ? game.remainingScore : null,
   });

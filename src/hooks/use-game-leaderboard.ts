@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useCurrentUser } from "@/hooks/use-current-user";
 import {
   createPendingLeaderboardEntry,
   fetchLeaderboard,
@@ -10,22 +11,27 @@ import {
 } from "@/lib/leaderboard";
 
 type UseGameLeaderboardOptions = {
+  gameSessionId?: string | null;
   leaderboardKey: string;
   pendingScore: number | null;
   sortDirection?: LeaderboardSortDirection;
 };
 
 export function useGameLeaderboard({
+  gameSessionId = null,
   leaderboardKey,
   pendingScore,
   sortDirection = "desc",
 }: UseGameLeaderboardOptions) {
+  const { user } = useCurrentUser();
+  const userDisplayName = user?.displayName ?? "";
   const [isSavingLeaderboardScore, setIsSavingLeaderboardScore] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardLoadFailed, setLeaderboardLoadFailed] = useState(false);
-  const [playerName, setPlayerName] = useState("");
+  const [playerName, setPlayerName] = useState(userDisplayName);
   const [scoreSaveFailed, setScoreSaveFailed] = useState(false);
   const [savedPendingScoreKey, setSavedPendingScoreKey] = useState<string | null>(null);
+  const displayedPlayerName = playerName || userDisplayName;
   const pendingScoreKey =
     pendingScore === null ? null : `${leaderboardKey}|sort=${sortDirection}|score=${pendingScore}`;
   const hasSavedPendingScore =
@@ -83,8 +89,9 @@ export function useGameLeaderboard({
 
     try {
       const result = await submitLeaderboardScore({
+        gameSessionId,
         leaderboardKey,
-        name: playerName,
+        name: displayedPlayerName,
         score: pendingLeaderboardEntry.score,
         sortDirection,
       });
@@ -101,10 +108,11 @@ export function useGameLeaderboard({
     }
   }, [
     isSavingLeaderboardScore,
+    gameSessionId,
     leaderboardKey,
     pendingLeaderboardEntry,
     pendingScoreKey,
-    playerName,
+    displayedPlayerName,
     sortDirection,
   ]);
 
@@ -115,7 +123,7 @@ export function useGameLeaderboard({
     leaderboardSlots,
     leaderboardStatusMessage,
     pendingLeaderboardEntry,
-    playerName,
+    playerName: displayedPlayerName,
     resetLeaderboardForm,
     saveLeaderboardScore,
     scoreSaveFailed,

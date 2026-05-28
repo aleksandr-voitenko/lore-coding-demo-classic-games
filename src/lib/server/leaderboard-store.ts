@@ -7,10 +7,10 @@ import {
   normalizeLeaderboardSortDirection,
   normalizePlayerName,
   type LeaderboardEntry,
-  type LeaderboardScoreSubmission,
   type LeaderboardSortDirection,
   type SubmitLeaderboardScoreResult,
 } from "../leaderboard";
+import { normalizeGameSessionId } from "../user-profile";
 
 export type LeaderboardStore = {
   close?: () => void;
@@ -24,7 +24,14 @@ export type LeaderboardStore = {
   ) => Promise<SubmitLeaderboardScoreResult>;
 };
 
-export type NormalizedLeaderboardScoreSubmission = Required<LeaderboardScoreSubmission>;
+export type NormalizedLeaderboardScoreSubmission = {
+  gameSessionId?: string | null;
+  leaderboardKey: string;
+  name: string;
+  score: number;
+  sortDirection: LeaderboardSortDirection;
+  userId?: string;
+};
 
 export type ParseLeaderboardKeyResult =
   | {
@@ -95,8 +102,11 @@ export function parseScoreSubmission(value: unknown): ParseScoreSubmissionResult
     };
   }
 
+  const gameSessionId = normalizeGameSessionId(value.gameSessionId);
+
   return {
     submission: {
+      ...(gameSessionId === null ? {} : { gameSessionId }),
       leaderboardKey,
       name: normalizePlayerName(value.name),
       score,

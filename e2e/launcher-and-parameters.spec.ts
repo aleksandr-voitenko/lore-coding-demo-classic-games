@@ -197,6 +197,30 @@ test("launcher restores its scroll position after returning from a game", async 
   expect(restoredScrollY).toBeLessThanOrEqual(menuScrollY + 1);
 });
 
+test("launcher hydrates the signed-in user before client account refreshes", async ({ page }) => {
+  await openLauncher(page);
+
+  await page.getByTestId("display-name-input").fill("E2E Hero");
+  await page.getByTestId("sign-in-button").click();
+  await expect(page.getByTestId("profile-link")).toContainText("E2E Hero");
+
+  await page.getByTestId("profile-link").click();
+  await expect(page.getByRole("heading", { name: "E2E Hero" })).toBeVisible();
+
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({ user: null }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+
+  await page.getByRole("link", { name: "Back to games" }).click();
+  await expect(page.getByTestId("game-menu")).toBeVisible();
+  await expect(page.getByTestId("profile-link")).toContainText("E2E Hero");
+  await expect(page.getByTestId("display-name-input")).toHaveCount(0);
+});
+
 for (const handoffCase of launcherParameterHandoffCases) {
   test(`launcher-selected ${handoffCase.name} parameters seed the opened game`, async ({
     page,

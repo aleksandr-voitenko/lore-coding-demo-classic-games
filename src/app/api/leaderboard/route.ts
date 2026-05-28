@@ -7,11 +7,21 @@ import {
   type LeaderboardStore,
 } from "../../../lib/server/leaderboard-store";
 import { getLeaderboardStore } from "../../../lib/server/sqlite-leaderboard-store";
+import { getUserProfileStore } from "../../../lib/server/sqlite-user-profile-store";
+import { getSessionTokenFromRequest } from "../../../lib/server/user-session-cookie";
+import type { AuthenticatedUser } from "../../../lib/user-profile";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export function createLeaderboardRouteHandlers(store: LeaderboardStore) {
+type UserSessionLookup = {
+  getUserBySessionToken: (sessionToken: string | null) => Promise<AuthenticatedUser | null>;
+};
+
+export function createLeaderboardRouteHandlers(
+  store: LeaderboardStore,
+  userStore?: UserSessionLookup,
+) {
   return {
     async GET(request: Request) {
       const parsedKey = parseLeaderboardKeySearchParams(new URL(request.url).searchParams);
@@ -43,7 +53,17 @@ export function createLeaderboardRouteHandlers(store: LeaderboardStore) {
         return NextResponse.json({ error: parsedSubmission.error }, { status: 400 });
       }
 
-      const result = await store.submitScore(parsedSubmission.submission);
+      const user = userStore
+        ? await userStore.getUserBySessionToken(getSessionTokenFromRequest(request))
+        : null;
+      const submission =
+        user === null
+          ? parsedSubmission.submission
+          : {
+              ...parsedSubmission.submission,
+              userId: user.id,
+            };
+      const result = await store.submitScore(submission);
 
       return NextResponse.json(
         {
@@ -65,5 +85,5 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  return createLeaderboardRouteHandlers(getLeaderboardStore()).POST(request);
+  return createLeaderboardRouteHandlers(getLeaderboardStore(), getUserProfileStore()).POST(request);
 }

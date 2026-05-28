@@ -22,6 +22,9 @@ This file covers deterministic game engines and shared source logic under
   top-three ranking, pending-entry calculation, and client fetch/submit helpers.
   Keys use stable game-and-parameter segments such as `snake|board=19` or
   `tetris|board=10x20|level=3`.
+- `user-profile.ts` owns shared demo-user, game-session, and profile-stat types;
+  display-name/game-id/session-id normalization; and client helpers for `/api/me`
+  and `/api/game-sessions`.
 - `game-ui-flow.ts` owns pure Help and Escape/back-to-menu state transitions.
   React hooks in `src/components/game-ui-hooks.ts` should delegate decisions here
   and only apply effects such as pause, resume, or back-to-menu callbacks.

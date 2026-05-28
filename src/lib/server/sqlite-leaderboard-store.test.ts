@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { parseScoreSubmission } from "./leaderboard-store";
 import { SqliteLeaderboardStore } from "./sqlite-leaderboard-store";
+import { SqliteUserProfileStore } from "./sqlite-user-profile-store";
 
 const START_TIME = Date.parse("2026-05-08T00:00:00.000Z");
 
@@ -176,6 +177,53 @@ describe("sqlite leaderboard store", () => {
       { name: "Mid", score: 20 },
       { name: "Slow", score: 40 },
     ]);
+  });
+
+  it("stores optional user and game-session links with qualifying scores", async () => {
+    const { databasePath, dispose, store } = createTempStore();
+    const userStore = new SqliteUserProfileStore({
+      createId: () => "user-1",
+      createSessionToken: () => "token-1",
+      databasePath,
+      now: () => new Date(START_TIME),
+    });
+    disposables.push(() => {
+      userStore.close();
+      dispose();
+    });
+    const userSession = await userStore.createUserSession("Ada");
+
+    expect(userSession).not.toBeNull();
+    await userStore.recordGameSession(userSession!.user, {
+      activeDurationMs: 1000,
+      finalScore: 9,
+      gameId: "snake",
+      leaderboardKey: "snake|board=19",
+      result: "won",
+      sortDirection: "desc",
+    });
+
+    await store.submitScore({
+      gameSessionId: "user-1",
+      leaderboardKey: "snake|board=19",
+      name: "Ada",
+      score: 9,
+      sortDirection: "desc",
+      userId: "user-1",
+    });
+
+    const database = new Database(databasePath);
+    const row = database
+      .prepare(
+        "SELECT user_id AS userId, game_session_id AS gameSessionId FROM leaderboard_scores",
+      )
+      .get() as { gameSessionId: string; userId: string };
+    database.close();
+
+    expect(row).toEqual({
+      gameSessionId: "user-1",
+      userId: "user-1",
+    });
   });
 
   it("migrates existing snake rows into board-scoped leaderboard keys", async () => {

@@ -52,6 +52,7 @@ import {
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
 import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
+import { useGameSession } from "@/hooks/use-game-session";
 
 type TetrisGameProps = {
   initialBoardHeight?: number;
@@ -217,6 +218,14 @@ export function TetrisGame({
     { name: "board", value: `${game.boardWidth}x${game.boardHeight}` },
     { name: "level", value: game.startLevel },
   ]);
+  const { completedSessionId } = useGameSession({
+    active: game.status === "running",
+    finalResult: game.status === "lost" ? "lost" : null,
+    finalScore: game.score,
+    gameId: "tetris",
+    leaderboardKey,
+    started: game.status !== "ready",
+  });
   const {
     isSavingLeaderboardScore,
     leaderboardSlots,
@@ -228,6 +237,7 @@ export function TetrisGame({
     scoreSaveFailed,
     setPlayerName,
   } = useGameLeaderboard({
+    gameSessionId: completedSessionId,
     leaderboardKey,
     pendingScore: showGameOverScreen ? game.score : null,
   });

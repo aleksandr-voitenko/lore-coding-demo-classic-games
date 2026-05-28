@@ -43,6 +43,7 @@ import {
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
 import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
+import { useGameSession } from "@/hooks/use-game-session";
 
 type TwentyFortyEightGameProps = {
   initialBoardSize?: number;
@@ -139,6 +140,16 @@ export function TwentyFortyEightGame({
     { name: "board", value: game.boardSize },
     { name: "goal", value: game.winTile },
   ]);
+  const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen();
+  const { completedSessionId } = useGameSession({
+    active: game.status === "running" && !isHelpVisible,
+    finalResult:
+      game.status === "lost" || game.status === "won" ? game.status : null,
+    finalScore: game.score,
+    gameId: "twenty-forty-eight",
+    leaderboardKey,
+    started: game.status !== "ready",
+  });
   const {
     isSavingLeaderboardScore,
     leaderboardBestScore,
@@ -151,11 +162,11 @@ export function TwentyFortyEightGame({
     scoreSaveFailed,
     setPlayerName,
   } = useGameLeaderboard({
+    gameSessionId: completedSessionId,
     leaderboardKey,
     pendingScore: showEndScreen ? game.score : null,
   });
   const bestScore = Math.max(game.bestScore, leaderboardBestScore);
-  const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen();
   const { abandonDialogProps, requestBackToMenu } = useGameEscapeToMenu({
     isDisabled: isHelpVisible,
     isGameStarted: game.status === "running",

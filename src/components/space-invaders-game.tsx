@@ -59,6 +59,7 @@ import {
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
 import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
+import { useGameSession } from "@/hooks/use-game-session";
 
 type SpaceInvadersGameProps = {
   initialAlienCount?: number;
@@ -137,6 +138,15 @@ export function SpaceInvadersGame({
     { name: "board", value: `${game.boardWidth}x${game.boardHeight}` },
     { name: "aliens", value: game.alienCount },
   ]);
+  const { completedSessionId } = useGameSession({
+    active: game.status === "running",
+    finalResult:
+      game.status === "lost" || game.status === "won" ? game.status : null,
+    finalScore: game.score,
+    gameId: "space-invaders",
+    leaderboardKey,
+    started: game.status !== "ready",
+  });
   const {
     isSavingLeaderboardScore,
     leaderboardSlots,
@@ -148,6 +158,7 @@ export function SpaceInvadersGame({
     scoreSaveFailed,
     setPlayerName,
   } = useGameLeaderboard({
+    gameSessionId: completedSessionId,
     leaderboardKey,
     pendingScore: showEndScreen ? game.score : null,
   });
