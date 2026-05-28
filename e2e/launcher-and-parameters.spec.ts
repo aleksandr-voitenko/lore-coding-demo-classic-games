@@ -221,6 +221,40 @@ test("launcher hydrates the signed-in user before client account refreshes", asy
   await expect(page.getByTestId("display-name-input")).toHaveCount(0);
 });
 
+test("launcher renders signed-in account controls as separate buttons", async ({ page }) => {
+  await openLauncher(page);
+
+  await page.getByTestId("display-name-input").fill("E2E Hero");
+  await page.getByTestId("sign-in-button").click();
+  await expect(page.getByTestId("profile-link")).toContainText("E2E Hero");
+
+  const accountActionMetrics = await page.getByTestId("user-account-controls").evaluate((element) => {
+    const profileLink = element.querySelector('[data-testid="profile-link"]');
+    const signOutButton = element.querySelector('[data-testid="sign-out-button"]');
+
+    if (!(profileLink instanceof HTMLElement) || !(signOutButton instanceof HTMLElement)) {
+      throw new Error("Signed-in account controls did not render both actions.");
+    }
+
+    const profileLinkRect = profileLink.getBoundingClientRect();
+    const signOutButtonRect = signOutButton.getBoundingClientRect();
+    const profileLinkStyle = getComputedStyle(profileLink);
+    const signOutButtonStyle = getComputedStyle(signOutButton);
+
+    return {
+      containerBackground: getComputedStyle(element).backgroundColor,
+      gap: signOutButtonRect.left - profileLinkRect.right,
+      profileLinkBorderWidth: profileLinkStyle.borderLeftWidth,
+      signOutButtonBorderWidth: signOutButtonStyle.borderLeftWidth,
+    };
+  });
+
+  expect(accountActionMetrics.containerBackground).toBe("rgba(0, 0, 0, 0)");
+  expect(accountActionMetrics.gap).toBeGreaterThanOrEqual(7);
+  expect(accountActionMetrics.profileLinkBorderWidth).toBe("1px");
+  expect(accountActionMetrics.signOutButtonBorderWidth).toBe("1px");
+});
+
 for (const handoffCase of launcherParameterHandoffCases) {
   test(`launcher-selected ${handoffCase.name} parameters seed the opened game`, async ({
     page,

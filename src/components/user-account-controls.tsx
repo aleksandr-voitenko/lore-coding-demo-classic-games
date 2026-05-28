@@ -53,11 +53,11 @@ export function UserAccountControls() {
   if (user) {
     return (
       <div
-        className="flex w-full flex-wrap items-center justify-start gap-2 rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] p-2 text-sm shadow-sm sm:w-auto sm:justify-end"
+        className="flex w-full flex-wrap items-center justify-start gap-2 text-sm sm:w-auto sm:justify-end"
         data-testid="user-account-controls"
       >
         <Link
-          className="inline-flex h-8 min-w-0 items-center gap-1.5 rounded-md px-2.5 font-medium text-[var(--snake-ink)] transition hover:bg-[color-mix(in_oklch,var(--snake-head)_12%,white)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[color-mix(in_oklch,var(--snake-head)_25%,transparent)]"
+          className="inline-flex h-9 min-w-0 max-w-full items-center gap-1.5 rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] px-3 font-medium text-[var(--snake-ink)] shadow-sm transition hover:border-[color-mix(in_oklch,var(--snake-head)_45%,var(--snake-border))] hover:bg-[color-mix(in_oklch,var(--snake-head)_12%,white)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[color-mix(in_oklch,var(--snake-head)_25%,transparent)]"
           data-testid="profile-link"
           href="/profile"
         >
@@ -69,9 +69,10 @@ export function UserAccountControls() {
           data-testid="sign-out-button"
           disabled={isSubmitting}
           onClick={handleSignOut}
-          size="icon"
+          className="border-[var(--snake-border)] bg-[var(--snake-panel)] text-[var(--snake-ink)] shadow-sm hover:border-[color-mix(in_oklch,var(--snake-head)_45%,var(--snake-border))] hover:bg-[color-mix(in_oklch,var(--snake-head)_12%,white)]"
+          size="icon-lg"
           type="button"
-          variant="ghost"
+          variant="outline"
         >
           <LogOutIcon />
         </Button>
