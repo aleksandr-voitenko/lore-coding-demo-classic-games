@@ -230,7 +230,7 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
   });
   const bestScore = Math.max(game.bestScore, leaderboardBestScore);
   const speed = getGameTickDelay({
-    score: game.score,
+    pickedUpObjects: game.pickedUpObjects,
     speedBoosts: game.speedBoosts,
     status: game.status,
   });

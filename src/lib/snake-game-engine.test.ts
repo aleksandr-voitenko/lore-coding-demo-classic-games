@@ -23,6 +23,7 @@ import {
   OBSTACLE_CLUSTER_MAX_SIZE,
   OBSTACLE_CLUSTER_MIN_SIZE,
   OBSTACLE_FIELD_COVERAGE_RATIO,
+  PICKUPS_PER_BASE_SPEED_INCREASE,
   SHRINK_FOOD_SCORE,
   SHRINK_FOOD_TAIL_TRIM,
   SLOW_FOOD_TIMEOUT_MIN_MS,
@@ -194,12 +195,64 @@ describe("snake game engine", () => {
     expect(generateFood(3, createBoardCells(3), [], () => 0)).toBeNull();
   });
 
-  it("starts running games one speed unit slower before score-based acceleration", () => {
+  it("starts slower and accelerates every five picked up objects", () => {
     const game = createRunningGame();
+    const highScoreGame = {
+      ...game,
+      pickedUpObjects: PICKUPS_PER_BASE_SPEED_INCREASE - 1,
+      score: 99,
+    };
+    const firstAcceleratedGame = {
+      ...game,
+      pickedUpObjects: PICKUPS_PER_BASE_SPEED_INCREASE,
+      score: PICKUPS_PER_BASE_SPEED_INCREASE,
+    };
 
     expect(getGameSpeed(game)).toBe(STARTING_GAME_SPEED);
-    expect(getGameSpeed({ ...game, score: 3 })).toBe(STARTING_GAME_SPEED);
-    expect(getGameSpeed({ ...game, score: 4 })).toBe(STARTING_GAME_SPEED + 1);
+    expect(getGameSpeed(highScoreGame)).toBe(STARTING_GAME_SPEED);
+    expect(getGameSpeed(firstAcceleratedGame)).toBe(STARTING_GAME_SPEED + 1);
+  });
+
+  it("counts red food pickups toward base speed acceleration", () => {
+    const game = createRunningGame({
+      food: { x: 6, y: 5 },
+      pickedUpObjects: PICKUPS_PER_BASE_SPEED_INCREASE - 1,
+      score: 99,
+      snake: [
+        { x: 5, y: 5 },
+        { x: 4, y: 5 },
+        { x: 3, y: 5 },
+      ],
+    });
+
+    const nextGame = advanceSnakeGame(game, { random: () => 0 });
+
+    expect(nextGame.score).toBe(100);
+    expect(nextGame.pickedUpObjects).toBe(PICKUPS_PER_BASE_SPEED_INCREASE);
+    expect(getGameSpeed(nextGame)).toBe(STARTING_GAME_SPEED + 1);
+  });
+
+  it("counts each timed food pickup once regardless of score value", () => {
+    const game = createRunningGame({
+      bonusFood: {
+        expiresAt: 9_000,
+        position: { x: 6, y: 5 },
+      },
+      food: { x: 9, y: 9 },
+      pickedUpObjects: PICKUPS_PER_BASE_SPEED_INCREASE - 2,
+      score: PICKUPS_PER_BASE_SPEED_INCREASE - 2,
+      snake: [
+        { x: 5, y: 5 },
+        { x: 4, y: 5 },
+        { x: 3, y: 5 },
+      ],
+    });
+
+    const nextGame = advanceSnakeGame(game);
+
+    expect(nextGame.score).toBe(PICKUPS_PER_BASE_SPEED_INCREASE);
+    expect(nextGame.pickedUpObjects).toBe(PICKUPS_PER_BASE_SPEED_INCREASE - 1);
+    expect(getGameSpeed(nextGame)).toBe(STARTING_GAME_SPEED);
   });
 
   it("generates persistent obstacle islands away from the starting path", () => {
@@ -590,6 +643,7 @@ describe("snake game engine", () => {
     const nextGame = advanceSnakeGame(game);
 
     expect(nextGame.score).toBe(3);
+    expect(nextGame.pickedUpObjects).toBe(1);
     expect(nextGame.snake).toHaveLength(game.snake.length + 1);
     expect(nextGame.snake[0]).toEqual({ x: 6, y: 5 });
     expect(nextGame.speedFood).toBeNull();
@@ -616,6 +670,7 @@ describe("snake game engine", () => {
     const nextGame = advanceSnakeGame(game);
 
     expect(nextGame.score).toBe(1);
+    expect(nextGame.pickedUpObjects).toBe(1);
     expect(nextGame.snake).toHaveLength(game.snake.length + 1);
     expect(nextGame.snake[0]).toEqual({ x: 6, y: 5 });
     expect(nextGame.slowFood).toBeNull();
@@ -644,6 +699,7 @@ describe("snake game engine", () => {
     const nextGame = advanceSnakeGame(game);
 
     expect(nextGame.score).toBe(4);
+    expect(nextGame.pickedUpObjects).toBe(1);
     expect(nextGame.slowFood).toBeNull();
     expect(getGameSpeed(nextGame)).toBe(1);
   });
@@ -669,6 +725,7 @@ describe("snake game engine", () => {
     const nextGame = advanceSnakeGame(game);
 
     expect(nextGame.score).toBe(SHRINK_FOOD_SCORE);
+    expect(nextGame.pickedUpObjects).toBe(1);
     expect(nextGame.snake).toHaveLength(game.snake.length - SHRINK_FOOD_TAIL_TRIM);
     expect(nextGame.snake[0]).toEqual({ x: 6, y: 5 });
     expect(nextGame.snake.some((segment) => isSamePoint(segment, { x: 1, y: 5 }))).toBe(false);
@@ -834,6 +891,7 @@ describe("snake game engine", () => {
     expect(nextGame.food).toBeNull();
     expect(nextGame.score).toBe(1);
     expect(nextGame.bestScore).toBe(1);
+    expect(nextGame.pickedUpObjects).toBe(1);
     expect(nextGame.snake).toHaveLength(9);
     expect(nextGame.snake[0]).toEqual({ x: 2, y: 2 });
     expect(nextGame.bonusFood).toBeNull();

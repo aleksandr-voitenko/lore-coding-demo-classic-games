@@ -18,6 +18,7 @@ export type GameState = {
   direction: Direction;
   food: Point | null;
   obstacles: Point[];
+  pickedUpObjects: number;
   queuedDirection: Direction;
   score: number;
   shrinkFood: TimedFood | null;
@@ -106,7 +107,8 @@ export const SLOW_FOOD_TIMEOUT_MAX_MS = 3_000;
 export const SLOW_FOOD_TIMEOUT_MIN_MS = 2_000;
 export const SPEED_FOOD_SCORE = 3;
 export const SPEED_FOOD_SPEED_INCREASE = 1;
-export const STARTING_GAME_SPEED = 5;
+export const STARTING_GAME_SPEED = 4;
+export const PICKUPS_PER_BASE_SPEED_INCREASE = 5;
 export const BOARD_SIZE_OPTIONS = Array.from(
   { length: Math.floor((MAX_BOARD_SIZE - MIN_BOARD_SIZE) / BOARD_SIZE_STEP) + 1 },
   (_, index) => MIN_BOARD_SIZE + index * BOARD_SIZE_STEP,
@@ -182,7 +184,6 @@ const OBSTACLE_CLUSTER_ATTEMPT_LIMIT = 40;
 const OBSTACLE_SEED_ATTEMPT_LIMIT = 80;
 const ORTHOGONAL_OFFSETS = Object.values(directionOffsets);
 const MAX_BASE_GAME_SPEED = Math.round(1000 / 78);
-const SCORE_PER_BASE_SPEED_INCREASE = 4;
 
 export function getPointKey(point: Point) {
   return `${point.x}:${point.y}`;
@@ -608,6 +609,7 @@ export function createInitialGame({
       createInitialObstacleSafeCells(normalizedBoardSize, food),
       randomSource,
     ),
+    pickedUpObjects: 0,
     queuedDirection: "right",
     score: 0,
     shrinkFood: null,
@@ -619,42 +621,46 @@ export function createInitialGame({
   };
 }
 
-function getBaseGameTickDelay(score: number) {
-  return Math.max(78, Math.round(1000 / getBaseGameSpeed(score)));
+function getBaseGameTickDelay(pickedUpObjects: number) {
+  return Math.max(78, Math.round(1000 / getBaseGameSpeed(pickedUpObjects)));
 }
 
-function getBaseGameSpeed(score: number) {
+function getBaseGameSpeed(pickedUpObjects: number) {
   return Math.min(
     MAX_BASE_GAME_SPEED,
-    STARTING_GAME_SPEED + Math.floor(score / SCORE_PER_BASE_SPEED_INCREASE),
+    STARTING_GAME_SPEED + Math.floor(pickedUpObjects / PICKUPS_PER_BASE_SPEED_INCREASE),
   );
 }
 
-function getAdjustedGameSpeed(score: number, speedBoosts: number) {
-  return Math.min(MAX_GAME_SPEED, Math.max(1, getBaseGameSpeed(score) + speedBoosts));
+function getAdjustedGameSpeed(pickedUpObjects: number, speedBoosts: number) {
+  return Math.min(MAX_GAME_SPEED, Math.max(1, getBaseGameSpeed(pickedUpObjects) + speedBoosts));
 }
 
-function getSpeedBoostsForTargetSpeed(score: number, speed: number) {
-  return speed - getBaseGameSpeed(score);
+function getSpeedBoostsForTargetSpeed(pickedUpObjects: number, speed: number) {
+  return speed - getBaseGameSpeed(pickedUpObjects);
 }
 
-export function getGameTickDelay(game: Pick<GameState, "score" | "speedBoosts" | "status">) {
+export function getGameTickDelay(
+  game: Pick<GameState, "pickedUpObjects" | "speedBoosts" | "status">,
+) {
   if (game.status !== "running") {
     return null;
   }
 
-  const baseTickDelay = getBaseGameTickDelay(game.score);
+  const baseTickDelay = getBaseGameTickDelay(game.pickedUpObjects);
 
   if (game.speedBoosts === 0) {
     return baseTickDelay;
   }
 
-  const adjustedSpeed = getAdjustedGameSpeed(game.score, game.speedBoosts);
+  const adjustedSpeed = getAdjustedGameSpeed(game.pickedUpObjects, game.speedBoosts);
 
   return Math.max(MIN_GAME_TICK_DELAY_MS, Math.round(1000 / adjustedSpeed));
 }
 
-export function getGameSpeed(game: Pick<GameState, "score" | "speedBoosts" | "status">) {
+export function getGameSpeed(
+  game: Pick<GameState, "pickedUpObjects" | "speedBoosts" | "status">,
+) {
   const tickDelay = getGameTickDelay(game);
 
   return tickDelay === null ? null : Math.round(1000 / tickDelay);
@@ -745,7 +751,7 @@ function getTimedFoodStateAfterEating(current: GameState, eatenKinds: TimedFoodK
 
 function getSpeedBoostsAfterEatingTimedFood(
   current: GameState,
-  nextScore: number,
+  nextPickedUpObjects: number,
   eatenKinds: TimedFoodKind[],
 ) {
   return eatenKinds.reduce((nextSpeedBoosts, kind) => {
@@ -762,7 +768,7 @@ function getSpeedBoostsAfterEatingTimedFood(
     const currentSpeed = getGameSpeed(current) ?? 1;
     const nextSpeed = Math.max(1, currentSpeed - speedEffect.amount);
 
-    return getSpeedBoostsForTargetSpeed(nextScore, nextSpeed);
+    return getSpeedBoostsForTargetSpeed(nextPickedUpObjects, nextSpeed);
   }, current.speedBoosts);
 }
 
@@ -839,6 +845,7 @@ export function advanceSnakeGame(
   };
   const ateFood = current.food !== null && isSamePoint(nextHead, current.food);
   const eatenTimedFoodKinds = getEatenTimedFoodKinds(current, nextHead);
+  const pickedUpObjectCount = (ateFood ? 1 : 0) + eatenTimedFoodKinds.length;
   const lengthDelta = (ateFood ? 1 : 0) + getTimedFoodLengthDelta(eatenTimedFoodKinds);
   const collisionBody = lengthDelta > 0 ? current.snake : current.snake.slice(0, -1);
   const hitWall =
@@ -862,10 +869,11 @@ export function advanceSnakeGame(
   const nextSnake = advanceSnakeSegments(current.snake, nextHead, lengthDelta);
   const nextScore =
     current.score + (ateFood ? 1 : 0) + getTimedFoodScore(eatenTimedFoodKinds);
+  const nextPickedUpObjects = current.pickedUpObjects + pickedUpObjectCount;
   const nextTimedFoodState = getTimedFoodStateAfterEating(current, eatenTimedFoodKinds);
   const nextSpeedBoosts = getSpeedBoostsAfterEatingTimedFood(
     current,
-    nextScore,
+    nextPickedUpObjects,
     eatenTimedFoodKinds,
   );
   const occupiedSpecialFood = [
@@ -884,6 +892,7 @@ export function advanceSnakeGame(
       direction,
       food: null,
       obstacles: current.obstacles,
+      pickedUpObjects: nextPickedUpObjects,
       queuedDirection: direction,
       score: nextScore,
       snake: nextSnake,
@@ -899,6 +908,7 @@ export function advanceSnakeGame(
     direction,
     food: nextFood,
     obstacles: current.obstacles,
+    pickedUpObjects: nextPickedUpObjects,
     queuedDirection: direction,
     score: nextScore,
     snake: nextSnake,
