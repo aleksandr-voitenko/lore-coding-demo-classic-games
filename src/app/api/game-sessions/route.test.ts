@@ -56,6 +56,49 @@ describe("game sessions route", () => {
     });
   });
 
+  it("rejects unsupported game-session payload shapes", () => {
+    expect(parseGameSessionSubmission(null)).toEqual({
+      error: "Game session must be a JSON object.",
+      success: false,
+    });
+    expect(
+      parseGameSessionSubmission({
+        activeDurationMs: 1200,
+        finalScore: 9,
+        gameId: "snake",
+        leaderboardKey: "bad key",
+        result: "won",
+      }),
+    ).toEqual({
+      error: "Leaderboard key is not supported.",
+      success: false,
+    });
+    expect(
+      parseGameSessionSubmission({
+        activeDurationMs: 1200,
+        finalScore: 1.5,
+        gameId: "snake",
+        leaderboardKey: "snake|board=19",
+        result: "won",
+      }),
+    ).toEqual({
+      error: "Final score must be a non-negative integer.",
+      success: false,
+    });
+    expect(
+      parseGameSessionSubmission({
+        activeDurationMs: 1200,
+        finalScore: 9,
+        gameId: "snake",
+        leaderboardKey: "snake|board=19",
+        result: "quit",
+      }),
+    ).toEqual({
+      error: "Game session result is not supported.",
+      success: false,
+    });
+  });
+
   it("requires a signed-in user before recording stats", async () => {
     const store = {
       getUserBySessionToken: vi.fn(async () => null),
@@ -111,5 +154,42 @@ describe("game sessions route", () => {
       sortDirection: "desc",
     });
     await expect(response.json()).resolves.toEqual({ id: "session-1" });
+  });
+
+  it("rejects malformed and invalid signed-in session requests before recording stats", async () => {
+    const user = { displayName: "Ada", id: "user-1" };
+    const store = {
+      getUserBySessionToken: vi.fn(async () => user),
+      recordGameSession: vi.fn(),
+    } as unknown as SqliteUserProfileStore;
+    const handlers = createGameSessionRouteHandlers(store);
+    const invalidJsonResponse = await handlers.POST(
+      new Request("http://localhost/api/game-sessions", {
+        body: "{",
+        headers: {
+          cookie: "game_user_session=session-token",
+        },
+        method: "POST",
+      }),
+    );
+    const invalidPayloadResponse = await handlers.POST(
+      new Request("http://localhost/api/game-sessions", {
+        body: JSON.stringify({ gameId: "bad game" }),
+        headers: {
+          cookie: "game_user_session=session-token",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(invalidJsonResponse.status).toBe(400);
+    await expect(invalidJsonResponse.json()).resolves.toEqual({
+      error: "Request body must be valid JSON.",
+    });
+    expect(invalidPayloadResponse.status).toBe(400);
+    await expect(invalidPayloadResponse.json()).resolves.toEqual({
+      error: "Game id is not supported.",
+    });
+    expect(store.recordGameSession).not.toHaveBeenCalled();
   });
 });

@@ -66,6 +66,9 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
 - `npm run test:coverage:core` runs the thresholded core coverage gate for
   deterministic engines, server/API helpers, pure board renderers, shared input
   filtering, and utilities.
+- Run coverage checks when code changes are significant, especially when they
+  touch core coverage surfaces or add new branches that CI will gate with
+  `npm run test:coverage:core`.
 - `npm run test:e2e` runs the focused Chromium Playwright smoke suite. Browser
   flow details live in `e2e/MEMORY.md`.
 - `npm run typecheck`, `npm run lint`, and `npm run build` are the standard

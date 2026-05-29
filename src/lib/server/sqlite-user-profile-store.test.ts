@@ -4,9 +4,23 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { SqliteUserProfileStore } from "./sqlite-user-profile-store";
+import {
+  getUserProfileSqlitePath,
+  SqliteUserProfileStore,
+} from "./sqlite-user-profile-store";
 
 const START_TIME = Date.parse("2026-05-28T10:00:00.000Z");
+const ORIGINAL_GAME_LEADERBOARD_SQLITE_PATH = process.env.GAME_LEADERBOARD_SQLITE_PATH;
+const ORIGINAL_SNAKE_LEADERBOARD_SQLITE_PATH = process.env.SNAKE_LEADERBOARD_SQLITE_PATH;
+
+function restoreEnvValue(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
+}
 
 function createTempStore() {
   const tempDir = mkdtempSync(join(tmpdir(), "user-profile-"));
@@ -37,6 +51,9 @@ describe("sqlite user profile store", () => {
     while (disposables.length > 0) {
       disposables.pop()?.();
     }
+
+    restoreEnvValue("GAME_LEADERBOARD_SQLITE_PATH", ORIGINAL_GAME_LEADERBOARD_SQLITE_PATH);
+    restoreEnvValue("SNAKE_LEADERBOARD_SQLITE_PATH", ORIGINAL_SNAKE_LEADERBOARD_SQLITE_PATH);
   });
 
   it("creates reusable display-name sessions and resolves active session users", async () => {
@@ -144,5 +161,65 @@ describe("sqlite user profile store", () => {
       totalSessionsPlayed: 4,
       user,
     });
+  });
+
+  it("ignores blank names and absent session tokens without mutating sessions", async () => {
+    const { dispose, store } = createTempStore();
+    disposables.push(dispose);
+    const user = { displayName: "Missing", id: "missing-user" };
+
+    await expect(store.createUserSession("   ")).resolves.toBeNull();
+    await expect(store.deleteUserSession(null)).resolves.toBeUndefined();
+    await expect(store.getUserBySessionToken(null)).resolves.toBeNull();
+    await expect(store.getUserById(user.id)).resolves.toBeNull();
+    await expect(store.getUserProfile(user)).resolves.toEqual({
+      games: [],
+      totalActiveDurationMs: 0,
+      totalSessionsPlayed: 0,
+      user,
+    });
+  });
+
+  it("expires sessions using the configured session ttl", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "user-profile-expiring-"));
+    const databasePath = join(tempDir, "profile.sqlite");
+    let nextId = 0;
+    let nextSessionToken = 0;
+    let currentTime = START_TIME;
+    const store = new SqliteUserProfileStore({
+      createId: () => `id-${++nextId}`,
+      createSessionToken: () => `token-${++nextSessionToken}`,
+      databasePath,
+      now: () => new Date(currentTime),
+      sessionTtlMs: 500,
+    });
+    disposables.push(() => {
+      store.close();
+      rmSync(tempDir, { force: true, recursive: true });
+    });
+
+    const session = await store.createUserSession("Katherine");
+
+    expect(session).toMatchObject({
+      expiresAt: "2026-05-28T10:00:00.500Z",
+      sessionToken: "token-1",
+    });
+    currentTime = START_TIME + 1000;
+    await expect(store.getUserBySessionToken("token-1")).resolves.toBeNull();
+  });
+
+  it("selects the configured profile sqlite path with the legacy snake fallback", () => {
+    process.env.GAME_LEADERBOARD_SQLITE_PATH = "  /tmp/game-profile.sqlite  ";
+    process.env.SNAKE_LEADERBOARD_SQLITE_PATH = "  /tmp/snake-profile.sqlite  ";
+
+    expect(getUserProfileSqlitePath()).toBe("/tmp/game-profile.sqlite");
+
+    process.env.GAME_LEADERBOARD_SQLITE_PATH = "   ";
+
+    expect(getUserProfileSqlitePath()).toBe("/tmp/snake-profile.sqlite");
+
+    process.env.SNAKE_LEADERBOARD_SQLITE_PATH = "   ";
+
+    expect(getUserProfileSqlitePath()).toContain(".data/snake-leaderboard.sqlite");
   });
 });
