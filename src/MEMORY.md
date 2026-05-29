@@ -14,9 +14,9 @@ rules live in child memory files for `src/app`, `src/components`, `src/lib`, and
 - `src/hooks/` is for reusable React state hooks that are shared across game
   components. It contains `use-game-leaderboard.ts`, which centralizes client
   leaderboard loading, submission, failure, player-name, slot, and pending-score
-  state for all games; `use-current-user.tsx`, which owns the demo signed-in
-  user context; and `use-game-session.ts`, which records signed-in play sessions
-  without moving timing logic into deterministic engines.
+  state for all games; `use-current-user.tsx`, which owns the signed-in user
+  context and auth actions; and `use-game-session.ts`, which records signed-in
+  play sessions without moving timing logic into deterministic engines.
 - `src/lib/` owns deterministic game engines and pure/shared logic. See
   `src/lib/MEMORY.md`.
 - `src/lib/server/` owns Node-only server storage adapters and parsing helpers.
@@ -47,7 +47,8 @@ rules live in child memory files for `src/app`, `src/components`, `src/lib`, and
 - Profile stats must be recorded through the shared game-session hook and server
   store. Keep guest play as a no-op for profile stats, and do not trust client
   submissions for user identity; server routes derive the user from the session
-  cookie.
+  cookie. Name/password auth still uses normalized display-name keys, so
+  duplicate account checks and profile ownership must remain server-enforced.
 - Prefer meaningful whole-state or structured-output assertions in tests. Use
   field-by-field assertions only when they produce clearer failures.
 - Prefer Playwright for new rendered UI behavior such as launcher handoff,

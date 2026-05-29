@@ -14,8 +14,8 @@ All the code in this repository was created using AI agents and the Lore Coding 
   win state.
 - SQLite-backed, parameter-scoped top-three leaderboards for every game.
   Minesweeper ranks fastest clears; the other games rank higher scores.
-- Demo sign-in with profile stats for signed-in play sessions, including total
-  play time and per-game best metrics.
+- Name-and-password player accounts with private profile stats for signed-in
+  play sessions, including total play time and per-game best metrics.
 - Closable in-game Help screens and Escape-to-menu abandon confirmations.
 - Local game-card artwork for every game in the launcher.
 
@@ -51,11 +51,15 @@ menu.
 
 ## Persistent Storage
 
-Leaderboards, demo user sessions, and signed-in profile stats use SQLite.
+Leaderboards, player accounts, signed-in sessions, and profile stats use SQLite.
 Leaderboard records are stored under game-and-parameter keys such as
 `snake|board=19` or `tetris|board=10x20|level=3`. Signed-in play sessions also
 store the selected leaderboard key so profile stats can report both per-game
 totals and parameter-aware history.
+
+Player names are unique after trimming, whitespace collapsing, and
+case-insensitive comparison. Passwords are salted and hashed in SQLite; existing
+passwordless demo names remain reserved and cannot be claimed through sign-up.
 
 The default database path is `.data/snake-leaderboard.sqlite`, kept for
 compatibility with existing Snake deployments. On a VPS, set

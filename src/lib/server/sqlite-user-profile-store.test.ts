@@ -2,11 +2,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
   getUserProfileSqlitePath,
   SqliteUserProfileStore,
+  type UserAuthenticationResult,
+  type UserSession,
 } from "./sqlite-user-profile-store";
 
 const START_TIME = Date.parse("2026-05-28T10:00:00.000Z");
@@ -44,6 +47,16 @@ function createTempStore() {
   };
 }
 
+function getSuccessfulSession(result: UserAuthenticationResult): UserSession {
+  expect(result.success).toBe(true);
+
+  if (!result.success) {
+    throw new Error(`Expected successful auth result, got ${result.reason}.`);
+  }
+
+  return result.session;
+}
+
 describe("sqlite user profile store", () => {
   const disposables: Array<() => void> = [];
 
@@ -56,12 +69,17 @@ describe("sqlite user profile store", () => {
     restoreEnvValue("SNAKE_LEADERBOARD_SQLITE_PATH", ORIGINAL_SNAKE_LEADERBOARD_SQLITE_PATH);
   });
 
-  it("creates reusable display-name sessions and resolves active session users", async () => {
+  it("registers unique display-name accounts and resolves active session users", async () => {
     const { dispose, store } = createTempStore();
     disposables.push(dispose);
 
-    const firstSession = await store.createUserSession("  Ada   Lovelace  ");
-    const secondSession = await store.createUserSession("ada lovelace");
+    const firstSession = getSuccessfulSession(
+      await store.registerUser("  Ada   Lovelace  ", "password123"),
+    );
+    const duplicateSignup = await store.registerUser("ada lovelace", "password456");
+    const secondSession = getSuccessfulSession(
+      await store.authenticateUser("ada lovelace", "password123"),
+    );
 
     expect(firstSession).toMatchObject({
       sessionToken: "token-1",
@@ -70,34 +88,39 @@ describe("sqlite user profile store", () => {
         id: "id-1",
       },
     });
+    expect(duplicateSignup).toEqual({
+      reason: "display-name-taken",
+      success: false,
+    });
     expect(secondSession).toMatchObject({
       sessionToken: "token-2",
       user: {
-        displayName: "ada lovelace",
+        displayName: "Ada Lovelace",
         id: "id-1",
       },
     });
     await expect(store.getUserBySessionToken("token-1")).resolves.toEqual({
-      displayName: "ada lovelace",
+      displayName: "Ada Lovelace",
       id: "id-1",
     });
 
     await store.deleteUserSession("token-1");
     await expect(store.getUserBySessionToken("token-1")).resolves.toBeNull();
     await expect(store.getUserBySessionToken("token-2")).resolves.toEqual({
-      displayName: "ada lovelace",
+      displayName: "Ada Lovelace",
       id: "id-1",
+    });
+    await expect(store.authenticateUser("Ada Lovelace", "wrongpass")).resolves.toEqual({
+      reason: "invalid-credentials",
+      success: false,
     });
   });
 
   it("records signed-in game sessions and aggregates profile stats by game", async () => {
     const { dispose, store } = createTempStore();
     disposables.push(dispose);
-    const session = await store.createUserSession("Grace");
-
-    expect(session).not.toBeNull();
-
-    const user = session!.user;
+    const session = getSuccessfulSession(await store.registerUser("Grace", "password123"));
+    const user = session.user;
 
     await expect(
       store.recordGameSession(user, {
@@ -168,7 +191,22 @@ describe("sqlite user profile store", () => {
     disposables.push(dispose);
     const user = { displayName: "Missing", id: "missing-user" };
 
-    await expect(store.createUserSession("   ")).resolves.toBeNull();
+    await expect(store.registerUser("   ", "password123")).resolves.toEqual({
+      reason: "invalid-display-name",
+      success: false,
+    });
+    await expect(store.registerUser("Ada", "short")).resolves.toEqual({
+      reason: "invalid-password",
+      success: false,
+    });
+    await expect(store.authenticateUser("   ", "password123")).resolves.toEqual({
+      reason: "invalid-display-name",
+      success: false,
+    });
+    await expect(store.authenticateUser("Ada", "")).resolves.toEqual({
+      reason: "invalid-password",
+      success: false,
+    });
     await expect(store.deleteUserSession(null)).resolves.toBeUndefined();
     await expect(store.getUserBySessionToken(null)).resolves.toBeNull();
     await expect(store.getUserById(user.id)).resolves.toBeNull();
@@ -198,7 +236,7 @@ describe("sqlite user profile store", () => {
       rmSync(tempDir, { force: true, recursive: true });
     });
 
-    const session = await store.createUserSession("Katherine");
+    const session = getSuccessfulSession(await store.registerUser("Katherine", "password123"));
 
     expect(session).toMatchObject({
       expiresAt: "2026-05-28T10:00:00.500Z",
@@ -206,6 +244,58 @@ describe("sqlite user profile store", () => {
     });
     currentTime = START_TIME + 1000;
     await expect(store.getUserBySessionToken("token-1")).resolves.toBeNull();
+  });
+
+  it("reserves legacy passwordless users without allowing account claiming", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "user-profile-legacy-"));
+    const databasePath = join(tempDir, "profile.sqlite");
+    const database = new Database(databasePath);
+
+    database.exec(`
+      CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        display_name_key TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      INSERT INTO users (
+        id,
+        display_name,
+        display_name_key,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        'legacy-user',
+        'Legacy Hero',
+        'legacy hero',
+        '2026-05-28T09:00:00.000Z',
+        '2026-05-28T09:00:00.000Z'
+      );
+    `);
+    database.close();
+
+    const store = new SqliteUserProfileStore({
+      createId: () => "id-1",
+      createSessionToken: () => "token-1",
+      databasePath,
+      now: () => new Date(START_TIME),
+    });
+    disposables.push(() => {
+      store.close();
+      rmSync(tempDir, { force: true, recursive: true });
+    });
+
+    await expect(store.registerUser("legacy hero", "password123")).resolves.toEqual({
+      reason: "display-name-taken",
+      success: false,
+    });
+    await expect(store.authenticateUser("Legacy Hero", "password123")).resolves.toEqual({
+      reason: "invalid-credentials",
+      success: false,
+    });
   });
 
   it("selects the configured profile sqlite path with the legacy snake fallback", () => {

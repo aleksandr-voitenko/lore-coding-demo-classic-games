@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import {
   createUserDisplayNameKey,
+  getUserPasswordValidationError,
   normalizeUserDisplayName,
   type AuthenticatedUser,
   type GameSessionResult,
@@ -16,6 +17,7 @@ import {
   prepareSqliteDatabasePath,
   type SqliteDatabase,
 } from "./sqlite-app-schema";
+import { hashUserPassword, verifyUserPassword } from "./password-auth";
 
 type CreateSqliteUserProfileStoreOptions = {
   createId?: () => string;
@@ -25,11 +27,12 @@ type CreateSqliteUserProfileStoreOptions = {
   sessionTtlMs?: number;
 };
 
-type UpsertUserParameters = {
+type InsertUserParameters = {
   createdAt: string;
   displayName: string;
   displayNameKey: string;
   id: string;
+  passwordHash: string;
   updatedAt: string;
 };
 
@@ -65,6 +68,30 @@ type UserRow = {
   id: string;
 };
 
+type UserCredentialsRow = UserRow & {
+  passwordHash: string | null;
+};
+
+export type UserSession = {
+  expiresAt: string;
+  sessionToken: string;
+  user: AuthenticatedUser;
+};
+
+export type UserAuthenticationResult =
+  | {
+      session: UserSession;
+      success: true;
+    }
+  | {
+      reason:
+        | "display-name-taken"
+        | "invalid-credentials"
+        | "invalid-display-name"
+        | "invalid-password";
+      success: false;
+    };
+
 type ProfileTotalsRow = {
   totalActiveDurationMs: number | null;
   totalSessionsPlayed: number;
@@ -92,20 +119,30 @@ function createDefaultSessionToken() {
   return randomBytes(32).toString("base64url");
 }
 
+function isUniqueDisplayNameConstraintError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "SQLITE_CONSTRAINT_UNIQUE"
+  );
+}
+
 export class SqliteUserProfileStore {
   readonly #createId: () => string;
   readonly #createSessionToken: () => string;
   readonly #database: SqliteDatabase;
   readonly #deleteUserSession;
   readonly #insertGameSession;
+  readonly #insertUser;
   readonly #insertUserSession;
   readonly #now: () => Date;
   readonly #selectProfileGameStats;
   readonly #selectProfileTotals;
+  readonly #selectUserCredentialsByDisplayNameKey;
   readonly #selectUserById;
   readonly #selectUserBySessionToken;
   readonly #sessionTtlMs: number;
-  readonly #upsertUser;
 
   constructor({
     createId = randomUUID,
@@ -122,12 +159,23 @@ export class SqliteUserProfileStore {
 
     initializeAppSchema(this.#database);
 
-    this.#upsertUser = this.#database.prepare<UpsertUserParameters>(`
-      INSERT INTO users (id, display_name, display_name_key, created_at, updated_at)
-      VALUES (@id, @displayName, @displayNameKey, @createdAt, @updatedAt)
-      ON CONFLICT(display_name_key) DO UPDATE SET
-        display_name = excluded.display_name,
-        updated_at = excluded.updated_at
+    this.#insertUser = this.#database.prepare<InsertUserParameters>(`
+      INSERT INTO users (
+        id,
+        display_name,
+        display_name_key,
+        password_hash,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        @id,
+        @displayName,
+        @displayNameKey,
+        @passwordHash,
+        @createdAt,
+        @updatedAt
+      )
       RETURNING id, display_name AS displayName
     `);
     this.#insertUserSession = this.#database.prepare<InsertUserSessionParameters>(`
@@ -151,6 +199,15 @@ export class SqliteUserProfileStore {
       FROM users
       WHERE id = @userId
     `);
+    this.#selectUserCredentialsByDisplayNameKey =
+      this.#database.prepare<{ displayNameKey: string }>(`
+        SELECT
+          id,
+          display_name AS displayName,
+          password_hash AS passwordHash
+        FROM users
+        WHERE display_name_key = @displayNameKey
+      `);
     this.#insertGameSession = this.#database.prepare<InsertGameSessionParameters>(`
       INSERT INTO game_sessions (
         id,
@@ -216,22 +273,8 @@ export class SqliteUserProfileStore {
     this.#database.close();
   }
 
-  async createUserSession(displayNameValue: unknown) {
-    const displayName = normalizeUserDisplayName(displayNameValue);
-
-    if (displayName.length === 0) {
-      return null;
-    }
-
-    const now = this.#now();
+  #createUserSession(user: AuthenticatedUser, now = this.#now()): UserSession {
     const timestamp = now.toISOString();
-    const user = this.#upsertUser.get({
-      createdAt: timestamp,
-      displayName,
-      displayNameKey: createUserDisplayNameKey(displayName),
-      id: this.#createId(),
-      updatedAt: timestamp,
-    }) as UserRow;
     const sessionToken = this.#createSessionToken();
     const expiresAt = new Date(now.getTime() + this.#sessionTtlMs).toISOString();
 
@@ -247,6 +290,108 @@ export class SqliteUserProfileStore {
       sessionToken,
       user,
     };
+  }
+
+  async authenticateUser(
+    displayNameValue: unknown,
+    passwordValue: unknown,
+  ): Promise<UserAuthenticationResult> {
+    const displayName = normalizeUserDisplayName(displayNameValue);
+
+    if (displayName.length === 0) {
+      return {
+        reason: "invalid-display-name",
+        success: false,
+      };
+    }
+
+    if (typeof passwordValue !== "string" || passwordValue.length === 0) {
+      return {
+        reason: "invalid-password",
+        success: false,
+      };
+    }
+
+    const user = this.#selectUserCredentialsByDisplayNameKey.get({
+      displayNameKey: createUserDisplayNameKey(displayName),
+    }) as UserCredentialsRow | undefined;
+
+    if (
+      user === undefined ||
+      !(await verifyUserPassword(passwordValue, user.passwordHash))
+    ) {
+      return {
+        reason: "invalid-credentials",
+        success: false,
+      };
+    }
+
+    return {
+      session: this.#createUserSession(user),
+      success: true,
+    };
+  }
+
+  async registerUser(
+    displayNameValue: unknown,
+    passwordValue: unknown,
+  ): Promise<UserAuthenticationResult> {
+    const displayName = normalizeUserDisplayName(displayNameValue);
+
+    if (displayName.length === 0) {
+      return {
+        reason: "invalid-display-name",
+        success: false,
+      };
+    }
+
+    if (getUserPasswordValidationError(passwordValue) !== null) {
+      return {
+        reason: "invalid-password",
+        success: false,
+      };
+    }
+
+    const displayNameKey = createUserDisplayNameKey(displayName);
+    const existingUser = this.#selectUserCredentialsByDisplayNameKey.get({
+      displayNameKey,
+    }) as UserCredentialsRow | undefined;
+
+    if (existingUser !== undefined) {
+      return {
+        reason: "display-name-taken",
+        success: false,
+      };
+    }
+
+    const passwordHash = await hashUserPassword(passwordValue as string);
+    const now = this.#now();
+    const timestamp = now.toISOString();
+
+    try {
+      const user = this.#insertUser.get({
+        createdAt: timestamp,
+        displayName,
+        displayNameKey,
+        id: this.#createId(),
+        passwordHash,
+        updatedAt: timestamp,
+      }) as UserRow;
+
+      return {
+        session: this.#createUserSession(user, now),
+        success: true,
+      };
+    } catch (error) {
+      if (isUniqueDisplayNameConstraintError(error)) {
+        return {
+          reason: "display-name-taken",
+          success: false,
+        };
+      }
+
+      throw error;
+    }
   }
 
   async deleteUserSession(sessionToken: string | null) {

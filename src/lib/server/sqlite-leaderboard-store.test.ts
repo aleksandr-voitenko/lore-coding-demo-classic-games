@@ -191,10 +191,15 @@ describe("sqlite leaderboard store", () => {
       userStore.close();
       dispose();
     });
-    const userSession = await userStore.createUserSession("Ada");
+    const userSession = await userStore.registerUser("Ada", "password123");
 
-    expect(userSession).not.toBeNull();
-    await userStore.recordGameSession(userSession!.user, {
+    expect(userSession.success).toBe(true);
+
+    if (!userSession.success) {
+      throw new Error(`Expected user registration to succeed, got ${userSession.reason}.`);
+    }
+
+    await userStore.recordGameSession(userSession.session.user, {
       activeDurationMs: 1000,
       finalScore: 9,
       gameId: "snake",

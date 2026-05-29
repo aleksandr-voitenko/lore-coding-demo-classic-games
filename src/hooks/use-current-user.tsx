@@ -12,23 +12,30 @@ import {
 
 import {
   fetchCurrentUser,
-  signInUser,
+  logInUser,
   signOutUser,
+  signUpUser,
   type AuthenticatedUser,
 } from "@/lib/user-profile";
 
 type CurrentUserContextValue = {
   isLoading: boolean;
-  signIn: (displayName: string) => Promise<void>;
+  logIn: (displayName: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  signUp: (
+    displayName: string,
+    password: string,
+    passwordConfirmation: string,
+  ) => Promise<void>;
   user: AuthenticatedUser | null;
   userError: boolean;
 };
 
 const CurrentUserContext = createContext<CurrentUserContextValue>({
   isLoading: false,
-  signIn: async () => {},
+  logIn: async () => {},
   signOut: async () => {},
+  signUp: async () => {},
   user: null,
   userError: false,
 });
@@ -79,12 +86,26 @@ export function CurrentUserProvider({
     };
   }, [hasInitialUser]);
 
-  const signIn = useCallback(async (displayName: string) => {
-    const nextUser = await signInUser(displayName);
+  const logIn = useCallback(async (displayName: string, password: string) => {
+    const nextUser = await logInUser(displayName, password);
 
     setUser(nextUser);
     setUserError(false);
   }, []);
+
+  const signUp = useCallback(
+    async (
+      displayName: string,
+      password: string,
+      passwordConfirmation: string,
+    ) => {
+      const nextUser = await signUpUser(displayName, password, passwordConfirmation);
+
+      setUser(nextUser);
+      setUserError(false);
+    },
+    [],
+  );
 
   const signOut = useCallback(async () => {
     await signOutUser();
@@ -95,12 +116,13 @@ export function CurrentUserProvider({
   const value = useMemo(
     () => ({
       isLoading,
-      signIn,
+      logIn,
       signOut,
+      signUp,
       user,
       userError,
     }),
-    [isLoading, signIn, signOut, user, userError],
+    [isLoading, logIn, signOut, signUp, user, userError],
   );
 
   return <CurrentUserContext.Provider value={value}>{children}</CurrentUserContext.Provider>;

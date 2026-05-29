@@ -33,11 +33,11 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   `src/lib/leaderboard.ts`, the React state hook lives in `src/hooks/`, shared
   UI lives in `src/components/`, the API route lives in `src/app/api/`, and the
   current server store lives in `src/lib/server/`.
-- Demo user profiles cross the same boundaries: `src/lib/user-profile.ts` owns
-  shared user/session types and client helpers, `src/hooks/use-current-user.tsx`
-  owns browser sign-in state, `src/hooks/use-game-session.ts` records signed-in
-  play sessions, `/api/me` and `/api/game-sessions` expose server routes, and
-  `/profile` renders aggregate stats.
+- User profiles cross the same boundaries: `src/lib/user-profile.ts` owns shared
+  user/session/auth types and client helpers, `src/hooks/use-current-user.tsx`
+  owns browser auth state, `src/hooks/use-game-session.ts` records signed-in play
+  sessions, `/api/auth/*`, `/api/me`, and `/api/game-sessions` expose server
+  routes, and `/profile` renders aggregate stats for the current session.
 
 ## Cross-Cutting Constraints
 
@@ -57,8 +57,9 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   durable override, with `SNAKE_LEADERBOARD_SQLITE_PATH` still honored as a
   fallback.
 - Profile stats count only signed-in sessions. Guest play and guest leaderboard
-  saves remain allowed but do not create `game_sessions` rows. The current
-  first-party sign-in is a demo display-name session, not hardened authentication.
+  saves remain allowed but do not create `game_sessions` rows. First-party auth
+  uses normalized unique display names plus salted password hashes; private
+  profile access is derived from the HTTP-only session cookie, never client ids.
 - shadcn/ui is initialized with Tailwind CSS v4, the `base-nova` preset, and the
   `@/*` import alias. The shared button is `src/components/ui/button.tsx`.
 

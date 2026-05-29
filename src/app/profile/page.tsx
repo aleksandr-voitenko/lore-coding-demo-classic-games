@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { formatGameCatalogLabel } from "@/lib/game-catalog";
 import { getUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
@@ -61,24 +62,7 @@ export default async function ProfilePage() {
   const user = await store.getUserBySessionToken(sessionToken);
 
   if (user === null) {
-    return (
-      <main className="min-h-svh bg-[var(--snake-page)] px-4 py-6 text-[var(--snake-ink)] sm:px-6 lg:py-8">
-        <section className="mx-auto flex min-h-[calc(100svh-3rem)] w-full max-w-3xl flex-col justify-center gap-5">
-          <div className="flex flex-col gap-2">
-            <p className="text-sm font-semibold text-[var(--snake-muted)]">Profile</p>
-            <h1 className="text-3xl font-semibold tracking-normal text-black sm:text-4xl">
-              No signed-in player
-            </h1>
-          </div>
-          <Link
-            className="inline-flex h-9 w-fit items-center justify-center rounded-md bg-[var(--snake-ink)] px-3 text-sm font-medium text-white transition hover:bg-[color-mix(in_oklch,var(--snake-ink)_84%,white)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[color-mix(in_oklch,var(--snake-head)_25%,transparent)]"
-            href="/"
-          >
-            Back to games
-          </Link>
-        </section>
-      </main>
-    );
+    redirect("/?auth=login");
   }
 
   const profile = await store.getUserProfile(user);

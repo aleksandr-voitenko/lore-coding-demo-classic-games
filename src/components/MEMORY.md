@@ -23,9 +23,10 @@ This file covers React component ownership and shared game UI conventions under
 - `game-leaderboard.tsx` renders the shared top-three panel and save-score form.
   `use-game-leaderboard.ts` in `src/hooks/` owns the client state feeding those
   components and pre-fills the signed-in display name when available.
-- `user-account-controls.tsx` renders the launcher sign-in/profile/sign-out
-  controls against `useCurrentUser`; keep account state in the provider rather
-  than local launcher state.
+- `user-account-controls.tsx` renders the launcher Log in/Sign up modal plus
+  signed-in profile/sign-out controls against `useCurrentUser`. Keep durable
+  account state in the provider; local component state should stay limited to the
+  active auth tab, form values, pending state, and field-level errors.
 
 ## Shared Layout
 

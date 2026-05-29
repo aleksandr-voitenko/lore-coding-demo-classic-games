@@ -21,13 +21,18 @@ import {
   type GameParameterValues,
 } from "@/components/game-launcher-config";
 import { UserAccountControls } from "@/components/user-account-controls";
+import type { UserAuthMode } from "@/lib/user-profile";
 
 type MenuViewport = {
   scrollX: number;
   scrollY: number;
 };
 
-export function GameLauncher() {
+type GameLauncherProps = {
+  initialAuthMode?: UserAuthMode | null;
+};
+
+export function GameLauncher({ initialAuthMode = null }: GameLauncherProps) {
   const [selectedGameId, setSelectedGameId] = useState<GameId | null>(null);
   const [parameterValues, setParameterValues] = useState<GameParameterValues>(() =>
     createDefaultParameterValues(),
@@ -121,7 +126,7 @@ export function GameLauncher() {
               Game Library
             </h1>
           </div>
-          <UserAccountControls />
+          <UserAccountControls initialAuthMode={initialAuthMode} />
         </header>
 
         <div className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))]">

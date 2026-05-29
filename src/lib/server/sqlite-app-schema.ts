@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 export type SqliteDatabase = InstanceType<typeof Database>;
 
 export const DEFAULT_SQLITE_FILENAME = "snake-leaderboard.sqlite";
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export function prepareSqliteDatabasePath(databasePath: string) {
   if (databasePath === ":memory:") {
@@ -52,6 +52,7 @@ export function initializeAppSchema(database: SqliteDatabase) {
       id TEXT PRIMARY KEY,
       display_name TEXT NOT NULL,
       display_name_key TEXT NOT NULL UNIQUE,
+      password_hash TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -98,6 +99,7 @@ export function initializeAppSchema(database: SqliteDatabase) {
     );
   `);
 
+  addColumnIfMissing(database, "users", "password_hash TEXT");
   addColumnIfMissing(database, "leaderboard_scores", "user_id TEXT");
   addColumnIfMissing(database, "leaderboard_scores", "game_session_id TEXT");
 

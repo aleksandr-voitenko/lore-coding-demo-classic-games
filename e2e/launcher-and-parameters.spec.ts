@@ -1,7 +1,13 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./support/fixtures";
-import { openGame, openLauncher, selectGameParameter } from "./support/app";
+import {
+  logInFromLauncher,
+  openGame,
+  openLauncher,
+  selectGameParameter,
+  signUpFromLauncher,
+} from "./support/app";
 
 const gameCardIds = [
   "snake",
@@ -200,9 +206,7 @@ test("launcher restores its scroll position after returning from a game", async 
 test("launcher hydrates the signed-in user before client account refreshes", async ({ page }) => {
   await openLauncher(page);
 
-  await page.getByTestId("display-name-input").fill("E2E Hero");
-  await page.getByTestId("sign-in-button").click();
-  await expect(page.getByTestId("profile-link")).toContainText("E2E Hero");
+  await signUpFromLauncher(page, "E2E Hero");
 
   await page.getByTestId("profile-link").click();
   await expect(page.getByRole("heading", { name: "E2E Hero" })).toBeVisible();
@@ -218,15 +222,13 @@ test("launcher hydrates the signed-in user before client account refreshes", asy
   await page.getByRole("link", { name: "Back to games" }).click();
   await expect(page.getByTestId("game-menu")).toBeVisible();
   await expect(page.getByTestId("profile-link")).toContainText("E2E Hero");
-  await expect(page.getByTestId("display-name-input")).toHaveCount(0);
+  await expect(page.getByTestId("auth-displayName-input")).toHaveCount(0);
 });
 
 test("launcher renders signed-in account controls as separate buttons", async ({ page }) => {
   await openLauncher(page);
 
-  await page.getByTestId("display-name-input").fill("E2E Hero");
-  await page.getByTestId("sign-in-button").click();
-  await expect(page.getByTestId("profile-link")).toContainText("E2E Hero");
+  await signUpFromLauncher(page, "Separate Button Hero");
 
   const accountActionMetrics = await page.getByTestId("user-account-controls").evaluate((element) => {
     const profileLink = element.querySelector('[data-testid="profile-link"]');
@@ -253,6 +255,157 @@ test("launcher renders signed-in account controls as separate buttons", async ({
   expect(accountActionMetrics.gap).toBeGreaterThanOrEqual(7);
   expect(accountActionMetrics.profileLinkBorderWidth).toBe("1px");
   expect(accountActionMetrics.signOutButtonBorderWidth).toBe("1px");
+});
+
+test("auth modal validates signup passwords before submitting", async ({ page }) => {
+  await openLauncher(page);
+
+  await page.getByTestId("sign-up-open-button").click();
+  await expect(page.getByTestId("auth-dialog")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign up" })).toBeVisible();
+  const authTitleMetrics = await page
+    .getByRole("heading", { name: "Sign up" })
+    .evaluate((element) => {
+      const dialog = element.closest('[data-testid="auth-dialog"]');
+
+      if (dialog === null) {
+        return null;
+      }
+
+      const titleRect = element.getBoundingClientRect();
+      const dialogRect = dialog.getBoundingClientRect();
+
+      return {
+        dialogCenter: dialogRect.left + dialogRect.width / 2,
+        fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
+        textAlign: getComputedStyle(element).textAlign,
+        titleCenter: titleRect.left + titleRect.width / 2,
+      };
+    });
+
+  expect(authTitleMetrics).not.toBeNull();
+  expect(authTitleMetrics?.fontSize).toBeGreaterThanOrEqual(30);
+  expect(authTitleMetrics?.textAlign).toBe("center");
+  expect(
+    Math.abs((authTitleMetrics?.dialogCenter ?? 0) - (authTitleMetrics?.titleCenter ?? 0)),
+  ).toBeLessThanOrEqual(1);
+  await expect(page.getByRole("tab")).toHaveCount(0);
+  await expect(page.getByLabel("User name")).toBeVisible();
+  await expect(page.getByText("Display name")).toHaveCount(0);
+  await expect(page.getByText("Sign up to Game Library")).toHaveCount(0);
+  await expect(
+    page.getByText("Use your player name and password. No email is required."),
+  ).toHaveCount(0);
+  await page.getByTestId("auth-displayName-input").fill("Mismatch Hero");
+  await page.getByTestId("auth-password-input").fill("password123");
+  await page.getByTestId("auth-passwordConfirmation-input").fill("different123");
+  await page.getByTestId("auth-submit-button").click();
+
+  await expect(page.getByTestId("auth-passwordConfirmation-input")).toHaveAttribute(
+    "aria-invalid",
+    "true",
+  );
+  const passwordMatchError = page.getByText("Passwords must match.");
+  await expect(passwordMatchError).toBeVisible();
+  const errorColor = await passwordMatchError.evaluate((element) => {
+    const probe = document.createElement("span");
+    probe.style.color = getComputedStyle(document.documentElement)
+      .getPropertyValue("--destructive")
+      .trim();
+    document.body.append(probe);
+
+    const colors = {
+      actual: getComputedStyle(element).color,
+      destructive: getComputedStyle(probe).color,
+    };
+
+    probe.remove();
+    return colors;
+  });
+  expect(errorColor.actual).toBe(errorColor.destructive);
+
+  const submitButtonMarginTop = await page
+    .getByTestId("auth-submit-button")
+    .evaluate((element) => Number.parseFloat(getComputedStyle(element).marginTop));
+  expect(submitButtonMarginTop).toBeGreaterThan(0);
+  await expect(page.getByTestId("profile-link")).toHaveCount(0);
+});
+
+test("auth modal reports duplicate signup names next to the name field", async ({
+  browserIssues,
+  page,
+}) => {
+  await openLauncher(page);
+
+  await signUpFromLauncher(page, "Duplicate Hero");
+  await page.getByTestId("sign-out-button").click();
+  await expect(page.getByTestId("sign-up-open-button")).toBeVisible();
+
+  await page.getByTestId("sign-up-open-button").click();
+  await page.getByTestId("auth-displayName-input").fill(" duplicate   hero ");
+  await page.getByTestId("auth-password-input").fill("password456");
+  await page.getByTestId("auth-passwordConfirmation-input").fill("password456");
+  await page.getByTestId("auth-submit-button").click();
+
+  await expect(page.getByTestId("auth-displayName-input")).toHaveAttribute(
+    "aria-invalid",
+    "true",
+  );
+  await expect(page.getByText("User name is already taken.")).toBeVisible();
+
+  const expectedConflictIndex = browserIssues.findIndex(
+    (issue) =>
+      issue.source === "console" &&
+      issue.text === "Failed to load resource: the server responded with a status of 409 (Conflict)",
+  );
+
+  expect(expectedConflictIndex).toBeGreaterThanOrEqual(0);
+  browserIssues.splice(expectedConflictIndex, 1);
+
+  await page.getByRole("button", { name: "Close account dialog" }).click();
+  await page.getByTestId("log-in-open-button").click();
+  await expect(page.getByRole("heading", { name: "Log in" })).toBeVisible();
+  await expect(page.getByText("Log in to Game Library")).toHaveCount(0);
+  await page.getByTestId("auth-displayName-input").fill("Duplicate Hero");
+  await page.getByTestId("auth-password-input").fill("password123");
+  await page.getByTestId("auth-submit-button").click();
+  await expect(page.getByTestId("profile-link")).toContainText("Duplicate Hero");
+});
+
+test("auth modal logs registered users back in with a password", async ({ page }) => {
+  await openLauncher(page);
+
+  await signUpFromLauncher(page, "Returning Hero");
+  await page.getByTestId("sign-out-button").click();
+  await expect(page.getByTestId("log-in-open-button")).toBeVisible();
+
+  await logInFromLauncher(page, "Returning Hero");
+});
+
+test("profile access redirects unsigned users into the login modal", async ({ page }) => {
+  await page.goto("/profile");
+
+  await expect(page).toHaveURL(/\/\?auth=login$/);
+  await expect(page.getByTestId("game-menu")).toBeVisible();
+  await expect(page.getByTestId("auth-dialog")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Log in" })).toBeVisible();
+});
+
+test("profile page shows only the current signed-in user", async ({ page }) => {
+  await openLauncher(page);
+  await signUpFromLauncher(page, "Private Alice");
+  await page.getByTestId("profile-link").click();
+  await expect(page.getByRole("heading", { name: "Private Alice" })).toBeVisible();
+
+  await page.getByRole("link", { name: "Back to games" }).click();
+  await page.getByTestId("sign-out-button").click();
+  await expect(page.getByTestId("sign-up-open-button")).toBeVisible();
+
+  await signUpFromLauncher(page, "Private Bob");
+  await page.getByTestId("profile-link").click();
+
+  await expect(page.getByRole("heading", { name: "Private Bob" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Private Alice" })).toHaveCount(0);
 });
 
 for (const handoffCase of launcherParameterHandoffCases) {
