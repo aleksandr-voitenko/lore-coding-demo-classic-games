@@ -1,23 +1,13 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 
+import { formatGameCatalogLabel } from "@/lib/game-catalog";
 import { getUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
 import { USER_SESSION_COOKIE_NAME } from "@/lib/server/user-session-cookie";
 import type { UserProfileGameStat } from "@/lib/user-profile";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const GAME_LABELS: Record<string, string> = {
-  breakout: "Breakout",
-  minesweeper: "Minesweeper",
-  pong: "Pong",
-  simon: "Simon",
-  snake: "Snake",
-  "space-invaders": "Space Invaders",
-  tetris: "Tetris",
-  "twenty-forty-eight": "2048",
-};
 
 function formatDuration(ms: number) {
   const totalSeconds = Math.floor(ms / 1000);
@@ -34,16 +24,6 @@ function formatDuration(ms: number) {
   }
 
   return `${seconds}s`;
-}
-
-function formatGameLabel(gameId: string) {
-  return (
-    GAME_LABELS[gameId] ??
-    gameId
-      .split("-")
-      .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
-      .join(" ")
-  );
 }
 
 function formatLastPlayed(value: string) {
@@ -158,7 +138,7 @@ export default async function ProfilePage() {
                 return (
                   <div className="contents text-sm" key={game.gameId}>
                     <div className="border-b border-[var(--snake-border)] px-3 py-3 font-semibold">
-                      {formatGameLabel(game.gameId)}
+                      {formatGameCatalogLabel(game.gameId)}
                     </div>
                     <div className="border-b border-[var(--snake-border)] px-3 py-3 text-right font-mono">
                       {formatDuration(game.totalActiveDurationMs)}

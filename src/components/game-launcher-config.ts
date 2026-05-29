@@ -61,16 +61,9 @@ import {
   TWENTY_FORTY_EIGHT_WIN_TILE,
   TWENTY_FORTY_EIGHT_WIN_TILE_OPTIONS,
 } from "@/lib/twenty-forty-eight-game-engine";
+import { getGameCatalogEntry, type GameId } from "@/lib/game-catalog";
 
-export type GameId =
-  | "snake"
-  | "tetris"
-  | "breakout"
-  | "minesweeper"
-  | "space-invaders"
-  | "twenty-forty-eight"
-  | "pong"
-  | "simon";
+export type { GameId } from "@/lib/game-catalog";
 
 export type PlayableGameProps = {
   initialAlienCount?: number;
@@ -252,6 +245,15 @@ export type GameCard = {
 
 const GAME_CARD_ARTWORK_VERSION = "ai-key-art-v2";
 
+const snakeCatalogEntry = getGameCatalogEntry("snake");
+const tetrisCatalogEntry = getGameCatalogEntry("tetris");
+const breakoutCatalogEntry = getGameCatalogEntry("breakout");
+const minesweeperCatalogEntry = getGameCatalogEntry("minesweeper");
+const spaceInvadersCatalogEntry = getGameCatalogEntry("space-invaders");
+const twentyFortyEightCatalogEntry = getGameCatalogEntry("twenty-forty-eight");
+const pongCatalogEntry = getGameCatalogEntry("pong");
+const simonCatalogEntry = getGameCatalogEntry("simon");
+
 export const GAME_CARDS: readonly GameCard[] = [
   {
     accentClassName:
@@ -264,8 +266,8 @@ export const GAME_CARDS: readonly GameCard[] = [
     },
     component: SnakeGame,
     description: "A classic score chase with obstacles, timed food, and saved best runs.",
-    id: "snake",
-    label: "Classic Snake",
+    id: snakeCatalogEntry.id,
+    label: snakeCatalogEntry.label,
     parameters: ["snake-board-size"],
   },
   {
@@ -279,8 +281,8 @@ export const GAME_CARDS: readonly GameCard[] = [
     },
     component: TetrisGame,
     description: "A falling-block survival game with line clears, scoring, and rising speed.",
-    id: "tetris",
-    label: "Classic Tetris",
+    id: tetrisCatalogEntry.id,
+    label: tetrisCatalogEntry.label,
     parameters: ["tetris-board-size", "tetris-start-level"],
   },
   {
@@ -294,8 +296,8 @@ export const GAME_CARDS: readonly GameCard[] = [
     },
     component: BreakoutGame,
     description: "A paddle-and-ball brick breaker with lives, scoring, and wall clears.",
-    id: "breakout",
-    label: "Classic Breakout",
+    id: breakoutCatalogEntry.id,
+    label: breakoutCatalogEntry.label,
     parameters: ["breakout-board-size", "breakout-lives"],
   },
   {
@@ -309,8 +311,8 @@ export const GAME_CARDS: readonly GameCard[] = [
     },
     component: MinesweeperGame,
     description: "A classic minefield puzzle with safe first clicks, flags, and flood reveals.",
-    id: "minesweeper",
-    label: "Classic Minesweeper",
+    id: minesweeperCatalogEntry.id,
+    label: minesweeperCatalogEntry.label,
     parameters: ["minesweeper-board-size", "minesweeper-mines"],
   },
   {
@@ -324,8 +326,8 @@ export const GAME_CARDS: readonly GameCard[] = [
     },
     component: SpaceInvadersGame,
     description: "A cannon defense arcade game with marching invaders, shots, and scoring.",
-    id: "space-invaders",
-    label: "Classic Space Invaders",
+    id: spaceInvadersCatalogEntry.id,
+    label: spaceInvadersCatalogEntry.label,
     parameters: ["space-invaders-board-size", "space-invaders-aliens"],
   },
   {
@@ -339,8 +341,8 @@ export const GAME_CARDS: readonly GameCard[] = [
     },
     component: TwentyFortyEightGame,
     description: "A sliding tile puzzle with merges, score chasing, and a 2048 goal tile.",
-    id: "twenty-forty-eight",
-    label: "Classic 2048",
+    id: twentyFortyEightCatalogEntry.id,
+    label: twentyFortyEightCatalogEntry.label,
     parameters: ["twenty-forty-eight-board-size", "twenty-forty-eight-goal"],
   },
   {
@@ -354,8 +356,8 @@ export const GAME_CARDS: readonly GameCard[] = [
     },
     component: PongGame,
     description: "A paddle duel against a computer opponent with rebounds, rallies, and scoring.",
-    id: "pong",
-    label: "Classic Pong",
+    id: pongCatalogEntry.id,
+    label: pongCatalogEntry.label,
     parameters: ["pong-board-size", "pong-target"],
   },
   {
@@ -368,8 +370,8 @@ export const GAME_CARDS: readonly GameCard[] = [
     },
     component: SimonGame,
     description: "A memory pattern game with four pads, growing sequences, and strict misses.",
-    id: "simon",
-    label: "Classic Simon",
+    id: simonCatalogEntry.id,
+    label: simonCatalogEntry.label,
     parameters: ["simon-target"],
   },
 ];

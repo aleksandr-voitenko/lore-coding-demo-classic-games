@@ -1,7 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { GAME_CATALOG } from "@/lib/game-catalog";
+
 import { GameLauncher } from "./game-launcher";
+import { GAME_CARDS } from "./game-launcher-config";
 
 const EXPECTED_PARAMETER_SELECTS = [
   {
@@ -91,6 +94,10 @@ const EXPECTED_PARAMETER_SELECTS = [
 ] as const;
 
 describe("game launcher", () => {
+  it("uses the shared game catalog ids and labels for launcher cards", () => {
+    expect(GAME_CARDS.map(({ id, label }) => ({ id, label }))).toEqual(GAME_CATALOG);
+  });
+
   it("renders only configurable card parameters on the launch screen", () => {
     const markup = renderToStaticMarkup(<GameLauncher />);
 
