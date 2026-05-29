@@ -14,6 +14,8 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
 - `public/images/` owns launcher key art and the sprite-backed board assets.
   See `public/images/MEMORY.md`.
 - `e2e/` owns rendered browser-flow coverage. See `e2e/MEMORY.md`.
+- `scripts/` owns repository-local development tooling, including the
+  dependency-free Agentic Lore Coding validator. See `scripts/MEMORY.md`.
 - `.github/` owns CI workflow behavior. See `.github/MEMORY.md`.
 
 ## Major Boundaries
@@ -73,5 +75,9 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   flow details live in `e2e/MEMORY.md`.
 - `npm run typecheck`, `npm run lint`, and `npm run build` are the standard
   TypeScript, ESLint, and Next build checks.
+- `npm run lore-coding -- --file <path>` validates a Lore Coding commit message file.
+  `npm install` runs `scripts/install-lore-coding-hooks.mjs` through the package
+  `prepare` script to configure `core.hooksPath .githooks` for local clones;
+  CI does not run Lore Coding validation yet.
 - CI repeats the build, static checks, core coverage gate, and Playwright suite
   for code-affecting changes. See `.github/MEMORY.md`.

@@ -76,6 +76,7 @@ compatibility with existing Snake deployments. On a VPS, set
 | `npm run test:e2e:ui` | Open Playwright's interactive test runner. |
 | `npm run typecheck` | Run TypeScript without emitting. |
 | `npm run lint` | Run ESLint. |
+| `npm run lore-coding -- --file <path>` | Validate a Lore Coding commit message file. |
 | `npm run build` | Build the Next.js app. |
 
 GitHub Actions runs these checks on pushes to `main` and pull requests that
@@ -83,6 +84,61 @@ change code or build-affecting files: `npm ci`, `npm run build`,
 `npm run lint`, `npm run typecheck`, `npm run test:coverage:core`, and
 `npm run test:e2e`. Documentation-only changes such as Markdown, `docs/**`,
 and `LICENSE` are ignored by CI.
+
+## Lore Coding Validation
+
+The repository includes a dependency-free Agentic Lore Coding validator at
+`scripts/lore-coding.mjs`, a local Git `commit-msg` hook wrapper at
+`.githooks/commit-msg`, and an install-time hook setup script at
+`scripts/install-lore-coding-hooks.mjs`.
+
+`npm install` runs the package `prepare` script, which configures this clone
+with:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The installer only does this inside a Git worktree, skips in CI, and does not
+overwrite an existing custom `core.hooksPath`. Set
+`LORE_CODING_INSTALL_HOOKS=0` before installing dependencies to skip automatic
+hook setup. If your package manager skips lifecycle scripts, run the Git config
+command manually.
+
+After the hook path is configured, `git commit` passes the proposed
+commit-message file to the hook. The hook runs:
+
+```bash
+node scripts/lore-coding.mjs --edit "$1"
+```
+
+If validation fails, Git aborts the commit and prints stable `LORE###` error
+codes with the offending line, expected format, fix guidance, and an example.
+The validator rejects assistant wrapper prose, Markdown code fences, malformed
+subjects, unsupported task types, malformed scopes, missing or empty required
+sections, out-of-order sections, malformed `Links:` entries, and linked commits
+that do not exist as reachable commits in this repository.
+
+Run it manually against a message file with:
+
+```bash
+npm run lore-coding -- --file .git/COMMIT_EDITMSG
+```
+
+Explain an error code with:
+
+```bash
+npm run lore-coding -- explain LORE034
+```
+
+`Links:` entries must use a full commit hash, an em dash, and a reason:
+
+```text
+Links:
+- 3251d4ac7c0cbf6426f901c15ed2195b3a68f82d — established CI workflow behavior
+```
+
+This first version is local-only; CI does not run Lore Coding validation yet.
 
 ## UI Components
 
