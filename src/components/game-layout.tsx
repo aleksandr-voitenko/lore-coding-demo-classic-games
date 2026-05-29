@@ -13,6 +13,7 @@ export {
   GameHeader,
   GameShell,
   GameSidebar,
+  GameStatsBar,
   GameStatCard,
 } from "@/components/game-layout-shell";
 export {

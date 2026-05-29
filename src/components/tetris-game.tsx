@@ -21,6 +21,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStatsBar,
   GameStatCard,
   useGameEscapeToMenu,
   useGameHelpScreen,
@@ -413,81 +414,75 @@ export function TetrisGame({
 
   return (
     <GameShell className="bg-[var(--tetris-page)] text-[var(--tetris-ink)]">
-      <GameSidebar className="border-[var(--tetris-border)] bg-[var(--tetris-panel)]">
-        <GameHeader
-          status={statusLabels[game.status]}
-          statusTestId="tetris-status"
-          title="Classic Tetris"
-        />
-
-        <dl className="grid grid-cols-2 gap-3">
-          <GameStatCard
-            className="border-[var(--tetris-border)]"
-            label="Score"
-            labelClassName="text-[var(--tetris-muted)]"
-            value={game.score}
-            valueTestId="tetris-score"
-          />
-          <GameStatCard
-            className="border-[var(--tetris-border)]"
-            label="Lines"
-            labelClassName="text-[var(--tetris-muted)]"
-            value={game.lines}
-            valueTestId="tetris-lines"
-          />
-        </dl>
-
-        <dl className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_5rem] gap-3">
-          <GameStatCard
-            className="border-[var(--tetris-border)]"
-            label="Level"
-            labelClassName="text-[var(--tetris-muted)]"
-            value={game.level}
-            valueTestId="tetris-level"
-          />
-          <GameStatCard
-            className="border-[var(--tetris-border)]"
-            label="Speed"
-            labelClassName="text-[var(--tetris-muted)]"
-            value={tickDelay === null ? "0" : `${Math.round(1000 / tickDelay)}`}
-            valueTestId="tetris-speed"
-          />
-          <div className="flex flex-col gap-2 rounded-md border border-[var(--tetris-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--tetris-muted)]">
-              Next
-            </dt>
-            <dd>
-              <div
-                aria-label={`Next piece ${game.nextPieceKind}`}
-                className="relative aspect-square overflow-hidden rounded-[0.375rem] bg-[var(--tetris-board)] p-1"
-                data-testid="tetris-next-piece"
-                role="img"
-              >
-                <div aria-hidden="true" className="relative size-full">
-                  {nextPreviewBlocks.map((block) => (
-                    <span
-                      className={cn(
-                        "absolute rounded-[0.16rem]",
-                        tetrominoCellClassNames[game.nextPieceKind],
-                      )}
-                      key={block.key}
-                      style={{
-                        height: `${TETRIS_PREVIEW_CELL_SIZE_PERCENT}%`,
-                        left: `${block.leftPercent}%`,
-                        top: `${block.topPercent}%`,
-                        width: `${TETRIS_PREVIEW_CELL_SIZE_PERCENT}%`,
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            </dd>
-          </div>
-        </dl>
-
-      </GameSidebar>
-
       <GameBoardColumn className="w-[min(86vw,22.25rem)]">
+        <GameSidebar className="border-[var(--tetris-border)] bg-[var(--tetris-panel)]">
+          <GameHeader
+            status={statusLabels[game.status]}
+            statusTestId="tetris-status"
+            title="Classic Tetris"
+          />
+
+          <GameStatsBar>
+            <GameStatCard
+              className="border-[var(--tetris-border)]"
+              label="Score"
+              labelClassName="text-[var(--tetris-muted)]"
+              value={game.score}
+              valueTestId="tetris-score"
+            />
+            <GameStatCard
+              className="border-[var(--tetris-border)]"
+              label="Lines"
+              labelClassName="text-[var(--tetris-muted)]"
+              value={game.lines}
+              valueTestId="tetris-lines"
+            />
+            <GameStatCard
+              className="border-[var(--tetris-border)]"
+              label="Level"
+              labelClassName="text-[var(--tetris-muted)]"
+              value={game.level}
+              valueTestId="tetris-level"
+            />
+            <GameStatCard
+              className="border-[var(--tetris-border)]"
+              label="Speed"
+              labelClassName="text-[var(--tetris-muted)]"
+              value={tickDelay === null ? "0" : `${Math.round(1000 / tickDelay)}`}
+              valueTestId="tetris-speed"
+            />
+            <div className="flex min-w-0 flex-col gap-2 rounded-md border border-[var(--tetris-border)] p-2 sm:p-3">
+              <dt className="text-xs font-medium text-[var(--tetris-muted)]">Next</dt>
+              <dd>
+                <div
+                  aria-label={`Next piece ${game.nextPieceKind}`}
+                  className="relative aspect-square overflow-hidden rounded-[0.375rem] bg-[var(--tetris-board)] p-1"
+                  data-testid="tetris-next-piece"
+                  role="img"
+                >
+                  <div aria-hidden="true" className="relative size-full">
+                    {nextPreviewBlocks.map((block) => (
+                      <span
+                        className={cn(
+                          "absolute rounded-[0.16rem]",
+                          tetrominoCellClassNames[game.nextPieceKind],
+                        )}
+                        key={block.key}
+                        style={{
+                          height: `${TETRIS_PREVIEW_CELL_SIZE_PERCENT}%`,
+                          left: `${block.leftPercent}%`,
+                          top: `${block.topPercent}%`,
+                          width: `${TETRIS_PREVIEW_CELL_SIZE_PERCENT}%`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </dd>
+            </div>
+          </GameStatsBar>
+        </GameSidebar>
+
         <GameBoardStage
           actions={
             <GameBoardActions

@@ -32,6 +32,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStatsBar,
   GameStatCard,
   useGameEscapeToMenu,
   useGameHelpScreen,
@@ -305,50 +306,46 @@ export function BreakoutGame({
 
   return (
     <GameShell className="bg-[var(--breakout-page)] text-[var(--breakout-ink)]">
-      <GameSidebar className="border-[var(--breakout-border)] bg-[var(--breakout-panel)]">
-        <GameHeader
-          status={statusLabels[game.status]}
-          statusTestId="breakout-status"
-          title="Classic Breakout"
-        />
-
-        <dl className="grid grid-cols-2 gap-3">
-          <GameStatCard
-            className="border-[var(--breakout-border)]"
-            label="Score"
-            labelClassName="text-[var(--breakout-muted)]"
-            value={game.score}
-            valueTestId="breakout-score"
-          />
-          <GameStatCard
-            className="border-[var(--breakout-border)]"
-            label="Lives"
-            labelClassName="text-[var(--breakout-muted)]"
-            value={game.lives}
-            valueTestId="breakout-lives"
-          />
-        </dl>
-
-        <dl className="grid grid-cols-2 gap-3">
-          <GameStatCard
-            className="border-[var(--breakout-border)]"
-            label="Bricks"
-            labelClassName="text-[var(--breakout-muted)]"
-            value={activeBrickCount}
-            valueTestId="breakout-bricks-remaining"
-          />
-          <GameStatCard
-            className="border-[var(--breakout-border)]"
-            label="Speed"
-            labelClassName="text-[var(--breakout-muted)]"
-            value={tickDelay === null ? "0" : Math.round(1000 / tickDelay)}
-            valueTestId="breakout-speed"
-          />
-        </dl>
-
-      </GameSidebar>
-
       <GameBoardColumn className="w-[min(92vw,37.25rem)]">
+        <GameSidebar className="border-[var(--breakout-border)] bg-[var(--breakout-panel)]">
+          <GameHeader
+            status={statusLabels[game.status]}
+            statusTestId="breakout-status"
+            title="Classic Breakout"
+          />
+
+          <GameStatsBar>
+            <GameStatCard
+              className="border-[var(--breakout-border)]"
+              label="Score"
+              labelClassName="text-[var(--breakout-muted)]"
+              value={game.score}
+              valueTestId="breakout-score"
+            />
+            <GameStatCard
+              className="border-[var(--breakout-border)]"
+              label="Lives"
+              labelClassName="text-[var(--breakout-muted)]"
+              value={game.lives}
+              valueTestId="breakout-lives"
+            />
+            <GameStatCard
+              className="border-[var(--breakout-border)]"
+              label="Bricks"
+              labelClassName="text-[var(--breakout-muted)]"
+              value={activeBrickCount}
+              valueTestId="breakout-bricks-remaining"
+            />
+            <GameStatCard
+              className="border-[var(--breakout-border)]"
+              label="Speed"
+              labelClassName="text-[var(--breakout-muted)]"
+              value={tickDelay === null ? "0" : Math.round(1000 / tickDelay)}
+              valueTestId="breakout-speed"
+            />
+          </GameStatsBar>
+        </GameSidebar>
+
         <GameBoardStage
           actions={
             <GameBoardActions

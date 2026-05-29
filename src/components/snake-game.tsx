@@ -28,6 +28,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStatsBar,
   GameStatCard,
   useGameEscapeToMenu,
   useGameHelpScreen,
@@ -432,47 +433,46 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
 
   return (
     <GameShell className="bg-[var(--snake-page)] text-[var(--snake-ink)]">
-      <GameSidebar className="border-[var(--snake-border)] bg-[var(--snake-panel)]">
-        <GameHeader
-          status={statusLabels[game.status]}
-          statusTestId="snake-status"
-          title="Classic Snake"
-        />
-
-        <dl className="grid grid-cols-2 gap-3">
-          <GameStatCard
-            className="border-[var(--snake-border)]"
-            label="Score"
-            labelClassName="text-[var(--snake-muted)]"
-            value={game.score}
-            valueTestId="snake-score"
-          />
-          <GameStatCard
-            className="border-[var(--snake-border)]"
-            label="Best"
-            labelClassName="text-[var(--snake-muted)]"
-            value={bestScore}
-            valueTestId="snake-best"
-          />
-          <GameStatCard
-            className="border-[var(--snake-border)]"
-            label="Length"
-            labelClassName="text-[var(--snake-muted)]"
-            value={game.snake.length}
-            valueTestId="snake-length"
-          />
-          <GameStatCard
-            className="border-[var(--snake-border)]"
-            label="Speed"
-            labelClassName="text-[var(--snake-muted)]"
-            value={speed === null ? "0" : `${Math.round(1000 / speed)}`}
-            valueTestId="snake-speed"
-          />
-        </dl>
-
-      </GameSidebar>
-
       <GameBoardColumn className="w-[min(92vw,41.25rem)]">
+        <GameSidebar className="border-[var(--snake-border)] bg-[var(--snake-panel)]">
+          <GameHeader
+            status={statusLabels[game.status]}
+            statusTestId="snake-status"
+            title="Classic Snake"
+          />
+
+          <GameStatsBar>
+            <GameStatCard
+              className="border-[var(--snake-border)]"
+              label="Score"
+              labelClassName="text-[var(--snake-muted)]"
+              value={game.score}
+              valueTestId="snake-score"
+            />
+            <GameStatCard
+              className="border-[var(--snake-border)]"
+              label="Best"
+              labelClassName="text-[var(--snake-muted)]"
+              value={bestScore}
+              valueTestId="snake-best"
+            />
+            <GameStatCard
+              className="border-[var(--snake-border)]"
+              label="Length"
+              labelClassName="text-[var(--snake-muted)]"
+              value={game.snake.length}
+              valueTestId="snake-length"
+            />
+            <GameStatCard
+              className="border-[var(--snake-border)]"
+              label="Speed"
+              labelClassName="text-[var(--snake-muted)]"
+              value={speed === null ? "0" : `${Math.round(1000 / speed)}`}
+              valueTestId="snake-speed"
+            />
+          </GameStatsBar>
+        </GameSidebar>
+
         <GameBoardStage
           actions={
             <GameBoardActions

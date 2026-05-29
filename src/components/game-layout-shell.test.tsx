@@ -1,20 +1,45 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { GameHeader, GameShell, GameStatCard } from "./game-layout-shell";
+import {
+  GameBoardColumn,
+  GameBoardStage,
+  GameHeader,
+  GameShell,
+  GameSidebar,
+  GameStatsBar,
+  GameStatCard,
+} from "./game-layout-shell";
 
 describe("game layout shell", () => {
-  it("centers the board rail and keeps the sidebar adjacent on desktop", () => {
+  it("centers the board column with the stats bar above the board stage", () => {
     const markup = renderToStaticMarkup(
       <GameShell className="bg-test">
-        <aside>Stats</aside>
-        <div>Board</div>
+        <GameBoardColumn className="w-test">
+          <GameSidebar className="bg-panel">
+            <GameStatsBar>
+              <GameStatCard
+                className="border-test"
+                label="Score"
+                labelClassName="text-muted"
+                value={42}
+              />
+            </GameStatsBar>
+          </GameSidebar>
+          <GameBoardStage actions={<button type="button">Pause</button>}>
+            <div>Board</div>
+          </GameBoardStage>
+        </GameBoardColumn>
       </GameShell>,
     );
 
     expect(markup).toContain("max-w-[100rem]");
-    expect(markup).toContain("xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]");
-    expect(markup).toContain("xl:content-center xl:items-start");
+    expect(markup).toContain("justify-center");
+    expect(markup).toContain("xl:items-center");
+    expect(markup).toContain("w-test");
+    expect(markup.indexOf('data-testid="game-sidebar"')).toBeLessThan(
+      markup.indexOf('data-testid="game-board-stage"'),
+    );
   });
 
   it("keeps game status available without rendering a visible sidebar title block", () => {
@@ -28,9 +53,9 @@ describe("game layout shell", () => {
     expect(markup).toContain(">Ready</p>");
   });
 
-  it("renders a shared sidebar stat card with game-specific color hooks", () => {
+  it("renders a single-row shared stats bar with game-specific color hooks", () => {
     const markup = renderToStaticMarkup(
-      <dl>
+      <GameStatsBar>
         <GameStatCard
           className="border-[var(--snake-border)]"
           label="Score"
@@ -38,10 +63,11 @@ describe("game layout shell", () => {
           value={42}
           valueTestId="snake-score"
         />
-      </dl>,
+      </GameStatsBar>,
     );
 
-    expect(markup).toContain("rounded-md border p-3");
+    expect(markup).toContain("grid-flow-col auto-cols-fr");
+    expect(markup).toContain("min-w-0 rounded-md border p-2 sm:p-3");
     expect(markup).toContain("border-[var(--snake-border)]");
     expect(markup).toContain("<dt");
     expect(markup).toContain("text-[var(--snake-muted)]");

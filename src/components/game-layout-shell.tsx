@@ -14,6 +14,11 @@ type GameSidebarProps = {
   className: string;
 };
 
+type GameStatsBarProps = {
+  children: ReactNode;
+  className?: string;
+};
+
 type GameBoardColumnProps = {
   children: ReactNode;
   className: string;
@@ -42,7 +47,7 @@ type GameStatCardProps = {
 export function GameShell({ children, className }: GameShellProps) {
   return (
     <main className={cn("min-h-svh px-4 py-6 sm:px-6 lg:py-8", className)}>
-      <section className="mx-auto grid w-full max-w-[100rem] gap-5 xl:min-h-[calc(100svh-4rem)] xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:content-center xl:items-start">
+      <section className="mx-auto flex w-full max-w-[100rem] justify-center xl:min-h-[calc(100svh-4rem)] xl:items-center">
         {children}
       </section>
     </main>
@@ -53,7 +58,7 @@ export function GameSidebar({ children, className }: GameSidebarProps) {
   return (
     <aside
       className={cn(
-        "flex flex-col gap-4 rounded-md border p-4 shadow-sm xl:justify-self-end",
+        "flex w-full flex-col gap-2 rounded-md border p-2 shadow-sm sm:p-3",
         className,
       )}
       data-testid="game-sidebar"
@@ -63,9 +68,22 @@ export function GameSidebar({ children, className }: GameSidebarProps) {
   );
 }
 
+export function GameStatsBar({ children, className }: GameStatsBarProps) {
+  return (
+    <dl
+      className={cn(
+        "grid w-full grid-flow-col auto-cols-fr items-stretch gap-2 sm:gap-3",
+        className,
+      )}
+    >
+      {children}
+    </dl>
+  );
+}
+
 export function GameBoardColumn({ children, className }: GameBoardColumnProps) {
   return (
-    <div className={cn("mx-auto flex w-full flex-col gap-3 xl:col-start-2", className)}>
+    <div className={cn("mx-auto flex w-full flex-col gap-3", className)}>
       {children}
     </div>
   );
@@ -103,10 +121,10 @@ export function GameStatCard({
   valueTestId,
 }: GameStatCardProps) {
   return (
-    <div className={cn("rounded-md border p-3", className)}>
+    <div className={cn("min-w-0 rounded-md border p-2 sm:p-3", className)}>
       <dt className={cn("text-xs font-medium", labelClassName)}>{label}</dt>
       <dd
-        className={cn("font-mono text-3xl font-semibold leading-none", valueClassName)}
+        className={cn("font-mono text-2xl font-semibold leading-none sm:text-3xl", valueClassName)}
         data-testid={valueTestId}
       >
         {value}

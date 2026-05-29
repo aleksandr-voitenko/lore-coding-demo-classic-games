@@ -34,17 +34,19 @@ This file covers React component ownership and shared game UI conventions under
   shared layout, action, Help, dialog, or flow-hook implementation details in
   focused sibling modules so the barrel does not regain unrelated responsibilities.
 - `game-layout-shell.tsx` contains `GameShell`, `GameSidebar`,
-  `GameBoardColumn`, `GameBoardStage`, `GameHeader`, and `GameStatCard`.
-- `GameShell` centers the board column in the desktop viewport and places
-  `GameSidebar` immediately to the board's left, aligned to the board stage's top
-  edge. Per-game `GameBoardColumn` usage should provide an explicit responsive
-  width so the shared auto-width center column can measure and center the board.
+  `GameStatsBar`, `GameBoardColumn`, `GameBoardStage`, `GameHeader`, and
+  `GameStatCard`.
+- `GameShell` centers the board column in the viewport. Per-game
+  `GameBoardColumn` usage should provide an explicit responsive width, and
+  `GameSidebar` should be the first child inside that board column so the stats
+  bar sits directly above `GameBoardStage` and matches the board/stage width.
 - `GameHeader` is intentionally screen-reader-only status/title structure for
   accessibility and existing status test IDs. Keep visible titles and statuses in
   board overlays, Help screens, and end screens.
 - Keep per-game metrics and live status details in `GameSidebar`; do not add
-  separate information strips below `GameBoardStage`. Use `GameStatCard` for
-  simple repeated sidebar metrics and keep specialized panels local.
+  separate information strips below `GameBoardStage`. Use `GameStatsBar` for the
+  single-row metric list, `GameStatCard` for simple repeated metrics, and keep
+  specialized panels local.
 
 ## Board Actions And Overlays
 

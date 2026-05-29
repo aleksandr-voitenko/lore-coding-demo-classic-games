@@ -22,6 +22,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStatsBar,
   GameStatCard,
   useGameEscapeToMenu,
   useGameHelpScreen,
@@ -229,50 +230,46 @@ export function TwentyFortyEightGame({
 
   return (
     <GameShell className="bg-[var(--twenty-page)] text-[var(--twenty-ink)]">
-      <GameSidebar className="border-[var(--twenty-border)] bg-[var(--twenty-panel)]">
-        <GameHeader
-          status={statusLabel}
-          statusTestId="twenty-forty-eight-status"
-          title="Classic 2048"
-        />
-
-        <dl className="grid grid-cols-2 gap-3">
-          <GameStatCard
-            className="border-[var(--twenty-border)]"
-            label="Score"
-            labelClassName="text-[var(--twenty-muted)]"
-            value={game.score}
-            valueTestId="twenty-forty-eight-score"
-          />
-          <GameStatCard
-            className="border-[var(--twenty-border)]"
-            label="Best"
-            labelClassName="text-[var(--twenty-muted)]"
-            value={bestScore}
-            valueTestId="twenty-forty-eight-best-score"
-          />
-        </dl>
-
-        <dl className="grid grid-cols-2 gap-3">
-          <GameStatCard
-            className="border-[var(--twenty-border)]"
-            label="Top tile"
-            labelClassName="text-[var(--twenty-muted)]"
-            value={topTile}
-            valueTestId="twenty-forty-eight-top-tile"
-          />
-          <GameStatCard
-            className="border-[var(--twenty-border)]"
-            label="Moves"
-            labelClassName="text-[var(--twenty-muted)]"
-            value={game.moveCount}
-            valueTestId="twenty-forty-eight-moves"
-          />
-        </dl>
-
-      </GameSidebar>
-
       <GameBoardColumn className="w-[min(92vw,37.25rem)]">
+        <GameSidebar className="border-[var(--twenty-border)] bg-[var(--twenty-panel)]">
+          <GameHeader
+            status={statusLabel}
+            statusTestId="twenty-forty-eight-status"
+            title="Classic 2048"
+          />
+
+          <GameStatsBar>
+            <GameStatCard
+              className="border-[var(--twenty-border)]"
+              label="Score"
+              labelClassName="text-[var(--twenty-muted)]"
+              value={game.score}
+              valueTestId="twenty-forty-eight-score"
+            />
+            <GameStatCard
+              className="border-[var(--twenty-border)]"
+              label="Best"
+              labelClassName="text-[var(--twenty-muted)]"
+              value={bestScore}
+              valueTestId="twenty-forty-eight-best-score"
+            />
+            <GameStatCard
+              className="border-[var(--twenty-border)]"
+              label="Top tile"
+              labelClassName="text-[var(--twenty-muted)]"
+              value={topTile}
+              valueTestId="twenty-forty-eight-top-tile"
+            />
+            <GameStatCard
+              className="border-[var(--twenty-border)]"
+              label="Moves"
+              labelClassName="text-[var(--twenty-muted)]"
+              value={game.moveCount}
+              valueTestId="twenty-forty-eight-moves"
+            />
+          </GameStatsBar>
+        </GameSidebar>
+
         <GameBoardStage
           actions={
             <GameBoardActions

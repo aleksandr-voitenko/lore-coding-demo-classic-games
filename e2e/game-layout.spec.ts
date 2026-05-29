@@ -9,8 +9,8 @@ const desktopViewport = {
 };
 
 const centeredBoardTolerancePx = 48;
-const alignedTopTolerancePx = 1;
-const adjacentSidebarGapPx = 24;
+const alignedEdgeTolerancePx = 1;
+const stackedGapPx = 16;
 
 const layoutCases = [
   { boardTestId: "snake-board", gameId: "snake", name: "Snake", statusTestId: "snake-status" },
@@ -55,10 +55,11 @@ const layoutCases = [
 
 test.use({ viewport: desktopViewport });
 
-async function expectCenteredBoardAndAlignedSidebar(page: Page, boardTestId: string) {
+async function expectCenteredBoardAndTopStatsBar(page: Page, boardTestId: string) {
   const board = page.getByTestId(boardTestId);
   const sidebar = page.getByTestId("game-sidebar");
   const stage = page.getByTestId("game-board-stage");
+  const statItems = sidebar.locator("dl > div");
 
   await expect(board).toBeVisible();
   await expect(sidebar).toBeVisible();
@@ -82,23 +83,39 @@ async function expectCenteredBoardAndAlignedSidebar(page: Page, boardTestId: str
   expect(Math.abs(boardCenterX - viewportCenterX)).toBeLessThanOrEqual(
     centeredBoardTolerancePx,
   );
-  expect(Math.abs(sidebarBox!.y - stageBox!.y)).toBeLessThanOrEqual(
-    alignedTopTolerancePx,
+  expect(sidebarBox!.y + sidebarBox!.height).toBeLessThanOrEqual(stageBox!.y);
+  expect(stageBox!.y - (sidebarBox!.y + sidebarBox!.height)).toBeLessThanOrEqual(
+    stackedGapPx,
   );
-  expect(sidebarBox!.x + sidebarBox!.width).toBeLessThanOrEqual(stageBox!.x);
-  expect(stageBox!.x - (sidebarBox!.x + sidebarBox!.width)).toBeLessThanOrEqual(
-    adjacentSidebarGapPx,
+  expect(Math.abs(sidebarBox!.x - stageBox!.x)).toBeLessThanOrEqual(
+    alignedEdgeTolerancePx,
   );
+  expect(Math.abs(sidebarBox!.width - stageBox!.width)).toBeLessThanOrEqual(
+    alignedEdgeTolerancePx,
+  );
+
+  const statItemCount = await statItems.count();
+  expect(statItemCount).toBeGreaterThan(1);
+  const statItemBoxes = await Promise.all(
+    Array.from({ length: statItemCount }, (_, index) => statItems.nth(index).boundingBox()),
+  );
+  expect(statItemBoxes.every((box) => box !== null)).toBe(true);
+  const statItemTop = statItemBoxes[0]!.y;
+  for (const statItemBox of statItemBoxes) {
+    expect(Math.abs(statItemBox!.y - statItemTop)).toBeLessThanOrEqual(
+      alignedEdgeTolerancePx,
+    );
+  }
 }
 
 for (const layoutCase of layoutCases) {
-  test(`${layoutCase.name} centers the board beside a top-aligned info panel`, async ({
+  test(`${layoutCase.name} centers the board below a one-line stats bar`, async ({
     page,
   }) => {
     await openLauncher(page);
     await openGame(page, layoutCase.gameId);
 
     await expect(page.getByTestId(layoutCase.statusTestId)).toHaveText("Ready");
-    await expectCenteredBoardAndAlignedSidebar(page, layoutCase.boardTestId);
+    await expectCenteredBoardAndTopStatsBar(page, layoutCase.boardTestId);
   });
 }

@@ -19,6 +19,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStatsBar,
   GameStatCard,
   useGameEscapeToMenu,
   useGameHelpScreen,
@@ -319,50 +320,46 @@ export function SpaceInvadersGame({
 
   return (
     <GameShell className="bg-[var(--invaders-page)] text-[var(--invaders-ink)]">
-      <GameSidebar className="border-[var(--invaders-border)] bg-[var(--invaders-panel)]">
-        <GameHeader
-          status={statusLabels[game.status]}
-          statusTestId="space-invaders-status"
-          title="Classic Space Invaders"
-        />
-
-        <dl className="grid grid-cols-2 gap-3">
-          <GameStatCard
-            className="border-[var(--invaders-border)]"
-            label="Score"
-            labelClassName="text-[var(--invaders-muted)]"
-            value={game.score}
-            valueTestId="space-invaders-score"
-          />
-          <GameStatCard
-            className="border-[var(--invaders-border)]"
-            label="Lives"
-            labelClassName="text-[var(--invaders-muted)]"
-            value={game.lives}
-            valueTestId="space-invaders-lives"
-          />
-        </dl>
-
-        <dl className="grid grid-cols-2 gap-3">
-          <GameStatCard
-            className="border-[var(--invaders-border)]"
-            label="Invaders"
-            labelClassName="text-[var(--invaders-muted)]"
-            value={activeInvaderCount}
-            valueTestId="space-invaders-remaining"
-          />
-          <GameStatCard
-            className="border-[var(--invaders-border)]"
-            label="Speed"
-            labelClassName="text-[var(--invaders-muted)]"
-            value={tickDelay === null ? "0" : Math.round(1000 / tickDelay)}
-            valueTestId="space-invaders-speed"
-          />
-        </dl>
-
-      </GameSidebar>
-
       <GameBoardColumn className="w-[min(92vw,37.25rem)]">
+        <GameSidebar className="border-[var(--invaders-border)] bg-[var(--invaders-panel)]">
+          <GameHeader
+            status={statusLabels[game.status]}
+            statusTestId="space-invaders-status"
+            title="Classic Space Invaders"
+          />
+
+          <GameStatsBar>
+            <GameStatCard
+              className="border-[var(--invaders-border)]"
+              label="Score"
+              labelClassName="text-[var(--invaders-muted)]"
+              value={game.score}
+              valueTestId="space-invaders-score"
+            />
+            <GameStatCard
+              className="border-[var(--invaders-border)]"
+              label="Lives"
+              labelClassName="text-[var(--invaders-muted)]"
+              value={game.lives}
+              valueTestId="space-invaders-lives"
+            />
+            <GameStatCard
+              className="border-[var(--invaders-border)]"
+              label="Invaders"
+              labelClassName="text-[var(--invaders-muted)]"
+              value={activeInvaderCount}
+              valueTestId="space-invaders-remaining"
+            />
+            <GameStatCard
+              className="border-[var(--invaders-border)]"
+              label="Speed"
+              labelClassName="text-[var(--invaders-muted)]"
+              value={tickDelay === null ? "0" : Math.round(1000 / tickDelay)}
+              valueTestId="space-invaders-speed"
+            />
+          </GameStatsBar>
+        </GameSidebar>
+
         <GameBoardStage
           actions={
             <GameBoardActions

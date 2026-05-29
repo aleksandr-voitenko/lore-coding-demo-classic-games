@@ -19,6 +19,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStatsBar,
   GameStatCard,
   useGameEscapeToMenu,
   useGameHelpScreen,
@@ -347,60 +348,49 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
 
   return (
     <GameShell className="bg-[#f6f9fc] text-[#172033]">
-      <GameSidebar className="border-[#d6dfeb] bg-white">
-        <GameHeader
-          status={statusLabel}
-          statusTestId="simon-status"
-          title="Classic Simon"
-        />
-
-        <dl className="grid grid-cols-2 gap-3">
-          <GameStatCard
-            className="border-[#d6dfeb]"
-            label="Score"
-            labelClassName="text-[#59687d]"
-            value={game.score}
-            valueTestId="simon-score"
-          />
-          <GameStatCard
-            className="border-[#d6dfeb]"
-            label="Round"
-            labelClassName="text-[#59687d]"
-            value={game.round}
-            valueTestId="simon-round"
-          />
-        </dl>
-
-        <dl className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-3">
-          <GameStatCard
-            className="border-[#d6dfeb]"
-            label="Progress"
-            labelClassName="text-[#59687d]"
-            value={progressLabel}
-            valueTestId="simon-progress"
-          />
-          <GameStatCard
-            className="border-[#d6dfeb]"
-            label="Target"
-            labelClassName="text-[#59687d]"
-            value={game.winTarget}
-            valueTestId="simon-target"
-          />
-        </dl>
-
-        <dl>
-          <GameStatCard
-            className="border-[#d6dfeb]"
-            label="Speed"
-            labelClassName="text-[#59687d]"
-            value={playbackDelay === null ? "0" : Math.round(1000 / playbackDelay)}
-            valueTestId="simon-speed"
-          />
-        </dl>
-
-      </GameSidebar>
-
       <GameBoardColumn className="w-[min(92vw,37.25rem)]">
+        <GameSidebar className="border-[#d6dfeb] bg-white">
+          <GameHeader status={statusLabel} statusTestId="simon-status" title="Classic Simon" />
+
+          <GameStatsBar>
+            <GameStatCard
+              className="border-[#d6dfeb]"
+              label="Score"
+              labelClassName="text-[#59687d]"
+              value={game.score}
+              valueTestId="simon-score"
+            />
+            <GameStatCard
+              className="border-[#d6dfeb]"
+              label="Round"
+              labelClassName="text-[#59687d]"
+              value={game.round}
+              valueTestId="simon-round"
+            />
+            <GameStatCard
+              className="border-[#d6dfeb]"
+              label="Progress"
+              labelClassName="text-[#59687d]"
+              value={progressLabel}
+              valueTestId="simon-progress"
+            />
+            <GameStatCard
+              className="border-[#d6dfeb]"
+              label="Target"
+              labelClassName="text-[#59687d]"
+              value={game.winTarget}
+              valueTestId="simon-target"
+            />
+            <GameStatCard
+              className="border-[#d6dfeb]"
+              label="Speed"
+              labelClassName="text-[#59687d]"
+              value={playbackDelay === null ? "0" : Math.round(1000 / playbackDelay)}
+              valueTestId="simon-speed"
+            />
+          </GameStatsBar>
+        </GameSidebar>
+
         <GameBoardStage
           actions={
             <GameBoardActions

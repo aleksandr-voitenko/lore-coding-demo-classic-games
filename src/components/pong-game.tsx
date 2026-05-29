@@ -21,6 +21,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStatsBar,
   GameStatCard,
   useGameEscapeToMenu,
   useGameHelpScreen,
@@ -339,49 +340,41 @@ export function PongGame({
 
   return (
     <GameShell className="bg-[var(--pong-page)] text-[var(--pong-ink)]">
-      <GameSidebar className="border-[var(--pong-border)] bg-[var(--pong-panel)]">
-        <GameHeader
-          status={statusLabel}
-          statusTestId="pong-status"
-          title="Classic Pong"
-        />
-
-        <dl className="grid grid-cols-2 gap-3">
-          <GameStatCard
-            className="border-[var(--pong-border)]"
-            label="Score"
-            labelClassName="text-[var(--pong-muted)]"
-            value={game.remainingScore}
-            valueTestId="pong-remaining-score"
-          />
-          <GameStatCard
-            className="border-[var(--pong-border)]"
-            label="Target"
-            labelClassName="text-[var(--pong-muted)]"
-            value={game.targetScore}
-          />
-        </dl>
-
-        <dl className="grid grid-cols-2 gap-3">
-          <GameStatCard
-            className="border-[var(--pong-border)]"
-            label="Player"
-            labelClassName="text-[var(--pong-muted)]"
-            value={game.score.player}
-            valueTestId="pong-player-score"
-          />
-          <GameStatCard
-            className="border-[var(--pong-border)]"
-            label="Computer"
-            labelClassName="text-[var(--pong-muted)]"
-            value={game.score.cpu}
-            valueTestId="pong-cpu-score"
-          />
-        </dl>
-
-      </GameSidebar>
-
       <GameBoardColumn className="w-[min(92vw,37.25rem)]">
+        <GameSidebar className="border-[var(--pong-border)] bg-[var(--pong-panel)]">
+          <GameHeader status={statusLabel} statusTestId="pong-status" title="Classic Pong" />
+
+          <GameStatsBar>
+            <GameStatCard
+              className="border-[var(--pong-border)]"
+              label="Score"
+              labelClassName="text-[var(--pong-muted)]"
+              value={game.remainingScore}
+              valueTestId="pong-remaining-score"
+            />
+            <GameStatCard
+              className="border-[var(--pong-border)]"
+              label="Target"
+              labelClassName="text-[var(--pong-muted)]"
+              value={game.targetScore}
+            />
+            <GameStatCard
+              className="border-[var(--pong-border)]"
+              label="Player"
+              labelClassName="text-[var(--pong-muted)]"
+              value={game.score.player}
+              valueTestId="pong-player-score"
+            />
+            <GameStatCard
+              className="border-[var(--pong-border)]"
+              label="Computer"
+              labelClassName="text-[var(--pong-muted)]"
+              value={game.score.cpu}
+              valueTestId="pong-cpu-score"
+            />
+          </GameStatsBar>
+        </GameSidebar>
+
         <GameBoardStage
           actions={
             <GameBoardActions

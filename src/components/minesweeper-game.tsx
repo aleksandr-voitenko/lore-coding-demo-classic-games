@@ -15,6 +15,7 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStatsBar,
   GameStatCard,
   useGameEscapeToMenu,
   useGameHelpScreen,
@@ -231,57 +232,55 @@ export function MinesweeperGame({
 
   return (
     <GameShell className="bg-[var(--minesweeper-page)] text-[var(--minesweeper-ink)]">
-      <GameSidebar className="border-[var(--minesweeper-border)] bg-[var(--minesweeper-panel)]">
-        <GameHeader
-          status={statusLabels[game.status]}
-          statusTestId="minesweeper-status"
-          title="Classic Minesweeper"
-        />
-
-        <dl className="grid grid-cols-2 gap-3">
-          <GameStatCard
-            className="border-[var(--minesweeper-border)]"
-            label="Mines"
-            labelClassName="text-[var(--minesweeper-muted)]"
-            value={remainingMineCount}
-            valueTestId="minesweeper-mines-remaining"
-          />
-          <GameStatCard
-            className="border-[var(--minesweeper-border)]"
-            label="Time"
-            labelClassName="text-[var(--minesweeper-muted)]"
-            value={formatElapsedTime(elapsedSeconds)}
-            valueTestId="minesweeper-time"
-          />
-        </dl>
-
-        <dl className="grid grid-cols-2 gap-3">
-          <GameStatCard
-            className="border-[var(--minesweeper-border)]"
-            label="Safe cells"
-            labelClassName="text-[var(--minesweeper-muted)]"
-            value={`${game.revealedSafeCellCount}/${safeCellCount}`}
-            valueTestId="minesweeper-safe-cells"
-          />
-          <div className="rounded-md border border-[var(--minesweeper-border)] p-3">
-            <dt className="text-xs font-medium text-[var(--minesweeper-muted)]">Mode</dt>
-            <dd
-              className={cn(
-                "mt-1 inline-flex rounded-[0.2rem] px-2 py-1 text-sm font-semibold",
-                isFlagMode
-                  ? "bg-[color-mix(in_oklch,var(--minesweeper-flag)_14%,white)] text-[var(--minesweeper-flag)]"
-                  : "bg-[color-mix(in_oklch,var(--minesweeper-one)_14%,white)] text-[var(--minesweeper-one)]",
-              )}
-              data-testid="minesweeper-active-mode"
-            >
-              {isFlagMode ? "Flag" : "Reveal"}
-            </dd>
-          </div>
-        </dl>
-
-      </GameSidebar>
-
       <GameBoardColumn className="w-[min(92vw,37.25rem)]">
+        <GameSidebar className="border-[var(--minesweeper-border)] bg-[var(--minesweeper-panel)]">
+          <GameHeader
+            status={statusLabels[game.status]}
+            statusTestId="minesweeper-status"
+            title="Classic Minesweeper"
+          />
+
+          <GameStatsBar>
+            <GameStatCard
+              className="border-[var(--minesweeper-border)]"
+              label="Mines"
+              labelClassName="text-[var(--minesweeper-muted)]"
+              value={remainingMineCount}
+              valueTestId="minesweeper-mines-remaining"
+            />
+            <GameStatCard
+              className="border-[var(--minesweeper-border)]"
+              label="Time"
+              labelClassName="text-[var(--minesweeper-muted)]"
+              value={formatElapsedTime(elapsedSeconds)}
+              valueTestId="minesweeper-time"
+            />
+            <GameStatCard
+              className="border-[var(--minesweeper-border)]"
+              label="Safe cells"
+              labelClassName="text-[var(--minesweeper-muted)]"
+              value={`${game.revealedSafeCellCount}/${safeCellCount}`}
+              valueTestId="minesweeper-safe-cells"
+            />
+            <div className="min-w-0 rounded-md border border-[var(--minesweeper-border)] p-2 sm:p-3">
+              <dt className="text-xs font-medium text-[var(--minesweeper-muted)]">
+                Mode
+              </dt>
+              <dd
+                className={cn(
+                  "mt-1 inline-flex rounded-[0.2rem] px-2 py-1 text-sm font-semibold",
+                  isFlagMode
+                    ? "bg-[color-mix(in_oklch,var(--minesweeper-flag)_14%,white)] text-[var(--minesweeper-flag)]"
+                    : "bg-[color-mix(in_oklch,var(--minesweeper-one)_14%,white)] text-[var(--minesweeper-one)]",
+                )}
+                data-testid="minesweeper-active-mode"
+              >
+                {isFlagMode ? "Flag" : "Reveal"}
+              </dd>
+            </div>
+          </GameStatsBar>
+        </GameSidebar>
+
         <GameBoardStage
           actions={
             <GameBoardActions
