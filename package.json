@@ -9,6 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "stats:loc": "scc . --exclude-ext md,json,svg,png,ico --no-gen",
     "lint": "eslint",
     "test": "vitest run",
     "test:agent": "vitest run --coverage --reporter=default --reporter=json --reporter=junit --outputFile.json=reports/vitest/results.json --outputFile.junit=reports/vitest/junit.xml",
