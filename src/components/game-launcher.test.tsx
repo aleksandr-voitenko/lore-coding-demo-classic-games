@@ -91,6 +91,18 @@ const EXPECTED_PARAMETER_SELECTS = [
     label: "Target",
     testId: "simon-target",
   },
+  {
+    defaultLabel: "640 x 480",
+    defaultValue: "640x480",
+    label: "Board",
+    testId: "asteroids-board-size",
+  },
+  {
+    defaultLabel: "6",
+    defaultValue: "6",
+    label: "Rocks",
+    testId: "asteroids-rocks",
+  },
 ] as const;
 
 describe("game launcher", () => {

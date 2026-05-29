@@ -18,11 +18,13 @@ describe("game catalog", () => {
       { id: "twenty-forty-eight", label: "Classic 2048" },
       { id: "pong", label: "Classic Pong" },
       { id: "simon", label: "Classic Simon" },
+      { id: "asteroids", label: "Classic Asteroids" },
     ]);
   });
 
   it("formats profile game ids from the shared catalog with a readable fallback", () => {
     expect(formatGameCatalogLabel("space-invaders")).toBe("Classic Space Invaders");
+    expect(formatGameCatalogLabel("asteroids")).toBe("Classic Asteroids");
     expect(formatGameCatalogLabel("twenty-forty-eight")).toBe("Classic 2048");
     expect(formatGameCatalogLabel("custom-game")).toBe("Custom Game");
   });

@@ -40,6 +40,13 @@ const realtimeSharedFlowCases: RealtimeSharedFlowCase[] = [
     prefix: "pong",
     startButtonTestId: "pong-start-button",
   },
+  {
+    activeStatus: "Running",
+    gameId: "asteroids",
+    name: "Asteroids",
+    prefix: "asteroids",
+    startButtonTestId: "asteroids-start-button",
+  },
 ];
 
 async function expectAbandonDialogHidden(page: Page) {

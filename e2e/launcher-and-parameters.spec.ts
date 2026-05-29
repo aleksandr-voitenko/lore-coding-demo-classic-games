@@ -18,6 +18,7 @@ const gameCardIds = [
   "twenty-forty-eight",
   "pong",
   "simon",
+  "asteroids",
 ] as const;
 
 type GameId = (typeof gameCardIds)[number];
@@ -146,6 +147,22 @@ const launcherParameterHandoffCases: LauncherParameterHandoffCase[] = [
     name: "Simon target",
     parameters: [{ testId: "simon-target", value: "16" }],
   },
+  {
+    assertGameSeeded: async (page) => {
+      await expect(page.getByTestId("asteroids-status")).toHaveText("Ready");
+      await expect(page.getByTestId("asteroids-rocks")).toHaveText("8");
+      await expect(page.getByTestId("asteroids-board")).toHaveAttribute(
+        "aria-label",
+        /Asteroids board\. Field 800 by 600\. Score 0\. Lives 3\. Wave 1\. 8 asteroids remaining\. Ready\./,
+      );
+    },
+    gameId: "asteroids",
+    name: "Asteroids board and rock count",
+    parameters: [
+      { testId: "asteroids-board-size", value: "800x600" },
+      { testId: "asteroids-rocks", value: "8" },
+    ],
+  },
 ];
 
 test("launcher renders game cards and configurable parameters", async ({ page }) => {
@@ -155,11 +172,12 @@ test("launcher renders game cards and configurable parameters", async ({ page })
     await expect(page.getByTestId(`game-card-${gameId}`)).toBeVisible();
   }
 
-  await expect(page.getByText("8 games available")).toBeVisible();
+  await expect(page.getByText("9 games available")).toBeVisible();
   await expect(page.getByTestId("snake-board-size")).toHaveValue("19");
   await expect(page.getByTestId("tetris-board-size")).toHaveValue("10x20");
   await expect(page.getByTestId("tetris-start-level")).toHaveValue("1");
   await expect(page.getByTestId("minesweeper-mines")).toHaveValue("10");
+  await expect(page.getByTestId("asteroids-rocks")).toHaveValue("6");
 });
 
 test("launcher-selected Tetris parameters seed the opened game", async ({ page }) => {

@@ -51,6 +51,12 @@ const layoutCases = [
     statusTestId: "twenty-forty-eight-status",
   },
   { boardTestId: "simon-board", gameId: "simon", name: "Simon", statusTestId: "simon-status" },
+  {
+    boardTestId: "asteroids-board",
+    gameId: "asteroids",
+    name: "Asteroids",
+    statusTestId: "asteroids-status",
+  },
 ] as const;
 
 test.use({ viewport: desktopViewport });

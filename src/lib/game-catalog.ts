@@ -31,6 +31,10 @@ export const GAME_CATALOG = [
     id: "simon",
     label: "Classic Simon",
   },
+  {
+    id: "asteroids",
+    label: "Classic Asteroids",
+  },
 ] as const;
 
 export type GameCatalogEntry = (typeof GAME_CATALOG)[number];

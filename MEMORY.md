@@ -8,7 +8,7 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
 
 - This is a Next.js App Router classic game collection. The launcher currently
   exposes Classic Snake, Tetris, Breakout, Minesweeper, Space Invaders, Pong,
-  2048, and Simon.
+  2048, Simon, and Asteroids.
 - `src/` owns application source. See `src/MEMORY.md` for App Router,
   component, hook, library, and server boundaries.
 - `public/images/` owns launcher key art and the sprite-backed board assets.

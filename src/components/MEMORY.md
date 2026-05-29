@@ -92,6 +92,10 @@ This file covers React component ownership and shared game UI conventions under
   keyup/blur/modal cleanup. Use the shared held-direction movement state,
   controller, and React lifecycle hook in `game-input.ts`, with small
   game-specific key-map wrappers beside the game components.
+- For non-exclusive realtime controls that must be held together, keep a small
+  local control-state helper beside the game component. Asteroids uses this for
+  simultaneous rotation and thrust while still using shared key registration and
+  keyboard guards.
 - Component tests are useful for static board renderers, shared input filtering,
   and focused shared UI behavior. Prefer Playwright for broad rendered flows and
   browser interactions.

@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 
+import { AsteroidsGame } from "@/components/asteroids-game";
 import { BreakoutGame } from "@/components/breakout-game";
 import { MinesweeperGame } from "@/components/minesweeper-game";
 import { PongGame } from "@/components/pong-game";
@@ -8,6 +9,13 @@ import { SnakeGame } from "@/components/snake-game";
 import { SpaceInvadersGame } from "@/components/space-invaders-game";
 import { TetrisGame } from "@/components/tetris-game";
 import { TwentyFortyEightGame } from "@/components/twenty-forty-eight-game";
+import {
+  ASTEROIDS_ASTEROID_COUNT_OPTIONS,
+  ASTEROIDS_BOARD_HEIGHT,
+  ASTEROIDS_BOARD_SIZE_OPTIONS,
+  ASTEROIDS_BOARD_WIDTH,
+  ASTEROIDS_STARTING_ASTEROID_COUNT,
+} from "@/lib/asteroids-game-engine";
 import {
   BREAKOUT_BOARD_HEIGHT,
   BREAKOUT_BOARD_SIZE_OPTIONS,
@@ -66,6 +74,7 @@ import { getGameCatalogEntry, type GameId } from "@/lib/game-catalog";
 export type { GameId } from "@/lib/game-catalog";
 
 export type PlayableGameProps = {
+  initialAsteroidCount?: number;
   initialAlienCount?: number;
   initialBoardHeight?: number;
   initialBoardSize?: number;
@@ -222,6 +231,22 @@ export const GAME_PARAMETER_CONFIG = defineGameParameterConfig({
       initialWinTarget: Number(value),
     }),
   },
+  "asteroids-board-size": createBoardSizeParameter({
+    defaultSize: {
+      height: ASTEROIDS_BOARD_HEIGHT,
+      width: ASTEROIDS_BOARD_WIDTH,
+    },
+    label: "Board",
+    options: ASTEROIDS_BOARD_SIZE_OPTIONS,
+  }),
+  "asteroids-rocks": {
+    defaultValue: String(ASTEROIDS_STARTING_ASTEROID_COUNT),
+    label: "Rocks",
+    options: createNumberSelectOptions(ASTEROIDS_ASTEROID_COUNT_OPTIONS),
+    toInitialProps: (value) => ({
+      initialAsteroidCount: Number(value),
+    }),
+  },
 });
 
 export type GameParameterKind = keyof typeof GAME_PARAMETER_CONFIG;
@@ -253,6 +278,7 @@ const spaceInvadersCatalogEntry = getGameCatalogEntry("space-invaders");
 const twentyFortyEightCatalogEntry = getGameCatalogEntry("twenty-forty-eight");
 const pongCatalogEntry = getGameCatalogEntry("pong");
 const simonCatalogEntry = getGameCatalogEntry("simon");
+const asteroidsCatalogEntry = getGameCatalogEntry("asteroids");
 
 export const GAME_CARDS: readonly GameCard[] = [
   {
@@ -373,6 +399,21 @@ export const GAME_CARDS: readonly GameCard[] = [
     id: simonCatalogEntry.id,
     label: simonCatalogEntry.label,
     parameters: ["simon-target"],
+  },
+  {
+    accentClassName:
+      "bg-[linear-gradient(90deg,var(--asteroids-ship),var(--asteroids-bullet),var(--asteroids-asteroid))]",
+    artwork: {
+      height: 941,
+      loading: "eager",
+      src: "/images/asteroids-game-card.png",
+      width: 1672,
+    },
+    component: AsteroidsGame,
+    description: "A vector space survival game with thrust, wraparound, rocks, and waves.",
+    id: asteroidsCatalogEntry.id,
+    label: asteroidsCatalogEntry.label,
+    parameters: ["asteroids-board-size", "asteroids-rocks"],
   },
 ];
 

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+import { AsteroidsBoard } from "./asteroids-board";
 import { BreakoutBoard } from "./breakout-board";
 import { MinesweeperBoard, MinesweeperStartPreview } from "./minesweeper-board";
 import { PongBoard } from "./pong-board";
@@ -10,6 +11,7 @@ import { SpaceInvadersBoard } from "./space-invaders-board";
 import { TetrisBoard } from "./tetris-board";
 import { TwentyFortyEightBoard } from "./twenty-forty-eight-board";
 import { createInitialBreakoutGame } from "@/lib/breakout-game-engine";
+import { createInitialAsteroidsGame } from "@/lib/asteroids-game-engine";
 import { createInitialMinesweeperGame } from "@/lib/minesweeper-game-engine";
 import { createInitialPongGame } from "@/lib/pong-game-engine";
 import { createInitialSimonGame } from "@/lib/simon-game-engine";
@@ -282,6 +284,44 @@ describe("game board renderers", () => {
       "inset_0_0_0_4px_rgba(255,255,255,0.94)",
       "Red pad. Key 2 or W.",
       ">2</div>",
+    ]);
+  });
+
+  it("renders Asteroids vector entities and score summary", () => {
+    const game = createInitialAsteroidsGame();
+    const markup = renderToStaticMarkup(
+      <AsteroidsBoard
+        game={{
+          ...game,
+          bullets: [
+            {
+              id: "bullet-test",
+              radius: 2.5,
+              ttl: 20,
+              velocity: { x: 0, y: -8 },
+              x: 320,
+              y: 220,
+            },
+          ],
+          score: 120,
+          ship: {
+            ...game.ship,
+            isThrusting: true,
+          },
+          status: "running",
+          wave: 2,
+        }}
+        statusLabel="Running"
+      />,
+    );
+
+    expectMarkup(markup, [
+      'data-testid="asteroids-board"',
+      "Asteroids board. Field 640 by 480. Score 120. Lives 3. Wave 2. 6 asteroids remaining. Running.",
+      'data-testid="asteroids-asteroid"',
+      'data-testid="asteroids-bullet"',
+      'data-testid="asteroids-ship"',
+      "<polygon",
     ]);
   });
 });

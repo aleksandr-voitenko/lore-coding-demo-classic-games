@@ -52,6 +52,13 @@ const keyboardPauseCases: KeyboardPauseCase[] = [
     prefix: "simon",
     startButtonTestId: "simon-start-button",
   },
+  {
+    activeStatus: "Running",
+    gameId: "asteroids",
+    name: "Asteroids",
+    prefix: "asteroids",
+    startButtonTestId: "asteroids-start-button",
+  },
 ];
 
 test("2048 keyboard input starts play and advances moves", async ({ page }) => {
@@ -131,6 +138,41 @@ test("Tetris keyboard input starts, soft-drops, pauses, and resumes", async ({
 
   await page.keyboard.press("P");
   await expect(page.getByTestId("tetris-status")).toHaveText("Running");
+});
+
+test("Asteroids keyboard input starts, thrusts, rotates, fires, pauses, and resumes", async ({
+  page,
+}) => {
+  await openLauncher(page);
+  await openGame(page, "asteroids");
+
+  await expect(page.getByTestId("asteroids-status")).toHaveText("Ready");
+  await expect(page.getByTestId("asteroids-start-screen")).toBeVisible();
+
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByTestId("asteroids-status")).toHaveText("Running");
+  await expect(page.getByTestId("asteroids-start-screen")).toBeHidden();
+  await expect(page.getByTestId("asteroids-ship")).toBeVisible();
+
+  await page.keyboard.down("ArrowRight");
+  await page.keyboard.down("ArrowUp");
+  await page.waitForTimeout(80);
+  await page.keyboard.up("ArrowUp");
+  await page.keyboard.up("ArrowRight");
+  await page.keyboard.press("Space");
+
+  await expect(page.getByTestId("asteroids-bullet")).toBeVisible();
+  await expect(page.getByTestId("asteroids-board")).toHaveAttribute(
+    "aria-label",
+    /Asteroids board\. Field 640 by 480\..*Running\./,
+  );
+
+  await page.keyboard.press("p");
+  await expect(page.getByTestId("asteroids-status")).toHaveText("Paused");
+
+  await page.keyboard.press("P");
+  await expect(page.getByTestId("asteroids-status")).toHaveText("Running");
 });
 
 for (const keyboardPauseCase of keyboardPauseCases) {
