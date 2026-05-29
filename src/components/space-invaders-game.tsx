@@ -107,7 +107,8 @@ const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
     items: [
       "Shoot every invader before the formation reaches your base.",
       "Only one player shot can be active at a time.",
-      "Defend Earth to win; the game ends if the invaders reach the base.",
+      "Dodge shots fired by the lowest surviving invader in each column.",
+      "Defend Earth to win; the game ends if you lose every life or the invaders reach the base.",
     ],
   },
 ];

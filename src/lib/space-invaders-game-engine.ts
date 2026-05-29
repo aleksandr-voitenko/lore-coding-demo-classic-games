@@ -29,14 +29,23 @@ export type SpaceInvadersShot = {
   y: number;
 };
 
+export type SpaceInvadersInvaderShot = SpaceInvadersShot & {
+  id: string;
+  sourceColumn: number;
+  sourceInvaderId: string;
+};
+
 export type SpaceInvadersGameState = {
   alienCount: number;
   baseY: number;
   boardHeight: number;
   boardWidth: number;
+  invaderShotCooldownTicks: number;
+  invaderShots: SpaceInvadersInvaderShot[];
   invaders: SpaceInvader[];
   lives: number;
   marchDirection: SpaceInvadersDirection;
+  nextInvaderShotId: number;
   player: SpaceInvadersPlayer;
   playerShot: SpaceInvadersShot | null;
   score: number;
@@ -74,6 +83,12 @@ const INVADER_HEIGHT = 23;
 const INVADER_STEP_X = 0.8;
 const INVADER_TOP = 64;
 const INVADER_WIDTH = 28;
+const INVADER_FIRE_COOLDOWN_TICKS = 80;
+const INVADER_HIT_RECOVERY_TICKS = 120;
+const INVADER_SHOT_HEIGHT = 20;
+const INVADER_SHOT_SPEED = 3.2;
+const INVADER_SHOT_WIDTH = 5;
+const MAX_INVADER_SHOTS = 1;
 const PLAYER_BOTTOM_MARGIN = 10;
 const INVADER_X = 38;
 const PLAYER_HEIGHT = 50;
@@ -105,6 +120,8 @@ export function createInitialSpaceInvadersGame({
     baseY: normalizedBoardHeight - 68,
     boardHeight: normalizedBoardHeight,
     boardWidth: normalizedBoardWidth,
+    invaderShotCooldownTicks: INVADER_FIRE_COOLDOWN_TICKS,
+    invaderShots: [],
     invaders: createSpaceInvadersFormation({
       boardWidth: normalizedBoardWidth,
       columns: formation.columns,
@@ -112,6 +129,7 @@ export function createInitialSpaceInvadersGame({
     }),
     lives: SPACE_INVADERS_STARTING_LIVES,
     marchDirection: 1,
+    nextInvaderShotId: 0,
     player: createCenteredPlayer(normalizedBoardWidth, normalizedBoardHeight),
     playerShot: null,
     score: 0,
@@ -254,7 +272,17 @@ export function advanceSpaceInvadersGame(
     return gameAfterShot;
   }
 
-  const marchedGame = marchInvaders(gameAfterShot);
+  const gameAfterInvaderShots = advanceInvaderShots(gameAfterShot);
+
+  if (
+    gameAfterInvaderShots.status === "lost" ||
+    gameAfterInvaderShots.lives < gameAfterShot.lives
+  ) {
+    return gameAfterInvaderShots;
+  }
+
+  const gameAfterInvaderFire = maybeFireInvaderShot(gameAfterInvaderShots);
+  const marchedGame = marchInvaders(gameAfterInvaderFire);
 
   if (hasInvaderReachedBase(marchedGame)) {
     return {
@@ -315,6 +343,135 @@ function advancePlayerShot(game: SpaceInvadersGameState): SpaceInvadersGameState
     playerShot: null,
     score,
     status: activeInvaderCount === 0 ? "won" : game.status,
+  };
+}
+
+function advanceInvaderShots(game: SpaceInvadersGameState): SpaceInvadersGameState {
+  if (game.invaderShots.length === 0) {
+    return game;
+  }
+
+  const movedShots = game.invaderShots
+    .map((shot) => ({
+      ...shot,
+      y: shot.y + shot.velocityY,
+    }))
+    .filter((shot) => shot.y <= game.boardHeight);
+  const didHitPlayer = movedShots.some((shot) => rectanglesIntersect(shot, game.player));
+
+  if (!didHitPlayer) {
+    return {
+      ...game,
+      invaderShots: movedShots,
+    };
+  }
+
+  const lives = game.lives - 1;
+
+  return {
+    ...game,
+    invaderShotCooldownTicks: INVADER_HIT_RECOVERY_TICKS,
+    invaderShots: [],
+    lives,
+    player: createCenteredPlayer(game.boardWidth, game.boardHeight),
+    playerShot: null,
+    status: lives <= 0 ? "lost" : game.status,
+  };
+}
+
+function maybeFireInvaderShot(game: SpaceInvadersGameState): SpaceInvadersGameState {
+  if (game.invaderShotCooldownTicks > 0) {
+    return {
+      ...game,
+      invaderShotCooldownTicks: game.invaderShotCooldownTicks - 1,
+    };
+  }
+
+  if (game.invaderShots.length >= MAX_INVADER_SHOTS) {
+    return game;
+  }
+
+  const shooter = selectInvaderShotSource(game);
+
+  if (shooter === undefined) {
+    return {
+      ...game,
+      invaderShotCooldownTicks: INVADER_FIRE_COOLDOWN_TICKS,
+    };
+  }
+
+  return {
+    ...game,
+    invaderShotCooldownTicks: INVADER_FIRE_COOLDOWN_TICKS,
+    invaderShots: [
+      ...game.invaderShots,
+      createInvaderShot(shooter, game.nextInvaderShotId),
+    ],
+    nextInvaderShotId: game.nextInvaderShotId + 1,
+  };
+}
+
+function selectInvaderShotSource(game: SpaceInvadersGameState) {
+  const lowestInvaders = getLowestActiveInvadersByColumn(game.invaders);
+  const blockedColumns = new Set(game.invaderShots.map((shot) => shot.sourceColumn));
+  const unblockedInvaders = lowestInvaders.filter(
+    (invader) => !blockedColumns.has(invader.column),
+  );
+  const candidates = unblockedInvaders.length > 0 ? unblockedInvaders : lowestInvaders;
+
+  if (candidates.length === 0) {
+    return undefined;
+  }
+
+  const playerCenterX = game.player.x + game.player.width / 2;
+
+  return [...candidates].sort((first, second) => {
+    const firstDistance = Math.abs(getEntityCenterX(first) - playerCenterX);
+    const secondDistance = Math.abs(getEntityCenterX(second) - playerCenterX);
+
+    if (firstDistance !== secondDistance) {
+      return firstDistance - secondDistance;
+    }
+
+    return first.column - second.column;
+  })[0];
+}
+
+function getLowestActiveInvadersByColumn(invaders: SpaceInvader[]) {
+  const lowestInvaderByColumn = new Map<number, SpaceInvader>();
+
+  for (const invader of invaders) {
+    if (!invader.isActive) {
+      continue;
+    }
+
+    const current = lowestInvaderByColumn.get(invader.column);
+
+    if (
+      current === undefined ||
+      invader.y > current.y ||
+      (invader.y === current.y && invader.row > current.row)
+    ) {
+      lowestInvaderByColumn.set(invader.column, invader);
+    }
+  }
+
+  return [...lowestInvaderByColumn.values()];
+}
+
+function createInvaderShot(
+  invader: SpaceInvader,
+  nextInvaderShotId: number,
+): SpaceInvadersInvaderShot {
+  return {
+    height: INVADER_SHOT_HEIGHT,
+    id: `invader-shot-${nextInvaderShotId}`,
+    sourceColumn: invader.column,
+    sourceInvaderId: invader.id,
+    velocityY: INVADER_SHOT_SPEED,
+    width: INVADER_SHOT_WIDTH,
+    x: invader.x + invader.width / 2 - INVADER_SHOT_WIDTH / 2,
+    y: invader.y + invader.height + 1,
   };
 }
 
@@ -401,6 +558,10 @@ function rectanglesIntersect(
     first.y < second.y + second.height &&
     first.y + first.height > second.y
   );
+}
+
+function getEntityCenterX(entity: { width: number; x: number }) {
+  return entity.x + entity.width / 2;
 }
 
 function clamp(value: number, min: number, max: number) {

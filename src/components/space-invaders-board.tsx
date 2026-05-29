@@ -172,6 +172,23 @@ export function SpaceInvadersBoard({
           />
         ) : null}
 
+        {game.invaderShots.map((shot) => (
+          <span
+            aria-hidden="true"
+            className="absolute left-0 top-0 rounded-full bg-[var(--invaders-magenta)] shadow-[0_0_10px_color-mix(in_oklch,var(--invaders-magenta)_70%,transparent)] will-change-transform"
+            data-testid="space-invaders-invader-shot"
+            key={shot.id}
+            style={getBoardEntityStyle({
+              boardHeight: game.boardHeight,
+              boardWidth: game.boardWidth,
+              height: shot.height,
+              width: shot.width,
+              x: shot.x,
+              y: shot.y,
+            })}
+          />
+        ))}
+
         <span
           aria-hidden="true"
           className="absolute left-0 top-0 bg-contain bg-center bg-no-repeat drop-shadow-[0_0_18px_color-mix(in_oklch,var(--invaders-player)_56%,transparent)] will-change-transform [image-rendering:pixelated]"

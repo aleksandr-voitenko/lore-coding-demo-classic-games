@@ -199,6 +199,18 @@ describe("game board renderers", () => {
             x: 200,
             y: 450,
           },
+          invaderShots: [
+            {
+              height: 20,
+              id: "invader-shot-test",
+              sourceColumn: 4,
+              sourceInvaderId: "4:4",
+              velocityY: 3.2,
+              width: 5,
+              x: 170,
+              y: 240,
+            },
+          ],
           status: "running",
         }}
         statusLabel="Running"
@@ -210,6 +222,7 @@ describe("game board renderers", () => {
       "Space Invaders board. Field 420 by 560. Score 0. Lives 3. 54 invaders remaining. Running.",
       'data-testid="space-invaders-invader"',
       'data-testid="space-invaders-player-shot"',
+      'data-testid="space-invaders-invader-shot"',
       'data-testid="space-invaders-player"',
       "/images/space-invaders/background.png?v=sprite-art-v1",
       "/images/space-invaders/alien-purple.png?v=sprite-art-v1",

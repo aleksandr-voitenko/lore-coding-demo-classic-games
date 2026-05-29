@@ -17,6 +17,7 @@ import {
   startSpaceInvadersGame,
   type SpaceInvader,
   type SpaceInvadersGameState,
+  type SpaceInvadersInvaderShot,
 } from "./space-invaders-game-engine";
 
 function createRunningGame(
@@ -39,6 +40,45 @@ function withOnlyActiveInvader(game: SpaceInvadersGameState, activeInvader: Spac
   };
 }
 
+function createInvaderShotFixture(
+  overrides: Partial<SpaceInvadersInvaderShot> = {},
+): SpaceInvadersInvaderShot {
+  return {
+    height: 20,
+    id: "invader-shot-test",
+    sourceColumn: 0,
+    sourceInvaderId: "4:0",
+    velocityY: 3.2,
+    width: 5,
+    x: 100,
+    y: 100,
+    ...overrides,
+  };
+}
+
+function getInvader(
+  game: SpaceInvadersGameState,
+  row: number,
+  column: number,
+): SpaceInvader {
+  const invader = game.invaders.find(
+    (candidate) => candidate.row === row && candidate.column === column,
+  );
+
+  if (invader === undefined) {
+    throw new Error(`Missing invader at row ${row}, column ${column}`);
+  }
+
+  return invader;
+}
+
+function centerPlayerUnderInvader(game: SpaceInvadersGameState, invader: SpaceInvader) {
+  return {
+    ...game.player,
+    x: invader.x + invader.width / 2 - game.player.width / 2,
+  };
+}
+
 describe("space invaders game engine", () => {
   it("creates a ready formation with a centered player cannon", () => {
     const game = createInitialSpaceInvadersGame();
@@ -48,6 +88,9 @@ describe("space invaders game engine", () => {
     expect(game.lives).toBe(SPACE_INVADERS_STARTING_LIVES);
     expect(game.player.x + game.player.width / 2).toBe(SPACE_INVADERS_BOARD_WIDTH / 2);
     expect(game.playerShot).toBeNull();
+    expect(game.invaderShots).toEqual([]);
+    expect(game.invaderShotCooldownTicks).toBeGreaterThan(0);
+    expect(game.nextInvaderShotId).toBe(0);
     expect(game.marchDirection).toBe(1);
     expect(game.invaders).toHaveLength(SPACE_INVADERS_COLUMNS * SPACE_INVADERS_ROWS);
     expect(game.invaders.every((invader) => invader.isActive)).toBe(true);
@@ -134,6 +177,50 @@ describe("space invaders game engine", () => {
     expect(secondFireGame.playerShot).toBe(firedGame.playerShot);
   });
 
+  it("fires invader shots from the lowest active invader in the nearest column", () => {
+    const game = createInitialSpaceInvadersGame();
+    const shooter = getInvader(game, SPACE_INVADERS_ROWS - 1, 5);
+    const coveredInvader = getInvader(game, 0, shooter.column);
+    const runningGame = createRunningGame({
+      invaderShotCooldownTicks: 0,
+      player: centerPlayerUnderInvader(game, shooter),
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame);
+    const shot = advanced.invaderShots[0]!;
+
+    expect(advanced.invaderShots).toHaveLength(1);
+    expect(shot).toMatchObject({
+      id: "invader-shot-0",
+      sourceColumn: shooter.column,
+      sourceInvaderId: shooter.id,
+      velocityY: expect.any(Number),
+    });
+    expect(shot.sourceInvaderId).not.toBe(coveredInvader.id);
+    expect(shot.x).toBeCloseTo(shooter.x + shooter.width / 2 - shot.width / 2);
+    expect(shot.y).toBeCloseTo(shooter.y + shooter.height + 1);
+    expect(advanced.nextInvaderShotId).toBe(1);
+    expect(advanced.invaderShotCooldownTicks).toBeGreaterThan(0);
+  });
+
+  it("lets the next lowest invader in a column fire after the bottom invader is cleared", () => {
+    const game = createInitialSpaceInvadersGame();
+    const bottomInvader = getInvader(game, SPACE_INVADERS_ROWS - 1, 5);
+    const nextShooter = getInvader(game, SPACE_INVADERS_ROWS - 2, bottomInvader.column);
+    const runningGame = createRunningGame({
+      invaderShotCooldownTicks: 0,
+      invaders: game.invaders.map((invader) =>
+        invader.id === bottomInvader.id ? { ...invader, isActive: false } : invader,
+      ),
+      player: centerPlayerUnderInvader(game, nextShooter),
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame);
+
+    expect(advanced.invaderShots[0]).toMatchObject({
+      sourceColumn: nextShooter.column,
+      sourceInvaderId: nextShooter.id,
+    });
+  });
+
   it("moves the player shot upward and clears it after it leaves the board", () => {
     const movingShotGame = fireSpaceInvadersShot(createRunningGame());
     const movingShot = movingShotGame.playerShot!;
@@ -148,6 +235,75 @@ describe("space invaders game engine", () => {
       movingShot.y + movingShot.velocityY,
     );
     expect(advanceSpaceInvadersGame(clearedShotGame).playerShot).toBeNull();
+  });
+
+  it("moves invader shots downward and clears them after they leave the board", () => {
+    const shot = createInvaderShotFixture({ y: 120 });
+    const movingShotGame = createRunningGame({
+      invaderShotCooldownTicks: 100,
+      invaderShots: [shot],
+    });
+    const clearedShotGame = createRunningGame({
+      invaderShotCooldownTicks: 100,
+      invaderShots: [
+        createInvaderShotFixture({
+          y: SPACE_INVADERS_BASE_Y + 100,
+        }),
+      ],
+    });
+
+    expect(advanceSpaceInvadersGame(movingShotGame).invaderShots[0]?.y).toBeCloseTo(
+      shot.y + shot.velocityY,
+    );
+    expect(advanceSpaceInvadersGame(clearedShotGame).invaderShots).toEqual([]);
+  });
+
+  it("loses a life and clears active shots when an invader shot hits the player", () => {
+    const game = createInitialSpaceInvadersGame();
+    const playerShot = fireSpaceInvadersShot(createRunningGame()).playerShot!;
+    const runningGame = createRunningGame({
+      invaderShots: [
+        createInvaderShotFixture({
+          height: 20,
+          velocityY: 8,
+          width: 5,
+          x: game.player.x + game.player.width / 2 - 2.5,
+          y: game.player.y - 8,
+        }),
+      ],
+      playerShot,
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame);
+
+    expect(advanced.status).toBe("running");
+    expect(advanced.lives).toBe(SPACE_INVADERS_STARTING_LIVES - 1);
+    expect(advanced.invaderShots).toEqual([]);
+    expect(advanced.playerShot).toBeNull();
+    expect(advanced.player.x + advanced.player.width / 2).toBe(
+      SPACE_INVADERS_BOARD_WIDTH / 2,
+    );
+    expect(advanced.invaderShotCooldownTicks).toBeGreaterThan(0);
+  });
+
+  it("loses the game when an invader shot hits the player's final life", () => {
+    const game = createInitialSpaceInvadersGame();
+    const runningGame = createRunningGame({
+      invaderShots: [
+        createInvaderShotFixture({
+          height: 20,
+          velocityY: 8,
+          width: 5,
+          x: game.player.x + game.player.width / 2 - 2.5,
+          y: game.player.y - 8,
+        }),
+      ],
+      lives: 1,
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame);
+
+    expect(advanced.status).toBe("lost");
+    expect(advanced.lives).toBe(0);
+    expect(advanced.invaderShots).toEqual([]);
   });
 
   it("removes a hit invader, clears the shot, and adds the invader score", () => {
@@ -199,7 +355,9 @@ describe("space invaders game engine", () => {
   it("keeps the untouched formation above the base for a playable opening window", () => {
     const ticksForTwoMinutes = Math.floor(120_000 / getSpaceInvadersTickDelay());
     const ticksForThreeMinutes = Math.floor(180_000 / getSpaceInvadersTickDelay());
-    let game = createRunningGame();
+    let game = createRunningGame({
+      invaderShotCooldownTicks: ticksForThreeMinutes + 10,
+    });
 
     for (let tick = 0; tick < ticksForTwoMinutes; tick += 1) {
       game = advanceSpaceInvadersGame(game);
@@ -266,7 +424,10 @@ describe("space invaders game engine", () => {
     const lostGame = {
       ...createInitialSpaceInvadersGame(),
       invaders: [],
+      invaderShotCooldownTicks: 0,
+      invaderShots: [createInvaderShotFixture()],
       lives: 0,
+      nextInvaderShotId: 1,
       playerShot: {
         height: 14,
         velocityY: -16,
@@ -283,6 +444,7 @@ describe("space invaders game engine", () => {
     expect(restarted.score).toBe(0);
     expect(restarted.lives).toBe(SPACE_INVADERS_STARTING_LIVES);
     expect(restarted.playerShot).toBeNull();
+    expect(restarted.invaderShots).toEqual([]);
     expect(restarted.invaders).toHaveLength(SPACE_INVADERS_COLUMNS * SPACE_INVADERS_ROWS);
     expect(restarted.invaders.every((invader) => invader.isActive)).toBe(true);
   });
