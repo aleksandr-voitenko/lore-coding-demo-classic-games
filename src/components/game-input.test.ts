@@ -7,6 +7,7 @@ import {
   isGamePauseKey,
   isTypingTarget,
   pressHeldDirectionMovementKey,
+  registerHeldDirectionMovementBlurReset,
   registerGameKeyDown,
   registerGameKeyUp,
   releaseHeldDirectionMovementKey,
@@ -47,6 +48,30 @@ function createKeyboardTarget(expectedType: "keydown" | "keyup") {
   return {
     dispatch(event: KeyboardEvent) {
       listeners.forEach((listener) => listener(event));
+    },
+    get listenerCount() {
+      return listeners.size;
+    },
+    target,
+  };
+}
+
+function createBlurTarget() {
+  const listeners = new Set<(event: Event) => void>();
+  const target = {
+    addEventListener(type: "blur", listener: (event: Event) => void) {
+      expect(type).toBe("blur");
+      listeners.add(listener);
+    },
+    removeEventListener(type: "blur", listener: (event: Event) => void) {
+      expect(type).toBe("blur");
+      listeners.delete(listener);
+    },
+  };
+
+  return {
+    dispatch() {
+      listeners.forEach((listener) => listener(new Event("blur")));
     },
     get listenerCount() {
       return listeners.size;
@@ -321,6 +346,39 @@ describe("held direction movement input", () => {
 
     testTimers.runActiveIntervals();
     expect(moves).toEqual(["right", "right"]);
+  });
+
+  it("registers blur cleanup that resets active movement and cleans up on unmount", () => {
+    const state = createTestMovementState();
+    const testTimers = createTestMovementTimers();
+    const controller = createHeldDirectionMovementController({
+      intervalMs: 16,
+      move: () => undefined,
+      state,
+      timers: testTimers.timers,
+    });
+    const rightKey = getMovementKey("ArrowRight");
+    const blurTarget = createBlurTarget();
+
+    expect(rightKey).not.toBeNull();
+    controller.beginMovement(rightKey!);
+
+    const cleanup = registerHeldDirectionMovementBlurReset(controller, blurTarget.target);
+
+    expect(blurTarget.listenerCount).toBe(1);
+    expect(testTimers.activeIntervalCount).toBe(1);
+
+    blurTarget.dispatch();
+
+    expect(state.direction).toBeNull();
+    expect(testTimers.activeIntervalCount).toBe(0);
+
+    controller.beginMovement(rightKey!);
+    cleanup();
+
+    expect(blurTarget.listenerCount).toBe(0);
+    expect(state.direction).toBeNull();
+    expect(testTimers.activeIntervalCount).toBe(0);
   });
 });
 

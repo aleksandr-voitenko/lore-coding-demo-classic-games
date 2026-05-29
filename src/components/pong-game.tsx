@@ -4,11 +4,11 @@ import { ArrowDownIcon, ArrowUpIcon, PlayIcon, RotateCcwIcon } from "lucide-reac
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
-  createHeldDirectionMovementController,
   isGamePauseKey,
   registerGameKeyDown,
   registerGameKeyUp,
   shouldIgnoreGameKeyDown,
+  useHeldDirectionMovementController,
 } from "@/components/game-input";
 import {
   GameAbandonDialog,
@@ -31,7 +31,6 @@ import {
   createPongPaddleMovementState,
   getPongPaddleMovementKey,
   type PongPaddleMovementDirection,
-  type PongPaddleMovementKey,
 } from "@/components/pong-paddle-input";
 import { PongBoard } from "@/components/pong-board";
 import { Button } from "@/components/ui/button";
@@ -176,34 +175,6 @@ export function PongGame({
     );
   }, []);
 
-  const paddleMovementController = useMemo(
-    () =>
-      createHeldDirectionMovementController({
-        intervalMs: PONG_PADDLE_MOVE_INTERVAL_MS,
-        move: movePaddle,
-        state: createPongPaddleMovementState(),
-      }),
-    [movePaddle],
-  );
-
-  const beginPaddleMovement = useCallback(
-    (movementKey: PongPaddleMovementKey) => {
-      paddleMovementController.beginMovement(movementKey);
-    },
-    [paddleMovementController],
-  );
-
-  const endPaddleMovement = useCallback(
-    (movementKey: PongPaddleMovementKey) => {
-      return paddleMovementController.endMovement(movementKey);
-    },
-    [paddleMovementController],
-  );
-
-  const resetPaddleMovement = useCallback(() => {
-    paddleMovementController.resetMovement();
-  }, [paddleMovementController]);
-
   const startGame = useCallback(() => {
     resetLeaderboardForm();
     setGame((current) => startPongGame(current));
@@ -219,12 +190,6 @@ export function PongGame({
       return startPongGame(current);
     });
   }, [resetLeaderboardForm]);
-
-  const restartGame = useCallback(() => {
-    resetPaddleMovement();
-    resetLeaderboardForm();
-    setGame((current) => restartPongGame(current));
-  }, [resetLeaderboardForm, resetPaddleMovement]);
 
   const advancePong = useCallback(() => {
     setGame((current) => advancePongGame(current));
@@ -261,6 +226,28 @@ export function PongGame({
   });
   const isAbandonDialogVisible = abandonDialogProps !== null;
 
+  const {
+    beginMovement: beginPaddleMovement,
+    endMovement: endPaddleMovement,
+    resetMovement: resetPaddleMovement,
+  } = useHeldDirectionMovementController({
+    createState: createPongPaddleMovementState,
+    intervalMs: PONG_PADDLE_MOVE_INTERVAL_MS,
+    isMovementDisabled:
+      isHelpVisible ||
+      isAbandonDialogVisible ||
+      pendingLeaderboardEntry !== null ||
+      game.status === "lost" ||
+      game.status === "won",
+    move: movePaddle,
+  });
+
+  const restartGame = useCallback(() => {
+    resetPaddleMovement();
+    resetLeaderboardForm();
+    setGame((current) => restartPongGame(current));
+  }, [resetLeaderboardForm, resetPaddleMovement]);
+
   useEffect(() => {
     if (tickDelay === null) {
       return;
@@ -280,33 +267,6 @@ export function PongGame({
 
     return () => window.clearInterval(scoreTick);
   }, [decrementRemainingScore, scoreTickDelay]);
-
-  useEffect(() => {
-    if (
-      isHelpVisible ||
-      isAbandonDialogVisible ||
-      pendingLeaderboardEntry !== null ||
-      game.status === "lost" ||
-      game.status === "won"
-    ) {
-      resetPaddleMovement();
-    }
-  }, [
-    game.status,
-    isAbandonDialogVisible,
-    isHelpVisible,
-    pendingLeaderboardEntry,
-    resetPaddleMovement,
-  ]);
-
-  useEffect(() => {
-    window.addEventListener("blur", resetPaddleMovement);
-
-    return () => {
-      window.removeEventListener("blur", resetPaddleMovement);
-      resetPaddleMovement();
-    };
-  }, [resetPaddleMovement]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {

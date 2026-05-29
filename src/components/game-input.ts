@@ -1,8 +1,15 @@
+import { useCallback, useEffect, useMemo } from "react";
+
 type GameKeyboardEventType = "keydown" | "keyup";
 
 type GameKeyboardEventTarget = {
   addEventListener(type: GameKeyboardEventType, listener: (event: KeyboardEvent) => void): void;
   removeEventListener(type: GameKeyboardEventType, listener: (event: KeyboardEvent) => void): void;
+};
+
+type GameWindowBlurTarget = {
+  addEventListener(type: "blur", listener: (event: Event) => void): void;
+  removeEventListener(type: "blur", listener: (event: Event) => void): void;
 };
 
 type GameKeyboardGuardOptions = {
@@ -53,6 +60,14 @@ type HeldDirectionMovementControllerOptions<Direction extends string> = {
   intervalMs: number;
   move(direction: Direction): void;
   state: HeldDirectionMovementState<Direction>;
+  timers?: HeldDirectionMovementTimers;
+};
+
+type HeldDirectionMovementControllerHookOptions<Direction extends string> = {
+  createState(): HeldDirectionMovementState<Direction>;
+  intervalMs: number;
+  isMovementDisabled?: boolean;
+  move(direction: Direction): void;
   timers?: HeldDirectionMovementTimers;
 };
 
@@ -237,6 +252,74 @@ export function createHeldDirectionMovementController<Direction extends string>(
       stopMovementLoop();
     },
     state,
+  };
+}
+
+export function registerHeldDirectionMovementBlurReset<Direction extends string>(
+  controller: Pick<HeldDirectionMovementController<Direction>, "resetMovement">,
+  target: GameWindowBlurTarget = window,
+) {
+  const resetMovement = () => {
+    controller.resetMovement();
+  };
+
+  target.addEventListener("blur", resetMovement);
+
+  return () => {
+    target.removeEventListener("blur", resetMovement);
+    resetMovement();
+  };
+}
+
+export function useHeldDirectionMovementController<Direction extends string>({
+  createState,
+  intervalMs,
+  isMovementDisabled = false,
+  move,
+  timers,
+}: HeldDirectionMovementControllerHookOptions<Direction>) {
+  const controller = useMemo(
+    () =>
+      createHeldDirectionMovementController({
+        intervalMs,
+        move,
+        state: createState(),
+        timers,
+      }),
+    [createState, intervalMs, move, timers],
+  );
+
+  useEffect(() => {
+    if (isMovementDisabled) {
+      controller.resetMovement();
+    }
+  }, [controller, isMovementDisabled]);
+
+  useEffect(() => registerHeldDirectionMovementBlurReset(controller), [controller]);
+
+  const beginMovement = useCallback(
+    (movementKey: HeldDirectionMovementKey<Direction>) => {
+      controller.beginMovement(movementKey);
+    },
+    [controller],
+  );
+
+  const endMovement = useCallback(
+    (movementKey: HeldDirectionMovementKey<Direction>) => {
+      return controller.endMovement(movementKey);
+    },
+    [controller],
+  );
+
+  const resetMovement = useCallback(() => {
+    controller.resetMovement();
+  }, [controller]);
+
+  return {
+    beginMovement,
+    endMovement,
+    resetMovement,
+    state: controller.state,
   };
 }
 

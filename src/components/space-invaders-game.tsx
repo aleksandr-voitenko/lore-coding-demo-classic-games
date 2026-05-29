@@ -6,7 +6,7 @@ import {
   PlayIcon,
   RotateCcwIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   GameAbandonDialog,
@@ -26,11 +26,11 @@ import {
 } from "@/components/game-layout";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import {
-  createHeldDirectionMovementController,
   isGamePauseKey,
   registerGameKeyDown,
   registerGameKeyUp,
   shouldIgnoreGameKeyDown,
+  useHeldDirectionMovementController,
 } from "@/components/game-input";
 import {
   getSpaceInvaderSprite,
@@ -40,7 +40,6 @@ import {
   createSpaceInvadersPlayerMovementState,
   getSpaceInvadersPlayerMovementKey,
   type SpaceInvadersPlayerMovementDirection,
-  type SpaceInvadersPlayerMovementKey,
 } from "@/components/space-invaders-player-input";
 import { Button } from "@/components/ui/button";
 import {
@@ -192,34 +191,6 @@ export function SpaceInvadersGame({
     );
   }, []);
 
-  const playerMovementController = useMemo(
-    () =>
-      createHeldDirectionMovementController({
-        intervalMs: SPACE_INVADERS_PLAYER_MOVE_INTERVAL_MS,
-        move: movePlayer,
-        state: createSpaceInvadersPlayerMovementState(),
-      }),
-    [movePlayer],
-  );
-
-  const beginPlayerMovement = useCallback(
-    (movementKey: SpaceInvadersPlayerMovementKey) => {
-      playerMovementController.beginMovement(movementKey);
-    },
-    [playerMovementController],
-  );
-
-  const endPlayerMovement = useCallback(
-    (movementKey: SpaceInvadersPlayerMovementKey) => {
-      return playerMovementController.endMovement(movementKey);
-    },
-    [playerMovementController],
-  );
-
-  const resetPlayerMovement = useCallback(() => {
-    playerMovementController.resetMovement();
-  }, [playerMovementController]);
-
   const fireShot = useCallback(() => {
     setGame((current) => fireSpaceInvadersShot(current));
   }, []);
@@ -254,6 +225,17 @@ export function SpaceInvadersGame({
     shouldPauseBeforeConfirm: canPauseGame,
   });
 
+  const {
+    beginMovement: beginPlayerMovement,
+    endMovement: endPlayerMovement,
+  } = useHeldDirectionMovementController({
+    createState: createSpaceInvadersPlayerMovementState,
+    intervalMs: SPACE_INVADERS_PLAYER_MOVE_INTERVAL_MS,
+    isMovementDisabled:
+      isHelpVisible || pendingLeaderboardEntry !== null || game.status !== "running",
+    move: movePlayer,
+  });
+
   useEffect(() => {
     if (tickDelay === null) {
       return;
@@ -263,21 +245,6 @@ export function SpaceInvadersGame({
 
     return () => window.clearInterval(tick);
   }, [advanceSpaceInvaders, tickDelay]);
-
-  useEffect(() => {
-    if (isHelpVisible || pendingLeaderboardEntry !== null || game.status !== "running") {
-      resetPlayerMovement();
-    }
-  }, [game.status, isHelpVisible, pendingLeaderboardEntry, resetPlayerMovement]);
-
-  useEffect(() => {
-    window.addEventListener("blur", resetPlayerMovement);
-
-    return () => {
-      window.removeEventListener("blur", resetPlayerMovement);
-      resetPlayerMovement();
-    };
-  }, [resetPlayerMovement]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {

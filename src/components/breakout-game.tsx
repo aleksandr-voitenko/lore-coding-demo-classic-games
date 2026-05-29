@@ -6,21 +6,20 @@ import {
   PlayIcon,
   RotateCcwIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { BreakoutBoard, breakoutBrickClassNames } from "@/components/breakout-board";
 import {
   createBreakoutPaddleMovementState,
   getBreakoutPaddleMovementKey,
   type BreakoutPaddleMovementDirection,
-  type BreakoutPaddleMovementKey,
 } from "@/components/breakout-paddle-input";
 import {
-  createHeldDirectionMovementController,
   isGamePauseKey,
   registerGameKeyDown,
   registerGameKeyUp,
   shouldIgnoreGameKeyDown,
+  useHeldDirectionMovementController,
 } from "@/components/game-input";
 import {
   GameAbandonDialog,
@@ -186,34 +185,6 @@ export function BreakoutGame({
     );
   }, []);
 
-  const paddleMovementController = useMemo(
-    () =>
-      createHeldDirectionMovementController({
-        intervalMs: BREAKOUT_PADDLE_MOVE_INTERVAL_MS,
-        move: movePaddle,
-        state: createBreakoutPaddleMovementState(),
-      }),
-    [movePaddle],
-  );
-
-  const beginPaddleMovement = useCallback(
-    (movementKey: BreakoutPaddleMovementKey) => {
-      paddleMovementController.beginMovement(movementKey);
-    },
-    [paddleMovementController],
-  );
-
-  const endPaddleMovement = useCallback(
-    (movementKey: BreakoutPaddleMovementKey) => {
-      return paddleMovementController.endMovement(movementKey);
-    },
-    [paddleMovementController],
-  );
-
-  const resetPaddleMovement = useCallback(() => {
-    paddleMovementController.resetMovement();
-  }, [paddleMovementController]);
-
   const advanceBreakout = useCallback(() => {
     setGame((current) => advanceBreakoutGame(current));
   }, []);
@@ -244,6 +215,20 @@ export function BreakoutGame({
     shouldPauseBeforeConfirm: canPauseGame,
   });
 
+  const {
+    beginMovement: beginPaddleMovement,
+    endMovement: endPaddleMovement,
+  } = useHeldDirectionMovementController({
+    createState: createBreakoutPaddleMovementState,
+    intervalMs: BREAKOUT_PADDLE_MOVE_INTERVAL_MS,
+    isMovementDisabled:
+      isHelpVisible ||
+      pendingLeaderboardEntry !== null ||
+      game.status === "lost" ||
+      game.status === "won",
+    move: movePaddle,
+  });
+
   useEffect(() => {
     if (tickDelay === null) {
       return;
@@ -253,26 +238,6 @@ export function BreakoutGame({
 
     return () => window.clearInterval(tick);
   }, [advanceBreakout, tickDelay]);
-
-  useEffect(() => {
-    if (
-      isHelpVisible ||
-      pendingLeaderboardEntry !== null ||
-      game.status === "lost" ||
-      game.status === "won"
-    ) {
-      resetPaddleMovement();
-    }
-  }, [game.status, isHelpVisible, pendingLeaderboardEntry, resetPaddleMovement]);
-
-  useEffect(() => {
-    window.addEventListener("blur", resetPaddleMovement);
-
-    return () => {
-      window.removeEventListener("blur", resetPaddleMovement);
-      resetPaddleMovement();
-    };
-  }, [resetPaddleMovement]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
