@@ -2,7 +2,10 @@
 
 import type { CSSProperties, ReactNode } from "react";
 
-import { type SpaceInvadersGameState } from "@/lib/space-invaders-game-engine";
+import {
+  type SpaceInvadersGameState,
+  type SpaceInvadersInvaderShotKind,
+} from "@/lib/space-invaders-game-engine";
 import { cn } from "@/lib/utils";
 
 type SpaceInvadersBoardProps = {
@@ -65,6 +68,19 @@ export const spaceInvaderSprites = [
 export function getSpaceInvaderSprite(row: number) {
   return spaceInvaderSprites[row % spaceInvaderSprites.length];
 }
+
+const invaderShotClassNames: Record<SpaceInvadersInvaderShotKind, string> = {
+  commander:
+    "rounded-[0.2rem] bg-[var(--invaders-yellow)] shadow-[0_0_14px_color-mix(in_oklch,var(--invaders-yellow)_72%,transparent)]",
+  needle:
+    "rounded-full bg-[var(--invaders-cyan)] shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-cyan)_78%,transparent)]",
+  scatter:
+    "rounded-full bg-[var(--invaders-lime)] shadow-[0_0_10px_color-mix(in_oklch,var(--invaders-lime)_72%,transparent)]",
+  standard:
+    "rounded-full bg-[var(--invaders-magenta)] shadow-[0_0_10px_color-mix(in_oklch,var(--invaders-magenta)_70%,transparent)]",
+  zigzag:
+    "rounded-[0.35rem] bg-[var(--invaders-red)] shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-red)_70%,transparent)]",
+};
 
 function getBoardEntityStyle({
   boardHeight,
@@ -175,7 +191,11 @@ export function SpaceInvadersBoard({
         {game.invaderShots.map((shot) => (
           <span
             aria-hidden="true"
-            className="absolute left-0 top-0 rounded-full bg-[var(--invaders-magenta)] shadow-[0_0_10px_color-mix(in_oklch,var(--invaders-magenta)_70%,transparent)] will-change-transform"
+            className={cn(
+              "absolute left-0 top-0 will-change-transform",
+              invaderShotClassNames[shot.kind],
+            )}
+            data-shot-kind={shot.kind}
             data-testid="space-invaders-invader-shot"
             key={shot.id}
             style={getBoardEntityStyle({

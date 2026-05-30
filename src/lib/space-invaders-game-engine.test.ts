@@ -44,10 +44,15 @@ function createInvaderShotFixture(
   overrides: Partial<SpaceInvadersInvaderShot> = {},
 ): SpaceInvadersInvaderShot {
   return {
+    ageTicks: 0,
     height: 20,
     id: "invader-shot-test",
+    kind: "standard",
     sourceColumn: 0,
     sourceInvaderId: "4:0",
+    sourceRow: 4,
+    ttlTicks: null,
+    velocityX: 0,
     velocityY: 3.2,
     width: 5,
     x: 100,
@@ -76,6 +81,23 @@ function centerPlayerUnderInvader(game: SpaceInvadersGameState, invader: SpaceIn
   return {
     ...game.player,
     x: invader.x + invader.width / 2 - game.player.width / 2,
+  };
+}
+
+function fireFromOnlyInvader(row: number, column = 5) {
+  const game = createInitialSpaceInvadersGame();
+  const shooter = getInvader(game, row, column);
+  const runningGame = withOnlyActiveInvader(
+    createRunningGame({
+      invaderShotCooldownTicks: 0,
+      player: centerPlayerUnderInvader(game, shooter),
+    }),
+    shooter,
+  );
+
+  return {
+    advanced: advanceSpaceInvadersGame(runningGame),
+    shooter,
   };
 }
 
@@ -191,8 +213,10 @@ describe("space invaders game engine", () => {
     expect(advanced.invaderShots).toHaveLength(1);
     expect(shot).toMatchObject({
       id: "invader-shot-0",
+      kind: "standard",
       sourceColumn: shooter.column,
       sourceInvaderId: shooter.id,
+      sourceRow: shooter.row,
       velocityY: expect.any(Number),
     });
     expect(shot.sourceInvaderId).not.toBe(coveredInvader.id);
@@ -216,9 +240,85 @@ describe("space invaders game engine", () => {
     const advanced = advanceSpaceInvadersGame(runningGame);
 
     expect(advanced.invaderShots[0]).toMatchObject({
+      kind: "needle",
       sourceColumn: nextShooter.column,
       sourceInvaderId: nextShooter.id,
+      sourceRow: nextShooter.row,
     });
+  });
+
+  it("assigns each invader row its own shot variant and cooldown", () => {
+    const commander = fireFromOnlyInvader(0).advanced;
+    const zigzag = fireFromOnlyInvader(1).advanced;
+    const scatter = fireFromOnlyInvader(2).advanced;
+    const needle = fireFromOnlyInvader(3).advanced;
+    const standard = fireFromOnlyInvader(4).advanced;
+
+    expect(commander.invaderShots[0]).toMatchObject({
+      height: 24,
+      kind: "commander",
+      sourceRow: 0,
+      velocityX: 0,
+      velocityY: 2.35,
+      width: 8,
+    });
+    expect(zigzag.invaderShots[0]).toMatchObject({
+      height: 18,
+      kind: "zigzag",
+      sourceRow: 1,
+      velocityX: 1.15,
+      velocityY: 3,
+      width: 7,
+    });
+    expect(needle.invaderShots[0]).toMatchObject({
+      height: 24,
+      kind: "needle",
+      sourceRow: 3,
+      velocityX: 0,
+      velocityY: 4.9,
+      width: 3,
+    });
+    expect(scatter.invaderShots).toHaveLength(3);
+    expect(scatter.invaderShots).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "scatter",
+          sourceRow: 2,
+          ttlTicks: 96,
+          velocityX: -1.25,
+          velocityY: 2.8,
+        }),
+        expect.objectContaining({
+          kind: "scatter",
+          sourceRow: 2,
+          ttlTicks: 96,
+          velocityX: 0,
+          velocityY: 2.8,
+        }),
+        expect.objectContaining({
+          kind: "scatter",
+          sourceRow: 2,
+          ttlTicks: 96,
+          velocityX: 1.25,
+          velocityY: 2.8,
+        }),
+      ]),
+    );
+    expect(standard.invaderShots[0]).toMatchObject({
+      height: 20,
+      kind: "standard",
+      sourceRow: 4,
+      velocityX: 0,
+      velocityY: 3.2,
+      width: 5,
+    });
+    expect(commander.invaderShotCooldownTicks).toBeGreaterThan(
+      standard.invaderShotCooldownTicks,
+    );
+    expect(needle.invaderShotCooldownTicks).toBeLessThan(
+      standard.invaderShotCooldownTicks,
+    );
+    expect(scatter.nextInvaderShotId).toBe(3);
   });
 
   it("moves the player shot upward and clears it after it leaves the board", () => {
@@ -256,6 +356,80 @@ describe("space invaders game engine", () => {
       shot.y + shot.velocityY,
     );
     expect(advanceSpaceInvadersGame(clearedShotGame).invaderShots).toEqual([]);
+  });
+
+  it("moves commander, zig-zag, and scatter shots with their row behavior", () => {
+    const game = createInitialSpaceInvadersGame();
+    const commander = createInvaderShotFixture({
+      height: 24,
+      id: "commander-shot",
+      kind: "commander",
+      sourceRow: 0,
+      velocityX: 0,
+      velocityY: 2.35,
+      width: 8,
+      x: 120,
+      y: 120,
+    });
+    const zigzagRight = createInvaderShotFixture({
+      id: "zigzag-right",
+      kind: "zigzag",
+      sourceColumn: 0,
+      sourceRow: 1,
+      velocityX: 1.15,
+      velocityY: 3,
+      x: 160,
+      y: 120,
+    });
+    const zigzagLeft = createInvaderShotFixture({
+      ageTicks: 12,
+      id: "zigzag-left",
+      kind: "zigzag",
+      sourceColumn: 0,
+      sourceRow: 1,
+      velocityX: 1.15,
+      velocityY: 3,
+      x: 200,
+      y: 120,
+    });
+    const expiredScatter = createInvaderShotFixture({
+      id: "expired-scatter",
+      kind: "scatter",
+      sourceRow: 4,
+      ttlTicks: 1,
+      velocityX: 1.25,
+      velocityY: 2.8,
+      x: 240,
+      y: 120,
+    });
+    const advanced = advanceSpaceInvadersGame(
+      createRunningGame({
+        invaderShotCooldownTicks: 100,
+        invaderShots: [commander, zigzagRight, zigzagLeft, expiredScatter],
+        player: {
+          ...game.player,
+          x: 260,
+        },
+      }),
+    );
+    const movedCommander = advanced.invaderShots.find(
+      (shot) => shot.id === commander.id,
+    );
+    const movedZigzagRight = advanced.invaderShots.find(
+      (shot) => shot.id === zigzagRight.id,
+    );
+    const movedZigzagLeft = advanced.invaderShots.find(
+      (shot) => shot.id === zigzagLeft.id,
+    );
+
+    expect(movedCommander?.velocityX).toBeGreaterThan(0);
+    expect(movedCommander?.x).toBeGreaterThan(commander.x);
+    expect(movedCommander?.y).toBeCloseTo(commander.y + commander.velocityY);
+    expect(movedZigzagRight?.x).toBeGreaterThan(zigzagRight.x);
+    expect(movedZigzagLeft?.x).toBeLessThan(zigzagLeft.x);
+    expect(advanced.invaderShots.find((shot) => shot.id === expiredScatter.id)).toBe(
+      undefined,
+    );
   });
 
   it("loses a life and clears active shots when an invader shot hits the player", () => {

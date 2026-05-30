@@ -107,7 +107,7 @@ const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
     items: [
       "Shoot every invader before the formation reaches your base.",
       "Only one player shot can be active at a time.",
-      "Dodge shots fired by the lowest surviving invader in each column.",
+      "Each exposed invader row fires its own pattern: tracking bolts, zig-zags, scatter bursts, needles, or lasers.",
       "Defend Earth to win; the game ends if you lose every life or the invaders reach the base.",
     ],
   },

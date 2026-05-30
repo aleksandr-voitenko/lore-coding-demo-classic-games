@@ -2,6 +2,13 @@ export type SpaceInvadersStatus = "ready" | "running" | "paused" | "lost" | "won
 
 export type SpaceInvadersDirection = -1 | 1;
 
+export type SpaceInvadersInvaderShotKind =
+  | "commander"
+  | "zigzag"
+  | "standard"
+  | "needle"
+  | "scatter";
+
 export type SpaceInvadersPlayer = {
   height: number;
   width: number;
@@ -30,9 +37,14 @@ export type SpaceInvadersShot = {
 };
 
 export type SpaceInvadersInvaderShot = SpaceInvadersShot & {
+  ageTicks: number;
   id: string;
+  kind: SpaceInvadersInvaderShotKind;
   sourceColumn: number;
   sourceInvaderId: string;
+  sourceRow: number;
+  ttlTicks: number | null;
+  velocityX: number;
 };
 
 export type SpaceInvadersGameState = {
@@ -85,10 +97,7 @@ const INVADER_TOP = 64;
 const INVADER_WIDTH = 28;
 const INVADER_FIRE_COOLDOWN_TICKS = 80;
 const INVADER_HIT_RECOVERY_TICKS = 120;
-const INVADER_SHOT_HEIGHT = 20;
-const INVADER_SHOT_SPEED = 3.2;
-const INVADER_SHOT_WIDTH = 5;
-const MAX_INVADER_SHOTS = 1;
+const MAX_INVADER_SHOTS = 3;
 const PLAYER_BOTTOM_MARGIN = 10;
 const INVADER_X = 38;
 const PLAYER_HEIGHT = 50;
@@ -97,6 +106,76 @@ const PLAYER_WIDTH = 62;
 const SHOT_HEIGHT = 22;
 const SHOT_SPEED = -6.4;
 const SHOT_WIDTH = 6;
+const COMMANDER_SHOT_MAX_SPEED_X = 1.1;
+const COMMANDER_SHOT_STEER_X = 0.14;
+const ZIGZAG_SHOT_SEGMENT_TICKS = 12;
+const SCATTER_SHOT_VELOCITIES_X = [-1.25, 0, 1.25] as const;
+
+type InvaderShotSpec = {
+  cooldownTicks: number;
+  height: number;
+  kind: SpaceInvadersInvaderShotKind;
+  ttlTicks: number | null;
+  velocityX: number;
+  velocityY: number;
+  width: number;
+};
+
+const SPACE_INVADERS_ROW_SHOT_KINDS: SpaceInvadersInvaderShotKind[] = [
+  "commander",
+  "zigzag",
+  "scatter",
+  "needle",
+  "standard",
+];
+
+const INVADER_SHOT_SPECS: Record<SpaceInvadersInvaderShotKind, InvaderShotSpec> = {
+  commander: {
+    cooldownTicks: 132,
+    height: 24,
+    kind: "commander",
+    ttlTicks: null,
+    velocityX: 0,
+    velocityY: 2.35,
+    width: 8,
+  },
+  zigzag: {
+    cooldownTicks: 92,
+    height: 18,
+    kind: "zigzag",
+    ttlTicks: null,
+    velocityX: 1.15,
+    velocityY: 3,
+    width: 7,
+  },
+  standard: {
+    cooldownTicks: INVADER_FIRE_COOLDOWN_TICKS,
+    height: 20,
+    kind: "standard",
+    ttlTicks: null,
+    velocityX: 0,
+    velocityY: 3.2,
+    width: 5,
+  },
+  needle: {
+    cooldownTicks: 56,
+    height: 24,
+    kind: "needle",
+    ttlTicks: null,
+    velocityX: 0,
+    velocityY: 4.9,
+    width: 3,
+  },
+  scatter: {
+    cooldownTicks: 112,
+    height: 12,
+    kind: "scatter",
+    ttlTicks: 96,
+    velocityX: 0,
+    velocityY: 2.8,
+    width: 5,
+  },
+};
 
 export function createInitialSpaceInvadersGame({
   alienCount = SPACE_INVADERS_COLUMNS * SPACE_INVADERS_ROWS,
@@ -352,11 +431,8 @@ function advanceInvaderShots(game: SpaceInvadersGameState): SpaceInvadersGameSta
   }
 
   const movedShots = game.invaderShots
-    .map((shot) => ({
-      ...shot,
-      y: shot.y + shot.velocityY,
-    }))
-    .filter((shot) => shot.y <= game.boardHeight);
+    .map((shot) => advanceInvaderShot(shot, game))
+    .filter((shot) => isInvaderShotActive(shot, game));
   const didHitPlayer = movedShots.some((shot) => rectanglesIntersect(shot, game.player));
 
   if (!didHitPlayer) {
@@ -400,14 +476,17 @@ function maybeFireInvaderShot(game: SpaceInvadersGameState): SpaceInvadersGameSt
     };
   }
 
+  const createdShots = createInvaderShots(shooter, game.nextInvaderShotId);
+
+  if (game.invaderShots.length + createdShots.length > MAX_INVADER_SHOTS) {
+    return game;
+  }
+
   return {
     ...game,
-    invaderShotCooldownTicks: INVADER_FIRE_COOLDOWN_TICKS,
-    invaderShots: [
-      ...game.invaderShots,
-      createInvaderShot(shooter, game.nextInvaderShotId),
-    ],
-    nextInvaderShotId: game.nextInvaderShotId + 1,
+    invaderShotCooldownTicks: getInvaderShotSpec(shooter.row).cooldownTicks,
+    invaderShots: [...game.invaderShots, ...createdShots],
+    nextInvaderShotId: game.nextInvaderShotId + createdShots.length,
   };
 }
 
@@ -459,20 +538,105 @@ function getLowestActiveInvadersByColumn(invaders: SpaceInvader[]) {
   return [...lowestInvaderByColumn.values()];
 }
 
+function advanceInvaderShot(
+  shot: SpaceInvadersInvaderShot,
+  game: SpaceInvadersGameState,
+): SpaceInvadersInvaderShot {
+  const velocityX = getNextInvaderShotVelocityX(shot, game.player);
+
+  return {
+    ...shot,
+    ageTicks: shot.ageTicks + 1,
+    ttlTicks: shot.ttlTicks === null ? null : shot.ttlTicks - 1,
+    velocityX,
+    x: shot.x + velocityX,
+    y: shot.y + shot.velocityY,
+  };
+}
+
+function getNextInvaderShotVelocityX(
+  shot: SpaceInvadersInvaderShot,
+  player: SpaceInvadersPlayer,
+) {
+  if (shot.kind === "commander") {
+    const deltaX = getEntityCenterX(player) - getEntityCenterX(shot);
+
+    if (Math.abs(deltaX) < 1) {
+      return shot.velocityX;
+    }
+
+    return clamp(
+      shot.velocityX + Math.sign(deltaX) * COMMANDER_SHOT_STEER_X,
+      -COMMANDER_SHOT_MAX_SPEED_X,
+      COMMANDER_SHOT_MAX_SPEED_X,
+    );
+  }
+
+  if (shot.kind === "zigzag") {
+    const segment = Math.floor(
+      (shot.ageTicks + shot.sourceColumn * 2) / ZIGZAG_SHOT_SEGMENT_TICKS,
+    );
+    const direction = segment % 2 === 0 ? 1 : -1;
+
+    return Math.abs(shot.velocityX) * direction;
+  }
+
+  return shot.velocityX;
+}
+
+function isInvaderShotActive(
+  shot: SpaceInvadersInvaderShot,
+  game: Pick<SpaceInvadersGameState, "boardHeight" | "boardWidth">,
+) {
+  return (
+    (shot.ttlTicks === null || shot.ttlTicks > 0) &&
+    shot.y <= game.boardHeight &&
+    shot.x + shot.width >= 0 &&
+    shot.x <= game.boardWidth
+  );
+}
+
+function createInvaderShots(invader: SpaceInvader, nextInvaderShotId: number) {
+  const spec = getInvaderShotSpec(invader.row);
+
+  if (spec.kind === "scatter") {
+    return SCATTER_SHOT_VELOCITIES_X.map((velocityX, index) =>
+      createInvaderShot(invader, nextInvaderShotId + index, spec, velocityX),
+    );
+  }
+
+  return [createInvaderShot(invader, nextInvaderShotId, spec, spec.velocityX)];
+}
+
 function createInvaderShot(
   invader: SpaceInvader,
   nextInvaderShotId: number,
+  spec: InvaderShotSpec,
+  velocityX: number,
 ): SpaceInvadersInvaderShot {
   return {
-    height: INVADER_SHOT_HEIGHT,
+    ageTicks: 0,
+    height: spec.height,
     id: `invader-shot-${nextInvaderShotId}`,
+    kind: spec.kind,
     sourceColumn: invader.column,
     sourceInvaderId: invader.id,
-    velocityY: INVADER_SHOT_SPEED,
-    width: INVADER_SHOT_WIDTH,
-    x: invader.x + invader.width / 2 - INVADER_SHOT_WIDTH / 2,
+    sourceRow: invader.row,
+    ttlTicks: spec.ttlTicks,
+    velocityX,
+    velocityY: spec.velocityY,
+    width: spec.width,
+    x: invader.x + invader.width / 2 - spec.width / 2,
     y: invader.y + invader.height + 1,
   };
+}
+
+function getInvaderShotSpec(row: number) {
+  return INVADER_SHOT_SPECS[getInvaderShotKind(row)];
+}
+
+function getInvaderShotKind(row: number) {
+  return SPACE_INVADERS_ROW_SHOT_KINDS[row] ?? "scatter";
 }
 
 function marchInvaders(game: SpaceInvadersGameState): SpaceInvadersGameState {
