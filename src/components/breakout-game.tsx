@@ -43,6 +43,7 @@ import { Button } from "@/components/ui/button";
 import {
   advanceBreakoutGame,
   createInitialBreakoutGame,
+  getBreakoutBallSpeed,
   getBreakoutTickDelay,
   moveBreakoutPaddleLeft,
   moveBreakoutPaddleRight,
@@ -120,6 +121,7 @@ export function BreakoutGame({
     }),
   );
   const tickDelay = game.status === "running" ? getBreakoutTickDelay() : null;
+  const ballSpeed = game.status === "running" ? getBreakoutBallSpeed(game.ball.velocity) : null;
   const activeBrickCount = game.bricks.filter((brick) => brick.isActive).length;
   const canPauseGame = game.status === "running" || game.status === "paused";
   const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
@@ -187,7 +189,7 @@ export function BreakoutGame({
   }, []);
 
   const advanceBreakout = useCallback(() => {
-    setGame((current) => advanceBreakoutGame(current));
+    setGame((current) => advanceBreakoutGame(current, { random: Math.random }));
   }, []);
 
   const saveLeaderboardScore = useCallback(() => {
@@ -340,7 +342,7 @@ export function BreakoutGame({
               className="border-[var(--breakout-border)]"
               label="Speed"
               labelClassName="text-[var(--breakout-muted)]"
-              value={tickDelay === null ? "0" : Math.round(1000 / tickDelay)}
+              value={ballSpeed === null ? "0" : ballSpeed.toFixed(2)}
               valueTestId="breakout-speed"
             />
           </GameStatsBar>

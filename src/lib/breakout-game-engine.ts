@@ -47,6 +47,13 @@ export type CreateBreakoutGameOptions = {
   lives?: number;
 };
 
+export type AdvanceBreakoutGameOptions = {
+  random?: BreakoutRandomSource;
+};
+
+type BreakoutRandomSource = () => number;
+type BreakoutVelocitySign = "negative" | "positive";
+
 export const BREAKOUT_BOARD_WIDTH = 420;
 export const BREAKOUT_BOARD_HEIGHT = 560;
 export const BREAKOUT_BRICK_COLUMNS = 10;
@@ -61,11 +68,13 @@ export const BREAKOUT_BOARD_SIZE_OPTIONS = [
 export const BREAKOUT_LIVES_OPTIONS = [2, 3, 5] as const;
 
 const BALL_RADIUS = 6;
+const BALL_HIT_ANGLE_JITTER_RADIANS = Math.PI / 60;
+const BALL_HIT_SPEED_MULTIPLIER = 1.002;
 const BRICK_GAP = 6;
 const BRICK_HEIGHT = 20;
 const BRICK_HORIZONTAL_PADDING = 24;
 const BRICK_TOP = 56;
-const INITIAL_BALL_VELOCITY: BreakoutPoint = { x: 3.2, y: -5.2 };
+const INITIAL_BALL_VELOCITY: BreakoutPoint = { x: 1.68, y: -2.73 };
 const MAX_PADDLE_BOUNCE_X = 5.8;
 const PADDLE_HEIGHT = 12;
 const PADDLE_SPEED = 7;
@@ -197,7 +206,10 @@ export function moveBreakoutPaddleRight(game: BreakoutGameState): BreakoutGameSt
   return moveBreakoutPaddle(game, PADDLE_SPEED);
 }
 
-export function advanceBreakoutGame(game: BreakoutGameState): BreakoutGameState {
+export function advanceBreakoutGame(
+  game: BreakoutGameState,
+  { random = getNeutralRandomValue }: AdvanceBreakoutGameOptions = {},
+): BreakoutGameState {
   if (game.status !== "running") {
     return game;
   }
@@ -211,15 +223,15 @@ export function advanceBreakoutGame(game: BreakoutGameState): BreakoutGameState 
     velocity: previousBall.velocity,
   };
 
-  ball = collideWithWalls(ball, game.boardWidth);
+  ball = collideWithWalls(ball, game.boardWidth, random);
 
   if (ball.position.y - BALL_RADIUS > game.boardHeight) {
     return loseBreakoutLife(game);
   }
 
-  ball = collideWithPaddle(previousBall, ball, game.paddle);
+  ball = collideWithPaddle(previousBall, ball, game.paddle, random);
 
-  const brickCollision = getFirstBrickCollision(previousBall, ball, game.bricks);
+  const brickCollision = getFirstBrickCollision(previousBall, ball, game.bricks, random);
 
   if (brickCollision === null) {
     return {
@@ -251,6 +263,10 @@ export function getBreakoutBallRadius() {
   return BALL_RADIUS;
 }
 
+export function getBreakoutBallSpeed(velocity: BreakoutPoint) {
+  return Math.hypot(velocity.x, velocity.y);
+}
+
 function createCenteredPaddle(
   boardWidth = BREAKOUT_BOARD_WIDTH,
   boardHeight = BREAKOUT_BOARD_HEIGHT,
@@ -276,7 +292,11 @@ function createBallForPaddle(
   };
 }
 
-function collideWithWalls(ball: BreakoutBall, boardWidth: number): BreakoutBall {
+function collideWithWalls(
+  ball: BreakoutBall,
+  boardWidth: number,
+  random: BreakoutRandomSource,
+): BreakoutBall {
   let nextBall = ball;
 
   if (nextBall.position.x - BALL_RADIUS <= 0) {
@@ -285,10 +305,14 @@ function collideWithWalls(ball: BreakoutBall, boardWidth: number): BreakoutBall 
         ...nextBall.position,
         x: BALL_RADIUS,
       },
-      velocity: {
-        ...nextBall.velocity,
-        x: Math.abs(nextBall.velocity.x),
-      },
+      velocity: increaseBallSpeed(
+        {
+          ...nextBall.velocity,
+          x: Math.abs(nextBall.velocity.x),
+        },
+        random,
+        { x: "positive" },
+      ),
     };
   }
 
@@ -298,10 +322,14 @@ function collideWithWalls(ball: BreakoutBall, boardWidth: number): BreakoutBall 
         ...nextBall.position,
         x: boardWidth - BALL_RADIUS,
       },
-      velocity: {
-        ...nextBall.velocity,
-        x: -Math.abs(nextBall.velocity.x),
-      },
+      velocity: increaseBallSpeed(
+        {
+          ...nextBall.velocity,
+          x: -Math.abs(nextBall.velocity.x),
+        },
+        random,
+        { x: "negative" },
+      ),
     };
   }
 
@@ -311,10 +339,14 @@ function collideWithWalls(ball: BreakoutBall, boardWidth: number): BreakoutBall 
         ...nextBall.position,
         y: BALL_RADIUS,
       },
-      velocity: {
-        ...nextBall.velocity,
-        y: Math.abs(nextBall.velocity.y),
-      },
+      velocity: increaseBallSpeed(
+        {
+          ...nextBall.velocity,
+          y: Math.abs(nextBall.velocity.y),
+        },
+        random,
+        { y: "positive" },
+      ),
     };
   }
 
@@ -325,6 +357,7 @@ function collideWithPaddle(
   previousBall: BreakoutBall,
   ball: BreakoutBall,
   paddle: BreakoutPaddle,
+  random: BreakoutRandomSource,
 ): BreakoutBall {
   const wasAbovePaddle = previousBall.position.y + BALL_RADIUS <= paddle.y;
   const crossedPaddleTop = ball.position.y + BALL_RADIUS >= paddle.y;
@@ -338,15 +371,22 @@ function collideWithPaddle(
 
   const hitOffset = (ball.position.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
 
+  const velocity = jitterAndNormalizeVelocity(
+    {
+      x: clamp(hitOffset, -1, 1) * MAX_PADDLE_BOUNCE_X,
+      y: -Math.abs(ball.velocity.y),
+    },
+    getBreakoutBallSpeed(ball.velocity) * BALL_HIT_SPEED_MULTIPLIER,
+    random,
+    { y: "negative" },
+  );
+
   return {
     position: {
       ...ball.position,
       y: paddle.y - BALL_RADIUS,
     },
-    velocity: {
-      x: clamp(hitOffset, -1, 1) * MAX_PADDLE_BOUNCE_X,
-      y: -Math.abs(ball.velocity.y),
-    },
+    velocity,
   };
 }
 
@@ -354,6 +394,7 @@ function getFirstBrickCollision(
   previousBall: BreakoutBall,
   ball: BreakoutBall,
   bricks: BreakoutBrick[],
+  random: BreakoutRandomSource,
 ) {
   const brick = bricks.find((candidate) => candidate.isActive && ballIntersectsBrick(ball, candidate));
 
@@ -362,7 +403,7 @@ function getFirstBrickCollision(
   }
 
   return {
-    ball: bounceOffBrick(previousBall, ball, brick),
+    ball: bounceOffBrick(previousBall, ball, brick, random),
     brick,
   };
 }
@@ -380,23 +421,111 @@ function bounceOffBrick(
   previousBall: BreakoutBall,
   ball: BreakoutBall,
   brick: BreakoutBrick,
+  random: BreakoutRandomSource,
 ): BreakoutBall {
   const cameFromAbove = previousBall.position.y + BALL_RADIUS <= brick.y;
   const cameFromBelow = previousBall.position.y - BALL_RADIUS >= brick.y + brick.height;
   const nextVelocity = { ...ball.velocity };
+  let enforcedSign: { x?: BreakoutVelocitySign; y?: BreakoutVelocitySign };
 
   if (cameFromAbove) {
     nextVelocity.y = -Math.abs(ball.velocity.y);
+    enforcedSign = { y: "negative" };
   } else if (cameFromBelow) {
     nextVelocity.y = Math.abs(ball.velocity.y);
+    enforcedSign = { y: "positive" };
   } else {
     nextVelocity.x = -ball.velocity.x;
+    enforcedSign = { x: nextVelocity.x < 0 ? "negative" : "positive" };
   }
 
   return {
     ...ball,
-    velocity: nextVelocity,
+    velocity: increaseBallSpeed(nextVelocity, random, enforcedSign),
   };
+}
+
+function increaseBallSpeed(
+  velocity: BreakoutPoint,
+  random: BreakoutRandomSource,
+  enforcedSign: { x?: BreakoutVelocitySign; y?: BreakoutVelocitySign } = {},
+): BreakoutPoint {
+  return jitterAndNormalizeVelocity(
+    velocity,
+    getBreakoutBallSpeed(velocity) * BALL_HIT_SPEED_MULTIPLIER,
+    random,
+    enforcedSign,
+  );
+}
+
+function jitterAndNormalizeVelocity(
+  velocity: BreakoutPoint,
+  targetSpeed: number,
+  random: BreakoutRandomSource,
+  enforcedSign: { x?: BreakoutVelocitySign; y?: BreakoutVelocitySign },
+): BreakoutPoint {
+  const jitteredVelocity = rotateVelocity(velocity, getBreakoutAngleJitter(random));
+
+  return normalizeVelocityToSpeed(
+    {
+      x: enforceVelocitySign(jitteredVelocity.x, enforcedSign.x),
+      y: enforceVelocitySign(jitteredVelocity.y, enforcedSign.y),
+    },
+    targetSpeed,
+  );
+}
+
+function normalizeVelocityToSpeed(velocity: BreakoutPoint, targetSpeed: number): BreakoutPoint {
+  const currentSpeed = getBreakoutBallSpeed(velocity);
+
+  if (currentSpeed === 0) {
+    return velocity;
+  }
+
+  return scaleVelocity(velocity, targetSpeed / currentSpeed);
+}
+
+function scaleVelocity(velocity: BreakoutPoint, multiplier: number): BreakoutPoint {
+  return {
+    x: velocity.x * multiplier,
+    y: velocity.y * multiplier,
+  };
+}
+
+function rotateVelocity(velocity: BreakoutPoint, radians: number): BreakoutPoint {
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+
+  return {
+    x: velocity.x * cos - velocity.y * sin,
+    y: velocity.x * sin + velocity.y * cos,
+  };
+}
+
+function enforceVelocitySign(value: number, sign: BreakoutVelocitySign | undefined) {
+  if (sign === "positive") {
+    return Math.abs(value);
+  }
+
+  if (sign === "negative") {
+    return -Math.abs(value);
+  }
+
+  return value;
+}
+
+function getBreakoutAngleJitter(random: BreakoutRandomSource) {
+  const randomValue = random();
+
+  if (!Number.isFinite(randomValue)) {
+    return 0;
+  }
+
+  return (clamp(randomValue, 0, 1) * 2 - 1) * BALL_HIT_ANGLE_JITTER_RADIANS;
+}
+
+function getNeutralRandomValue() {
+  return 0.5;
 }
 
 function loseBreakoutLife(game: BreakoutGameState): BreakoutGameState {

@@ -9,6 +9,7 @@ import {
   BREAKOUT_STARTING_LIVES,
   createInitialBreakoutGame,
   getBreakoutBallRadius,
+  getBreakoutBallSpeed,
   moveBreakoutPaddle,
   pauseBreakoutGame,
   restartBreakoutGame,
@@ -23,6 +24,10 @@ function createRunningGame(overrides: Partial<BreakoutGameState> = {}): Breakout
     ...overrides,
   };
 }
+
+const HIT_SPEED_MULTIPLIER = 1.002;
+const PREVIOUS_INITIAL_BALL_SPEED = Math.hypot(3.2, 5.2);
+const STARTING_SPEED_MULTIPLIER = 0.525;
 
 describe("breakout game engine", () => {
   it("creates a ready board with a centered paddle, staged ball, and classic brick wall", () => {
@@ -49,6 +54,10 @@ describe("breakout game engine", () => {
       x: BREAKOUT_BOARD_WIDTH / 2,
       y: game.paddle.y - ballRadius - 1,
     });
+    expect(game.ball.velocity).toEqual({ x: 1.68, y: -2.73 });
+    expect(getBreakoutBallSpeed(game.ball.velocity)).toBeCloseTo(
+      PREVIOUS_INITIAL_BALL_SPEED * STARTING_SPEED_MULTIPLIER,
+    );
   });
 
   it("creates configurable board sizes and life counts", () => {
@@ -112,8 +121,35 @@ describe("breakout game engine", () => {
       },
     });
 
-    expect(advanceBreakoutGame(leftWallGame).ball.velocity.x).toBeGreaterThan(0);
-    expect(advanceBreakoutGame(topWallGame).ball.velocity.y).toBeGreaterThan(0);
+    const leftWallAdvanced = advanceBreakoutGame(leftWallGame);
+    const topWallAdvanced = advanceBreakoutGame(topWallGame);
+
+    expect(leftWallAdvanced.ball.velocity.x).toBeGreaterThan(0);
+    expect(topWallAdvanced.ball.velocity.y).toBeGreaterThan(0);
+    expect(getBreakoutBallSpeed(leftWallAdvanced.ball.velocity)).toBeCloseTo(
+      getBreakoutBallSpeed(leftWallGame.ball.velocity) * HIT_SPEED_MULTIPLIER,
+    );
+    expect(getBreakoutBallSpeed(topWallAdvanced.ball.velocity)).toBeCloseTo(
+      getBreakoutBallSpeed(topWallGame.ball.velocity) * HIT_SPEED_MULTIPLIER,
+    );
+  });
+
+  it("adds slight random angle jitter to wall rebounds", () => {
+    const ballRadius = getBreakoutBallRadius();
+    const topWallGame = createRunningGame({
+      ball: {
+        position: { x: 120, y: ballRadius + 1 },
+        velocity: { x: 1, y: -4 },
+      },
+    });
+    const neutralAdvanced = advanceBreakoutGame(topWallGame);
+    const jitteredAdvanced = advanceBreakoutGame(topWallGame, { random: () => 1 });
+
+    expect(jitteredAdvanced.ball.velocity.y).toBeGreaterThan(0);
+    expect(jitteredAdvanced.ball.velocity.x).not.toBeCloseTo(neutralAdvanced.ball.velocity.x);
+    expect(getBreakoutBallSpeed(jitteredAdvanced.ball.velocity)).toBeCloseTo(
+      getBreakoutBallSpeed(topWallGame.ball.velocity) * HIT_SPEED_MULTIPLIER,
+    );
   });
 
   it("bounces the ball from the paddle when descending onto it", () => {
@@ -133,6 +169,33 @@ describe("breakout game engine", () => {
 
     expect(advanced.ball.position.y).toBe(game.paddle.y - ballRadius);
     expect(advanced.ball.velocity.y).toBeLessThan(0);
+    expect(getBreakoutBallSpeed(advanced.ball.velocity)).toBeCloseTo(
+      getBreakoutBallSpeed(runningGame.ball.velocity) * HIT_SPEED_MULTIPLIER,
+    );
+  });
+
+  it("adds slight random angle jitter to paddle rebounds", () => {
+    const game = createInitialBreakoutGame();
+    const ballRadius = getBreakoutBallRadius();
+    const runningGame = createRunningGame({
+      ball: {
+        position: {
+          x: game.paddle.x + game.paddle.width / 2,
+          y: game.paddle.y - ballRadius - 1,
+        },
+        velocity: { x: 0, y: 5 },
+      },
+      paddle: game.paddle,
+    });
+    const neutralAdvanced = advanceBreakoutGame(runningGame);
+    const jitteredAdvanced = advanceBreakoutGame(runningGame, { random: () => 1 });
+
+    expect(neutralAdvanced.ball.velocity.x).toBe(0);
+    expect(jitteredAdvanced.ball.velocity.x).toBeGreaterThan(0);
+    expect(jitteredAdvanced.ball.velocity.y).toBeLessThan(0);
+    expect(getBreakoutBallSpeed(jitteredAdvanced.ball.velocity)).toBeCloseTo(
+      getBreakoutBallSpeed(runningGame.ball.velocity) * HIT_SPEED_MULTIPLIER,
+    );
   });
 
   it("removes the first hit brick, bounces the ball, and adds the brick score", () => {
@@ -155,6 +218,33 @@ describe("breakout game engine", () => {
     expect(hitBrick?.isActive).toBe(false);
     expect(advanced.score).toBe(targetBrick.points);
     expect(advanced.ball.velocity.y).toBeLessThan(0);
+    expect(getBreakoutBallSpeed(advanced.ball.velocity)).toBeCloseTo(
+      getBreakoutBallSpeed(runningGame.ball.velocity) * HIT_SPEED_MULTIPLIER,
+    );
+  });
+
+  it("adds slight random angle jitter to brick rebounds", () => {
+    const game = createInitialBreakoutGame();
+    const targetBrick = game.bricks[0]!;
+    const ballRadius = getBreakoutBallRadius();
+    const runningGame = createRunningGame({
+      ball: {
+        position: {
+          x: targetBrick.x + targetBrick.width / 2,
+          y: targetBrick.y - ballRadius - 1,
+        },
+        velocity: { x: 0, y: 2 },
+      },
+      bricks: game.bricks,
+    });
+    const neutralAdvanced = advanceBreakoutGame(runningGame);
+    const jitteredAdvanced = advanceBreakoutGame(runningGame, { random: () => 1 });
+
+    expect(jitteredAdvanced.ball.velocity.y).toBeLessThan(0);
+    expect(jitteredAdvanced.ball.velocity.x).not.toBeCloseTo(neutralAdvanced.ball.velocity.x);
+    expect(getBreakoutBallSpeed(jitteredAdvanced.ball.velocity)).toBeCloseTo(
+      getBreakoutBallSpeed(runningGame.ball.velocity) * HIT_SPEED_MULTIPLIER,
+    );
   });
 
   it("wins when the last active brick is cleared", () => {
@@ -201,6 +291,9 @@ describe("breakout game engine", () => {
     expect(readyAfterMiss.lives).toBe(1);
     expect(readyAfterMiss.score).toBe(70);
     expect(readyAfterMiss.ball.position.x).toBe(BREAKOUT_BOARD_WIDTH / 2);
+    expect(getBreakoutBallSpeed(readyAfterMiss.ball.velocity)).toBeCloseTo(
+      PREVIOUS_INITIAL_BALL_SPEED * STARTING_SPEED_MULTIPLIER,
+    );
     expect(lostGame.status).toBe("lost");
     expect(restartedGame.status).toBe("running");
     expect(restartedGame.lives).toBe(BREAKOUT_STARTING_LIVES);
