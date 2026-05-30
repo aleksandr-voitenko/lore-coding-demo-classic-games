@@ -9,8 +9,9 @@ This file covers repository-local development tooling under `scripts/`.
   be copied or packaged for other repositories without app-specific imports.
 - The CLI supports `--edit <file>` for Git `commit-msg` hooks, `--file <file>`
   or stdin for manual checks, `--format json` for machine-readable diagnostics,
-  `explain <LORE###>` for stable rule help, `--target <commit>` for reachability
-  checks, and `--no-git-links` for syntax-only link validation.
+  `explain <LORE###>` for stable rule help, `--target <commit>` for Lore-Link
+  history checks, `--no-lore-links` for syntax-only link validation, and the
+  legacy `--no-git-links` alias.
 - `.githooks/commit-msg` calls `node scripts/lore-coding.mjs --edit "$1"`.
   `scripts/install-lore-coding-hooks.mjs` configures `core.hooksPath .githooks` from
   the package `prepare` script after dependency install. The installer skips
@@ -24,14 +25,14 @@ This file covers repository-local development tooling under `scripts/`.
   `LORE_TASK_TYPES`; scopes are optional lower-case words or numbers separated
   by single spaces or hyphens.
 - Body validation requires non-empty `Context:`, `Implementation:`, and
-  `Verification:` sections in that order, with optional `Links:` before them.
-  Wrapper prose and Markdown code fences are rejected because they previously
-  appeared in real commit subjects.
-- `Links:` entries must be `- <full commit hash> — <reason>`. The validator
-  detects the repository object format with `git rev-parse --show-object-format`,
-  requires the corresponding full hash length, checks that the object exists and
-  is a commit, and requires it to be an ancestor of the target commit
-  (`HEAD` by default for local hooks).
+  `Verification:` sections in that order, followed by final Lore trailers.
+  Wrapper prose, Markdown code fences, and legacy `Links:` sections are rejected
+  because they previously appeared in real commit subjects.
+- Trailer validation requires exactly one `Lore-ID: LC-YYYYMMDD-XXXX` trailer.
+  Optional repeated `Lore-Link: LC-YYYYMMDD-XXXX — <reason>` trailers must be
+  contiguous final lines and resolve to a matching `Lore-ID:` in the target
+  history (`HEAD` by default for local hooks), unless syntax-only validation is
+  requested.
 - Diagnostics use stable `LORE###` codes with line numbers, expected format,
   fix guidance, and examples. Preserve those codes when tightening copy so
   agents can react to failures reliably.
@@ -40,7 +41,8 @@ This file covers repository-local development tooling under `scripts/`.
 
 - `scripts/lore-coding.test.mjs` covers accepted Lore messages, wrapper and
   code-fence rejection, subject type/scope validation, required section checks,
-  link syntax, Git object checks, reachability checks, and hook-style diagnostic
+  Lore-ID and Lore-Link trailer syntax, legacy Links rejection, Lore-Link
+  history resolution, syntax-only link validation, and hook-style diagnostic
   formatting.
 - `scripts/install-lore-coding-hooks.test.mjs` covers install planning for fresh
   worktrees, non-Git directories, CI, explicit opt-out, existing custom hook

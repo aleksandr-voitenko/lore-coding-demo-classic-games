@@ -26,13 +26,15 @@ export const LORE_TASK_TYPES = [
 
 const TASK_TYPE_SET = new Set(LORE_TASK_TYPES);
 const REQUIRED_SECTIONS = ["Context", "Implementation", "Verification"];
-const ALL_SECTIONS = ["Links", ...REQUIRED_SECTIONS];
-const SECTION_ORDER = new Map(ALL_SECTIONS.map((section, index) => [section, index]));
+const SECTION_ORDER = new Map(REQUIRED_SECTIONS.map((section, index) => [section, index]));
 const SCOPE_PATTERN = /^[a-z0-9]+(?:[ -][a-z0-9]+)*$/;
 const WRAPPER_PATTERN =
   /^here(?:'|’)?s\s+(?:the\s+)?(?:commit-message-ready\s+)?(?:task\s+description|commit\s+message):?$/i;
 const SUBJECT_PATTERN = /^([^():]+)(?:\(([^)]*)\))?: (.+)$/;
-const LINK_PATTERN = /^- ([0-9a-fA-F]+)\s+—\s*(.*)$/;
+const LORE_ID_PATTERN = /^Lore-ID:\s+(LC-\d{8}-[A-Z0-9]{4})$/;
+const LORE_LINK_PATTERN = /^Lore-Link:\s+(LC-\d{8}-[A-Z0-9]{4})\s+—\s*(.*)$/;
+const LEGACY_LINKS_SECTION_PATTERN = /^\s*Links:\s*$/;
+const LORE_TRAILER_START_PATTERN = /^\s*Lore-(?:ID|Link):/;
 
 const ERROR_HELP = {
   LORE001: {
@@ -75,9 +77,9 @@ const ERROR_HELP = {
   },
   LORE021: {
     title: "Sections are out of order.",
-    expected: "Use optional Links: first, then Context:, Implementation:, and Verification:.",
+    expected: "Use Context:, Implementation:, and Verification: in that order.",
     fix: "Move the section headers into the required order.",
-    example: "Links:\nContext:\nImplementation:\nVerification:",
+    example: "Context:\nImplementation:\nVerification:",
   },
   LORE022: {
     title: "Section is empty.",
@@ -129,18 +131,69 @@ const ERROR_HELP = {
     example:
       "- 3251d4ac7c0cbf6426f901c15ed2195b3a68f82d — established CI workflow behavior",
   },
+  LORE040: {
+    title: "Missing Lore-ID trailer.",
+    expected: "Every v15 Lore Coding commit message must end with a `Lore-ID:` trailer.",
+    fix: "Add `Lore-ID: LC-YYYYMMDD-XXXX` after the Verification section.",
+    example: "Lore-ID: LC-20260530-4D61",
+  },
+  LORE041: {
+    title: "Malformed Lore-ID trailer.",
+    expected: "`Lore-ID:` must be `LC-YYYYMMDD-XXXX` with a four-character uppercase suffix.",
+    fix: "Use a stable task id such as `Lore-ID: LC-20260530-4D61`.",
+    example: "Lore-ID: LC-20260530-4D61",
+  },
+  LORE042: {
+    title: "Duplicate Lore-ID trailer.",
+    expected: "Use exactly one `Lore-ID:` trailer.",
+    fix: "Keep the single task identity for this commit and remove duplicate `Lore-ID:` lines.",
+    example: "Lore-ID: LC-20260530-4D61",
+  },
+  LORE043: {
+    title: "Lore trailers must be final.",
+    expected: "Only contiguous `Lore-ID:` and `Lore-Link:` trailers may appear after the first Lore trailer.",
+    fix: "Move all free-form content above the trailer block, and keep trailers as the final lines.",
+    example: "Verification:\n- Ran `npm test`; all tests passed.\n\nLore-ID: LC-20260530-4D61",
+  },
+  LORE044: {
+    title: "Malformed Lore-Link trailer.",
+    expected: "`Lore-Link:` must be `Lore-Link: LC-YYYYMMDD-XXXX — reason`.",
+    fix: "Use a valid Lore ID, an em dash separator, and a short reason.",
+    example:
+      "Lore-Link: LC-20260529-18A1 — established the validator behavior extended here",
+  },
+  LORE045: {
+    title: "Lore-Link trailer is missing a reason.",
+    expected: "Every `Lore-Link:` trailer must explain why the linked task matters.",
+    fix: "Add a short reason after the em dash.",
+    example:
+      "Lore-Link: LC-20260529-18A1 — established the validator behavior extended here",
+  },
+  LORE046: {
+    title: "Legacy Links section is not allowed.",
+    expected: "v15 commit messages use final `Lore-Link:` trailers instead of a `Links:` section.",
+    fix: "Replace the legacy hash entry with `Lore-Link: LC-YYYYMMDD-XXXX — reason`.",
+    example:
+      "Lore-Link: LC-20260529-18A1 — established the validator behavior extended here",
+  },
+  LORE047: {
+    title: "Linked Lore ID was not found.",
+    expected: "Every `Lore-Link:` must reference a Lore ID reachable from the target history.",
+    fix: "Search history with `git log --all --grep=\"Lore-ID: <id>\"` and use a reachable related task id.",
+    example: "git log --all --grep=\"Lore-ID: LC-20260529-18A1\"",
+  },
   LORE090: {
     title: "Git lookup failed.",
-    expected: "Commit link validation must run inside a Git repository with enough history.",
-    fix: "Run the validator from the repository root and make sure the linked history is available.",
-    example: "git rev-parse --show-object-format",
+    expected: "Lore-Link validation must run inside a Git repository with enough history.",
+    fix: "Run the validator from the repository root and make sure the linked Lore-ID history is available.",
+    example: "git log --all --grep=\"Lore-ID: LC-20260529-18A1\"",
   },
 };
 
 export async function validateLoreCoding(rawMessage, options = {}) {
   const records = createMessageRecords(rawMessage);
   const errors = [];
-  const linkEntries = [];
+  const loreLinkEntries = [];
 
   for (const record of records) {
     if (record.text.trimStart().startsWith("```")) {
@@ -163,10 +216,15 @@ export async function validateLoreCoding(rawMessage, options = {}) {
   validateSubject(subjectRecord, errors);
 
   const bodyRecords = records.slice(subjectIndex + 1);
-  validateSections(bodyRecords, errors, linkEntries);
+  validateLegacyLinks(bodyRecords, errors);
+  const trailerStartIndex = validateLoreTrailers(bodyRecords, errors, loreLinkEntries);
+  validateSections(bodyRecords, errors, trailerStartIndex);
 
-  if (linkEntries.length > 0 && options.checkLinkedCommits !== false) {
-    await validateLinkedCommits(linkEntries, errors, options);
+  const shouldCheckLoreLinks =
+    options.checkLinkedLoreIds ?? options.checkLinkedCommits ?? true;
+
+  if (loreLinkEntries.length > 0 && shouldCheckLoreLinks) {
+    await validateLinkedLoreIds(loreLinkEntries, errors, options);
   }
 
   return createResult(errors);
@@ -223,38 +281,9 @@ export function createGitInspector(options = {}) {
   const cwd = options.cwd ?? process.cwd();
 
   return {
-    getObjectFormat() {
-      return runGit(["rev-parse", "--show-object-format"], cwd).trim();
-    },
-
-    getObjectType(hash) {
-      const result = runGit(["cat-file", "-t", hash], cwd, { allowFailure: true });
-
-      if (result.status === 0) {
-        return result.stdout.trim();
-      }
-
-      if (result.status === 128) {
-        return null;
-      }
-
-      throw new Error(result.stderr || `git cat-file failed for ${hash}`);
-    },
-
-    isAncestor(hash, targetCommit) {
-      const result = runGit(["merge-base", "--is-ancestor", hash, targetCommit], cwd, {
-        allowFailure: true,
-      });
-
-      if (result.status === 0) {
-        return true;
-      }
-
-      if (result.status === 1) {
-        return false;
-      }
-
-      throw new Error(result.stderr || `git merge-base failed for ${hash}`);
+    findCommitsByLoreId(loreId, targetCommit) {
+      const logOutput = runGit(["log", "--format=%H%x1f%B%x1e", targetCommit], cwd);
+      return parseLoreIdCommits(logOutput, loreId);
     },
   };
 }
@@ -329,10 +358,12 @@ function validateSubject(subjectRecord, errors) {
   }
 }
 
-function validateSections(bodyRecords, errors, linkEntries) {
+function validateSections(bodyRecords, errors, trailerStartIndex) {
+  const sectionRecords =
+    trailerStartIndex === -1 ? bodyRecords : bodyRecords.slice(0, trailerStartIndex);
   const occurrences = [];
 
-  bodyRecords.forEach((record, index) => {
+  sectionRecords.forEach((record, index) => {
     const section = parseSectionHeader(record.text);
 
     if (section) {
@@ -388,146 +419,13 @@ function validateSections(bodyRecords, errors, linkEntries) {
   }
 
   for (const occurrence of occurrences) {
-    const content = getSectionContent(bodyRecords, occurrences, occurrence);
+    const content = getSectionContent(sectionRecords, occurrences, occurrence);
     const hasContent = content.some((record) => record.text.trim() !== "");
 
     if (!hasContent) {
       errors.push(
         createDiagnostic("LORE022", occurrence.record, {
           found: occurrence.record.text.trim(),
-        }),
-      );
-    }
-
-    if (occurrence.section === "Links") {
-      validateLinksContent(content, errors, linkEntries);
-    }
-  }
-}
-
-function validateLinksContent(contentRecords, errors, linkEntries) {
-  for (const record of contentRecords) {
-    const line = record.text.trim();
-
-    if (line === "") {
-      continue;
-    }
-
-    const match = line.match(LINK_PATTERN);
-
-    if (!match) {
-      errors.push(
-        createDiagnostic("LORE030", record, {
-          found: record.text,
-        }),
-      );
-      continue;
-    }
-
-    const [, hash, reason] = match;
-
-    if (reason.trim() === "") {
-      errors.push(
-        createDiagnostic("LORE035", record, {
-          found: record.text,
-        }),
-      );
-    }
-
-    linkEntries.push({
-      hash,
-      line: record.line,
-      record,
-    });
-  }
-}
-
-async function validateLinkedCommits(linkEntries, errors, options) {
-  const gitInspector = options.gitInspector ?? createGitInspector({ cwd: options.cwd });
-  const targetCommit = options.targetCommit ?? "HEAD";
-  let objectFormat;
-
-  try {
-    objectFormat = await gitInspector.getObjectFormat();
-  } catch (error) {
-    errors.push(
-      createDiagnostic("LORE090", undefined, {
-        found: String(error.message ?? error),
-      }),
-    );
-    return;
-  }
-
-  const expectedHashLength = getExpectedHashLength(objectFormat);
-
-  if (!expectedHashLength) {
-    errors.push(
-      createDiagnostic("LORE090", undefined, {
-        found: `Unsupported Git object format: ${objectFormat}`,
-      }),
-    );
-    return;
-  }
-
-  for (const entry of linkEntries) {
-    if (!isFullHashForFormat(entry.hash, expectedHashLength)) {
-      errors.push(
-        createDiagnostic("LORE031", entry.record, {
-          found: entry.hash,
-          expected: `A ${expectedHashLength}-character hexadecimal commit hash.`,
-        }),
-      );
-      continue;
-    }
-
-    let objectType;
-
-    try {
-      objectType = await gitInspector.getObjectType(entry.hash);
-    } catch (error) {
-      errors.push(
-        createDiagnostic("LORE090", entry.record, {
-          found: String(error.message ?? error),
-        }),
-      );
-      continue;
-    }
-
-    if (objectType === null) {
-      errors.push(
-        createDiagnostic("LORE032", entry.record, {
-          found: entry.hash,
-        }),
-      );
-      continue;
-    }
-
-    if (objectType !== "commit") {
-      errors.push(
-        createDiagnostic("LORE033", entry.record, {
-          found: `${entry.hash} is a ${objectType} object`,
-        }),
-      );
-      continue;
-    }
-
-    let isReachable;
-
-    try {
-      isReachable = await gitInspector.isAncestor(entry.hash, targetCommit);
-    } catch (error) {
-      errors.push(
-        createDiagnostic("LORE090", entry.record, {
-          found: String(error.message ?? error),
-        }),
-      );
-      continue;
-    }
-
-    if (!isReachable) {
-      errors.push(
-        createDiagnostic("LORE034", entry.record, {
-          found: entry.hash,
         }),
       );
     }
@@ -553,20 +451,195 @@ function getSectionContent(bodyRecords, occurrences, occurrence) {
   return bodyRecords.slice(occurrence.bodyIndex + 1, endIndex);
 }
 
-function getExpectedHashLength(objectFormat) {
-  if (objectFormat === "sha1") {
-    return 40;
+function validateLegacyLinks(bodyRecords, errors) {
+  for (const record of bodyRecords) {
+    if (LEGACY_LINKS_SECTION_PATTERN.test(record.text)) {
+      errors.push(
+        createDiagnostic("LORE046", record, {
+          found: record.text.trim(),
+        }),
+      );
+    }
+  }
+}
+
+function validateLoreTrailers(bodyRecords, errors, loreLinkEntries) {
+  const trailerStartIndex = bodyRecords.findIndex((record) =>
+    LORE_TRAILER_START_PATTERN.test(record.text),
+  );
+
+  if (trailerStartIndex === -1) {
+    errors.push(
+      createDiagnostic("LORE040", undefined, {
+        found: "<missing>",
+      }),
+    );
+    return -1;
   }
 
-  if (objectFormat === "sha256") {
-    return 64;
+  let loreIdCount = 0;
+
+  for (let index = trailerStartIndex; index < bodyRecords.length; index += 1) {
+    const record = bodyRecords[index];
+    const line = record.text.trim();
+
+    if (line === "" || !LORE_TRAILER_START_PATTERN.test(record.text)) {
+      errors.push(
+        createDiagnostic("LORE043", record, {
+          found: line === "" ? "<blank line>" : record.text,
+        }),
+      );
+      continue;
+    }
+
+    if (line.startsWith("Lore-ID:")) {
+      loreIdCount += 1;
+
+      if (loreIdCount > 1) {
+        errors.push(
+          createDiagnostic("LORE042", record, {
+            found: record.text,
+          }),
+        );
+      }
+
+      if (!LORE_ID_PATTERN.test(line)) {
+        errors.push(
+          createDiagnostic("LORE041", record, {
+            found: record.text,
+          }),
+        );
+      }
+
+      continue;
+    }
+
+    if (line.startsWith("Lore-Link:")) {
+      const linkMatch = line.match(LORE_LINK_PATTERN);
+
+      if (!linkMatch) {
+        const maybeMissingReason = line.match(
+          /^Lore-Link:\s+LC-\d{8}-[A-Z0-9]{4}\s+—\s*$/,
+        );
+
+        errors.push(
+          createDiagnostic(maybeMissingReason ? "LORE045" : "LORE044", record, {
+            found: record.text,
+          }),
+        );
+        continue;
+      }
+
+      const [, loreId, reason] = linkMatch;
+
+      if (reason.trim() === "") {
+        errors.push(
+          createDiagnostic("LORE045", record, {
+            found: record.text,
+          }),
+        );
+        continue;
+      }
+
+      loreLinkEntries.push({
+        loreId,
+        record,
+      });
+    }
+  }
+
+  if (loreIdCount === 0) {
+    errors.push(
+      createDiagnostic("LORE040", undefined, {
+        found: "<missing>",
+      }),
+    );
+  }
+
+  return trailerStartIndex;
+}
+
+async function validateLinkedLoreIds(loreLinkEntries, errors, options) {
+  const gitInspector = options.gitInspector ?? createGitInspector({ cwd: options.cwd });
+  const targetCommit = options.targetCommit ?? "HEAD";
+
+  for (const entry of loreLinkEntries) {
+    let matchingCommits;
+
+    try {
+      matchingCommits = await gitInspector.findCommitsByLoreId(entry.loreId, targetCommit);
+    } catch (error) {
+      errors.push(
+        createDiagnostic("LORE090", entry.record, {
+          found: String(error.message ?? error),
+        }),
+      );
+      continue;
+    }
+
+    if (matchingCommits.length === 0) {
+      errors.push(
+        createDiagnostic("LORE047", entry.record, {
+          found: entry.loreId,
+        }),
+      );
+    }
+  }
+}
+
+function parseLoreIdCommits(logOutput, loreId) {
+  const commits = [];
+
+  for (const rawEntry of logOutput.split("\x1e")) {
+    const entry = rawEntry.trim();
+
+    if (entry === "") {
+      continue;
+    }
+
+    const separatorIndex = entry.indexOf("\x1f");
+
+    if (separatorIndex === -1) {
+      continue;
+    }
+
+    const hash = entry.slice(0, separatorIndex).trim();
+    const message = entry.slice(separatorIndex + 1);
+
+    if (getLoreIdFromMessage(message) === loreId) {
+      commits.push(hash);
+    }
+  }
+
+  return commits;
+}
+
+function getLoreIdFromMessage(message) {
+  const records = createMessageRecords(message);
+  const subjectIndex = records.findIndex((record) => record.text.trim() !== "");
+
+  if (subjectIndex === -1) {
+    return null;
+  }
+
+  const bodyRecords = records.slice(subjectIndex + 1);
+  const trailerStartIndex = bodyRecords.findIndex((record) =>
+    LORE_TRAILER_START_PATTERN.test(record.text),
+  );
+
+  if (trailerStartIndex === -1) {
+    return null;
+  }
+
+  for (let index = trailerStartIndex; index < bodyRecords.length; index += 1) {
+    const match = bodyRecords[index].text.trim().match(LORE_ID_PATTERN);
+
+    if (match) {
+      return match[1];
+    }
   }
 
   return null;
-}
-
-function isFullHashForFormat(hash, expectedLength) {
-  return hash.length === expectedLength && /^[0-9a-fA-F]+$/.test(hash);
 }
 
 function createResult(errors) {
@@ -609,34 +682,12 @@ function pluralize(count, singular) {
   return count === 1 ? singular : `${singular}s`;
 }
 
-function runGit(args, cwd, options = {}) {
-  try {
-    const stdout = execFileSync("git", args, {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    if (options.allowFailure) {
-      return {
-        status: 0,
-        stdout,
-        stderr: "",
-      };
-    }
-
-    return stdout;
-  } catch (error) {
-    if (options.allowFailure) {
-      return {
-        status: error.status,
-        stdout: error.stdout?.toString() ?? "",
-        stderr: error.stderr?.toString() ?? "",
-      };
-    }
-
-    throw error;
-  }
+function runGit(args, cwd) {
+  return execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
 }
 
 async function main(argv) {
@@ -666,7 +717,7 @@ async function main(argv) {
 
   const message = args.filePath ? readFileSync(args.filePath, "utf8") : await readStdin();
   const result = await validateLoreCoding(message, {
-    checkLinkedCommits: args.checkLinkedCommits,
+    checkLinkedLoreIds: args.checkLinkedLoreIds,
     cwd: process.cwd(),
     targetCommit: args.targetCommit,
   });
@@ -690,7 +741,7 @@ async function main(argv) {
 
 function parseCliArgs(args) {
   const parsed = {
-    checkLinkedCommits: true,
+    checkLinkedLoreIds: true,
     filePath: null,
     format: "text",
     help: false,
@@ -755,8 +806,8 @@ function parseCliArgs(args) {
       continue;
     }
 
-    if (arg === "--no-git-links") {
-      parsed.checkLinkedCommits = false;
+    if (arg === "--no-git-links" || arg === "--no-lore-links") {
+      parsed.checkLinkedLoreIds = false;
       continue;
     }
 
@@ -789,8 +840,9 @@ Options:
   --edit <file>       Validate the commit message file passed by Git commit-msg.
   --file <file>       Validate a commit message file.
   --format <format>   Output text or json. Defaults to text.
-  --target <commit>   Require linked commits to be ancestors of this commit. Defaults to HEAD.
-  --no-git-links      Validate Links: syntax but skip Git existence and reachability checks.
+  --target <commit>   Resolve Lore-Link trailers against this history. Defaults to HEAD.
+  --no-lore-links     Validate Lore-Link syntax but skip Git history lookups.
+  --no-git-links      Legacy alias for --no-lore-links.
 
 Exit codes:
   0  valid

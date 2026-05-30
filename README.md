@@ -122,8 +122,9 @@ If validation fails, Git aborts the commit and prints stable `LORE###` error
 codes with the offending line, expected format, fix guidance, and an example.
 The validator rejects assistant wrapper prose, Markdown code fences, malformed
 subjects, unsupported task types, malformed scopes, missing or empty required
-sections, out-of-order sections, malformed `Links:` entries, and linked commits
-that do not exist as reachable commits in this repository.
+sections, out-of-order sections, missing or malformed `Lore-ID:` trailers,
+legacy `Links:` sections, malformed `Lore-Link:` trailers, and linked Lore IDs
+that do not exist in reachable history.
 
 Run it manually against a message file with:
 
@@ -134,14 +135,15 @@ npm run lore-coding -- --file .git/COMMIT_EDITMSG
 Explain an error code with:
 
 ```bash
-npm run lore-coding -- explain LORE034
+npm run lore-coding -- explain LORE047
 ```
 
-`Links:` entries must use a full commit hash, an em dash, and a reason:
+Every task commit must end with a `Lore-ID:` trailer. Related tasks use
+repeatable `Lore-Link:` trailers with a stable Lore ID, an em dash, and a reason:
 
 ```text
-Links:
-- 3251d4ac7c0cbf6426f901c15ed2195b3a68f82d — established CI workflow behavior
+Lore-ID: LC-20260530-4D61
+Lore-Link: LC-20260529-18A1 — established validator behavior extended here
 ```
 
 This first version is local-only; CI does not run Lore Coding validation yet.
