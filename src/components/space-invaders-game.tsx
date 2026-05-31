@@ -108,6 +108,7 @@ const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
       "Shoot every invader before the formation reaches your base.",
       "Only one player shot can be active at a time.",
       "Shoot the UFO bonus ship when it crosses the sky for extra points.",
+      "Clear columns carefully; exposed diver invaders move faster and drop harder than the rest.",
       "Each exposed invader row fires its own pattern: tracking bolts, zig-zags, scatter bursts, needles, or lasers.",
       "Defend Earth to win; the game ends if you lose every life or the invaders reach the base.",
     ],

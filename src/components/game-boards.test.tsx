@@ -233,6 +233,7 @@ describe("game board renderers", () => {
       'data-testid="space-invaders-board"',
       "Space Invaders board. Field 420 by 560. Score 0. Lives 3. 54 invaders remaining. Running.",
       'data-testid="space-invaders-invader"',
+      'data-invader-kind="diver"',
       'data-testid="space-invaders-player-shot"',
       'data-testid="space-invaders-invader-shot"',
       'data-shot-kind="needle"',

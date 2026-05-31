@@ -5,6 +5,7 @@ import type { CSSProperties, ReactNode } from "react";
 import {
   type SpaceInvadersGameState,
   type SpaceInvadersInvaderShotKind,
+  type SpaceInvaderKind,
 } from "@/lib/space-invaders-game-engine";
 import { cn } from "@/lib/utils";
 
@@ -83,6 +84,16 @@ const invaderShotClassNames: Record<SpaceInvadersInvaderShotKind, string> = {
     "rounded-[0.35rem] bg-[var(--invaders-red)] shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-red)_70%,transparent)]",
 };
 
+function getInvaderModifier(kind: SpaceInvaderKind) {
+  if (kind !== "diver") {
+    return null;
+  }
+
+  return (
+    <span className="pointer-events-none absolute bottom-[2%] left-1/2 size-[28%] -translate-x-1/2 rotate-45 rounded-[0.12rem] border-b-2 border-r-2 border-white/90 bg-[color-mix(in_oklch,var(--invaders-yellow)_30%,transparent)] shadow-[0_0_10px_color-mix(in_oklch,var(--invaders-yellow)_78%,transparent)]" />
+  );
+}
+
 function getBoardEntityStyle({
   boardHeight,
   boardWidth,
@@ -148,6 +159,7 @@ export function SpaceInvadersBoard({
                 "absolute left-0 top-0 transition-opacity will-change-transform",
                 !invader.isActive && "opacity-0",
               )}
+              data-invader-kind={invader.kind}
               data-testid={invader.isActive ? "space-invaders-invader" : undefined}
               key={invader.id}
               style={getBoardEntityStyle({
@@ -166,6 +178,7 @@ export function SpaceInvadersBoard({
                 )}
                 style={{ backgroundImage: `url("${sprite.src}")` }}
               />
+              {getInvaderModifier(invader.kind)}
             </span>
           );
         })}

@@ -2,6 +2,10 @@ export type SpaceInvadersStatus = "ready" | "running" | "paused" | "lost" | "won
 
 export type SpaceInvadersDirection = -1 | 1;
 
+export type SpaceInvaderKind = "standard" | "diver";
+
+export type SpaceInvadersRandomSource = () => number;
+
 export type SpaceInvadersInvaderShotKind =
   | "commander"
   | "zigzag"
@@ -32,6 +36,8 @@ export type SpaceInvader = {
   height: number;
   id: string;
   isActive: boolean;
+  isDiving: boolean;
+  kind: SpaceInvaderKind;
   points: number;
   row: number;
   width: number;
@@ -80,6 +86,7 @@ export type CreateSpaceInvadersGameOptions = {
   alienCount?: number;
   boardHeight?: number;
   boardWidth?: number;
+  random?: SpaceInvadersRandomSource;
 };
 
 export const SPACE_INVADERS_BOARD_WIDTH = 420;
@@ -101,6 +108,9 @@ export const SPACE_INVADERS_ALIEN_COUNT_OPTIONS = [
 ] as const;
 
 const INVADER_DROP_Y = 4;
+const DIVER_INVADER_COUNT = 10;
+const DIVER_DROP_Y = 16;
+const DIVER_STEP_MULTIPLIER = 4.375;
 const INVADER_GAP_X = 5;
 const INVADER_GAP_Y = 14;
 const INVADER_HEIGHT = 23;
@@ -199,6 +209,7 @@ export function createInitialSpaceInvadersGame({
   alienCount = SPACE_INVADERS_COLUMNS * SPACE_INVADERS_ROWS,
   boardHeight = SPACE_INVADERS_BOARD_HEIGHT,
   boardWidth = SPACE_INVADERS_BOARD_WIDTH,
+  random = Math.random,
 }: CreateSpaceInvadersGameOptions = {}): SpaceInvadersGameState {
   const normalizedBoardWidth = normalizeSpaceInvadersDimension(
     boardWidth,
@@ -222,6 +233,7 @@ export function createInitialSpaceInvadersGame({
     invaders: createSpaceInvadersFormation({
       boardWidth: normalizedBoardWidth,
       columns: formation.columns,
+      random,
       rows: formation.rows,
     }),
     lives: SPACE_INVADERS_STARTING_LIVES,
@@ -238,25 +250,32 @@ export function createInitialSpaceInvadersGame({
 export function createSpaceInvadersFormation({
   boardWidth = SPACE_INVADERS_BOARD_WIDTH,
   columns = SPACE_INVADERS_COLUMNS,
+  random = Math.random,
   rows = SPACE_INVADERS_ROWS,
 }: {
   boardWidth?: number;
   columns?: number;
+  random?: SpaceInvadersRandomSource;
   rows?: number;
 } = {}) {
   const formationWidth = columns * INVADER_WIDTH + (columns - 1) * INVADER_GAP_X;
   const startX = Math.max(INVADER_X, (boardWidth - formationWidth) / 2);
+  const diverInvaderIds = selectDiverInvaderIds(rows, columns, random);
 
   return Array.from({ length: rows }, (_, row) =>
     Array.from({ length: columns }, (_, column): SpaceInvader => {
+      const id = `${row}:${column}`;
+      const kind: SpaceInvaderKind = diverInvaderIds.has(id) ? "diver" : "standard";
       const x = startX + column * (INVADER_WIDTH + INVADER_GAP_X);
       const y = INVADER_TOP + row * (INVADER_HEIGHT + INVADER_GAP_Y);
 
       return {
         column,
         height: INVADER_HEIGHT,
-        id: `${row}:${column}`,
+        id,
         isActive: true,
+        isDiving: false,
+        kind,
         points: getInvaderPoints(row),
         row,
         width: INVADER_WIDTH,
@@ -718,8 +737,10 @@ function marchInvaders(game: SpaceInvadersGameState): SpaceInvadersGameState {
     return game;
   }
 
+  const exposedDiverIds = getExposedDiverIds(activeInvaders);
   const wouldHitWall = activeInvaders.some((invader) => {
-    const nextX = invader.x + game.marchDirection * INVADER_STEP_X;
+    const nextX =
+      invader.x + game.marchDirection * getInvaderStepX(invader, exposedDiverIds);
 
     return nextX < 0 || nextX + invader.width > game.boardWidth;
   });
@@ -728,7 +749,13 @@ function marchInvaders(game: SpaceInvadersGameState): SpaceInvadersGameState {
     return {
       ...game,
       invaders: game.invaders.map((invader) =>
-        invader.isActive ? { ...invader, y: invader.y + INVADER_DROP_Y } : invader,
+        invader.isActive
+          ? {
+              ...invader,
+              isDiving: getNextDiverState(invader, exposedDiverIds),
+              y: invader.y + getInvaderDropY(invader, exposedDiverIds),
+            }
+          : invader,
       ),
       marchDirection: (game.marchDirection * -1) as SpaceInvadersDirection,
     };
@@ -738,10 +765,59 @@ function marchInvaders(game: SpaceInvadersGameState): SpaceInvadersGameState {
     ...game,
     invaders: game.invaders.map((invader) =>
       invader.isActive
-        ? { ...invader, x: invader.x + game.marchDirection * INVADER_STEP_X }
+        ? {
+            ...invader,
+            x:
+              invader.x +
+              game.marchDirection * getInvaderStepX(invader, exposedDiverIds),
+            isDiving: getNextDiverState(invader, exposedDiverIds),
+          }
         : invader,
     ),
   };
+}
+
+function getExposedDiverIds(activeInvaders: SpaceInvader[]) {
+  return new Set(
+    activeInvaders
+      .filter((invader) => invader.kind === "diver")
+      .filter((invader) => invader.isDiving || isDiverLaneClear(invader, activeInvaders))
+      .map((invader) => invader.id),
+  );
+}
+
+function isDiverLaneClear(diver: SpaceInvader, activeInvaders: SpaceInvader[]) {
+  return !activeInvaders.some(
+    (invader) =>
+      invader.id !== diver.id && invader.y > diver.y && invadersOverlapX(diver, invader),
+  );
+}
+
+function invadersOverlapX(first: SpaceInvader, second: SpaceInvader) {
+  return first.x < second.x + second.width && second.x < first.x + first.width;
+}
+
+function getInvaderStepX(invader: SpaceInvader, exposedDiverIds: Set<string>) {
+  return INVADER_STEP_X * getInvaderMovementMultiplier(invader, exposedDiverIds);
+}
+
+function getInvaderDropY(invader: SpaceInvader, exposedDiverIds: Set<string>) {
+  return isExposedDiver(invader, exposedDiverIds) ? DIVER_DROP_Y : INVADER_DROP_Y;
+}
+
+function getInvaderMovementMultiplier(
+  invader: SpaceInvader,
+  exposedDiverIds: Set<string>,
+) {
+  return isExposedDiver(invader, exposedDiverIds) ? DIVER_STEP_MULTIPLIER : 1;
+}
+
+function getNextDiverState(invader: SpaceInvader, exposedDiverIds: Set<string>) {
+  return invader.isDiving || isExposedDiver(invader, exposedDiverIds);
+}
+
+function isExposedDiver(invader: SpaceInvader, exposedDiverIds: Set<string>) {
+  return invader.kind === "diver" && exposedDiverIds.has(invader.id);
 }
 
 function hasInvaderReachedBase(game: SpaceInvadersGameState) {
@@ -818,6 +894,43 @@ function getInvaderPoints(row: number) {
   }
 
   return 10;
+}
+
+function selectDiverInvaderIds(
+  rows: number,
+  columns: number,
+  random: SpaceInvadersRandomSource,
+) {
+  const candidates = Array.from({ length: Math.max(0, rows - 1) }, (_, row) =>
+    Array.from({ length: columns }, (_, column) => `${row}:${column}`),
+  ).flat();
+  const selectedCount = Math.min(DIVER_INVADER_COUNT, candidates.length);
+  const selectedIds = new Set<string>();
+
+  for (let selectedIndex = 0; selectedIndex < selectedCount; selectedIndex += 1) {
+    const candidateIndex = getRandomIndex(candidates.length, random);
+    const [selectedId] = candidates.splice(candidateIndex, 1);
+
+    if (selectedId !== undefined) {
+      selectedIds.add(selectedId);
+    }
+  }
+
+  return selectedIds;
+}
+
+function getRandomIndex(candidateCount: number, random: SpaceInvadersRandomSource) {
+  if (candidateCount <= 1) {
+    return 0;
+  }
+
+  const randomValue = random();
+
+  if (!Number.isFinite(randomValue)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(candidateCount - 1, Math.floor(randomValue * candidateCount)));
 }
 
 function rectanglesIntersect(
