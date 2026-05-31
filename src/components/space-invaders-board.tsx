@@ -24,6 +24,7 @@ function getSpaceInvadersAssetSrc(fileName: string) {
 const spaceInvadersBackgroundSrc = getSpaceInvadersAssetSrc("background");
 const playerShipSpriteSrc = getSpaceInvadersAssetSrc("player-ship");
 const playerShotSpriteSrc = getSpaceInvadersAssetSrc("player-shot");
+const ufoSpriteSrc = getSpaceInvadersAssetSrc("ufo");
 
 const spaceInvadersBoardBackgroundStyle: CSSProperties = {
   backgroundImage: `url("${spaceInvadersBackgroundSrc}")`,
@@ -168,6 +169,26 @@ export function SpaceInvadersBoard({
             </span>
           );
         })}
+
+        {game.ufo.isActive ? (
+          <span
+            aria-hidden="true"
+            className="absolute left-0 top-0 bg-contain bg-center bg-no-repeat drop-shadow-[0_0_16px_color-mix(in_oklch,var(--invaders-red)_62%,transparent)] will-change-transform [image-rendering:pixelated]"
+            data-testid="space-invaders-ufo"
+            data-ufo-points={game.ufo.points}
+            style={{
+              backgroundImage: `url("${ufoSpriteSrc}")`,
+              ...getBoardEntityStyle({
+                boardHeight: game.boardHeight,
+                boardWidth: game.boardWidth,
+                height: game.ufo.height,
+                width: game.ufo.width,
+                x: game.ufo.x,
+                y: game.ufo.y,
+              }),
+            }}
+          />
+        ) : null}
 
         {game.playerShot ? (
           <span

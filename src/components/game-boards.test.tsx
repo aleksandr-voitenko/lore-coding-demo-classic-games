@@ -217,6 +217,13 @@ describe("game board renderers", () => {
             },
           ],
           status: "running",
+          ufo: {
+            ...game.ufo,
+            isActive: true,
+            points: 150,
+            x: 178,
+            y: 36,
+          },
         }}
         statusLabel="Running"
       />,
@@ -229,9 +236,12 @@ describe("game board renderers", () => {
       'data-testid="space-invaders-player-shot"',
       'data-testid="space-invaders-invader-shot"',
       'data-shot-kind="needle"',
+      'data-testid="space-invaders-ufo"',
+      'data-ufo-points="150"',
       'data-testid="space-invaders-player"',
       "/images/space-invaders/background.png?v=sprite-art-v1",
       "/images/space-invaders/alien-purple.png?v=sprite-art-v1",
+      "/images/space-invaders/ufo.png?v=sprite-art-v1",
       "/images/space-invaders/player-shot.png?v=sprite-art-v1",
       "/images/space-invaders/player-ship.png?v=sprite-art-v1",
       "transform:translate3d(",

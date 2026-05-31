@@ -84,6 +84,19 @@ function centerPlayerUnderInvader(game: SpaceInvadersGameState, invader: SpaceIn
   };
 }
 
+function createPlayerShotAlignedWith(
+  target: { height: number; width: number; x: number; y: number },
+  game = createRunningGame(),
+) {
+  const shot = fireSpaceInvadersShot(game).playerShot!;
+
+  return {
+    ...shot,
+    x: target.x + target.width / 2 - shot.width / 2,
+    y: target.y + target.height + 2,
+  };
+}
+
 function fireFromOnlyInvader(row: number, column = 5) {
   const game = createInitialSpaceInvadersGame();
   const shooter = getInvader(game, row, column);
@@ -114,6 +127,16 @@ describe("space invaders game engine", () => {
     expect(game.invaderShotCooldownTicks).toBeGreaterThan(0);
     expect(game.nextInvaderShotId).toBe(0);
     expect(game.marchDirection).toBe(1);
+    expect(game.ufo).toMatchObject({
+      direction: 1,
+      height: 18,
+      isActive: false,
+      points: 100,
+      width: 48,
+      x: -48,
+      y: 34,
+    });
+    expect(game.ufo.cooldownTicks).toBeGreaterThan(0);
     expect(game.invaders).toHaveLength(SPACE_INVADERS_COLUMNS * SPACE_INVADERS_ROWS);
     expect(game.invaders.every((invader) => invader.isActive)).toBe(true);
     expect(game.invaders[0]).toMatchObject({
@@ -197,6 +220,66 @@ describe("space invaders game engine", () => {
     );
     expect(firedGame.playerShot?.y).toBeLessThan(firedGame.player.y);
     expect(secondFireGame.playerShot).toBe(firedGame.playerShot);
+  });
+
+  it("spawns UFO bonuses from alternating sides after their cooldown", () => {
+    const game = createInitialSpaceInvadersGame();
+    const spawned = advanceSpaceInvadersGame(
+      createRunningGame({
+        invaderShotCooldownTicks: 100,
+        ufo: {
+          ...game.ufo,
+          cooldownTicks: 0,
+        },
+      }),
+    );
+    const moved = advanceSpaceInvadersGame(
+      createRunningGame({
+        invaderShotCooldownTicks: 100,
+        ufo: spawned.ufo,
+      }),
+    );
+    const exitedRight = advanceSpaceInvadersGame(
+      createRunningGame({
+        invaderShotCooldownTicks: 100,
+        ufo: {
+          ...game.ufo,
+          isActive: true,
+          x: game.boardWidth - 1,
+        },
+      }),
+    );
+    const respawnedFromRight = advanceSpaceInvadersGame(
+      createRunningGame({
+        invaderShotCooldownTicks: 100,
+        ufo: {
+          ...exitedRight.ufo,
+          cooldownTicks: 0,
+        },
+      }),
+    );
+
+    expect(spawned.ufo).toMatchObject({
+      direction: 1,
+      isActive: true,
+      points: 100,
+      x: -game.ufo.width,
+      y: 34,
+    });
+    expect(moved.ufo.x).toBeCloseTo(spawned.ufo.x + 2.4);
+    expect(exitedRight.ufo).toMatchObject({
+      direction: -1,
+      isActive: false,
+      points: 150,
+      x: game.boardWidth,
+    });
+    expect(exitedRight.ufo.cooldownTicks).toBeGreaterThan(0);
+    expect(respawnedFromRight.ufo).toMatchObject({
+      direction: -1,
+      isActive: true,
+      points: 150,
+      x: game.boardWidth,
+    });
   });
 
   it("fires invader shots from the lowest active invader in the nearest column", () => {
@@ -483,14 +566,9 @@ describe("space invaders game engine", () => {
   it("removes a hit invader, clears the shot, and adds the invader score", () => {
     const game = createInitialSpaceInvadersGame();
     const targetInvader = game.invaders[0]!;
-    const shot = fireSpaceInvadersShot(createRunningGame()).playerShot!;
     const runningGame = createRunningGame({
       invaders: game.invaders,
-      playerShot: {
-        ...shot,
-        x: targetInvader.x + targetInvader.width / 2 - shot.width / 2,
-        y: targetInvader.y + targetInvader.height + 2,
-      },
+      playerShot: createPlayerShotAlignedWith(targetInvader),
     });
     const advanced = advanceSpaceInvadersGame(runningGame);
     const hitInvader = advanced.invaders.find((invader) => invader.id === targetInvader.id);
@@ -498,6 +576,36 @@ describe("space invaders game engine", () => {
     expect(hitInvader?.isActive).toBe(false);
     expect(advanced.playerShot).toBeNull();
     expect(advanced.score).toBe(targetInvader.points);
+  });
+
+  it("awards the UFO bonus, clears the shot, and leaves invaders intact", () => {
+    const game = createInitialSpaceInvadersGame();
+    const activeUfo = {
+      ...game.ufo,
+      isActive: true,
+      points: 100,
+      x: 180,
+    };
+    const runningGame = createRunningGame({
+      invaderShotCooldownTicks: 100,
+      playerShot: createPlayerShotAlignedWith(activeUfo),
+      score: 40,
+      ufo: activeUfo,
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame);
+
+    expect(advanced.score).toBe(140);
+    expect(advanced.playerShot).toBeNull();
+    expect(advanced.invaders.filter((invader) => invader.isActive)).toHaveLength(
+      game.invaders.length,
+    );
+    expect(advanced.ufo).toMatchObject({
+      direction: -1,
+      isActive: false,
+      points: 150,
+      x: game.boardWidth,
+    });
+    expect(advanced.ufo.cooldownTicks).toBeGreaterThan(0);
   });
 
   it("marches invaders horizontally until they hit an edge, then drops and reverses", () => {
@@ -576,14 +684,14 @@ describe("space invaders game engine", () => {
   it("wins when the final active invader is cleared", () => {
     const game = createInitialSpaceInvadersGame();
     const targetInvader = game.invaders[0]!;
-    const shot = fireSpaceInvadersShot(createRunningGame()).playerShot!;
     const runningGame = withOnlyActiveInvader(
       createRunningGame({
         invaders: game.invaders,
-        playerShot: {
-          ...shot,
-          x: targetInvader.x + targetInvader.width / 2 - shot.width / 2,
-          y: targetInvader.y + targetInvader.height + 2,
+        playerShot: createPlayerShotAlignedWith(targetInvader),
+        ufo: {
+          ...game.ufo,
+          isActive: true,
+          x: 180,
         },
       }),
       targetInvader,
@@ -592,6 +700,7 @@ describe("space invaders game engine", () => {
 
     expect(advanced.status).toBe("won");
     expect(advanced.score).toBe(targetInvader.points);
+    expect(advanced.ufo.isActive).toBe(true);
   });
 
   it("restarts from game over with a fresh running formation", () => {
@@ -611,6 +720,14 @@ describe("space invaders game engine", () => {
       },
       score: 120,
       status: "lost" as const,
+      ufo: {
+        ...createInitialSpaceInvadersGame().ufo,
+        cooldownTicks: 0,
+        direction: -1 as const,
+        isActive: true,
+        points: 200,
+        x: 100,
+      },
     };
     const restarted = startSpaceInvadersGame(lostGame);
 
@@ -619,6 +736,13 @@ describe("space invaders game engine", () => {
     expect(restarted.lives).toBe(SPACE_INVADERS_STARTING_LIVES);
     expect(restarted.playerShot).toBeNull();
     expect(restarted.invaderShots).toEqual([]);
+    expect(restarted.ufo).toMatchObject({
+      direction: 1,
+      isActive: false,
+      points: 100,
+      x: -48,
+    });
+    expect(restarted.ufo.cooldownTicks).toBeGreaterThan(0);
     expect(restarted.invaders).toHaveLength(SPACE_INVADERS_COLUMNS * SPACE_INVADERS_ROWS);
     expect(restarted.invaders.every((invader) => invader.isActive)).toBe(true);
   });

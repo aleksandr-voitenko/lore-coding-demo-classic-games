@@ -16,6 +16,17 @@ export type SpaceInvadersPlayer = {
   y: number;
 };
 
+export type SpaceInvadersUfoState = {
+  cooldownTicks: number;
+  direction: SpaceInvadersDirection;
+  height: number;
+  isActive: boolean;
+  points: number;
+  width: number;
+  x: number;
+  y: number;
+};
+
 export type SpaceInvader = {
   column: number;
   height: number;
@@ -62,6 +73,7 @@ export type SpaceInvadersGameState = {
   playerShot: SpaceInvadersShot | null;
   score: number;
   status: SpaceInvadersStatus;
+  ufo: SpaceInvadersUfoState;
 };
 
 export type CreateSpaceInvadersGameOptions = {
@@ -106,6 +118,12 @@ const PLAYER_WIDTH = 62;
 const SHOT_HEIGHT = 22;
 const SHOT_SPEED = -6.4;
 const SHOT_WIDTH = 6;
+const UFO_COOLDOWN_TICKS = 420;
+const UFO_HEIGHT = 18;
+const UFO_POINT_VALUES = [100, 150, 200, 300] as const;
+const UFO_SPEED = 2.4;
+const UFO_WIDTH = 48;
+const UFO_Y = 34;
 const COMMANDER_SHOT_MAX_SPEED_X = 1.1;
 const COMMANDER_SHOT_STEER_X = 0.14;
 const ZIGZAG_SHOT_SEGMENT_TICKS = 12;
@@ -213,6 +231,7 @@ export function createInitialSpaceInvadersGame({
     playerShot: null,
     score: 0,
     status: "ready",
+    ufo: createInitialSpaceInvadersUfo(),
   };
 }
 
@@ -361,7 +380,8 @@ export function advanceSpaceInvadersGame(
   }
 
   const gameAfterInvaderFire = maybeFireInvaderShot(gameAfterInvaderShots);
-  const marchedGame = marchInvaders(gameAfterInvaderFire);
+  const gameAfterUfo = advanceSpaceInvadersUfo(gameAfterInvaderFire);
+  const marchedGame = marchInvaders(gameAfterUfo);
 
   if (hasInvaderReachedBase(marchedGame)) {
     return {
@@ -399,6 +419,15 @@ function advancePlayerShot(game: SpaceInvadersGameState): SpaceInvadersGameState
     };
   }
 
+  if (game.ufo.isActive && rectanglesIntersect(movedShot, game.ufo)) {
+    return {
+      ...game,
+      playerShot: null,
+      score: game.score + game.ufo.points,
+      ufo: deactivateSpaceInvadersUfo(game.ufo, game.boardWidth),
+    };
+  }
+
   const hitInvader = game.invaders.find(
     (invader) => invader.isActive && rectanglesIntersect(movedShot, invader),
   );
@@ -422,6 +451,49 @@ function advancePlayerShot(game: SpaceInvadersGameState): SpaceInvadersGameState
     playerShot: null,
     score,
     status: activeInvaderCount === 0 ? "won" : game.status,
+  };
+}
+
+function advanceSpaceInvadersUfo(game: SpaceInvadersGameState): SpaceInvadersGameState {
+  if (game.ufo.isActive) {
+    const movedUfo = {
+      ...game.ufo,
+      x: game.ufo.x + game.ufo.direction * UFO_SPEED,
+    };
+
+    if (
+      (movedUfo.direction === 1 && movedUfo.x > game.boardWidth) ||
+      (movedUfo.direction === -1 && movedUfo.x + movedUfo.width < 0)
+    ) {
+      return {
+        ...game,
+        ufo: deactivateSpaceInvadersUfo(movedUfo, game.boardWidth),
+      };
+    }
+
+    return {
+      ...game,
+      ufo: movedUfo,
+    };
+  }
+
+  if (game.ufo.cooldownTicks > 0) {
+    return {
+      ...game,
+      ufo: {
+        ...game.ufo,
+        cooldownTicks: game.ufo.cooldownTicks - 1,
+      },
+    };
+  }
+
+  return {
+    ...game,
+    ufo: {
+      ...game.ufo,
+      isActive: true,
+      x: game.ufo.direction === 1 ? -game.ufo.width : game.boardWidth,
+    },
   };
 }
 
@@ -698,6 +770,42 @@ function createPlayerShot(player: SpaceInvadersPlayer): SpaceInvadersShot {
     x: player.x + player.width / 2 - SHOT_WIDTH / 2,
     y: player.y - SHOT_HEIGHT - 2,
   };
+}
+
+function createInitialSpaceInvadersUfo(): SpaceInvadersUfoState {
+  return {
+    cooldownTicks: UFO_COOLDOWN_TICKS,
+    direction: 1,
+    height: UFO_HEIGHT,
+    isActive: false,
+    points: UFO_POINT_VALUES[0],
+    width: UFO_WIDTH,
+    x: -UFO_WIDTH,
+    y: UFO_Y,
+  };
+}
+
+function deactivateSpaceInvadersUfo(
+  ufo: SpaceInvadersUfoState,
+  boardWidth: number,
+): SpaceInvadersUfoState {
+  const nextDirection = (ufo.direction * -1) as SpaceInvadersDirection;
+
+  return {
+    ...ufo,
+    cooldownTicks: UFO_COOLDOWN_TICKS,
+    direction: nextDirection,
+    isActive: false,
+    points: getNextSpaceInvadersUfoPoints(ufo.points),
+    x: nextDirection === 1 ? -ufo.width : boardWidth,
+  };
+}
+
+function getNextSpaceInvadersUfoPoints(points: number) {
+  const pointIndex = UFO_POINT_VALUES.findIndex((value) => value === points);
+  const nextIndex = pointIndex === -1 ? 0 : (pointIndex + 1) % UFO_POINT_VALUES.length;
+
+  return UFO_POINT_VALUES[nextIndex] ?? UFO_POINT_VALUES[0];
 }
 
 function getInvaderPoints(row: number) {
