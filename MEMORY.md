@@ -17,6 +17,8 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
 - `scripts/` owns repository-local development tooling, including the
   dependency-free Agentic Lore Coding validator. See `scripts/MEMORY.md`.
 - `.github/` owns CI workflow behavior. See `.github/MEMORY.md`.
+- `Dockerfile` owns the production container image. It builds the Next.js
+  standalone server bundle and runs with SQLite storage under `/data`.
 
 ## Major Boundaries
 
@@ -81,4 +83,5 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   `prepare` script to configure `core.hooksPath .githooks` for local clones;
   CI does not run Lore Coding validation yet.
 - CI repeats the build, static checks, core coverage gate, and Playwright suite
-  for code-affecting changes. See `.github/MEMORY.md`.
+  for code-affecting changes, then publishes the Docker image to Docker Hub
+  after successful `main` pushes. See `.github/MEMORY.md`.

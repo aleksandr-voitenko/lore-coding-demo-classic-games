@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["10.*.*.*"],
+  output: "standalone",
   reactCompiler: true,
   serverExternalPackages: ["better-sqlite3"],
 };

@@ -8,10 +8,15 @@ This file covers repository automation under `.github/`.
   code or build-affecting files change.
 - Documentation-only changes are ignored by CI through `paths-ignore` for
   Markdown files, `docs/**`, and `LICENSE`.
-- The single Ubuntu job uses `.node-version`, installs with `npm ci`, then runs
+- The first Ubuntu job uses `.node-version`, installs with `npm ci`, then runs
   `npm run build`, `npm run lint`, `npm run typecheck`,
   `npm run test:coverage:core`, installs Playwright Chromium with Linux
   dependencies, and runs `npm run test:e2e`.
+- The Docker publish job depends on the full build/check/test job and only runs
+  for successful pushes to `main`, never for pull requests. It logs in to
+  Docker Hub with `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`, uses
+  `DOCKERHUB_IMAGE` as the image name, and publishes `latest`, `main`, and short
+  SHA tags.
 - The workflow cancels older in-progress runs for the same ref and uses read-only
   repository permissions.
 - On failure, the workflow uploads `reports/playwright` so browser traces,

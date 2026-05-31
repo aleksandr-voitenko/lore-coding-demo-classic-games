@@ -1,6 +1,6 @@
-# Lore Coding Demo
+# Classic Games Lore Coding Demo
 
-Lore Coding Demo is a Next.js App Router game collection used to demonstrate
+This demo is a Next.js App Router game collection used to demonstrate
 [agentic-lore-coding](https://github.com/aleksandr-voitenko/agentic-lore-coding).
 It opens to a card-based menu with Classic games like Snake, Tetris, Breakout, Minesweeper, Asteroids and many others.
 
@@ -21,20 +21,16 @@ All the code in this repository was created using AI agents and the Lore Coding 
 - Closable in-game Help screens and Escape-to-menu abandon confirmations.
 - Local game-card artwork for every game in the launcher.
 
-## Stack
+## Try it with Docker
 
-- Node.js 22.22.2
-- TypeScript
-- Next.js App Router
-- React with the React Compiler enabled
-- SQLite through `better-sqlite3`
-- Tailwind CSS v4
-- shadcn/ui
-- Vitest
-- Playwright
-- ESLint
+```bash
+docker run --rm -p 3000:3000 aleksandrvoitenko/lore-coding-demo-classic-games
+```
 
-## Getting Started
+Open [http://localhost:3000](http://localhost:3000) to choose a game from the
+menu.
+
+## Building from source
 
 Install dependencies:
 
@@ -51,6 +47,20 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000) to choose a game from the
 menu.
 
+## Stack
+
+- Node.js 22
+- TypeScript
+- Next.js App Router
+- React with the React Compiler enabled
+- SQLite through `better-sqlite3`
+- Tailwind CSS v4
+- shadcn/ui
+- Vitest
+- Playwright
+- ESLint
+- Docker
+
 ## Persistent Storage
 
 Leaderboards, player accounts, signed-in sessions, and profile stats use SQLite.
@@ -65,8 +75,26 @@ passwordless demo names remain reserved and cannot be claimed through sign-up.
 
 The default database path is `.data/snake-leaderboard.sqlite`, kept for
 compatibility with existing Snake deployments. On a VPS, set
-`GAME_LEADERBOARD_SQLITE_PATH` to durable storage. Existing
-`SNAKE_LEADERBOARD_SQLITE_PATH` deployments are honored as a fallback.
+`GAME_LEADERBOARD_SQLITE_PATH` to durable storage.
+
+## Docker
+
+Build the production image locally with:
+
+```bash
+docker build -t lore-coding-demo .
+```
+
+Run it with a mounted data directory so SQLite state survives container
+replacement:
+
+```bash
+docker run --rm -p 3000:3000 \
+  -v "$PWD/.data:/data" \
+  lore-coding-demo
+```
+
+The image uses Next.js standalone output and listens on port `3000`.
 
 ## Checks
 
@@ -90,6 +118,11 @@ change code or build-affecting files: `npm ci`, `npm run build`,
 `npm run lint`, `npm run typecheck`, `npm run test:coverage:core`, and
 `npm run test:e2e`. Documentation-only changes such as Markdown, `docs/**`,
 and `LICENSE` are ignored by CI.
+
+After those checks pass on a push to `main`, GitHub Actions builds the Docker
+image and pushes it to Docker Hub using the `DOCKERHUB_USERNAME` and
+`DOCKERHUB_IMAGE` repository variables plus the `DOCKERHUB_TOKEN` repository
+secret. The published tags are `latest`, `main`, and the short commit SHA.
 
 ## Lore Coding Validation
 
