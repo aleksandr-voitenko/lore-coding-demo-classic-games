@@ -13,6 +13,9 @@ export type SpaceInvadersInvaderShotKind =
   | "needle"
   | "scatter";
 
+export type SpaceInvadersExplosionKind = "invader" | "player" | "ufo";
+export type SpaceInvadersExplosionVariant = 1 | 2 | 3 | 4;
+
 export type SpaceInvadersPlayer = {
   height: number;
   width: number;
@@ -64,16 +67,30 @@ export type SpaceInvadersInvaderShot = SpaceInvadersShot & {
   velocityX: number;
 };
 
+export type SpaceInvadersExplosion = {
+  ageTicks: number;
+  height: number;
+  id: string;
+  kind: SpaceInvadersExplosionKind;
+  ttlTicks: number;
+  variant: SpaceInvadersExplosionVariant;
+  width: number;
+  x: number;
+  y: number;
+};
+
 export type SpaceInvadersGameState = {
   alienCount: number;
   baseY: number;
   boardHeight: number;
   boardWidth: number;
+  explosions: SpaceInvadersExplosion[];
   invaderShotCooldownTicks: number;
   invaderShots: SpaceInvadersInvaderShot[];
   invaders: SpaceInvader[];
   lives: number;
   marchDirection: SpaceInvadersDirection;
+  nextExplosionId: number;
   nextInvaderShotId: number;
   player: SpaceInvadersPlayer;
   playerShot: SpaceInvadersShot | null;
@@ -106,11 +123,18 @@ export const SPACE_INVADERS_ALIEN_COUNT_OPTIONS = [
   { alienCount: 40, columns: 10, label: "40", rows: 4 },
   { alienCount: 55, columns: 11, label: "55", rows: 5 },
 ] as const;
+export const SPACE_INVADERS_EXPLOSION_VARIANTS = [1, 2, 3, 4] as const;
 
 const INVADER_DROP_Y = 4;
 const DIVER_INVADER_COUNT = 10;
 const DIVER_DROP_Y = 16;
 const DIVER_STEP_MULTIPLIER = 4.375;
+const EXPLOSION_PADDING_BY_KIND: Record<SpaceInvadersExplosionKind, number> = {
+  invader: 16,
+  player: 12,
+  ufo: 18,
+};
+const EXPLOSION_TTL_TICKS = 12;
 const INVADER_GAP_X = 5;
 const INVADER_GAP_Y = 14;
 const INVADER_HEIGHT = 23;
@@ -228,6 +252,7 @@ export function createInitialSpaceInvadersGame({
     baseY: normalizedBoardHeight - 68,
     boardHeight: normalizedBoardHeight,
     boardWidth: normalizedBoardWidth,
+    explosions: [],
     invaderShotCooldownTicks: INVADER_FIRE_COOLDOWN_TICKS,
     invaderShots: [],
     invaders: createSpaceInvadersFormation({
@@ -238,6 +263,7 @@ export function createInitialSpaceInvadersGame({
     }),
     lives: SPACE_INVADERS_STARTING_LIVES,
     marchDirection: 1,
+    nextExplosionId: 0,
     nextInvaderShotId: 0,
     player: createCenteredPlayer(normalizedBoardWidth, normalizedBoardHeight),
     playerShot: null,
@@ -378,18 +404,20 @@ export function fireSpaceInvadersShot(game: SpaceInvadersGameState): SpaceInvade
 
 export function advanceSpaceInvadersGame(
   game: SpaceInvadersGameState,
+  random: SpaceInvadersRandomSource = Math.random,
 ): SpaceInvadersGameState {
   if (game.status !== "running") {
     return game;
   }
 
-  const gameAfterShot = advancePlayerShot(game);
+  const gameAfterExplosions = advanceExplosions(game);
+  const gameAfterShot = advancePlayerShot(gameAfterExplosions, random);
 
   if (gameAfterShot.status === "won") {
     return gameAfterShot;
   }
 
-  const gameAfterInvaderShots = advanceInvaderShots(gameAfterShot);
+  const gameAfterInvaderShots = advanceInvaderShots(gameAfterShot, random);
 
   if (
     gameAfterInvaderShots.status === "lost" ||
@@ -421,7 +449,10 @@ export function getSpaceInvadersPlayerSpeed() {
   return PLAYER_SPEED;
 }
 
-function advancePlayerShot(game: SpaceInvadersGameState): SpaceInvadersGameState {
+function advancePlayerShot(
+  game: SpaceInvadersGameState,
+  random: SpaceInvadersRandomSource,
+): SpaceInvadersGameState {
   if (game.playerShot === null) {
     return game;
   }
@@ -439,8 +470,10 @@ function advancePlayerShot(game: SpaceInvadersGameState): SpaceInvadersGameState
   }
 
   if (game.ufo.isActive && rectanglesIntersect(movedShot, game.ufo)) {
+    const gameWithExplosion = createSpaceInvadersExplosion(game, "ufo", game.ufo, random);
+
     return {
-      ...game,
+      ...gameWithExplosion,
       playerShot: null,
       score: game.score + game.ufo.points,
       ufo: deactivateSpaceInvadersUfo(game.ufo, game.boardWidth),
@@ -463,9 +496,15 @@ function advancePlayerShot(game: SpaceInvadersGameState): SpaceInvadersGameState
   );
   const score = game.score + hitInvader.points;
   const activeInvaderCount = invaders.filter((invader) => invader.isActive).length;
+  const gameWithExplosion = createSpaceInvadersExplosion(
+    game,
+    "invader",
+    hitInvader,
+    random,
+  );
 
   return {
-    ...game,
+    ...gameWithExplosion,
     invaders,
     playerShot: null,
     score,
@@ -516,7 +555,10 @@ function advanceSpaceInvadersUfo(game: SpaceInvadersGameState): SpaceInvadersGam
   };
 }
 
-function advanceInvaderShots(game: SpaceInvadersGameState): SpaceInvadersGameState {
+function advanceInvaderShots(
+  game: SpaceInvadersGameState,
+  random: SpaceInvadersRandomSource,
+): SpaceInvadersGameState {
   if (game.invaderShots.length === 0) {
     return game;
   }
@@ -534,15 +576,70 @@ function advanceInvaderShots(game: SpaceInvadersGameState): SpaceInvadersGameSta
   }
 
   const lives = game.lives - 1;
+  const gameWithExplosion = createSpaceInvadersExplosion(
+    game,
+    "player",
+    game.player,
+    random,
+  );
 
   return {
-    ...game,
+    ...gameWithExplosion,
     invaderShotCooldownTicks: INVADER_HIT_RECOVERY_TICKS,
     invaderShots: [],
     lives,
     player: createCenteredPlayer(game.boardWidth, game.boardHeight),
     playerShot: null,
     status: lives <= 0 ? "lost" : game.status,
+  };
+}
+
+function advanceExplosions(game: SpaceInvadersGameState): SpaceInvadersGameState {
+  if (game.explosions.length === 0) {
+    return game;
+  }
+
+  return {
+    ...game,
+    explosions: game.explosions
+      .map((explosion) => ({
+        ...explosion,
+        ageTicks: explosion.ageTicks + 1,
+        ttlTicks: explosion.ttlTicks - 1,
+      }))
+      .filter((explosion) => explosion.ttlTicks > 0),
+  };
+}
+
+function createSpaceInvadersExplosion(
+  game: SpaceInvadersGameState,
+  kind: SpaceInvadersExplosionKind,
+  target: { height: number; width: number; x: number; y: number },
+  random: SpaceInvadersRandomSource,
+): SpaceInvadersGameState {
+  const padding = EXPLOSION_PADDING_BY_KIND[kind];
+  const height = target.height + padding * 2;
+  const width = target.width + padding * 2;
+  const variant =
+    SPACE_INVADERS_EXPLOSION_VARIANTS[
+      getRandomIndex(SPACE_INVADERS_EXPLOSION_VARIANTS.length, random)
+    ] ?? 1;
+  const explosion: SpaceInvadersExplosion = {
+    ageTicks: 0,
+    height,
+    id: `explosion-${game.nextExplosionId}`,
+    kind,
+    ttlTicks: EXPLOSION_TTL_TICKS,
+    variant,
+    width,
+    x: target.x + target.width / 2 - width / 2,
+    y: target.y + target.height / 2 - height / 2,
+  };
+
+  return {
+    ...game,
+    explosions: [...game.explosions, explosion],
+    nextExplosionId: game.nextExplosionId + 1,
   };
 }
 

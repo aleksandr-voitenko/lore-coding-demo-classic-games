@@ -3,6 +3,8 @@
 import type { CSSProperties, ReactNode } from "react";
 
 import {
+  type SpaceInvadersExplosionKind,
+  type SpaceInvadersExplosionVariant,
   type SpaceInvadersGameState,
   type SpaceInvadersInvaderShotKind,
   type SpaceInvaderKind,
@@ -15,7 +17,7 @@ type SpaceInvadersBoardProps = {
   statusLabel: string;
 };
 
-const SPACE_INVADERS_ASSET_VERSION = "sprite-art-v1";
+const SPACE_INVADERS_ASSET_VERSION = "sprite-art-v2";
 const SPACE_INVADERS_ASSET_ROOT = "/images/space-invaders";
 
 function getSpaceInvadersAssetSrc(fileName: string) {
@@ -23,6 +25,12 @@ function getSpaceInvadersAssetSrc(fileName: string) {
 }
 
 const spaceInvadersBackgroundSrc = getSpaceInvadersAssetSrc("background");
+const explosionSpriteSrcByVariant: Record<SpaceInvadersExplosionVariant, string> = {
+  1: getSpaceInvadersAssetSrc("explosion-1"),
+  2: getSpaceInvadersAssetSrc("explosion-2"),
+  3: getSpaceInvadersAssetSrc("explosion-3"),
+  4: getSpaceInvadersAssetSrc("explosion-4"),
+};
 const playerShipSpriteSrc = getSpaceInvadersAssetSrc("player-ship");
 const playerShotSpriteSrc = getSpaceInvadersAssetSrc("player-shot");
 const ufoSpriteSrc = getSpaceInvadersAssetSrc("ufo");
@@ -82,6 +90,19 @@ const invaderShotClassNames: Record<SpaceInvadersInvaderShotKind, string> = {
     "rounded-full bg-[var(--invaders-magenta)] shadow-[0_0_10px_color-mix(in_oklch,var(--invaders-magenta)_70%,transparent)]",
   zigzag:
     "rounded-[0.35rem] bg-[var(--invaders-red)] shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-red)_70%,transparent)]",
+};
+
+const explosionClassNames: Record<SpaceInvadersExplosionKind, string> = {
+  invader: "space-invaders-explosion--invader",
+  player: "space-invaders-explosion--player",
+  ufo: "space-invaders-explosion--ufo",
+};
+
+const explosionSpriteClassNames: Record<SpaceInvadersExplosionVariant, string> = {
+  1: "space-invaders-explosion__sprite--1",
+  2: "space-invaders-explosion__sprite--2",
+  3: "space-invaders-explosion__sprite--3",
+  4: "space-invaders-explosion__sprite--4",
 };
 
 function getInvaderModifier(kind: SpaceInvaderKind) {
@@ -259,6 +280,36 @@ export function SpaceInvadersBoard({
             }),
           }}
         />
+
+        {game.explosions.map((explosion) => (
+          <span
+            aria-hidden="true"
+            className="space-invaders-explosion absolute left-0 top-0"
+            data-explosion-kind={explosion.kind}
+            data-explosion-variant={explosion.variant}
+            data-testid="space-invaders-explosion"
+            key={explosion.id}
+            style={getBoardEntityStyle({
+              boardHeight: game.boardHeight,
+              boardWidth: game.boardWidth,
+              height: explosion.height,
+              width: explosion.width,
+              x: explosion.x,
+              y: explosion.y,
+            })}
+          >
+            <span
+              className={cn(
+                "space-invaders-explosion__sprite",
+                explosionClassNames[explosion.kind],
+                explosionSpriteClassNames[explosion.variant],
+              )}
+              style={{
+                backgroundImage: `url("${explosionSpriteSrcByVariant[explosion.variant]}")`,
+              }}
+            />
+          </span>
+        ))}
       </div>
 
       {children}
