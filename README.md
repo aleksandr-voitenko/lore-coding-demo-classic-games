@@ -119,10 +119,11 @@ change code or build-affecting files: `npm ci`, `npm run build`,
 `npm run test:e2e`. Documentation-only changes such as Markdown, `docs/**`,
 and `LICENSE` are ignored by CI.
 
-After those checks pass on a push to `main`, GitHub Actions builds the Docker
-image and pushes it to Docker Hub using the `DOCKERHUB_USERNAME` and
-`DOCKERHUB_IMAGE` repository variables plus the `DOCKERHUB_TOKEN` repository
-secret. The published tags are `latest`, `main`, and the short commit SHA.
+After those checks pass on a push to `main`, GitHub Actions builds the
+`linux/amd64` and `linux/arm64` Docker images and pushes a multi-platform
+manifest to Docker Hub using the `DOCKERHUB_USERNAME` and `DOCKERHUB_IMAGE`
+repository variables plus the `DOCKERHUB_TOKEN` repository secret. The
+published tags are `latest`, `main`, and the short commit SHA.
 
 ## Lore Coding Validation
 
