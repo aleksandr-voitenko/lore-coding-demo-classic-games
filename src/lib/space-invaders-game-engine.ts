@@ -8,7 +8,7 @@ export type SpaceInvadersRandomSource = () => number;
 
 export type SpaceInvadersInvaderShotKind =
   | "commander"
-  | "zigzag"
+  | "burst"
   | "standard"
   | "needle"
   | "scatter";
@@ -79,12 +79,18 @@ export type SpaceInvadersExplosion = {
   y: number;
 };
 
+export type SpaceInvadersInvaderBurst = {
+  remainingShots: number;
+  sourceInvaderId: string;
+};
+
 export type SpaceInvadersGameState = {
   alienCount: number;
   baseY: number;
   boardHeight: number;
   boardWidth: number;
   explosions: SpaceInvadersExplosion[];
+  invaderBurst: SpaceInvadersInvaderBurst | null;
   invaderShotCooldownTicks: number;
   invaderShots: SpaceInvadersInvaderShot[];
   invaders: SpaceInvader[];
@@ -167,9 +173,13 @@ const UFO_POINT_VALUES = [100, 150, 200, 300] as const;
 const UFO_SPEED = 2.4;
 const UFO_WIDTH = 48;
 const UFO_Y = 34;
+const BURST_SHOT_COUNT = 3;
+const BURST_SHOT_DELAY_TICKS = Math.max(
+  0,
+  Math.round(1_000 / SPACE_INVADERS_TICK_DELAY_MS) - 1,
+);
 const COMMANDER_SHOT_MAX_SPEED_X = 1.1;
 const COMMANDER_SHOT_STEER_X = 0.14;
-const ZIGZAG_SHOT_SEGMENT_TICKS = 12;
 const SCATTER_SHOT_VELOCITIES_X = [-1.25, 0, 1.25] as const;
 
 type InvaderShotSpec = {
@@ -184,7 +194,7 @@ type InvaderShotSpec = {
 
 const SPACE_INVADERS_ROW_SHOT_KINDS: SpaceInvadersInvaderShotKind[] = [
   "commander",
-  "zigzag",
+  "burst",
   "scatter",
   "needle",
   "standard",
@@ -200,13 +210,13 @@ const INVADER_SHOT_SPECS: Record<SpaceInvadersInvaderShotKind, InvaderShotSpec> 
     velocityY: 2.35,
     width: 8,
   },
-  zigzag: {
+  burst: {
     cooldownTicks: 92,
     height: 18,
-    kind: "zigzag",
+    kind: "burst",
     ttlTicks: null,
-    velocityX: 1.15,
-    velocityY: 3,
+    velocityX: 0,
+    velocityY: 3.45,
     width: 7,
   },
   standard: {
@@ -262,6 +272,7 @@ export function createInitialSpaceInvadersGame({
     boardHeight: normalizedBoardHeight,
     boardWidth: normalizedBoardWidth,
     explosions: [],
+    invaderBurst: null,
     invaderShotCooldownTicks: INVADER_FIRE_COOLDOWN_TICKS,
     invaderShots: [],
     invaders: createSpaceInvadersFormation({
@@ -611,6 +622,7 @@ function advanceInvaderShots(
 
   return {
     ...gameWithExplosion,
+    invaderBurst: null,
     invaderShotCooldownTicks: INVADER_HIT_RECOVERY_TICKS,
     invaderShots: [],
     lives,
@@ -703,6 +715,10 @@ function maybeFireInvaderShot(game: SpaceInvadersGameState): SpaceInvadersGameSt
     };
   }
 
+  if (game.invaderBurst !== null) {
+    return continueInvaderBurst(game);
+  }
+
   if (game.invaderShots.length >= MAX_INVADER_SHOTS) {
     return game;
   }
@@ -722,9 +738,64 @@ function maybeFireInvaderShot(game: SpaceInvadersGameState): SpaceInvadersGameSt
     return game;
   }
 
+  const spec = getInvaderShotSpec(shooter.row);
+
   return {
     ...game,
-    invaderShotCooldownTicks: getInvaderShotSpec(shooter.row).cooldownTicks,
+    invaderBurst:
+      spec.kind === "burst"
+        ? {
+            remainingShots: BURST_SHOT_COUNT - createdShots.length,
+            sourceInvaderId: shooter.id,
+          }
+        : null,
+    invaderShotCooldownTicks:
+      spec.kind === "burst" ? BURST_SHOT_DELAY_TICKS : spec.cooldownTicks,
+    invaderShots: [...game.invaderShots, ...createdShots],
+    nextInvaderShotId: game.nextInvaderShotId + createdShots.length,
+  };
+}
+
+function continueInvaderBurst(game: SpaceInvadersGameState): SpaceInvadersGameState {
+  const burst = game.invaderBurst;
+
+  if (burst === null) {
+    return game;
+  }
+
+  const shooter = game.invaders.find(
+    (invader) => invader.id === burst.sourceInvaderId && invader.isActive,
+  );
+
+  if (shooter === undefined) {
+    return {
+      ...game,
+      invaderBurst: null,
+      invaderShotCooldownTicks: INVADER_FIRE_COOLDOWN_TICKS,
+    };
+  }
+
+  const createdShots = createInvaderShots(shooter, game.nextInvaderShotId);
+
+  if (game.invaderShots.length + createdShots.length > MAX_INVADER_SHOTS) {
+    return game;
+  }
+
+  const remainingShots = burst.remainingShots - createdShots.length;
+
+  return {
+    ...game,
+    invaderBurst:
+      remainingShots > 0
+        ? {
+            ...burst,
+            remainingShots,
+          }
+        : null,
+    invaderShotCooldownTicks:
+      remainingShots > 0
+        ? BURST_SHOT_DELAY_TICKS
+        : getInvaderShotSpec(shooter.row).cooldownTicks,
     invaderShots: [...game.invaderShots, ...createdShots],
     nextInvaderShotId: game.nextInvaderShotId + createdShots.length,
   };
@@ -810,15 +881,6 @@ function getNextInvaderShotVelocityX(
       -COMMANDER_SHOT_MAX_SPEED_X,
       COMMANDER_SHOT_MAX_SPEED_X,
     );
-  }
-
-  if (shot.kind === "zigzag") {
-    const segment = Math.floor(
-      (shot.ageTicks + shot.sourceColumn * 2) / ZIGZAG_SHOT_SEGMENT_TICKS,
-    );
-    const direction = segment % 2 === 0 ? 1 : -1;
-
-    return Math.abs(shot.velocityX) * direction;
   }
 
   return shot.velocityX;

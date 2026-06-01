@@ -89,7 +89,7 @@ const invaderShotClassNames: Record<SpaceInvadersInvaderShotKind, string> = {
     "rounded-full bg-[var(--invaders-lime)] shadow-[0_0_10px_color-mix(in_oklch,var(--invaders-lime)_72%,transparent)]",
   standard:
     "rounded-full bg-[var(--invaders-magenta)] shadow-[0_0_10px_color-mix(in_oklch,var(--invaders-magenta)_70%,transparent)]",
-  zigzag:
+  burst:
     "rounded-[0.35rem] bg-[var(--invaders-red)] shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-red)_70%,transparent)]",
 };
 

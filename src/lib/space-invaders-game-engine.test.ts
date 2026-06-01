@@ -140,6 +140,16 @@ function fireFromOnlyInvader(row: number, column = 5) {
   };
 }
 
+function advanceSpaceInvadersTicks(game: SpaceInvadersGameState, ticks: number) {
+  let advanced = game;
+
+  for (let tick = 0; tick < ticks; tick += 1) {
+    advanced = advanceSpaceInvadersGame(advanced, () => 0);
+  }
+
+  return advanced;
+}
+
 describe("space invaders game engine", () => {
   it("creates a ready formation with a centered player cannon", () => {
     const game = createInitialSpaceInvadersGame({ random: () => 0 });
@@ -154,6 +164,7 @@ describe("space invaders game engine", () => {
     expect(game.player.x + game.player.width / 2).toBe(SPACE_INVADERS_BOARD_WIDTH / 2);
     expect(game.playerShot).toBeNull();
     expect(game.explosions).toEqual([]);
+    expect(game.invaderBurst).toBeNull();
     expect(game.invaderShots).toEqual([]);
     expect(game.invaderShotCooldownTicks).toBeGreaterThan(0);
     expect(game.nextExplosionId).toBe(0);
@@ -415,7 +426,7 @@ describe("space invaders game engine", () => {
 
   it("assigns each invader row its own shot variant and cooldown", () => {
     const commander = fireFromOnlyInvader(0).advanced;
-    const zigzag = fireFromOnlyInvader(1).advanced;
+    const burst = fireFromOnlyInvader(1).advanced;
     const scatter = fireFromOnlyInvader(2).advanced;
     const needle = fireFromOnlyInvader(3).advanced;
     const standard = fireFromOnlyInvader(4).advanced;
@@ -428,13 +439,16 @@ describe("space invaders game engine", () => {
       velocityY: 2.35,
       width: 8,
     });
-    expect(zigzag.invaderShots[0]).toMatchObject({
+    expect(burst.invaderShots[0]).toMatchObject({
       height: 18,
-      kind: "zigzag",
+      kind: "burst",
       sourceRow: 1,
-      velocityX: 1.15,
-      velocityY: 3,
+      velocityX: 0,
+      velocityY: 3.45,
       width: 7,
+    });
+    expect(burst.invaderBurst).toMatchObject({
+      remainingShots: 2,
     });
     expect(needle.invaderShots[0]).toMatchObject({
       height: 24,
@@ -487,6 +501,62 @@ describe("space invaders game engine", () => {
     expect(scatter.nextInvaderShotId).toBe(3);
   });
 
+  it("fires burst-row shots one second apart from the same invader", () => {
+    const { advanced: firstShot, shooter } = fireFromOnlyInvader(1);
+    const burstDelayTicks = Math.round(1_000 / getSpaceInvadersTickDelay());
+    const beforeSecondShot = advanceSpaceInvadersTicks(firstShot, burstDelayTicks - 1);
+    const secondShot = advanceSpaceInvadersGame(beforeSecondShot, () => 0);
+    const beforeThirdShot = advanceSpaceInvadersTicks(secondShot, burstDelayTicks - 1);
+    const thirdShot = advanceSpaceInvadersGame(beforeThirdShot, () => 0);
+
+    expect(firstShot.invaderShots).toHaveLength(1);
+    expect(firstShot.invaderBurst).toEqual({
+      remainingShots: 2,
+      sourceInvaderId: shooter.id,
+    });
+    expect(beforeSecondShot.invaderShots).toHaveLength(1);
+    expect(secondShot.invaderShots).toHaveLength(2);
+    expect(secondShot.invaderShots[1]).toMatchObject({
+      id: "invader-shot-1",
+      kind: "burst",
+      sourceInvaderId: shooter.id,
+      sourceRow: shooter.row,
+      velocityX: 0,
+      velocityY: 3.45,
+    });
+    expect(secondShot.invaderBurst).toEqual({
+      remainingShots: 1,
+      sourceInvaderId: shooter.id,
+    });
+    expect(beforeThirdShot.invaderShots).toHaveLength(2);
+    expect(thirdShot.invaderShots).toHaveLength(3);
+    expect(thirdShot.invaderShots[2]).toMatchObject({
+      id: "invader-shot-2",
+      kind: "burst",
+      sourceInvaderId: shooter.id,
+      sourceRow: shooter.row,
+    });
+    expect(thirdShot.invaderBurst).toBeNull();
+    expect(thirdShot.invaderShotCooldownTicks).toBeGreaterThan(burstDelayTicks);
+  });
+
+  it("cancels a pending burst when its source invader is destroyed", () => {
+    const { advanced: firstShot, shooter } = fireFromOnlyInvader(1);
+    const sourceDestroyed = {
+      ...firstShot,
+      invaderShotCooldownTicks: 0,
+      invaders: firstShot.invaders.map((invader) =>
+        invader.id === shooter.id ? { ...invader, isActive: false } : invader,
+      ),
+    };
+    const advanced = advanceSpaceInvadersGame(sourceDestroyed, () => 0);
+
+    expect(advanced.invaderShots).toHaveLength(1);
+    expect(advanced.invaderShots[0]?.id).toBe("invader-shot-0");
+    expect(advanced.invaderBurst).toBeNull();
+    expect(advanced.invaderShotCooldownTicks).toBeGreaterThan(0);
+  });
+
   it("moves the player shot upward and clears it after it leaves the board", () => {
     const movingShotGame = fireSpaceInvadersShot(createRunningGame());
     const movingShot = movingShotGame.playerShot!;
@@ -524,7 +594,7 @@ describe("space invaders game engine", () => {
     expect(advanceSpaceInvadersGame(clearedShotGame).invaderShots).toEqual([]);
   });
 
-  it("moves commander, zig-zag, and scatter shots with their row behavior", () => {
+  it("moves commander, burst, and scatter shots with their row behavior", () => {
     const game = createInitialSpaceInvadersGame();
     const commander = createInvaderShotFixture({
       height: 24,
@@ -537,25 +607,13 @@ describe("space invaders game engine", () => {
       x: 120,
       y: 120,
     });
-    const zigzagRight = createInvaderShotFixture({
-      id: "zigzag-right",
-      kind: "zigzag",
-      sourceColumn: 0,
+    const burst = createInvaderShotFixture({
+      id: "burst-shot",
+      kind: "burst",
       sourceRow: 1,
-      velocityX: 1.15,
-      velocityY: 3,
+      velocityX: 0,
+      velocityY: 3.45,
       x: 160,
-      y: 120,
-    });
-    const zigzagLeft = createInvaderShotFixture({
-      ageTicks: 12,
-      id: "zigzag-left",
-      kind: "zigzag",
-      sourceColumn: 0,
-      sourceRow: 1,
-      velocityX: 1.15,
-      velocityY: 3,
-      x: 200,
       y: 120,
     });
     const expiredScatter = createInvaderShotFixture({
@@ -571,7 +629,7 @@ describe("space invaders game engine", () => {
     const advanced = advanceSpaceInvadersGame(
       createRunningGame({
         invaderShotCooldownTicks: 100,
-        invaderShots: [commander, zigzagRight, zigzagLeft, expiredScatter],
+        invaderShots: [commander, burst, expiredScatter],
         player: {
           ...game.player,
           x: 260,
@@ -581,18 +639,13 @@ describe("space invaders game engine", () => {
     const movedCommander = advanced.invaderShots.find(
       (shot) => shot.id === commander.id,
     );
-    const movedZigzagRight = advanced.invaderShots.find(
-      (shot) => shot.id === zigzagRight.id,
-    );
-    const movedZigzagLeft = advanced.invaderShots.find(
-      (shot) => shot.id === zigzagLeft.id,
-    );
+    const movedBurst = advanced.invaderShots.find((shot) => shot.id === burst.id);
 
     expect(movedCommander?.velocityX).toBeGreaterThan(0);
     expect(movedCommander?.x).toBeGreaterThan(commander.x);
     expect(movedCommander?.y).toBeCloseTo(commander.y + commander.velocityY);
-    expect(movedZigzagRight?.x).toBeGreaterThan(zigzagRight.x);
-    expect(movedZigzagLeft?.x).toBeLessThan(zigzagLeft.x);
+    expect(movedBurst?.x).toBeCloseTo(burst.x);
+    expect(movedBurst?.y).toBeCloseTo(burst.y + burst.velocityY);
     expect(advanced.invaderShots.find((shot) => shot.id === expiredScatter.id)).toBe(
       undefined,
     );
@@ -603,6 +656,10 @@ describe("space invaders game engine", () => {
     const hitPlayer = game.player;
     const playerShot = fireSpaceInvadersShot(createRunningGame()).playerShot!;
     const runningGame = createRunningGame({
+      invaderBurst: {
+        remainingShots: 2,
+        sourceInvaderId: "1:5",
+      },
       invaderShots: [
         createInvaderShotFixture({
           height: 20,
@@ -633,6 +690,7 @@ describe("space invaders game engine", () => {
       hitPlayer.y + hitPlayer.height / 2,
     );
     expect(advanced.nextExplosionId).toBe(1);
+    expect(advanced.invaderBurst).toBeNull();
     expect(advanced.invaderShots).toEqual([]);
     expect(advanced.playerShot).toBeNull();
     expect(advanced.playerRespawnTicks).toBe(SPACE_INVADERS_PLAYER_RESPAWN_TICKS);
