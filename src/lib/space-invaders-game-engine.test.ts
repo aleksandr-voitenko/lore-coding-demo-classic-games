@@ -161,6 +161,8 @@ describe("space invaders game engine", () => {
     expect(game.status).toBe("ready");
     expect(game.score).toBe(0);
     expect(game.lives).toBe(SPACE_INVADERS_STARTING_LIVES);
+    expect(game.player.height).toBe(40);
+    expect(game.player.width).toBeCloseTo(49.6);
     expect(game.player.x + game.player.width / 2).toBe(SPACE_INVADERS_BOARD_WIDTH / 2);
     expect(game.playerShot).toBeNull();
     expect(game.explosions).toEqual([]);
@@ -700,6 +702,32 @@ describe("space invaders game engine", () => {
       SPACE_INVADERS_BOARD_WIDTH / 2,
     );
     expect(advanced.invaderShotCooldownTicks).toBeGreaterThan(0);
+  });
+
+  it("lets near-edge invader shots pass the smaller player hitbox", () => {
+    const game = createInitialSpaceInvadersGame();
+    const runningGame = createRunningGame({
+      invaderShotCooldownTicks: 100,
+      invaderShots: [
+        createInvaderShotFixture({
+          height: 20,
+          velocityY: 8,
+          width: 5,
+          x: game.player.x - 5,
+          y: game.player.y - 8,
+        }),
+      ],
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
+
+    expect(advanced.status).toBe("running");
+    expect(advanced.lives).toBe(SPACE_INVADERS_STARTING_LIVES);
+    expect(advanced.explosions).toEqual([]);
+    expect(advanced.invaderShots).toHaveLength(1);
+    expect(advanced.invaderShots[0]).toMatchObject({
+      x: game.player.x - 5,
+      y: game.player.y,
+    });
   });
 
   it("respawns the player only after the explosion expires and then starts a shield", () => {
