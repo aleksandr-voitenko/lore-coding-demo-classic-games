@@ -249,8 +249,8 @@ const PLAYER_WIDTH = 62 * PLAYER_SIZE_SCALE;
 const SHOT_HEIGHT = 22;
 const SHOT_SPEED = -6.4;
 const SHOT_WIDTH = 6;
+export const SPACE_INVADERS_POWER_UP_SIZE = 36;
 export const SPACE_INVADERS_POWER_UP_SPEED = Math.abs(SHOT_SPEED) * 0.75;
-const POWER_UP_SIZE = 18;
 const UFO_COOLDOWN_TICKS = 420;
 const UFO_HEIGHT = 18;
 const UFO_POINT_VALUES = [100, 150, 200, 300] as const;
@@ -1451,13 +1451,13 @@ function maybeCreateSpaceInvadersPowerUpDrop(
   }
 
   const powerUp: SpaceInvadersPowerUp = {
-    height: POWER_UP_SIZE,
+    height: SPACE_INVADERS_POWER_UP_SIZE,
     id: `power-up-${game.nextPowerUpId}`,
     kind: getRandomPowerUpKind(random),
     velocityY: SPACE_INVADERS_POWER_UP_SPEED,
-    width: POWER_UP_SIZE,
-    x: invader.x + invader.width / 2 - POWER_UP_SIZE / 2,
-    y: invader.y + invader.height / 2 - POWER_UP_SIZE / 2,
+    width: SPACE_INVADERS_POWER_UP_SIZE,
+    x: invader.x + invader.width / 2 - SPACE_INVADERS_POWER_UP_SIZE / 2,
+    y: invader.y + invader.height / 2 - SPACE_INVADERS_POWER_UP_SIZE / 2,
   };
 
   return {

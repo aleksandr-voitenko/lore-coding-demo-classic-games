@@ -34,6 +34,7 @@ import {
   useHeldDirectionMovementController,
 } from "@/components/game-input";
 import {
+  getSpaceInvadersPowerUpSpriteSrc,
   getSpaceInvaderSprite,
   SpaceInvadersBoard,
 } from "@/components/space-invaders-board";
@@ -55,7 +56,7 @@ import {
   SPACE_INVADERS_BONUS_SCORE_POINTS,
   startSpaceInvadersGame,
   type SpaceInvadersGameState,
-  type SpaceInvadersPendingShotPowerUp,
+  type SpaceInvadersPowerUpKind,
   type SpaceInvadersStatus,
 } from "@/lib/space-invaders-game-engine";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
@@ -78,26 +79,60 @@ const statusLabels: Record<SpaceInvadersStatus, string> = {
   won: "Earth defended",
 };
 
-const pendingShotPowerUpLabels: Record<SpaceInvadersPendingShotPowerUp, string> = {
+const powerUpLabels: Record<SpaceInvadersPowerUpKind, string> = {
+  "bonus-score": "Bonus score",
   "burst-shot": "Burst",
+  "extra-life": "Extra life",
+  freeze: "Freeze",
   "piercing-laser": "Piercing",
+  shield: "Shield",
   "shotgun-shot": "Shotgun",
 };
 
-function getSpaceInvadersPowerStatus(game: SpaceInvadersGameState) {
+export function getSpaceInvadersActivePowerUpKind(
+  game: SpaceInvadersGameState,
+): SpaceInvadersPowerUpKind | null {
   if (game.pendingShotPowerUp !== null) {
-    return pendingShotPowerUpLabels[game.pendingShotPowerUp];
+    return game.pendingShotPowerUp;
   }
 
   if (game.alienFreezeTicks > 0) {
-    return "Freeze";
+    return "freeze";
   }
 
   if (game.playerShieldTicks > 0) {
-    return "Shield";
+    return "shield";
   }
 
-  return "None";
+  return null;
+}
+
+function SpaceInvadersPowerStatusIcon({
+  kind,
+}: {
+  kind: SpaceInvadersPowerUpKind | null;
+}) {
+  if (kind === null) {
+    return (
+      <span
+        aria-label="No active power"
+        className="block size-8"
+        data-power-up-kind="none"
+        role="img"
+      />
+    );
+  }
+
+  return (
+    <span
+      aria-label={powerUpLabels[kind]}
+      className="block size-8 bg-contain bg-center bg-no-repeat drop-shadow-[0_0_8px_rgb(255_255_255_/_0.38)] [image-rendering:pixelated]"
+      data-power-up-kind={kind}
+      role="img"
+      style={{ backgroundImage: `url("${getSpaceInvadersPowerUpSpriteSrc(kind)}")` }}
+      title={powerUpLabels[kind]}
+    />
+  );
 }
 
 const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
@@ -133,7 +168,7 @@ const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
       "Only one normal shot or one primed shot sequence can be active at a time.",
       "Shoot the UFO bonus ship when it crosses the sky for extra points.",
       "Clear columns carefully; exposed diver invaders move faster and drop harder than the rest.",
-      `Destroyed diver invaders drop colored power-up circles: yellow adds ${SPACE_INVADERS_BONUS_SCORE_POINTS} points, white rarely grants an extra life, red primes Burst, cyan freezes aliens, orange primes Piercing, green shields you, and magenta primes Shotgun.`,
+      `Destroyed diver invaders drop power-up icons: bonus score adds ${SPACE_INVADERS_BONUS_SCORE_POINTS} points, extra life rarely grants a life, Burst, Freeze, Piercing, Shield, and Shotgun grant their matching bonuses.`,
       "Burst, Piercing, and Shotgun change your next shot, then return the cannon to its normal laser.",
       "Each exposed invader row fires its own pattern: tracking bolts, delayed bursts, scatter bursts, needles, or lasers.",
       "After a hit, your cannon returns when the explosion finishes and stays shielded for a short window.",
@@ -391,8 +426,12 @@ export function SpaceInvadersGame({
               className="border-[var(--invaders-border)]"
               label="Power"
               labelClassName="text-[var(--invaders-muted)]"
-              value={getSpaceInvadersPowerStatus(game)}
-              valueClassName="text-base sm:text-lg"
+              value={
+                <SpaceInvadersPowerStatusIcon
+                  kind={getSpaceInvadersActivePowerUpKind(game)}
+                />
+              }
+              valueClassName="flex h-8 items-center"
               valueTestId="space-invaders-power"
             />
           </GameStatsBar>

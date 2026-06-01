@@ -20,6 +20,7 @@ import {
   SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
   SPACE_INVADERS_PLAYER_SHIELD_TICKS,
   SPACE_INVADERS_POWER_UP_SHIELD_TICKS,
+  SPACE_INVADERS_POWER_UP_SIZE,
   SPACE_INVADERS_POWER_UP_SPEED,
   SPACE_INVADERS_ROWS,
   SPACE_INVADERS_STARTING_LIVES,
@@ -99,11 +100,11 @@ function createPowerUpFixture(
   overrides: Partial<SpaceInvadersPowerUp> = {},
 ): SpaceInvadersPowerUp {
   return {
-    height: 18,
+    height: SPACE_INVADERS_POWER_UP_SIZE,
     id: "power-up-test",
     kind: "bonus-score",
     velocityY: SPACE_INVADERS_POWER_UP_SPEED,
-    width: 18,
+    width: SPACE_INVADERS_POWER_UP_SIZE,
     x: 100,
     y: 100,
     ...overrides,
@@ -1022,9 +1023,11 @@ describe("space invaders game engine", () => {
 
     expect(diverDestroyed.powerUps).toHaveLength(1);
     expect(diverDestroyed.powerUps[0]).toMatchObject({
+      height: SPACE_INVADERS_POWER_UP_SIZE,
       id: "power-up-0",
       kind: "shotgun-shot",
       velocityY: SPACE_INVADERS_POWER_UP_SPEED,
+      width: SPACE_INVADERS_POWER_UP_SIZE,
     });
     expect(diverDestroyed.powerUps[0]!.x + diverDestroyed.powerUps[0]!.width / 2).toBeCloseTo(
       diverInvader.x + diverInvader.width / 2,

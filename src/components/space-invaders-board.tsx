@@ -38,6 +38,19 @@ const playerShipSpriteSrc = getSpaceInvadersAssetSrc("player-ship");
 const playerShotSpriteSrc = getSpaceInvadersAssetSrc("player-shot");
 const playerPiercingShotSpriteSrc = getSpaceInvadersAssetSrc("player-piercing-shot");
 const ufoSpriteSrc = getSpaceInvadersAssetSrc("ufo");
+const powerUpSpriteSrcByKind: Record<SpaceInvadersPowerUpKind, string> = {
+  "bonus-score": getSpaceInvadersAssetSrc("power-up-bonus-score"),
+  "burst-shot": getSpaceInvadersAssetSrc("power-up-burst-shot"),
+  "extra-life": getSpaceInvadersAssetSrc("power-up-extra-life"),
+  freeze: getSpaceInvadersAssetSrc("power-up-freeze"),
+  "piercing-laser": getSpaceInvadersAssetSrc("power-up-piercing-laser"),
+  shield: getSpaceInvadersAssetSrc("power-up-shield"),
+  "shotgun-shot": getSpaceInvadersAssetSrc("power-up-shotgun-shot"),
+};
+
+export function getSpaceInvadersPowerUpSpriteSrc(kind: SpaceInvadersPowerUpKind) {
+  return powerUpSpriteSrcByKind[kind];
+}
 
 const spaceInvadersBoardBackgroundStyle: CSSProperties = {
   backgroundImage: `url("${spaceInvadersBackgroundSrc}")`,
@@ -94,23 +107,6 @@ const invaderShotClassNames: Record<SpaceInvadersInvaderShotKind, string> = {
     "rounded-full bg-[var(--invaders-magenta)] shadow-[0_0_10px_color-mix(in_oklch,var(--invaders-magenta)_70%,transparent)]",
   burst:
     "rounded-[0.35rem] bg-[var(--invaders-red)] shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-red)_70%,transparent)]",
-};
-
-const powerUpClassNames: Record<SpaceInvadersPowerUpKind, string> = {
-  "bonus-score":
-    "bg-[var(--invaders-yellow)] shadow-[0_0_14px_color-mix(in_oklch,var(--invaders-yellow)_76%,transparent)]",
-  "burst-shot":
-    "bg-[var(--invaders-red)] shadow-[0_0_14px_color-mix(in_oklch,var(--invaders-red)_76%,transparent)]",
-  "extra-life":
-    "bg-white shadow-[0_0_16px_rgb(255_255_255_/_0.78)]",
-  freeze:
-    "bg-[var(--invaders-cyan)] shadow-[0_0_14px_color-mix(in_oklch,var(--invaders-cyan)_76%,transparent)]",
-  "piercing-laser":
-    "bg-orange-400 shadow-[0_0_14px_rgb(251_146_60_/_0.76)]",
-  shield:
-    "bg-[var(--invaders-lime)] shadow-[0_0_14px_color-mix(in_oklch,var(--invaders-lime)_76%,transparent)]",
-  "shotgun-shot":
-    "bg-[var(--invaders-magenta)] shadow-[0_0_14px_color-mix(in_oklch,var(--invaders-magenta)_76%,transparent)]",
 };
 
 const explosionClassNames: Record<SpaceInvadersExplosionKind, string> = {
@@ -321,21 +317,21 @@ export function SpaceInvadersBoard({
         {game.powerUps.map((powerUp) => (
           <span
             aria-hidden="true"
-            className={cn(
-              "absolute left-0 top-0 rounded-full border border-white/80 will-change-transform",
-              powerUpClassNames[powerUp.kind],
-            )}
+            className="absolute left-0 top-0 bg-contain bg-center bg-no-repeat drop-shadow-[0_0_14px_rgb(255_255_255_/_0.42)] will-change-transform [image-rendering:pixelated]"
             data-power-up-kind={powerUp.kind}
             data-testid="space-invaders-power-up"
             key={powerUp.id}
-            style={getBoardEntityStyle({
-              boardHeight: game.boardHeight,
-              boardWidth: game.boardWidth,
-              height: powerUp.height,
-              width: powerUp.width,
-              x: powerUp.x,
-              y: powerUp.y,
-            })}
+            style={{
+              backgroundImage: `url("${getSpaceInvadersPowerUpSpriteSrc(powerUp.kind)}")`,
+              ...getBoardEntityStyle({
+                boardHeight: game.boardHeight,
+                boardWidth: game.boardWidth,
+                height: powerUp.height,
+                width: powerUp.width,
+                x: powerUp.x,
+                y: powerUp.y,
+              }),
+            }}
           />
         ))}
 
