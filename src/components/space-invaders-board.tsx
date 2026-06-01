@@ -8,7 +8,9 @@ import {
   type SpaceInvadersExplosionVariant,
   type SpaceInvadersGameState,
   type SpaceInvadersInvaderShotKind,
+  type SpaceInvadersPlayerShotKind,
   type SpaceInvaderKind,
+  type SpaceInvadersPowerUpKind,
 } from "@/lib/space-invaders-game-engine";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +36,7 @@ const explosionSpriteSrcByVariant: Record<SpaceInvadersExplosionVariant, string>
 };
 const playerShipSpriteSrc = getSpaceInvadersAssetSrc("player-ship");
 const playerShotSpriteSrc = getSpaceInvadersAssetSrc("player-shot");
+const playerPiercingShotSpriteSrc = getSpaceInvadersAssetSrc("player-piercing-shot");
 const ufoSpriteSrc = getSpaceInvadersAssetSrc("ufo");
 
 const spaceInvadersBoardBackgroundStyle: CSSProperties = {
@@ -93,6 +96,23 @@ const invaderShotClassNames: Record<SpaceInvadersInvaderShotKind, string> = {
     "rounded-[0.35rem] bg-[var(--invaders-red)] shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-red)_70%,transparent)]",
 };
 
+const powerUpClassNames: Record<SpaceInvadersPowerUpKind, string> = {
+  "bonus-score":
+    "bg-[var(--invaders-yellow)] shadow-[0_0_14px_color-mix(in_oklch,var(--invaders-yellow)_76%,transparent)]",
+  "burst-shot":
+    "bg-[var(--invaders-red)] shadow-[0_0_14px_color-mix(in_oklch,var(--invaders-red)_76%,transparent)]",
+  "extra-life":
+    "bg-white shadow-[0_0_16px_rgb(255_255_255_/_0.78)]",
+  freeze:
+    "bg-[var(--invaders-cyan)] shadow-[0_0_14px_color-mix(in_oklch,var(--invaders-cyan)_76%,transparent)]",
+  "piercing-laser":
+    "bg-orange-400 shadow-[0_0_14px_rgb(251_146_60_/_0.76)]",
+  shield:
+    "bg-[var(--invaders-lime)] shadow-[0_0_14px_color-mix(in_oklch,var(--invaders-lime)_76%,transparent)]",
+  "shotgun-shot":
+    "bg-[var(--invaders-magenta)] shadow-[0_0_14px_color-mix(in_oklch,var(--invaders-magenta)_76%,transparent)]",
+};
+
 const explosionClassNames: Record<SpaceInvadersExplosionKind, string> = {
   invader: "space-invaders-explosion--invader",
   player: "space-invaders-explosion--player",
@@ -114,6 +134,14 @@ function getInvaderModifier(kind: SpaceInvaderKind) {
   return (
     <span className="pointer-events-none absolute bottom-[2%] left-1/2 size-[28%] -translate-x-1/2 rotate-45 rounded-[0.12rem] border-b-2 border-r-2 border-white/90 bg-[color-mix(in_oklch,var(--invaders-yellow)_30%,transparent)] shadow-[0_0_10px_color-mix(in_oklch,var(--invaders-yellow)_78%,transparent)]" />
   );
+}
+
+function getPlayerShotSpriteSrc(kind: SpaceInvadersPlayerShotKind) {
+  if (kind === "piercing") {
+    return playerPiercingShotSpriteSrc;
+  }
+
+  return playerShotSpriteSrc;
 }
 
 function getBoardEntityStyle({
@@ -157,6 +185,11 @@ export function SpaceInvadersBoard({
   statusLabel,
 }: SpaceInvadersBoardProps) {
   const activeInvaderCount = game.invaders.filter((invader) => invader.isActive).length;
+  const activePowerUpCount = game.powerUps.length;
+  const powerUpSummary =
+    activePowerUpCount === 1
+      ? "1 power up falling"
+      : `${activePowerUpCount} power ups falling`;
   const isPlayerVisible = game.status !== "lost" && game.playerRespawnTicks === 0;
   const isPlayerShieldVisible = isPlayerVisible && game.playerShieldTicks > 0;
   const isPlayerShieldFlashing =
@@ -169,7 +202,7 @@ export function SpaceInvadersBoard({
       style={{ aspectRatio: `${game.boardWidth} / ${game.boardHeight}` }}
     >
       <div
-        aria-label={`Space Invaders board. Field ${game.boardWidth} by ${game.boardHeight}. Score ${game.score}. Lives ${game.lives}. ${activeInvaderCount} invaders remaining. ${statusLabel}.`}
+        aria-label={`Space Invaders board. Field ${game.boardWidth} by ${game.boardHeight}. Score ${game.score}. Lives ${game.lives}. ${activeInvaderCount} invaders remaining. ${powerUpSummary}. ${statusLabel}.`}
         className="relative size-full overflow-hidden rounded-[0.375rem] bg-[var(--invaders-board)]"
         data-testid="space-invaders-board"
         role="img"
@@ -243,24 +276,26 @@ export function SpaceInvadersBoard({
           />
         ) : null}
 
-        {game.playerShot ? (
+        {game.playerShots.map((shot) => (
           <span
             aria-hidden="true"
             className="absolute left-0 top-0 bg-contain bg-center bg-no-repeat drop-shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-shot)_72%,transparent)] will-change-transform [image-rendering:pixelated]"
+            data-player-shot-kind={shot.kind}
             data-testid="space-invaders-player-shot"
+            key={shot.id}
             style={{
-              backgroundImage: `url("${playerShotSpriteSrc}")`,
+              backgroundImage: `url("${getPlayerShotSpriteSrc(shot.kind)}")`,
               ...getBoardEntityStyle({
                 boardHeight: game.boardHeight,
                 boardWidth: game.boardWidth,
-                height: game.playerShot.height,
-                width: game.playerShot.width,
-                x: game.playerShot.x,
-                y: game.playerShot.y,
+                height: shot.height,
+                width: shot.width,
+                x: shot.x,
+                y: shot.y,
               }),
             }}
           />
-        ) : null}
+        ))}
 
         {game.invaderShots.map((shot) => (
           <span
@@ -279,6 +314,27 @@ export function SpaceInvadersBoard({
               width: shot.width,
               x: shot.x,
               y: shot.y,
+            })}
+          />
+        ))}
+
+        {game.powerUps.map((powerUp) => (
+          <span
+            aria-hidden="true"
+            className={cn(
+              "absolute left-0 top-0 rounded-full border border-white/80 will-change-transform",
+              powerUpClassNames[powerUp.kind],
+            )}
+            data-power-up-kind={powerUp.kind}
+            data-testid="space-invaders-power-up"
+            key={powerUp.id}
+            style={getBoardEntityStyle({
+              boardHeight: game.boardHeight,
+              boardWidth: game.boardWidth,
+              height: powerUp.height,
+              width: powerUp.width,
+              x: powerUp.x,
+              y: powerUp.y,
             })}
           />
         ))}

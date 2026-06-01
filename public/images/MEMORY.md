@@ -17,8 +17,9 @@ This file covers public image assets under `public/images/`.
 - Board artwork is generally code-native inside board components instead of
   external sprite sheets.
 - `space-invaders/` is a sprite-backed exception. It contains the board
-  background and transparent PNG sprites for aliens, player ship, player shot,
-  `explosion-1` through `explosion-4` effects, and the UFO bonus ship.
+  background and transparent PNG sprites for aliens, player ship, standard and
+  piercing player shots, `explosion-1` through `explosion-4` effects, and the
+  UFO bonus ship.
   `SpaceInvadersBoard` references these with versioned public URLs and moves
   sprites with board-relative `translate3d(...)` transforms.
 - `snake/` is a sprite-backed exception. It contains 128x128 floor, food,

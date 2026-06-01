@@ -13,6 +13,26 @@ export type SpaceInvadersInvaderShotKind =
   | "needle"
   | "scatter";
 
+export type SpaceInvadersPowerUpKind =
+  | "bonus-score"
+  | "burst-shot"
+  | "extra-life"
+  | "freeze"
+  | "piercing-laser"
+  | "shield"
+  | "shotgun-shot";
+
+export type SpaceInvadersPendingShotPowerUp = Extract<
+  SpaceInvadersPowerUpKind,
+  "burst-shot" | "piercing-laser" | "shotgun-shot"
+>;
+
+export type SpaceInvadersPlayerShotKind =
+  | "standard"
+  | "burst"
+  | "piercing"
+  | "shotgun";
+
 export type SpaceInvadersExplosionKind = "invader" | "player" | "ufo";
 export type SpaceInvadersExplosionVariant = 1 | 2 | 3 | 4;
 
@@ -57,6 +77,12 @@ export type SpaceInvadersShot = {
   y: number;
 };
 
+export type SpaceInvadersPlayerShot = SpaceInvadersShot & {
+  id: string;
+  kind: SpaceInvadersPlayerShotKind;
+  velocityX: number;
+};
+
 export type SpaceInvadersInvaderShot = SpaceInvadersShot & {
   ageTicks: number;
   id: string;
@@ -66,6 +92,16 @@ export type SpaceInvadersInvaderShot = SpaceInvadersShot & {
   sourceRow: number;
   ttlTicks: number | null;
   velocityX: number;
+};
+
+export type SpaceInvadersPowerUp = {
+  height: number;
+  id: string;
+  kind: SpaceInvadersPowerUpKind;
+  velocityY: number;
+  width: number;
+  x: number;
+  y: number;
 };
 
 export type SpaceInvadersExplosion = {
@@ -85,8 +121,14 @@ export type SpaceInvadersInvaderBurst = {
   sourceInvaderId: string;
 };
 
+export type SpaceInvadersPlayerBurst = {
+  cooldownTicks: number;
+  remainingShots: number;
+};
+
 export type SpaceInvadersGameState = {
   alienCount: number;
+  alienFreezeTicks: number;
   baseY: number;
   boardHeight: number;
   boardWidth: number;
@@ -99,10 +141,15 @@ export type SpaceInvadersGameState = {
   marchDirection: SpaceInvadersDirection;
   nextExplosionId: number;
   nextInvaderShotId: number;
+  nextPlayerShotId: number;
+  nextPowerUpId: number;
+  pendingShotPowerUp: SpaceInvadersPendingShotPowerUp | null;
   player: SpaceInvadersPlayer;
+  playerBurst: SpaceInvadersPlayerBurst | null;
   playerRespawnTicks: number;
   playerShieldTicks: number;
-  playerShot: SpaceInvadersShot | null;
+  playerShots: SpaceInvadersPlayerShot[];
+  powerUps: SpaceInvadersPowerUp[];
   score: number;
   status: SpaceInvadersStatus;
   ufo: SpaceInvadersUfoState;
@@ -133,6 +180,26 @@ export const SPACE_INVADERS_ALIEN_COUNT_OPTIONS = [
   { alienCount: 55, columns: 11, label: "55", rows: 5 },
 ] as const;
 export const SPACE_INVADERS_EXPLOSION_VARIANTS = [1, 2, 3, 4] as const;
+export const SPACE_INVADERS_POWER_UP_KINDS: SpaceInvadersPowerUpKind[] = [
+  "bonus-score",
+  "burst-shot",
+  "extra-life",
+  "freeze",
+  "piercing-laser",
+  "shield",
+  "shotgun-shot",
+];
+const SPACE_INVADERS_COMMON_POWER_UP_KINDS: Exclude<
+  SpaceInvadersPowerUpKind,
+  "extra-life"
+>[] = [
+  "bonus-score",
+  "burst-shot",
+  "freeze",
+  "piercing-laser",
+  "shield",
+  "shotgun-shot",
+];
 
 const INVADER_DROP_Y = 4;
 const DIVER_INVADER_COUNT = 10;
@@ -150,6 +217,19 @@ export const SPACE_INVADERS_PLAYER_SHIELD_TICKS = Math.round(
 );
 export const SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS = Math.round(
   2_000 / SPACE_INVADERS_TICK_DELAY_MS,
+);
+export const SPACE_INVADERS_BONUS_SCORE_POINTS = 50;
+export const SPACE_INVADERS_EXTRA_LIFE_DROP_CHANCE = 0.05;
+export const SPACE_INVADERS_ALIEN_FREEZE_TICKS = Math.round(
+  5_000 / SPACE_INVADERS_TICK_DELAY_MS,
+);
+export const SPACE_INVADERS_POWER_UP_SHIELD_TICKS = Math.round(
+  10_000 / SPACE_INVADERS_TICK_DELAY_MS,
+);
+export const SPACE_INVADERS_PLAYER_BURST_SHOT_COUNT = 5;
+export const SPACE_INVADERS_PLAYER_BURST_SHOT_DELAY_TICKS = Math.max(
+  0,
+  Math.round(300 / SPACE_INVADERS_TICK_DELAY_MS) - 1,
 );
 const INVADER_GAP_X = 5;
 const INVADER_GAP_Y = 14;
@@ -169,6 +249,8 @@ const PLAYER_WIDTH = 62 * PLAYER_SIZE_SCALE;
 const SHOT_HEIGHT = 22;
 const SHOT_SPEED = -6.4;
 const SHOT_WIDTH = 6;
+export const SPACE_INVADERS_POWER_UP_SPEED = Math.abs(SHOT_SPEED) * 0.75;
+const POWER_UP_SIZE = 18;
 const UFO_COOLDOWN_TICKS = 420;
 const UFO_HEIGHT = 18;
 const UFO_POINT_VALUES = [100, 150, 200, 300] as const;
@@ -183,6 +265,7 @@ const BURST_SHOT_DELAY_TICKS = Math.max(
 const COMMANDER_SHOT_MAX_SPEED_X = 1.1;
 const COMMANDER_SHOT_STEER_X = 0.14;
 const SCATTER_SHOT_VELOCITIES_X = [-1.25, 0, 1.25] as const;
+const SHOTGUN_SHOT_VELOCITIES_X = [-2.4, -1.2, 0, 1.2, 2.4] as const;
 
 type InvaderShotSpec = {
   cooldownTicks: number;
@@ -270,6 +353,7 @@ export function createInitialSpaceInvadersGame({
 
   return {
     alienCount: formation.alienCount,
+    alienFreezeTicks: 0,
     baseY: normalizedBoardHeight - 68,
     boardHeight: normalizedBoardHeight,
     boardWidth: normalizedBoardWidth,
@@ -287,10 +371,15 @@ export function createInitialSpaceInvadersGame({
     marchDirection: 1,
     nextExplosionId: 0,
     nextInvaderShotId: 0,
+    nextPlayerShotId: 0,
+    nextPowerUpId: 0,
+    pendingShotPowerUp: null,
     player: createCenteredPlayer(normalizedBoardWidth, normalizedBoardHeight),
+    playerBurst: null,
     playerRespawnTicks: 0,
     playerShieldTicks: 0,
-    playerShot: null,
+    playerShots: [],
+    powerUps: [],
     score: 0,
     status: "ready",
     ufo: createInitialSpaceInvadersUfo(),
@@ -417,13 +506,33 @@ export function moveSpaceInvadersPlayerRight(game: SpaceInvadersGameState) {
 }
 
 export function fireSpaceInvadersShot(game: SpaceInvadersGameState): SpaceInvadersGameState {
-  if (game.status !== "running" || game.playerRespawnTicks > 0 || game.playerShot !== null) {
+  if (
+    game.status !== "running" ||
+    game.playerRespawnTicks > 0 ||
+    game.playerBurst !== null ||
+    game.playerShots.length > 0
+  ) {
     return game;
   }
 
+  const createdShots = createPlayerShots(
+    game.player,
+    game.nextPlayerShotId,
+    game.pendingShotPowerUp,
+  );
+
   return {
     ...game,
-    playerShot: createPlayerShot(game.player),
+    nextPlayerShotId: game.nextPlayerShotId + createdShots.length,
+    pendingShotPowerUp: null,
+    playerBurst:
+      game.pendingShotPowerUp === "burst-shot"
+        ? {
+            cooldownTicks: SPACE_INVADERS_PLAYER_BURST_SHOT_DELAY_TICKS,
+            remainingShots: SPACE_INVADERS_PLAYER_BURST_SHOT_COUNT - createdShots.length,
+          }
+        : null,
+    playerShots: createdShots,
   };
 }
 
@@ -436,13 +545,15 @@ export function advanceSpaceInvadersGame(
   }
 
   const gameAfterExplosions = advanceExplosions(game);
-  const gameAfterShot = advancePlayerShot(gameAfterExplosions, random);
+  const gameAfterPowerUps = advancePowerUps(gameAfterExplosions);
+  const gameAfterShot = advancePlayerShots(gameAfterPowerUps, random);
 
   if (gameAfterShot.status === "won") {
     return gameAfterShot;
   }
 
-  const gameAfterInvaderShots = advanceInvaderShots(gameAfterShot, random);
+  const gameAfterPlayerBurst = advancePlayerBurst(gameAfterShot);
+  const gameAfterInvaderShots = advanceInvaderShots(gameAfterPlayerBurst, random);
 
   if (
     gameAfterInvaderShots.status === "lost" ||
@@ -451,7 +562,14 @@ export function advanceSpaceInvadersGame(
     return gameAfterInvaderShots;
   }
 
-  const gameAfterInvaderFire = maybeFireInvaderShot(gameAfterInvaderShots);
+  const { game: gameAfterFreezeTick, isFrozen: areAliensFrozen } =
+    advanceAlienFreeze(gameAfterInvaderShots);
+
+  if (areAliensFrozen) {
+    return advancePlayerRecovery(gameAfterFreezeTick);
+  }
+
+  const gameAfterInvaderFire = maybeFireInvaderShot(gameAfterFreezeTick);
   const gameAfterUfo = advanceSpaceInvadersUfo(gameAfterInvaderFire);
   const marchedGame = marchInvaders(gameAfterUfo);
 
@@ -474,66 +592,102 @@ export function getSpaceInvadersPlayerSpeed() {
   return PLAYER_SPEED;
 }
 
-function advancePlayerShot(
+function advancePlayerShots(
   game: SpaceInvadersGameState,
   random: SpaceInvadersRandomSource,
 ): SpaceInvadersGameState {
-  if (game.playerShot === null) {
+  if (game.playerShots.length === 0) {
     return game;
   }
 
-  const movedShot = {
-    ...game.playerShot,
-    y: game.playerShot.y + game.playerShot.velocityY,
+  let nextGame: SpaceInvadersGameState = {
+    ...game,
+    playerShots: [],
   };
+  const activeShots: SpaceInvadersPlayerShot[] = [];
 
-  if (movedShot.y + movedShot.height < 0) {
-    return {
-      ...game,
-      playerShot: null,
+  for (const shot of game.playerShots) {
+    const movedShot = advancePlayerShotPosition(shot);
+
+    if (!isPlayerShotActive(movedShot, game)) {
+      continue;
+    }
+
+    if (nextGame.ufo.isActive && rectanglesIntersect(movedShot, nextGame.ufo)) {
+      const hitUfo = nextGame.ufo;
+      const gameWithExplosion = createSpaceInvadersExplosion(
+        nextGame,
+        "ufo",
+        hitUfo,
+        random,
+      );
+
+      nextGame = {
+        ...gameWithExplosion,
+        score: nextGame.score + hitUfo.points,
+        ufo: deactivateSpaceInvadersUfo(hitUfo, nextGame.boardWidth),
+      };
+
+      if (movedShot.kind !== "piercing") {
+        continue;
+      }
+    }
+
+    const hitInvaders = nextGame.invaders.filter(
+      (invader) => invader.isActive && rectanglesIntersect(movedShot, invader),
+    );
+
+    if (hitInvaders.length === 0) {
+      activeShots.push(movedShot);
+      continue;
+    }
+
+    const destroyedInvaders =
+      movedShot.kind === "piercing" ? hitInvaders : hitInvaders.slice(0, 1);
+    const destroyedInvaderIds = new Set(
+      destroyedInvaders.map((invader) => invader.id),
+    );
+    const invaders = nextGame.invaders.map((invader) =>
+      destroyedInvaderIds.has(invader.id) ? { ...invader, isActive: false } : invader,
+    );
+    const score = destroyedInvaders.reduce(
+      (total, invader) => total + invader.points,
+      nextGame.score,
+    );
+    const activeInvaderCount = invaders.filter((invader) => invader.isActive).length;
+    let gameWithHits: SpaceInvadersGameState = {
+      ...nextGame,
+      invaders,
+      score,
     };
-  }
 
-  if (game.ufo.isActive && rectanglesIntersect(movedShot, game.ufo)) {
-    const gameWithExplosion = createSpaceInvadersExplosion(game, "ufo", game.ufo, random);
+    for (const hitInvader of destroyedInvaders) {
+      gameWithHits = createSpaceInvadersExplosion(
+        gameWithHits,
+        "invader",
+        hitInvader,
+        random,
+      );
+      gameWithHits = maybeCreateSpaceInvadersPowerUpDrop(
+        gameWithHits,
+        hitInvader,
+        random,
+      );
+    }
 
-    return {
-      ...gameWithExplosion,
-      playerShot: null,
-      score: game.score + game.ufo.points,
-      ufo: deactivateSpaceInvadersUfo(game.ufo, game.boardWidth),
+    nextGame = {
+      ...gameWithHits,
+      status: activeInvaderCount === 0 ? "won" : nextGame.status,
     };
+
+    if (movedShot.kind === "piercing" && nextGame.status !== "won") {
+      activeShots.push(movedShot);
+    }
   }
-
-  const hitInvader = game.invaders.find(
-    (invader) => invader.isActive && rectanglesIntersect(movedShot, invader),
-  );
-
-  if (hitInvader === undefined) {
-    return {
-      ...game,
-      playerShot: movedShot,
-    };
-  }
-
-  const invaders = game.invaders.map((invader) =>
-    invader.id === hitInvader.id ? { ...invader, isActive: false } : invader,
-  );
-  const score = game.score + hitInvader.points;
-  const activeInvaderCount = invaders.filter((invader) => invader.isActive).length;
-  const gameWithExplosion = createSpaceInvadersExplosion(
-    game,
-    "invader",
-    hitInvader,
-    random,
-  );
 
   return {
-    ...gameWithExplosion,
-    invaders,
-    playerShot: null,
-    score,
-    status: activeInvaderCount === 0 ? "won" : game.status,
+    ...nextGame,
+    playerShots: activeShots,
   };
 }
 
@@ -577,6 +731,131 @@ function advanceSpaceInvadersUfo(game: SpaceInvadersGameState): SpaceInvadersGam
       isActive: true,
       x: game.ufo.direction === 1 ? -game.ufo.width : game.boardWidth,
     },
+  };
+}
+
+function advancePlayerBurst(game: SpaceInvadersGameState): SpaceInvadersGameState {
+  if (game.playerBurst === null) {
+    return game;
+  }
+
+  if (game.playerBurst.cooldownTicks > 0) {
+    return {
+      ...game,
+      playerBurst: {
+        ...game.playerBurst,
+        cooldownTicks: game.playerBurst.cooldownTicks - 1,
+      },
+    };
+  }
+
+  const createdShot = createPlayerShot(
+    game.player,
+    game.nextPlayerShotId,
+    "burst",
+    0,
+  );
+  const remainingShots = game.playerBurst.remainingShots - 1;
+
+  return {
+    ...game,
+    nextPlayerShotId: game.nextPlayerShotId + 1,
+    playerBurst:
+      remainingShots > 0
+        ? {
+            cooldownTicks: SPACE_INVADERS_PLAYER_BURST_SHOT_DELAY_TICKS,
+            remainingShots,
+          }
+        : null,
+    playerShots: [...game.playerShots, createdShot],
+  };
+}
+
+function advancePowerUps(game: SpaceInvadersGameState): SpaceInvadersGameState {
+  if (game.powerUps.length === 0) {
+    return game;
+  }
+
+  let nextGame = game;
+  const activePowerUps: SpaceInvadersPowerUp[] = [];
+
+  for (const powerUp of game.powerUps) {
+    const movedPowerUp = {
+      ...powerUp,
+      y: powerUp.y + powerUp.velocityY,
+    };
+
+    if (game.playerRespawnTicks === 0 && rectanglesIntersect(movedPowerUp, nextGame.player)) {
+      nextGame = applySpaceInvadersPowerUp(nextGame, movedPowerUp.kind);
+      continue;
+    }
+
+    if (movedPowerUp.y <= game.boardHeight) {
+      activePowerUps.push(movedPowerUp);
+    }
+  }
+
+  return {
+    ...nextGame,
+    powerUps: activePowerUps,
+  };
+}
+
+function applySpaceInvadersPowerUp(
+  game: SpaceInvadersGameState,
+  kind: SpaceInvadersPowerUpKind,
+): SpaceInvadersGameState {
+  switch (kind) {
+    case "bonus-score":
+      return {
+        ...game,
+        score: game.score + SPACE_INVADERS_BONUS_SCORE_POINTS,
+      };
+    case "extra-life":
+      return {
+        ...game,
+        lives: game.lives + 1,
+      };
+    case "burst-shot":
+    case "piercing-laser":
+    case "shotgun-shot":
+      return {
+        ...game,
+        pendingShotPowerUp: kind,
+      };
+    case "freeze":
+      return {
+        ...game,
+        alienFreezeTicks: Math.max(
+          game.alienFreezeTicks,
+          SPACE_INVADERS_ALIEN_FREEZE_TICKS,
+        ),
+      };
+    case "shield":
+      return {
+        ...game,
+        playerShieldTicks: Math.max(
+          game.playerShieldTicks,
+          SPACE_INVADERS_POWER_UP_SHIELD_TICKS,
+        ),
+      };
+  }
+}
+
+function advanceAlienFreeze(game: SpaceInvadersGameState) {
+  if (game.alienFreezeTicks <= 0) {
+    return {
+      game,
+      isFrozen: false,
+    };
+  }
+
+  return {
+    game: {
+      ...game,
+      alienFreezeTicks: game.alienFreezeTicks - 1,
+    },
+    isFrozen: true,
   };
 }
 
@@ -630,9 +909,10 @@ function advanceInvaderShots(
     invaderShots: [],
     lives,
     player: createCenteredPlayer(game.boardWidth, game.boardHeight),
+    playerBurst: null,
     playerRespawnTicks: lives <= 0 ? 0 : SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
     playerShieldTicks: 0,
-    playerShot: null,
+    playerShots: [],
     status: lives <= 0 ? "lost" : game.status,
   };
 }
@@ -1088,14 +1368,121 @@ function createCenteredPlayer(
   };
 }
 
-function createPlayerShot(player: SpaceInvadersPlayer): SpaceInvadersShot {
+function createPlayerShots(
+  player: SpaceInvadersPlayer,
+  nextPlayerShotId: number,
+  pendingShotPowerUp: SpaceInvadersPendingShotPowerUp | null,
+): SpaceInvadersPlayerShot[] {
+  if (pendingShotPowerUp === "shotgun-shot") {
+    return SHOTGUN_SHOT_VELOCITIES_X.map((velocityX, index) =>
+      createPlayerShot(player, nextPlayerShotId + index, "shotgun", velocityX),
+    );
+  }
+
+  return [
+    createPlayerShot(
+      player,
+      nextPlayerShotId,
+      getPlayerShotKind(pendingShotPowerUp),
+      0,
+    ),
+  ];
+}
+
+function getPlayerShotKind(
+  pendingShotPowerUp: SpaceInvadersPendingShotPowerUp | null,
+): SpaceInvadersPlayerShotKind {
+  if (pendingShotPowerUp === "burst-shot") {
+    return "burst";
+  }
+
+  if (pendingShotPowerUp === "piercing-laser") {
+    return "piercing";
+  }
+
+  return "standard";
+}
+
+function createPlayerShot(
+  player: SpaceInvadersPlayer,
+  nextPlayerShotId: number,
+  kind: SpaceInvadersPlayerShotKind,
+  velocityX: number,
+): SpaceInvadersPlayerShot {
   return {
     height: SHOT_HEIGHT,
+    id: `player-shot-${nextPlayerShotId}`,
+    kind,
+    velocityX,
     velocityY: SHOT_SPEED,
     width: SHOT_WIDTH,
     x: player.x + player.width / 2 - SHOT_WIDTH / 2,
     y: player.y - SHOT_HEIGHT - 2,
   };
+}
+
+function advancePlayerShotPosition(shot: SpaceInvadersPlayerShot): SpaceInvadersPlayerShot {
+  return {
+    ...shot,
+    x: shot.x + shot.velocityX,
+    y: shot.y + shot.velocityY,
+  };
+}
+
+function isPlayerShotActive(
+  shot: SpaceInvadersPlayerShot,
+  game: Pick<SpaceInvadersGameState, "boardHeight" | "boardWidth">,
+) {
+  return (
+    shot.y + shot.height >= 0 &&
+    shot.x + shot.width >= 0 &&
+    shot.x <= game.boardWidth &&
+    shot.y <= game.boardHeight
+  );
+}
+
+function maybeCreateSpaceInvadersPowerUpDrop(
+  game: SpaceInvadersGameState,
+  invader: SpaceInvader,
+  random: SpaceInvadersRandomSource,
+): SpaceInvadersGameState {
+  if (invader.kind !== "diver") {
+    return game;
+  }
+
+  const powerUp: SpaceInvadersPowerUp = {
+    height: POWER_UP_SIZE,
+    id: `power-up-${game.nextPowerUpId}`,
+    kind: getRandomPowerUpKind(random),
+    velocityY: SPACE_INVADERS_POWER_UP_SPEED,
+    width: POWER_UP_SIZE,
+    x: invader.x + invader.width / 2 - POWER_UP_SIZE / 2,
+    y: invader.y + invader.height / 2 - POWER_UP_SIZE / 2,
+  };
+
+  return {
+    ...game,
+    nextPowerUpId: game.nextPowerUpId + 1,
+    powerUps: [...game.powerUps, powerUp],
+  };
+}
+
+function getRandomPowerUpKind(random: SpaceInvadersRandomSource) {
+  const randomValue = getRandomValue(random);
+
+  if (randomValue < SPACE_INVADERS_EXTRA_LIFE_DROP_CHANCE) {
+    return "extra-life";
+  }
+
+  const commonRandomValue =
+    (randomValue - SPACE_INVADERS_EXTRA_LIFE_DROP_CHANCE) /
+    (1 - SPACE_INVADERS_EXTRA_LIFE_DROP_CHANCE);
+
+  return (
+    SPACE_INVADERS_COMMON_POWER_UP_KINDS[
+      getRandomIndex(SPACE_INVADERS_COMMON_POWER_UP_KINDS.length, () => commonRandomValue)
+    ] ?? "bonus-score"
+  );
 }
 
 function createInitialSpaceInvadersUfo(): SpaceInvadersUfoState {
@@ -1174,13 +1561,19 @@ function getRandomIndex(candidateCount: number, random: SpaceInvadersRandomSourc
     return 0;
   }
 
+  const randomValue = getRandomValue(random);
+
+  return Math.max(0, Math.min(candidateCount - 1, Math.floor(randomValue * candidateCount)));
+}
+
+function getRandomValue(random: SpaceInvadersRandomSource) {
   const randomValue = random();
 
   if (!Number.isFinite(randomValue)) {
     return 0;
   }
 
-  return Math.max(0, Math.min(candidateCount - 1, Math.floor(randomValue * candidateCount)));
+  return Math.max(0, Math.min(1, randomValue));
 }
 
 function rectanglesIntersect(

@@ -52,8 +52,10 @@ import {
   moveSpaceInvadersPlayerRight,
   pauseSpaceInvadersGame,
   restartSpaceInvadersGame,
+  SPACE_INVADERS_BONUS_SCORE_POINTS,
   startSpaceInvadersGame,
   type SpaceInvadersGameState,
+  type SpaceInvadersPendingShotPowerUp,
   type SpaceInvadersStatus,
 } from "@/lib/space-invaders-game-engine";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
@@ -75,6 +77,28 @@ const statusLabels: Record<SpaceInvadersStatus, string> = {
   running: "Running",
   won: "Earth defended",
 };
+
+const pendingShotPowerUpLabels: Record<SpaceInvadersPendingShotPowerUp, string> = {
+  "burst-shot": "Burst",
+  "piercing-laser": "Piercing",
+  "shotgun-shot": "Shotgun",
+};
+
+function getSpaceInvadersPowerStatus(game: SpaceInvadersGameState) {
+  if (game.pendingShotPowerUp !== null) {
+    return pendingShotPowerUpLabels[game.pendingShotPowerUp];
+  }
+
+  if (game.alienFreezeTicks > 0) {
+    return "Freeze";
+  }
+
+  if (game.playerShieldTicks > 0) {
+    return "Shield";
+  }
+
+  return "None";
+}
 
 const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
   {
@@ -106,9 +130,11 @@ const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
     title: "Rules",
     items: [
       "Shoot every invader before the formation reaches your base.",
-      "Only one player shot can be active at a time.",
+      "Only one normal shot or one primed shot sequence can be active at a time.",
       "Shoot the UFO bonus ship when it crosses the sky for extra points.",
       "Clear columns carefully; exposed diver invaders move faster and drop harder than the rest.",
+      `Destroyed diver invaders drop colored power-up circles: yellow adds ${SPACE_INVADERS_BONUS_SCORE_POINTS} points, white rarely grants an extra life, red primes Burst, cyan freezes aliens, orange primes Piercing, green shields you, and magenta primes Shotgun.`,
+      "Burst, Piercing, and Shotgun change your next shot, then return the cannon to its normal laser.",
       "Each exposed invader row fires its own pattern: tracking bolts, delayed bursts, scatter bursts, needles, or lasers.",
       "After a hit, your cannon returns when the explosion finishes and stays shielded for a short window.",
       "Defend Earth to win; the game ends if you lose every life or the invaders reach the base.",
@@ -360,6 +386,14 @@ export function SpaceInvadersGame({
               labelClassName="text-[var(--invaders-muted)]"
               value={tickDelay === null ? "0" : Math.round(1000 / tickDelay)}
               valueTestId="space-invaders-speed"
+            />
+            <GameStatCard
+              className="border-[var(--invaders-border)]"
+              label="Power"
+              labelClassName="text-[var(--invaders-muted)]"
+              value={getSpaceInvadersPowerStatus(game)}
+              valueClassName="text-base sm:text-lg"
+              valueTestId="space-invaders-power"
             />
           </GameStatsBar>
         </GameSidebar>
