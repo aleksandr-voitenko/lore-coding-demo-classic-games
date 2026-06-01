@@ -172,6 +172,7 @@ describe("space invaders game engine", () => {
     expect(game.playerRespawnTicks).toBe(0);
     expect(game.playerShieldTicks).toBe(0);
     expect(game.marchDirection).toBe(1);
+    expect(game.invaders.every((invader) => invader.direction === 1)).toBe(true);
     expect(game.ufo).toMatchObject({
       direction: 1,
       height: 18,
@@ -980,7 +981,53 @@ describe("space invaders game engine", () => {
     expect(movedLowerInvader?.isDiving).toBe(false);
   });
 
-  it("keeps released divers dropping harder while passing lower invaders", () => {
+  it("bounces released divers without dropping or reversing the formation", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const releasedDiver = {
+      ...getInvader(game, 1, Math.floor(SPACE_INVADERS_COLUMNS / 2) - 1),
+      direction: 1 as const,
+      isDiving: true,
+      kind: "diver" as const,
+      x: SPACE_INVADERS_BOARD_WIDTH - game.invaders[0]!.width - 0.1,
+    };
+    const lowerInvader = {
+      ...getInvader(game, SPACE_INVADERS_ROWS - 1, releasedDiver.column),
+      x: SPACE_INVADERS_BOARD_WIDTH - game.invaders[0]!.width - 1,
+    };
+    const advanced = advanceSpaceInvadersGame(
+      createRunningGame({
+        invaderShotCooldownTicks: 1_000,
+        invaders: game.invaders.map((invader) => {
+          if (invader.id === releasedDiver.id) {
+            return releasedDiver;
+          }
+
+          if (invader.id === lowerInvader.id) {
+            return lowerInvader;
+          }
+
+          return { ...invader, isActive: false };
+        }),
+        marchDirection: 1,
+      }),
+    );
+    const droppedDiver = advanced.invaders.find((invader) => invader.id === releasedDiver.id);
+    const droppedLowerInvader = advanced.invaders.find(
+      (invader) => invader.id === lowerInvader.id,
+    );
+
+    expect(releasedDiver.kind).toBe("diver");
+    expect(lowerInvader.y).toBeGreaterThan(releasedDiver.y);
+    expect(lowerInvader.x).toBeLessThan(releasedDiver.x);
+    expect(droppedDiver?.y).toBeCloseTo(releasedDiver.y + 16);
+    expect(droppedDiver?.direction).toBe(-1);
+    expect(droppedDiver?.isDiving).toBe(true);
+    expect(droppedLowerInvader?.x).toBeCloseTo(lowerInvader.x + 0.8);
+    expect(droppedLowerInvader?.y).toBeCloseTo(lowerInvader.y);
+    expect(advanced.marchDirection).toBe(1);
+  });
+
+  it("keeps released divers hard-dropping when the formation itself descends", () => {
     const game = createInitialSpaceInvadersGame({ random: () => 0 });
     const releasedDiver = {
       ...getInvader(game, 1, Math.floor(SPACE_INVADERS_COLUMNS / 2) - 1),
@@ -1025,15 +1072,20 @@ describe("space invaders game engine", () => {
     expect(lowerInvader.y).toBeGreaterThan(releasedDiver.y);
     expect(lowerInvader.x).toBe(releasedDiver.x);
     expect(droppedDiver?.y).toBeCloseTo(releasedDiver.y + 16);
+    expect(droppedDiver?.direction).toBe(-1);
     expect(droppedDiver?.isDiving).toBe(true);
     expect(droppedLowerInvader?.y).toBeCloseTo(lowerInvader.y + 4);
     expect(advanced.marchDirection).toBe(-1);
   });
 
-  it("moves exposed divers twice as fast as the previous tuning and drops them harder", () => {
+  it("moves exposed divers twice as fast as the previous tuning and hard-drops them on their own edge bounce", () => {
     const game = createInitialSpaceInvadersGame({ random: () => 0 });
     const standardInvader = getInvader(game, SPACE_INVADERS_ROWS - 1, 3);
-    const diverInvader = { ...getInvader(game, 2, 4), kind: "diver" as const };
+    const diverInvader = {
+      ...getInvader(game, 2, 4),
+      direction: 1 as const,
+      kind: "diver" as const,
+    };
     const exposedInvaders = game.invaders.map((invader) => {
       if (invader.id === diverInvader.id) {
         return { ...diverInvader, isActive: true };
@@ -1060,16 +1112,13 @@ describe("space invaders game engine", () => {
       invaderShotCooldownTicks: 1_000,
       invaders: game.invaders.map((invader) => {
         if (invader.id === standardInvader.id) {
-          return {
-            ...standardInvader,
-            x: SPACE_INVADERS_BOARD_WIDTH - standardInvader.width - 0.1,
-          };
+          return standardInvader;
         }
 
         if (invader.id === diverInvader.id) {
           return {
             ...diverInvader,
-            x: diverInvader.x,
+            x: SPACE_INVADERS_BOARD_WIDTH - diverInvader.width - 0.1,
           };
         }
 
@@ -1090,9 +1139,11 @@ describe("space invaders game engine", () => {
     expect(movedStandard.x - standardInvader.x).toBeCloseTo(0.8);
     expect(movedDiver.x - diverInvader.x).toBeCloseTo(3.5);
     expect(movedDiver.x - diverInvader.x).toBeGreaterThan(1.75);
-    expect(droppedStandard.y - standardInvader.y).toBeCloseTo(4);
+    expect(droppedStandard.x - standardInvader.x).toBeCloseTo(0.8);
+    expect(droppedStandard.y - standardInvader.y).toBeCloseTo(0);
     expect(droppedDiver.y - diverInvader.y).toBeCloseTo(16);
-    expect(afterDrop.marchDirection).toBe(-1);
+    expect(droppedDiver.direction).toBe(-1);
+    expect(afterDrop.marchDirection).toBe(1);
   });
 
   it("keeps the untouched formation above the base for a playable opening window", () => {

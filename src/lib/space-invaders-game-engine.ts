@@ -36,6 +36,7 @@ export type SpaceInvadersUfoState = {
 
 export type SpaceInvader = {
   column: number;
+  direction: SpaceInvadersDirection;
   height: number;
   id: string;
   isActive: boolean;
@@ -319,6 +320,7 @@ export function createSpaceInvadersFormation({
 
       return {
         column,
+        direction: 1,
         height: INVADER_HEIGHT,
         id,
         isActive: true,
@@ -949,42 +951,82 @@ function marchInvaders(game: SpaceInvadersGameState): SpaceInvadersGameState {
   }
 
   const exposedDiverIds = getExposedDiverIds(activeInvaders);
-  const wouldHitWall = activeInvaders.some((invader) => {
+  const formationInvaders = activeInvaders.filter(
+    (invader) => !isExposedDiver(invader, exposedDiverIds),
+  );
+  const wouldFormationHitWall = formationInvaders.some((invader) => {
     const nextX =
       invader.x + game.marchDirection * getInvaderStepX(invader, exposedDiverIds);
 
     return nextX < 0 || nextX + invader.width > game.boardWidth;
   });
 
-  if (wouldHitWall) {
+  const nextMarchDirection = wouldFormationHitWall
+    ? ((game.marchDirection * -1) as SpaceInvadersDirection)
+    : game.marchDirection;
+
+  if (wouldFormationHitWall) {
     return {
       ...game,
-      invaders: game.invaders.map((invader) =>
-        invader.isActive
-          ? {
-              ...invader,
-              isDiving: getNextDiverState(invader, exposedDiverIds),
-              y: invader.y + getInvaderDropY(invader, exposedDiverIds),
-            }
-          : invader,
-      ),
-      marchDirection: (game.marchDirection * -1) as SpaceInvadersDirection,
+      invaders: game.invaders.map((invader) => {
+        if (!invader.isActive) {
+          return invader;
+        }
+
+        const isDiving = isExposedDiver(invader, exposedDiverIds);
+
+        return {
+          ...invader,
+          direction: nextMarchDirection,
+          isDiving,
+          y: invader.y + (isDiving ? DIVER_DROP_Y : INVADER_DROP_Y),
+        };
+      }),
+      marchDirection: nextMarchDirection,
     };
   }
 
   return {
     ...game,
-    invaders: game.invaders.map((invader) =>
-      invader.isActive
-        ? {
-            ...invader,
-            x:
-              invader.x +
-              game.marchDirection * getInvaderStepX(invader, exposedDiverIds),
-            isDiving: getNextDiverState(invader, exposedDiverIds),
-          }
-        : invader,
-    ),
+    invaders: game.invaders.map((invader) => {
+      if (!invader.isActive) {
+        return invader;
+      }
+
+      if (isExposedDiver(invader, exposedDiverIds)) {
+        return advanceDivingInvader(invader, game);
+      }
+
+      return {
+        ...invader,
+        direction: game.marchDirection,
+        x: invader.x + game.marchDirection * getInvaderStepX(invader, exposedDiverIds),
+        isDiving: getNextDiverState(invader, exposedDiverIds),
+      };
+    }),
+  };
+}
+
+function advanceDivingInvader(
+  invader: SpaceInvader,
+  game: Pick<SpaceInvadersGameState, "boardWidth">,
+): SpaceInvader {
+  const nextX = invader.x + invader.direction * INVADER_STEP_X * DIVER_STEP_MULTIPLIER;
+
+  if (nextX < 0 || nextX + invader.width > game.boardWidth) {
+    return {
+      ...invader,
+      direction: (invader.direction * -1) as SpaceInvadersDirection,
+      isDiving: true,
+      x: clamp(invader.x, 0, game.boardWidth - invader.width),
+      y: invader.y + DIVER_DROP_Y,
+    };
+  }
+
+  return {
+    ...invader,
+    isDiving: true,
+    x: nextX,
   };
 }
 
@@ -1010,10 +1052,6 @@ function invadersOverlapX(first: SpaceInvader, second: SpaceInvader) {
 
 function getInvaderStepX(invader: SpaceInvader, exposedDiverIds: Set<string>) {
   return INVADER_STEP_X * getInvaderMovementMultiplier(invader, exposedDiverIds);
-}
-
-function getInvaderDropY(invader: SpaceInvader, exposedDiverIds: Set<string>) {
-  return isExposedDiver(invader, exposedDiverIds) ? DIVER_DROP_Y : INVADER_DROP_Y;
 }
 
 function getInvaderMovementMultiplier(
