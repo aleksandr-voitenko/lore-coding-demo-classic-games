@@ -85,7 +85,7 @@ const launcherParameterHandoffCases: LauncherParameterHandoffCase[] = [
       await expect(page.getByTestId("space-invaders-invader")).toHaveCount(24);
       await expect(page.getByTestId("space-invaders-board")).toHaveAttribute(
         "aria-label",
-        /Space Invaders board\. Field 540 by 720\. Score 0\. Lives 3\. 24 invaders remaining\. Ready\./,
+        /Space Invaders board\. Field 540 by 720\. Score 0\. Lives 3\. 24 invaders remaining\. 0 power ups falling\. Ready\./,
       );
     },
     gameId: "space-invaders",
