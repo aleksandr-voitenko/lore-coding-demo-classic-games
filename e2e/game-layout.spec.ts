@@ -7,10 +7,15 @@ const desktopViewport = {
   height: 900,
   width: 1440,
 };
+const compactDesktopViewport = {
+  height: 720,
+  width: 1280,
+};
 
 const centeredBoardTolerancePx = 48;
 const alignedEdgeTolerancePx = 1;
 const stackedGapPx = 16;
+const viewportFitTolerancePx = 1;
 
 const layoutCases = [
   { boardTestId: "snake-board", gameId: "snake", name: "Snake", statusTestId: "snake-status" },
@@ -66,6 +71,11 @@ async function expectCenteredBoardAndTopStatsBar(page: Page, boardTestId: string
   const sidebar = page.getByTestId("game-sidebar");
   const stage = page.getByTestId("game-board-stage");
   const statItems = sidebar.locator("dl > div");
+  const pageScroll = await page.evaluate(() => ({
+    clientHeight: document.documentElement.clientHeight,
+    scrollHeight: document.documentElement.scrollHeight,
+    scrollY: window.scrollY,
+  }));
 
   await expect(board).toBeVisible();
   await expect(sidebar).toBeVisible();
@@ -82,6 +92,15 @@ async function expectCenteredBoardAndTopStatsBar(page: Page, boardTestId: string
   expect(sidebarBox).not.toBeNull();
   expect(stageBox).not.toBeNull();
   expect(viewport).not.toBeNull();
+
+  expect(pageScroll.scrollY).toBeLessThanOrEqual(viewportFitTolerancePx);
+  expect(pageScroll.scrollHeight).toBeLessThanOrEqual(
+    pageScroll.clientHeight + viewportFitTolerancePx,
+  );
+  expect(sidebarBox!.y).toBeGreaterThanOrEqual(-viewportFitTolerancePx);
+  expect(stageBox!.y + stageBox!.height).toBeLessThanOrEqual(
+    viewport!.height + viewportFitTolerancePx,
+  );
 
   const boardCenterX = boardBox!.x + boardBox!.width / 2;
   const viewportCenterX = viewport!.width / 2;
@@ -115,9 +134,7 @@ async function expectCenteredBoardAndTopStatsBar(page: Page, boardTestId: string
 }
 
 for (const layoutCase of layoutCases) {
-  test(`${layoutCase.name} centers the board below a one-line stats bar`, async ({
-    page,
-  }) => {
+  test(`${layoutCase.name} centers the board below a one-line stats bar`, async ({ page }) => {
     await openLauncher(page);
     await openGame(page, layoutCase.gameId);
 
@@ -125,3 +142,19 @@ for (const layoutCase of layoutCases) {
     await expectCenteredBoardAndTopStatsBar(page, layoutCase.boardTestId);
   });
 }
+
+test.describe("compact desktop viewport", () => {
+  test.use({ viewport: compactDesktopViewport });
+
+  for (const layoutCase of layoutCases) {
+    test(`${layoutCase.name} fits board and stats without page scrolling`, async ({
+      page,
+    }) => {
+      await openLauncher(page);
+      await openGame(page, layoutCase.gameId);
+
+      await expect(page.getByTestId(layoutCase.statusTestId)).toHaveText("Ready");
+      await expectCenteredBoardAndTopStatsBar(page, layoutCase.boardTestId);
+    });
+  }
+});

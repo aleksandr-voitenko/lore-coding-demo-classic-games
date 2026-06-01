@@ -40,6 +40,10 @@ This file covers React component ownership and shared game UI conventions under
   `GameBoardColumn` usage should provide an explicit responsive width, and
   `GameSidebar` should be the first child inside that board column so the stats
   bar sits directly above `GameBoardStage` and matches the board/stage width.
+- Per-game `GameBoardColumn` widths should include a viewport-height cap based
+  on the board aspect ratio so the stats bar plus board fit in the first
+  in-game viewport without page scrolling. Use the existing `svh`-based width
+  classes as the pattern when adding or resizing a board.
 - `GameHeader` is intentionally screen-reader-only status/title structure for
   accessibility and existing status test IDs. Keep visible titles and statuses in
   board overlays, Help screens, and end screens.

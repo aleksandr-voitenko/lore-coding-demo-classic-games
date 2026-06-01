@@ -230,7 +230,7 @@ export function TwentyFortyEightGame({
 
   return (
     <GameShell className="bg-[var(--twenty-page)] text-[var(--twenty-ink)]">
-      <GameBoardColumn className="w-[min(92vw,37.25rem)]">
+      <GameBoardColumn className="w-[min(92vw,37.25rem,calc(100svh_-_12rem))]">
         <GameSidebar className="border-[var(--twenty-border)] bg-[var(--twenty-panel)]">
           <GameHeader
             status={statusLabel}

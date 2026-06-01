@@ -433,7 +433,7 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
 
   return (
     <GameShell className="bg-[var(--snake-page)] text-[var(--snake-ink)]">
-      <GameBoardColumn className="w-[min(92vw,41.25rem)]">
+      <GameBoardColumn className="w-[min(92vw,41.25rem,calc(100svh_-_12rem))]">
         <GameSidebar className="border-[var(--snake-border)] bg-[var(--snake-panel)]">
           <GameHeader
             status={statusLabels[game.status]}

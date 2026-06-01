@@ -308,7 +308,7 @@ export function BreakoutGame({
 
   return (
     <GameShell className="bg-[var(--breakout-page)] text-[var(--breakout-ink)]">
-      <GameBoardColumn className="w-[min(92vw,37.25rem)]">
+      <GameBoardColumn className="w-[min(92vw,37.25rem,calc(75svh_-_9rem))]">
         <GameSidebar className="border-[var(--breakout-border)] bg-[var(--breakout-panel)]">
           <GameHeader
             status={statusLabels[game.status]}

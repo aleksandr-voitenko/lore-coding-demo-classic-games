@@ -348,7 +348,7 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
 
   return (
     <GameShell className="bg-[#f6f9fc] text-[#172033]">
-      <GameBoardColumn className="w-[min(92vw,37.25rem)]">
+      <GameBoardColumn className="w-[min(92vw,37.25rem,calc(100svh_-_12rem))]">
         <GameSidebar className="border-[#d6dfeb] bg-white">
           <GameHeader status={statusLabel} statusTestId="simon-status" title="Classic Simon" />
 

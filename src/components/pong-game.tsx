@@ -340,7 +340,7 @@ export function PongGame({
 
   return (
     <GameShell className="bg-[var(--pong-page)] text-[var(--pong-ink)]">
-      <GameBoardColumn className="w-[min(92vw,37.25rem)]">
+      <GameBoardColumn className="w-[min(92vw,37.25rem,calc(75svh_-_9rem))]">
         <GameSidebar className="border-[var(--pong-border)] bg-[var(--pong-panel)]">
           <GameHeader status={statusLabel} statusTestId="pong-status" title="Classic Pong" />
 

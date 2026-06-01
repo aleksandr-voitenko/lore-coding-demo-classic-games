@@ -329,7 +329,7 @@ export function AsteroidsGame({
 
   return (
     <GameShell className="bg-[var(--asteroids-page)] text-[var(--asteroids-ink)]">
-      <GameBoardColumn className="w-[min(94vw,50rem)]">
+      <GameBoardColumn className="w-[min(94vw,50rem,calc(133.333svh_-_16rem))]">
         <GameSidebar className="border-[var(--asteroids-border)] bg-[var(--asteroids-panel)]">
           <GameHeader
             status={statusLabels[game.status]}

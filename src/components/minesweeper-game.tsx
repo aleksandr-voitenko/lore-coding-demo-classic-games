@@ -232,7 +232,7 @@ export function MinesweeperGame({
 
   return (
     <GameShell className="bg-[var(--minesweeper-page)] text-[var(--minesweeper-ink)]">
-      <GameBoardColumn className="w-[min(92vw,37.25rem)]">
+      <GameBoardColumn className="w-[min(92vw,37.25rem,calc(100svh_-_12rem))]">
         <GameSidebar className="border-[var(--minesweeper-border)] bg-[var(--minesweeper-panel)]">
           <GameHeader
             status={statusLabels[game.status]}

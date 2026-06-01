@@ -324,7 +324,7 @@ export function SpaceInvadersGame({
 
   return (
     <GameShell className="bg-[var(--invaders-page)] text-[var(--invaders-ink)]">
-      <GameBoardColumn className="w-[min(92vw,37.25rem)]">
+      <GameBoardColumn className="w-[min(92vw,37.25rem,calc(75svh_-_9rem))]">
         <GameSidebar className="border-[var(--invaders-border)] bg-[var(--invaders-panel)]">
           <GameHeader
             status={statusLabels[game.status]}

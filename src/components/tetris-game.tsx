@@ -414,7 +414,7 @@ export function TetrisGame({
 
   return (
     <GameShell className="bg-[var(--tetris-page)] text-[var(--tetris-ink)]">
-      <GameBoardColumn className="w-[min(86vw,22.25rem)]">
+      <GameBoardColumn className="w-[min(86vw,22.25rem,calc(50svh_-_6rem))]">
         <GameSidebar className="border-[var(--tetris-border)] bg-[var(--tetris-panel)]">
           <GameHeader
             status={statusLabels[game.status]}
