@@ -12,6 +12,8 @@ import {
   SPACE_INVADERS_BASE_Y,
   SPACE_INVADERS_BOARD_WIDTH,
   SPACE_INVADERS_COLUMNS,
+  SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
+  SPACE_INVADERS_PLAYER_SHIELD_TICKS,
   SPACE_INVADERS_ROWS,
   SPACE_INVADERS_STARTING_LIVES,
   startSpaceInvadersGame,
@@ -156,6 +158,8 @@ describe("space invaders game engine", () => {
     expect(game.invaderShotCooldownTicks).toBeGreaterThan(0);
     expect(game.nextExplosionId).toBe(0);
     expect(game.nextInvaderShotId).toBe(0);
+    expect(game.playerRespawnTicks).toBe(0);
+    expect(game.playerShieldTicks).toBe(0);
     expect(game.marchDirection).toBe(1);
     expect(game.ufo).toMatchObject({
       direction: 1,
@@ -290,6 +294,15 @@ describe("space invaders game engine", () => {
     );
     expect(firedGame.playerShot?.y).toBeLessThan(firedGame.player.y);
     expect(secondFireGame.playerShot).toBe(firedGame.playerShot);
+  });
+
+  it("does not move or fire while the player is waiting to respawn", () => {
+    const respawningGame = createRunningGame({
+      playerRespawnTicks: 3,
+    });
+
+    expect(moveSpaceInvadersPlayer(respawningGame, 40)).toBe(respawningGame);
+    expect(fireSpaceInvadersShot(respawningGame)).toBe(respawningGame);
   });
 
   it("spawns UFO bonuses from alternating sides after their cooldown", () => {
@@ -622,10 +635,70 @@ describe("space invaders game engine", () => {
     expect(advanced.nextExplosionId).toBe(1);
     expect(advanced.invaderShots).toEqual([]);
     expect(advanced.playerShot).toBeNull();
+    expect(advanced.playerRespawnTicks).toBe(SPACE_INVADERS_PLAYER_RESPAWN_TICKS);
+    expect(advanced.playerShieldTicks).toBe(0);
     expect(advanced.player.x + advanced.player.width / 2).toBe(
       SPACE_INVADERS_BOARD_WIDTH / 2,
     );
     expect(advanced.invaderShotCooldownTicks).toBeGreaterThan(0);
+  });
+
+  it("respawns the player only after the explosion expires and then starts a shield", () => {
+    const game = createInitialSpaceInvadersGame();
+    let advanced = advanceSpaceInvadersGame(
+      createRunningGame({
+        invaderShots: [
+          createInvaderShotFixture({
+            height: 20,
+            velocityY: 8,
+            width: 5,
+            x: game.player.x + game.player.width / 2 - 2.5,
+            y: game.player.y - 8,
+          }),
+        ],
+      }),
+      () => 0,
+    );
+
+    for (let tick = 1; tick < SPACE_INVADERS_PLAYER_RESPAWN_TICKS; tick += 1) {
+      advanced = advanceSpaceInvadersGame(advanced, () => 0);
+
+      expect(advanced.playerRespawnTicks).toBe(
+        SPACE_INVADERS_PLAYER_RESPAWN_TICKS - tick,
+      );
+      expect(advanced.playerShieldTicks).toBe(0);
+      expect(advanced.explosions).toHaveLength(1);
+    }
+
+    advanced = advanceSpaceInvadersGame(advanced, () => 0);
+
+    expect(advanced.playerRespawnTicks).toBe(0);
+    expect(advanced.playerShieldTicks).toBe(SPACE_INVADERS_PLAYER_SHIELD_TICKS);
+    expect(advanced.explosions).toEqual([]);
+  });
+
+  it("absorbs player hits while the respawn shield is active", () => {
+    const game = createInitialSpaceInvadersGame();
+    const runningGame = createRunningGame({
+      invaderShotCooldownTicks: 100,
+      invaderShots: [
+        createInvaderShotFixture({
+          height: 20,
+          velocityY: 8,
+          width: 5,
+          x: game.player.x + game.player.width / 2 - 2.5,
+          y: game.player.y - 8,
+        }),
+      ],
+      playerShieldTicks: SPACE_INVADERS_PLAYER_SHIELD_TICKS,
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
+
+    expect(advanced.lives).toBe(SPACE_INVADERS_STARTING_LIVES);
+    expect(advanced.invaderShots).toEqual([]);
+    expect(advanced.explosions).toEqual([]);
+    expect(advanced.playerRespawnTicks).toBe(0);
+    expect(advanced.playerShieldTicks).toBe(SPACE_INVADERS_PLAYER_SHIELD_TICKS - 1);
   });
 
   it("loses the game when an invader shot hits the player's final life", () => {
@@ -647,6 +720,8 @@ describe("space invaders game engine", () => {
     expect(advanced.status).toBe("lost");
     expect(advanced.lives).toBe(0);
     expect(advanced.invaderShots).toEqual([]);
+    expect(advanced.playerRespawnTicks).toBe(0);
+    expect(advanced.playerShieldTicks).toBe(0);
     expect(advanced.explosions[0]).toMatchObject({
       id: "explosion-0",
       kind: "player",
@@ -1068,6 +1143,8 @@ describe("space invaders game engine", () => {
     expect(restarted.explosions).toEqual([]);
     expect(restarted.nextExplosionId).toBe(0);
     expect(restarted.invaderShots).toEqual([]);
+    expect(restarted.playerRespawnTicks).toBe(0);
+    expect(restarted.playerShieldTicks).toBe(0);
     expect(restarted.ufo).toMatchObject({
       direction: 1,
       isActive: false,

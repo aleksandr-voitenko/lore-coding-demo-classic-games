@@ -3,6 +3,7 @@
 import type { CSSProperties, ReactNode } from "react";
 
 import {
+  SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS,
   type SpaceInvadersExplosionKind,
   type SpaceInvadersExplosionVariant,
   type SpaceInvadersGameState,
@@ -137,12 +138,30 @@ function getBoardEntityStyle({
   };
 }
 
+function getPlayerShieldStyle(game: SpaceInvadersGameState): CSSProperties {
+  const diameter = Math.max(game.player.width, game.player.height) + 24;
+
+  return getBoardEntityStyle({
+    boardHeight: game.boardHeight,
+    boardWidth: game.boardWidth,
+    height: diameter,
+    width: diameter,
+    x: game.player.x + game.player.width / 2 - diameter / 2,
+    y: game.player.y + game.player.height / 2 - diameter / 2,
+  });
+}
+
 export function SpaceInvadersBoard({
   children,
   game,
   statusLabel,
 }: SpaceInvadersBoardProps) {
   const activeInvaderCount = game.invaders.filter((invader) => invader.isActive).length;
+  const isPlayerVisible = game.status !== "lost" && game.playerRespawnTicks === 0;
+  const isPlayerShieldVisible = isPlayerVisible && game.playerShieldTicks > 0;
+  const isPlayerShieldFlashing =
+    isPlayerShieldVisible &&
+    game.playerShieldTicks <= SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS;
 
   return (
     <div
@@ -264,22 +283,41 @@ export function SpaceInvadersBoard({
           />
         ))}
 
-        <span
-          aria-hidden="true"
-          className="absolute left-0 top-0 bg-contain bg-center bg-no-repeat drop-shadow-[0_0_18px_color-mix(in_oklch,var(--invaders-player)_56%,transparent)] will-change-transform [image-rendering:pixelated]"
-          data-testid="space-invaders-player"
-          style={{
-            backgroundImage: `url("${playerShipSpriteSrc}")`,
-            ...getBoardEntityStyle({
-              boardHeight: game.boardHeight,
-              boardWidth: game.boardWidth,
-              height: game.player.height,
-              width: game.player.width,
-              x: game.player.x,
-              y: game.player.y,
-            }),
-          }}
-        />
+        {isPlayerShieldVisible ? (
+          <span
+            aria-hidden="true"
+            className="space-invaders-player-shield absolute left-0 top-0 will-change-transform"
+            data-shield-flashing={isPlayerShieldFlashing ? "true" : "false"}
+            data-testid="space-invaders-player-shield"
+            style={getPlayerShieldStyle(game)}
+          >
+            <span
+              className={cn(
+                "space-invaders-player-shield__surface",
+                isPlayerShieldFlashing && "space-invaders-player-shield__surface--flashing",
+              )}
+            />
+          </span>
+        ) : null}
+
+        {isPlayerVisible ? (
+          <span
+            aria-hidden="true"
+            className="absolute left-0 top-0 bg-contain bg-center bg-no-repeat drop-shadow-[0_0_18px_color-mix(in_oklch,var(--invaders-player)_56%,transparent)] will-change-transform [image-rendering:pixelated]"
+            data-testid="space-invaders-player"
+            style={{
+              backgroundImage: `url("${playerShipSpriteSrc}")`,
+              ...getBoardEntityStyle({
+                boardHeight: game.boardHeight,
+                boardWidth: game.boardWidth,
+                height: game.player.height,
+                width: game.player.width,
+                x: game.player.x,
+                y: game.player.y,
+              }),
+            }}
+          />
+        ) : null}
 
         {game.explosions.map((explosion) => (
           <span

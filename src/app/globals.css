@@ -314,6 +314,63 @@
   will-change: opacity, transform;
 }
 
+@keyframes space-invaders-player-shield-pulse {
+  0%,
+  100% {
+    opacity: 0.78;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+}
+
+@keyframes space-invaders-player-shield-flash {
+  0%,
+  48% {
+    opacity: 1;
+  }
+  49%,
+  100% {
+    opacity: 0.32;
+  }
+}
+
+.space-invaders-player-shield {
+  pointer-events: none;
+}
+
+.space-invaders-player-shield__surface {
+  animation: space-invaders-player-shield-pulse 920ms ease-in-out infinite;
+  background:
+    radial-gradient(
+      circle,
+      color-mix(in oklch, var(--invaders-cyan) 8%, transparent) 0 46%,
+      color-mix(in oklch, var(--invaders-cyan) 28%, transparent) 48% 54%,
+      transparent 56%
+    ),
+    radial-gradient(
+      circle,
+      transparent 0 64%,
+      color-mix(in oklch, var(--invaders-player) 58%, transparent) 66% 69%,
+      transparent 72%
+    );
+  border: 2px solid color-mix(in oklch, var(--invaders-cyan) 72%, transparent);
+  border-radius: 9999px;
+  box-shadow:
+    0 0 12px color-mix(in oklch, var(--invaders-cyan) 58%, transparent),
+    inset 0 0 18px color-mix(in oklch, var(--invaders-player) 34%, transparent);
+  inset: 0;
+  position: absolute;
+  transform-origin: center;
+  will-change: opacity, transform;
+}
+
+.space-invaders-player-shield__surface--flashing {
+  animation: space-invaders-player-shield-flash 220ms steps(1, end) infinite;
+}
+
 @keyframes space-invaders-explosion-sprite-1 {
   0% {
     background-position: 0% 0%;
@@ -666,6 +723,13 @@
   }
   .simon-turn-feedback {
     animation: none;
+  }
+  .space-invaders-player-shield__surface,
+  .space-invaders-player-shield__surface--flashing {
+    animation: none;
+  }
+  .space-invaders-player-shield__surface--flashing {
+    opacity: 0.48;
   }
   .space-invaders-explosion__sprite {
     animation: none;

@@ -16,7 +16,10 @@ import { createInitialMinesweeperGame } from "@/lib/minesweeper-game-engine";
 import { createInitialPongGame } from "@/lib/pong-game-engine";
 import { createInitialSimonGame } from "@/lib/simon-game-engine";
 import { createInitialGame } from "@/lib/snake-game-engine";
-import { createInitialSpaceInvadersGame } from "@/lib/space-invaders-game-engine";
+import {
+  createInitialSpaceInvadersGame,
+  SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS,
+} from "@/lib/space-invaders-game-engine";
 import { createInitialTetrisGame } from "@/lib/tetris-game-engine";
 import type { TwentyFortyEightGameState } from "@/lib/twenty-forty-eight-game-engine";
 
@@ -266,6 +269,62 @@ describe("game board renderers", () => {
       "/images/space-invaders/player-ship.png?v=sprite-art-v2",
       "transform:translate3d(",
     ]);
+  });
+
+  it("renders Space Invaders respawn shields and hides respawning players", () => {
+    const game = createInitialSpaceInvadersGame();
+    const steadyShieldMarkup = renderToStaticMarkup(
+      <SpaceInvadersBoard
+        game={{
+          ...game,
+          playerShieldTicks: SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS + 1,
+          status: "running",
+        }}
+        statusLabel="Running"
+      />,
+    );
+    const flashingShieldMarkup = renderToStaticMarkup(
+      <SpaceInvadersBoard
+        game={{
+          ...game,
+          playerShieldTicks: SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS,
+          status: "running",
+        }}
+        statusLabel="Running"
+      />,
+    );
+    const respawningMarkup = renderToStaticMarkup(
+      <SpaceInvadersBoard
+        game={{
+          ...game,
+          playerRespawnTicks: 1,
+          status: "running",
+        }}
+        statusLabel="Running"
+      />,
+    );
+
+    expectMarkup(steadyShieldMarkup, [
+      'data-testid="space-invaders-player-shield"',
+      'data-shield-flashing="false"',
+      "space-invaders-player-shield__surface",
+      'data-testid="space-invaders-player"',
+      "transform:translate3d(",
+    ]);
+    expect(steadyShieldMarkup).not.toContain(
+      "space-invaders-player-shield__surface--flashing",
+    );
+    expectMarkup(flashingShieldMarkup, [
+      'data-testid="space-invaders-player-shield"',
+      'data-shield-flashing="true"',
+      "space-invaders-player-shield__surface--flashing",
+      'data-testid="space-invaders-player"',
+      "transform:translate3d(",
+    ]);
+    expect(respawningMarkup).not.toContain('data-testid="space-invaders-player"');
+    expect(respawningMarkup).not.toContain(
+      'data-testid="space-invaders-player-shield"',
+    );
   });
 
   it("renders Pong ball, paddles, and score target", () => {
