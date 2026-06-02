@@ -255,6 +255,8 @@ describe("space invaders game engine", () => {
     expect(game.playerRespawnTicks).toBe(0);
     expect(game.playerShieldTicks).toBe(0);
     expect(game.playerShots).toEqual([]);
+    expect(game.playerVolleyHasScored).toBe(false);
+    expect(game.playerVolleyHasUnscoredExit).toBe(false);
     expect(game.powerUps).toEqual([]);
     expect(game.scorePopups).toEqual([]);
     expect(game.marchDirection).toBe(1);
@@ -1135,6 +1137,58 @@ describe("space invaders game engine", () => {
     expect(missed.hitStreak).toBe(0);
     expect(scoredThenExited.playerShots).toEqual([]);
     expect(scoredThenExited.hitStreak).toBe(4);
+  });
+
+  it("keeps hit streaks when a power-up volley scores after an early bullet exits", () => {
+    const game = createInitialSpaceInvadersGame();
+    const targetInvader = game.invaders.find((invader) => invader.kind === "standard")!;
+    const fired = fireSpaceInvadersShot(
+      createRunningGame({
+        pendingShotPowerUp: "shotgun-shot",
+      }),
+    );
+    const missedShot = fired.playerShots[0]!;
+    const stillFlyingShot = fired.playerShots[1]!;
+    const volleyWithEarlyMiss = advanceSpaceInvadersGame(
+      createRunningGame({
+        hitStreak: 4,
+        invaderShotCooldownTicks: 1_000,
+        invaders: game.invaders,
+        playerShots: [
+          {
+            ...missedShot,
+            y: -missedShot.height + missedShot.velocityY - 1,
+          },
+          {
+            ...stillFlyingShot,
+            x: 12,
+            y: 300,
+          },
+        ],
+      }),
+      () => 0.62,
+    );
+    const scoringShot = {
+      ...volleyWithEarlyMiss.playerShots[0]!,
+      x: targetInvader.x + targetInvader.width / 2 - stillFlyingShot.width / 2,
+      y: targetInvader.y + targetInvader.height + 2,
+    };
+    const scoredVolley = advanceSpaceInvadersGame(
+      {
+        ...volleyWithEarlyMiss,
+        invaderShotCooldownTicks: 1_000,
+        playerShots: [scoringShot],
+      },
+      () => 0.62,
+    );
+
+    expect(volleyWithEarlyMiss.hitStreak).toBe(4);
+    expect(volleyWithEarlyMiss.playerVolleyHasScored).toBe(false);
+    expect(volleyWithEarlyMiss.playerVolleyHasUnscoredExit).toBe(true);
+    expect(scoredVolley.hitStreak).toBe(5);
+    expect(scoredVolley.playerShots).toEqual([]);
+    expect(scoredVolley.playerVolleyHasScored).toBe(false);
+    expect(scoredVolley.playerVolleyHasUnscoredExit).toBe(false);
   });
 
   it("drops a random power-up from destroyed diver invaders only", () => {
@@ -2126,6 +2180,8 @@ describe("space invaders game engine", () => {
     expect(restarted.playerRespawnTicks).toBe(0);
     expect(restarted.playerShieldTicks).toBe(0);
     expect(restarted.playerShots).toEqual([]);
+    expect(restarted.playerVolleyHasScored).toBe(false);
+    expect(restarted.playerVolleyHasUnscoredExit).toBe(false);
     expect(restarted.powerUps).toEqual([]);
     expect(restarted.scorePopups).toEqual([]);
     expect(restarted.ufoHitStreak).toBe(0);

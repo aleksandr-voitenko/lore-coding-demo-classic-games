@@ -190,6 +190,8 @@ export type SpaceInvadersGameState = {
   playerRespawnTicks: number;
   playerShieldTicks: number;
   playerShots: SpaceInvadersPlayerShot[];
+  playerVolleyHasScored: boolean;
+  playerVolleyHasUnscoredExit: boolean;
   powerUps: SpaceInvadersPowerUp[];
   score: number;
   scorePopups: SpaceInvadersScorePopup[];
@@ -441,6 +443,8 @@ export function createInitialSpaceInvadersGame({
     playerRespawnTicks: 0,
     playerShieldTicks: 0,
     playerShots: [],
+    playerVolleyHasScored: false,
+    playerVolleyHasUnscoredExit: false,
     powerUps: [],
     score: 0,
     scorePopups: [],
@@ -617,17 +621,22 @@ export function advanceSpaceInvadersGame(
   const gameAfterShot = advancePlayerShots(gameAfterPowerUps, random);
 
   if (gameAfterShot.status === "won") {
-    return finalizeSpaceInvadersMultiKillCombo(gameAfterShot);
+    return finalizeSpaceInvadersPlayerVolley(
+      finalizeSpaceInvadersMultiKillCombo(gameAfterShot),
+    );
   }
 
   const gameAfterPlayerBurst = advancePlayerBurst(gameAfterShot);
   const gameAfterMultiKillCombo =
     finalizeSpaceInvadersMultiKillComboIfVolleyEnded(gameAfterPlayerBurst);
-  const gameAfterInvaderShots = advanceInvaderShots(gameAfterMultiKillCombo, random);
+  const gameAfterPlayerVolley = finalizeSpaceInvadersPlayerVolley(
+    gameAfterMultiKillCombo,
+  );
+  const gameAfterInvaderShots = advanceInvaderShots(gameAfterPlayerVolley, random);
 
   if (
     gameAfterInvaderShots.status === "lost" ||
-    gameAfterInvaderShots.lives < gameAfterMultiKillCombo.lives
+    gameAfterInvaderShots.lives < gameAfterPlayerVolley.lives
   ) {
     return finalizeSpaceInvadersMultiKillCombo(gameAfterInvaderShots);
   }
@@ -676,16 +685,20 @@ function advancePlayerShots(
   };
   const activeShots: SpaceInvadersPlayerShot[] = [];
   const destroyedInvaderBounds: SpaceInvadersScoreTarget[] = [];
+  let playerVolleyHasScored =
+    game.playerVolleyHasScored ||
+    game.playerShots.some((shot) => shot.hasScored === true);
+  let playerVolleyHasUnscoredExit = game.playerVolleyHasUnscoredExit;
   let destroyedInvaderPopupPoints = 0;
   let invaderPopupScoreScale = 1;
 
   for (const shot of game.playerShots) {
     const movedShot = advancePlayerShotPosition(shot);
-    let didScoreWithShot = shot.hasScored === true;
+    let didScoreWithShot = shot.hasScored === true || playerVolleyHasScored;
 
     if (!isPlayerShotActive(movedShot, game)) {
       if (!didScoreWithShot) {
-        nextGame = resetSpaceInvadersHitStreak(nextGame);
+        playerVolleyHasUnscoredExit = true;
       }
 
       continue;
@@ -740,6 +753,7 @@ function advancePlayerShots(
       );
 
       didScoreWithShot = true;
+      playerVolleyHasScored = true;
 
       nextGame = {
         ...gameWithScorePopup,
@@ -811,6 +825,7 @@ function advancePlayerShots(
         );
       }
       didScoreWithShot = true;
+      playerVolleyHasScored = true;
     }
 
     nextGame = {
@@ -836,9 +851,22 @@ function advancePlayerShots(
     );
   }
 
+  const scoredActiveShots = playerVolleyHasScored
+    ? activeShots.map((shot) =>
+        shot.hasScored === true
+          ? shot
+          : {
+              ...shot,
+              hasScored: true,
+            },
+      )
+    : activeShots;
+
   return {
     ...nextGame,
-    playerShots: activeShots,
+    playerShots: scoredActiveShots,
+    playerVolleyHasScored,
+    playerVolleyHasUnscoredExit,
   };
 }
 
@@ -1070,6 +1098,8 @@ function advanceInvaderShots(
     playerRespawnTicks: lives <= 0 ? 0 : SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
     playerShieldTicks: 0,
     playerShots: [],
+    playerVolleyHasScored: false,
+    playerVolleyHasUnscoredExit: false,
     status: lives <= 0 ? "lost" : game.status,
   };
 }
@@ -1171,6 +1201,30 @@ function finalizeSpaceInvadersMultiKillComboIfVolleyEnded(
   }
 
   return finalizeSpaceInvadersMultiKillCombo(game);
+}
+
+function finalizeSpaceInvadersPlayerVolley(game: SpaceInvadersGameState) {
+  if (!isSpaceInvadersVolleyFinished(game)) {
+    return game;
+  }
+
+  const resolvedGame =
+    game.playerVolleyHasUnscoredExit && !game.playerVolleyHasScored
+      ? resetSpaceInvadersHitStreak(game)
+      : game;
+
+  if (
+    !resolvedGame.playerVolleyHasScored &&
+    !resolvedGame.playerVolleyHasUnscoredExit
+  ) {
+    return resolvedGame;
+  }
+
+  return {
+    ...resolvedGame,
+    playerVolleyHasScored: false,
+    playerVolleyHasUnscoredExit: false,
+  };
 }
 
 function continueSpaceInvadersMultiKillCombo(
