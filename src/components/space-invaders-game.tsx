@@ -54,6 +54,11 @@ import {
   pauseSpaceInvadersGame,
   restartSpaceInvadersGame,
   SPACE_INVADERS_BONUS_SCORE_POINTS,
+  SPACE_INVADERS_HIT_STREAK_BONUS_CAP,
+  SPACE_INVADERS_HIT_STREAK_BONUS_STEP,
+  SPACE_INVADERS_MULTI_KILL_BONUSES,
+  SPACE_INVADERS_UFO_CHAIN_BONUS_CAP,
+  SPACE_INVADERS_UFO_CHAIN_BONUS_STEP,
   startSpaceInvadersGame,
   type SpaceInvadersGameState,
   type SpaceInvadersPowerUpKind,
@@ -135,7 +140,7 @@ function SpaceInvadersPowerStatusIcon({
   );
 }
 
-const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
+export const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
   {
     title: "Controls",
     controls: [
@@ -167,6 +172,9 @@ const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
       "Shoot every invader before the formation reaches your base.",
       "Only one normal shot or one primed shot sequence can be active at a time.",
       "Shoot the UFO bonus ship when it crosses the sky for extra points.",
+      `Clean hit streaks add ${SPACE_INVADERS_HIT_STREAK_BONUS_STEP} more points per hit after the first, up to ${SPACE_INVADERS_HIT_STREAK_BONUS_CAP}; missed shots and player hits reset the streak.`,
+      `Destroying multiple invaders in one volley adds ${SPACE_INVADERS_MULTI_KILL_BONUSES[2]}, ${SPACE_INVADERS_MULTI_KILL_BONUSES[3]}, or ${SPACE_INVADERS_MULTI_KILL_BONUSES[4]} bonus points.`,
+      `Consecutive UFO hits add ${SPACE_INVADERS_UFO_CHAIN_BONUS_STEP} more points per UFO after the first, up to ${SPACE_INVADERS_UFO_CHAIN_BONUS_CAP}; escaped UFOs reset the chain.`,
       "Clear columns carefully; exposed diver invaders move faster and drop harder than the rest.",
       `Destroyed diver invaders drop power-up icons: bonus score adds ${SPACE_INVADERS_BONUS_SCORE_POINTS} points, extra life rarely grants a life, Burst, Freeze, Piercing, Shield, and Shotgun grant their matching bonuses.`,
       "Burst, Piercing, and Shotgun change your next shot, then return the cannon to its normal laser.",
@@ -393,7 +401,7 @@ export function SpaceInvadersGame({
             title="Classic Space Invaders"
           />
 
-          <GameStatsBar>
+          <GameStatsBar className="grid-flow-row grid-cols-4 sm:grid-cols-7">
             <GameStatCard
               className="border-[var(--invaders-border)]"
               label="Score"
@@ -414,6 +422,20 @@ export function SpaceInvadersGame({
               labelClassName="text-[var(--invaders-muted)]"
               value={activeInvaderCount}
               valueTestId="space-invaders-remaining"
+            />
+            <GameStatCard
+              className="border-[var(--invaders-border)]"
+              label="Streak"
+              labelClassName="text-[var(--invaders-muted)]"
+              value={game.hitStreak}
+              valueTestId="space-invaders-hit-streak"
+            />
+            <GameStatCard
+              className="border-[var(--invaders-border)]"
+              label="UFO"
+              labelClassName="text-[var(--invaders-muted)]"
+              value={game.ufoHitStreak}
+              valueTestId="space-invaders-ufo-chain"
             />
             <GameStatCard
               className="border-[var(--invaders-border)]"

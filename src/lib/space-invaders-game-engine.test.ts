@@ -15,6 +15,11 @@ import {
   SPACE_INVADERS_BOARD_WIDTH,
   SPACE_INVADERS_COLUMNS,
   SPACE_INVADERS_EXTRA_LIFE_DROP_CHANCE,
+  SPACE_INVADERS_HIT_STREAK_BONUS_CAP,
+  SPACE_INVADERS_HIT_STREAK_BONUS_STEP,
+  SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_CAP,
+  SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_STEP,
+  SPACE_INVADERS_MULTI_KILL_BONUSES,
   SPACE_INVADERS_PLAYER_BURST_SHOT_COUNT,
   SPACE_INVADERS_PLAYER_BURST_SHOT_DELAY_TICKS,
   SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
@@ -25,6 +30,8 @@ import {
   SPACE_INVADERS_ROWS,
   SPACE_INVADERS_SCORE_POPUP_TICKS,
   SPACE_INVADERS_STARTING_LIVES,
+  SPACE_INVADERS_UFO_CHAIN_BONUS_CAP,
+  SPACE_INVADERS_UFO_CHAIN_BONUS_STEP,
   startSpaceInvadersGame,
   type SpaceInvader,
   type SpaceInvadersExplosion,
@@ -232,6 +239,7 @@ describe("space invaders game engine", () => {
     expect(game.player.x + game.player.width / 2).toBe(SPACE_INVADERS_BOARD_WIDTH / 2);
     expect(game.alienFreezeTicks).toBe(0);
     expect(game.explosions).toEqual([]);
+    expect(game.hitStreak).toBe(0);
     expect(game.invaderBurst).toBeNull();
     expect(game.invaderShots).toEqual([]);
     expect(game.invaderShotCooldownTicks).toBeGreaterThan(0);
@@ -248,6 +256,7 @@ describe("space invaders game engine", () => {
     expect(game.powerUps).toEqual([]);
     expect(game.scorePopups).toEqual([]);
     expect(game.marchDirection).toBe(1);
+    expect(game.ufoHitStreak).toBe(0);
     expect(game.invaders.every((invader) => invader.direction === 1)).toBe(true);
     expect(game.ufo).toMatchObject({
       direction: 1,
@@ -513,6 +522,7 @@ describe("space invaders game engine", () => {
           isActive: true,
           x: game.boardWidth - 1,
         },
+        ufoHitStreak: 2,
       }),
     );
     const respawnedFromRight = advanceSpaceInvadersGame(
@@ -539,6 +549,7 @@ describe("space invaders game engine", () => {
       points: 150,
       x: game.boardWidth,
     });
+    expect(exitedRight.ufoHitStreak).toBe(0);
     expect(exitedRight.ufo.cooldownTicks).toBeGreaterThan(0);
     expect(respawnedFromRight.ufo).toMatchObject({
       direction: -1,
@@ -834,6 +845,7 @@ describe("space invaders game engine", () => {
         remainingShots: 2,
         sourceInvaderId: "1:5",
       },
+      hitStreak: 3,
       invaderShots: [
         createInvaderShotFixture({
           height: 20,
@@ -870,6 +882,7 @@ describe("space invaders game engine", () => {
     expect(advanced.nextExplosionId).toBe(1);
     expect(advanced.invaderBurst).toBeNull();
     expect(advanced.invaderShots).toEqual([]);
+    expect(advanced.hitStreak).toBe(0);
     expect(advanced.playerBurst).toBeNull();
     expect(advanced.playerShots).toEqual([]);
     expect(advanced.playerRespawnTicks).toBe(SPACE_INVADERS_PLAYER_RESPAWN_TICKS);
@@ -1005,6 +1018,7 @@ describe("space invaders game engine", () => {
     expect(hitInvader?.isActive).toBe(false);
     expect(advanced.playerShots).toEqual([]);
     expect(advanced.score).toBe(targetInvader.points);
+    expect(advanced.hitStreak).toBe(1);
     expect(advanced.explosions).toHaveLength(1);
     expect(advanced.explosions[0]).toMatchObject({
       ageTicks: 0,
@@ -1033,6 +1047,92 @@ describe("space invaders game engine", () => {
       },
     ]);
     expect(advanced.nextScorePopupId).toBe(1);
+  });
+
+  it("adds hit-streak bonus points after consecutive clean hits", () => {
+    const game = createInitialSpaceInvadersGame();
+    const targetInvader = getInvader(game, SPACE_INVADERS_ROWS - 1, 0);
+    const runningGame = createRunningGame({
+      hitStreak: 1,
+      invaderShotCooldownTicks: 1_000,
+      invaders: game.invaders,
+      playerShots: [createPlayerShotAlignedWith(targetInvader)],
+      score: 100,
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0.62);
+
+    expect(SPACE_INVADERS_HIT_STREAK_BONUS_STEP).toBe(5);
+    expect(SPACE_INVADERS_HIT_STREAK_BONUS_CAP).toBe(30);
+    expect(SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_STEP).toBe(0.08);
+    expect(advanced.hitStreak).toBe(2);
+    expect(advanced.score).toBe(
+      100 + targetInvader.points + SPACE_INVADERS_HIT_STREAK_BONUS_STEP,
+    );
+    expect(advanced.scorePopups).toEqual([
+      expect.objectContaining({
+        points: targetInvader.points + SPACE_INVADERS_HIT_STREAK_BONUS_STEP,
+        scoreScale: 1.08,
+      }),
+    ]);
+    expect(advanced.scorePopups[0]).not.toHaveProperty("label");
+  });
+
+  it("caps hit-streak popup scale with the hit-streak bonus", () => {
+    const game = createInitialSpaceInvadersGame();
+    const targetInvader = getInvader(game, SPACE_INVADERS_ROWS - 1, 0);
+    const runningGame = createRunningGame({
+      hitStreak: 8,
+      invaderShotCooldownTicks: 1_000,
+      invaders: game.invaders,
+      playerShots: [createPlayerShotAlignedWith(targetInvader)],
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0.62);
+
+    expect(SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_CAP).toBe(1.48);
+    expect(advanced.hitStreak).toBe(9);
+    expect(advanced.scorePopups).toEqual([
+      expect.objectContaining({
+        points: targetInvader.points + SPACE_INVADERS_HIT_STREAK_BONUS_CAP,
+        scoreScale: SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_CAP,
+      }),
+    ]);
+    expect(advanced.scorePopups[0]).not.toHaveProperty("label");
+  });
+
+  it("resets hit streaks only when player shots leave the board without scoring", () => {
+    const missedShot = fireSpaceInvadersShot(createRunningGame()).playerShots[0]!;
+    const missed = advanceSpaceInvadersGame(
+      createRunningGame({
+        hitStreak: 4,
+        invaderShotCooldownTicks: 1_000,
+        playerShots: [
+          {
+            ...missedShot,
+            y: -missedShot.height + missedShot.velocityY - 1,
+          },
+        ],
+      }),
+    );
+    const scoredShot = fireSpaceInvadersShot(createRunningGame()).playerShots[0]!;
+    const scoredThenExited = advanceSpaceInvadersGame(
+      createRunningGame({
+        hitStreak: 4,
+        invaderShotCooldownTicks: 1_000,
+        playerShots: [
+          {
+            ...scoredShot,
+            hasScored: true,
+            kind: "piercing",
+            y: -scoredShot.height + scoredShot.velocityY - 1,
+          },
+        ],
+      }),
+    );
+
+    expect(missed.playerShots).toEqual([]);
+    expect(missed.hitStreak).toBe(0);
+    expect(scoredThenExited.playerShots).toEqual([]);
+    expect(scoredThenExited.hitStreak).toBe(4);
   });
 
   it("drops a random power-up from destroyed diver invaders only", () => {
@@ -1241,12 +1341,76 @@ describe("space invaders game engine", () => {
     expect(
       advanced.invaders.find((invader) => invader.id === remainingInvader.id)?.isActive,
     ).toBe(true);
-    expect(advanced.score).toBe(firstTarget.points + secondTarget.points);
-    expect(advanced.scorePopups.map((popup) => popup.points)).toEqual([
-      firstTarget.points,
-      secondTarget.points,
+    expect(advanced.score).toBe(
+      firstTarget.points +
+        secondTarget.points +
+        SPACE_INVADERS_MULTI_KILL_BONUSES[2],
+    );
+    expect(advanced.scorePopups).toEqual([
+      expect.objectContaining({
+        label: "DOUBLE",
+        points:
+          firstTarget.points +
+          secondTarget.points +
+          SPACE_INVADERS_MULTI_KILL_BONUSES[2],
+      }),
     ]);
-    expect(advanced.nextScorePopupId).toBe(2);
+    expect(advanced.nextScorePopupId).toBe(1);
+  });
+
+  it("uses the largest multi-kill bonus for four or more invaders in one volley", () => {
+    const game = createInitialSpaceInvadersGame();
+    const stackedTargets = [
+      getInvader(game, 0, 0),
+      getInvader(game, 1, 0),
+      getInvader(game, 2, 0),
+      getInvader(game, 3, 0),
+    ].map((invader) => ({
+      ...invader,
+      isActive: true,
+      kind: "standard" as const,
+      x: 180,
+      y: 220,
+    }));
+    const targetIds = new Set(stackedTargets.map((invader) => invader.id));
+    const runningGame = createRunningGame({
+      invaderShotCooldownTicks: 1_000,
+      invaders: game.invaders.map((invader) => {
+        const stackedTarget = stackedTargets.find((target) => target.id === invader.id);
+
+        if (stackedTarget !== undefined) {
+          return stackedTarget;
+        }
+
+        return {
+          ...invader,
+          isActive: invader.id === getInvader(game, SPACE_INVADERS_ROWS - 1, 10).id,
+        };
+      }),
+      playerShots: [
+        {
+          ...createPlayerShotAlignedWith(stackedTargets[0]!),
+          kind: "piercing",
+        },
+      ],
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
+    const baseScore = stackedTargets.reduce((score, invader) => score + invader.points, 0);
+
+    expect(SPACE_INVADERS_MULTI_KILL_BONUSES[4]).toBe(100);
+    expect(advanced.status).toBe("running");
+    expect(advanced.score).toBe(baseScore + SPACE_INVADERS_MULTI_KILL_BONUSES[4]);
+    expect(
+      advanced.invaders
+        .filter((invader) => targetIds.has(invader.id))
+        .every((invader) => !invader.isActive),
+    ).toBe(true);
+    expect(advanced.scorePopups).toEqual([
+      expect.objectContaining({
+        label: "MULTI",
+        points: baseScore + SPACE_INVADERS_MULTI_KILL_BONUSES[4],
+      }),
+    ]);
   });
 
   it("awards the UFO bonus, clears the shot, and leaves invaders intact", () => {
@@ -1266,6 +1430,8 @@ describe("space invaders game engine", () => {
     const advanced = advanceSpaceInvadersGame(runningGame, () => 0.3);
 
     expect(advanced.score).toBe(140);
+    expect(advanced.hitStreak).toBe(1);
+    expect(advanced.ufoHitStreak).toBe(1);
     expect(advanced.playerShots).toEqual([]);
     expect(advanced.explosions).toHaveLength(1);
     expect(advanced.explosions[0]).toMatchObject({
@@ -1303,6 +1469,66 @@ describe("space invaders game engine", () => {
       x: game.boardWidth,
     });
     expect(advanced.ufo.cooldownTicks).toBeGreaterThan(0);
+  });
+
+  it("adds UFO-chain bonus points after consecutive UFO hits", () => {
+    const game = createInitialSpaceInvadersGame();
+    const activeUfo = {
+      ...game.ufo,
+      isActive: true,
+      points: 200,
+      x: 180,
+    };
+    const runningGame = createRunningGame({
+      invaderShotCooldownTicks: 100,
+      playerShots: [createPlayerShotAlignedWith(activeUfo)],
+      ufo: activeUfo,
+      ufoHitStreak: 1,
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0.3);
+
+    expect(SPACE_INVADERS_UFO_CHAIN_BONUS_STEP).toBe(50);
+    expect(SPACE_INVADERS_UFO_CHAIN_BONUS_CAP).toBe(150);
+    expect(advanced.ufoHitStreak).toBe(2);
+    expect(advanced.score).toBe(
+      activeUfo.points + SPACE_INVADERS_UFO_CHAIN_BONUS_STEP,
+    );
+    expect(advanced.scorePopups).toEqual([
+      expect.objectContaining({
+        label: "UFO CHAIN",
+        points: activeUfo.points + SPACE_INVADERS_UFO_CHAIN_BONUS_STEP,
+      }),
+    ]);
+  });
+
+  it("caps UFO-chain bonus points after later consecutive UFO hits", () => {
+    const game = createInitialSpaceInvadersGame();
+    const activeUfo = {
+      ...game.ufo,
+      isActive: true,
+      points: 300,
+      x: 180,
+    };
+    const advanced = advanceSpaceInvadersGame(
+      createRunningGame({
+        invaderShotCooldownTicks: 100,
+        playerShots: [createPlayerShotAlignedWith(activeUfo)],
+        ufo: activeUfo,
+        ufoHitStreak: 4,
+      }),
+      () => 0.3,
+    );
+
+    expect(advanced.ufoHitStreak).toBe(5);
+    expect(advanced.score).toBe(
+      activeUfo.points + SPACE_INVADERS_UFO_CHAIN_BONUS_CAP,
+    );
+    expect(advanced.scorePopups).toEqual([
+      expect.objectContaining({
+        label: "UFO CHAIN",
+        points: activeUfo.points + SPACE_INVADERS_UFO_CHAIN_BONUS_CAP,
+      }),
+    ]);
   });
 
   it("expires explosions on running ticks", () => {
@@ -1695,6 +1921,7 @@ describe("space invaders game engine", () => {
       ...createInitialSpaceInvadersGame(),
       invaders: [],
       explosions: [createExplosionFixture()],
+      hitStreak: 4,
       invaderShotCooldownTicks: 0,
       invaderShots: [createInvaderShotFixture()],
       lives: 0,
@@ -1732,6 +1959,7 @@ describe("space invaders game engine", () => {
         points: 200,
         x: 100,
       },
+      ufoHitStreak: 3,
     };
     const restarted = startSpaceInvadersGame(lostGame);
 
@@ -1740,6 +1968,7 @@ describe("space invaders game engine", () => {
     expect(restarted.lives).toBe(SPACE_INVADERS_STARTING_LIVES);
     expect(restarted.alienFreezeTicks).toBe(0);
     expect(restarted.explosions).toEqual([]);
+    expect(restarted.hitStreak).toBe(0);
     expect(restarted.nextExplosionId).toBe(0);
     expect(restarted.invaderShots).toEqual([]);
     expect(restarted.nextPlayerShotId).toBe(0);
@@ -1752,6 +1981,7 @@ describe("space invaders game engine", () => {
     expect(restarted.playerShots).toEqual([]);
     expect(restarted.powerUps).toEqual([]);
     expect(restarted.scorePopups).toEqual([]);
+    expect(restarted.ufoHitStreak).toBe(0);
     expect(restarted.ufo).toMatchObject({
       direction: 1,
       isActive: false,

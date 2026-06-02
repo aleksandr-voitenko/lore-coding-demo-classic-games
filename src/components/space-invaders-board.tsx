@@ -79,7 +79,6 @@ const spaceInvadersScorePopupTextShadow = [
 const spaceInvadersScorePopupBaseStyle: CSSProperties = {
   color: "white",
   display: "block",
-  fontSize: "0.72rem",
   fontWeight: 800,
   letterSpacing: 0,
   lineHeight: 1,
@@ -88,6 +87,14 @@ const spaceInvadersScorePopupBaseStyle: CSSProperties = {
   WebkitTextStroke: "0.75px rgb(0 0 0 / 0.9)",
   willChange: "opacity",
 };
+
+function getScorePopupNumberStyle(scoreScale: number | undefined): CSSProperties {
+  const fontSize = Number((0.72 * (scoreScale ?? 1)).toFixed(4));
+
+  return {
+    fontSize: `${fontSize}rem`,
+  };
+}
 
 export const spaceInvaderSprites = [
   {
@@ -437,7 +444,9 @@ export function SpaceInvadersBoard({
           <span
             aria-hidden="true"
             className="absolute left-0 top-0 z-20 flex items-center justify-center"
+            data-score-popup-label={popup.label}
             data-score-popup-points={popup.points}
+            data-score-popup-scale={popup.scoreScale ?? 1}
             data-testid="space-invaders-score-popup"
             key={popup.id}
             style={getBoardEntityStyle({
@@ -450,10 +459,17 @@ export function SpaceInvadersBoard({
             })}
           >
             <span
-              className="space-invaders-score-popup__text"
+              className="space-invaders-score-popup__text flex flex-col items-center gap-0.5"
               style={getScorePopupTextStyle(popup.ttlTicks)}
             >
-              +{popup.points}
+              <span style={getScorePopupNumberStyle(popup.scoreScale)}>
+                +{popup.points}
+              </span>
+              {popup.label === undefined ? null : (
+                <span className="text-[0.44rem] font-extrabold leading-none tracking-normal">
+                  {popup.label}
+                </span>
+              )}
             </span>
           </span>
         ))}

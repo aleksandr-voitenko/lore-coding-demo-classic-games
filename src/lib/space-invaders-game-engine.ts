@@ -78,6 +78,7 @@ export type SpaceInvadersShot = {
 };
 
 export type SpaceInvadersPlayerShot = SpaceInvadersShot & {
+  hasScored?: boolean;
   id: string;
   kind: SpaceInvadersPlayerShotKind;
   velocityX: number;
@@ -120,11 +121,26 @@ export type SpaceInvadersScorePopup = {
   ageTicks: number;
   height: number;
   id: string;
+  label?: string;
   points: number;
+  scoreScale?: number;
   ttlTicks: number;
   width: number;
   x: number;
   y: number;
+};
+
+type SpaceInvadersScoreTarget = {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+};
+
+type SpaceInvadersScorePopupOptions = {
+  label?: string;
+  points: number;
+  scoreScale?: number;
 };
 
 export type SpaceInvadersInvaderBurst = {
@@ -144,6 +160,7 @@ export type SpaceInvadersGameState = {
   boardHeight: number;
   boardWidth: number;
   explosions: SpaceInvadersExplosion[];
+  hitStreak: number;
   invaderBurst: SpaceInvadersInvaderBurst | null;
   invaderShotCooldownTicks: number;
   invaderShots: SpaceInvadersInvaderShot[];
@@ -166,6 +183,7 @@ export type SpaceInvadersGameState = {
   scorePopups: SpaceInvadersScorePopup[];
   status: SpaceInvadersStatus;
   ufo: SpaceInvadersUfoState;
+  ufoHitStreak: number;
 };
 
 export type CreateSpaceInvadersGameOptions = {
@@ -235,6 +253,17 @@ export const SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS = Math.round(
   2_000 / SPACE_INVADERS_TICK_DELAY_MS,
 );
 export const SPACE_INVADERS_BONUS_SCORE_POINTS = 50;
+export const SPACE_INVADERS_HIT_STREAK_BONUS_STEP = 5;
+export const SPACE_INVADERS_HIT_STREAK_BONUS_CAP = 30;
+export const SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_STEP = 0.08;
+export const SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_CAP = 1.48;
+export const SPACE_INVADERS_MULTI_KILL_BONUSES = {
+  2: 25,
+  3: 60,
+  4: 100,
+} as const;
+export const SPACE_INVADERS_UFO_CHAIN_BONUS_STEP = 50;
+export const SPACE_INVADERS_UFO_CHAIN_BONUS_CAP = 150;
 export const SPACE_INVADERS_EXTRA_LIFE_DROP_CHANCE = 0.05;
 export const SPACE_INVADERS_ALIEN_FREEZE_TICKS = Math.round(
   5_000 / SPACE_INVADERS_TICK_DELAY_MS,
@@ -374,6 +403,7 @@ export function createInitialSpaceInvadersGame({
     boardHeight: normalizedBoardHeight,
     boardWidth: normalizedBoardWidth,
     explosions: [],
+    hitStreak: 0,
     invaderBurst: null,
     invaderShotCooldownTicks: INVADER_FIRE_COOLDOWN_TICKS,
     invaderShots: [],
@@ -401,6 +431,7 @@ export function createInitialSpaceInvadersGame({
     scorePopups: [],
     status: "ready",
     ufo: createInitialSpaceInvadersUfo(),
+    ufoHitStreak: 0,
   };
 }
 
@@ -624,11 +655,19 @@ function advancePlayerShots(
     playerShots: [],
   };
   const activeShots: SpaceInvadersPlayerShot[] = [];
+  const destroyedInvaderBounds: SpaceInvadersScoreTarget[] = [];
+  let destroyedInvaderPopupPoints = 0;
+  let invaderPopupScoreScale = 1;
 
   for (const shot of game.playerShots) {
     const movedShot = advancePlayerShotPosition(shot);
+    let didScoreWithShot = shot.hasScored === true;
 
     if (!isPlayerShotActive(movedShot, game)) {
+      if (!didScoreWithShot) {
+        nextGame = resetSpaceInvadersHitStreak(nextGame);
+      }
+
       continue;
     }
 
@@ -640,15 +679,50 @@ function advancePlayerShots(
         hitUfo,
         random,
       );
+      let ufoPopupPoints = hitUfo.points;
+      let ufoPopupLabel: string | undefined;
+      let ufoPopupScoreScale = 1;
+      let gameWithScore: SpaceInvadersGameState = {
+        ...gameWithExplosion,
+        score: gameWithExplosion.score + hitUfo.points,
+      };
+
+      if (!didScoreWithShot) {
+        const hitStreakResult = advanceSpaceInvadersHitStreak(gameWithScore);
+
+        gameWithScore = hitStreakResult.game;
+        ufoPopupPoints += hitStreakResult.bonus;
+
+        if (hitStreakResult.bonus > 0) {
+          ufoPopupScoreScale = getSpaceInvadersHitStreakPopupScale(
+            gameWithScore.hitStreak,
+          );
+        }
+      }
+
+      const ufoChainResult = advanceSpaceInvadersUfoChain(gameWithScore);
+
+      gameWithScore = ufoChainResult.game;
+      ufoPopupPoints += ufoChainResult.bonus;
+
+      if (ufoChainResult.bonus > 0) {
+        ufoPopupLabel = "UFO CHAIN";
+      }
+
       const gameWithScorePopup = createSpaceInvadersScorePopup(
-        gameWithExplosion,
+        gameWithScore,
         hitUfo,
-        hitUfo.points,
+        {
+          label: ufoPopupLabel,
+          points: ufoPopupPoints,
+          scoreScale: ufoPopupScoreScale,
+        },
       );
+
+      didScoreWithShot = true;
 
       nextGame = {
         ...gameWithScorePopup,
-        score: gameWithScorePopup.score + hitUfo.points,
         ufo: deactivateSpaceInvadersUfo(hitUfo, nextGame.boardWidth),
       };
 
@@ -662,7 +736,10 @@ function advancePlayerShots(
     );
 
     if (hitInvaders.length === 0) {
-      activeShots.push(movedShot);
+      activeShots.push({
+        ...movedShot,
+        hasScored: didScoreWithShot,
+      });
       continue;
     }
 
@@ -671,31 +748,29 @@ function advancePlayerShots(
     const destroyedInvaderIds = new Set(
       destroyedInvaders.map((invader) => invader.id),
     );
+    const destroyedInvaderPoints = destroyedInvaders.reduce(
+      (total, invader) => total + invader.points,
+      0,
+    );
     const invaders = nextGame.invaders.map((invader) =>
       destroyedInvaderIds.has(invader.id) ? { ...invader, isActive: false } : invader,
-    );
-    const score = destroyedInvaders.reduce(
-      (total, invader) => total + invader.points,
-      nextGame.score,
     );
     const activeInvaderCount = invaders.filter((invader) => invader.isActive).length;
     let gameWithHits: SpaceInvadersGameState = {
       ...nextGame,
       invaders,
-      score,
+      score: nextGame.score + destroyedInvaderPoints,
     };
 
+    destroyedInvaderPopupPoints += destroyedInvaderPoints;
+
     for (const hitInvader of destroyedInvaders) {
+      destroyedInvaderBounds.push(hitInvader);
       gameWithHits = createSpaceInvadersExplosion(
         gameWithHits,
         "invader",
         hitInvader,
         random,
-      );
-      gameWithHits = createSpaceInvadersScorePopup(
-        gameWithHits,
-        hitInvader,
-        hitInvader.points,
       );
       gameWithHits = maybeCreateSpaceInvadersPowerUpDrop(
         gameWithHits,
@@ -704,14 +779,54 @@ function advancePlayerShots(
       );
     }
 
+    if (!didScoreWithShot) {
+      const hitStreakResult = advanceSpaceInvadersHitStreak(gameWithHits);
+
+      gameWithHits = hitStreakResult.game;
+      destroyedInvaderPopupPoints += hitStreakResult.bonus;
+      if (hitStreakResult.bonus > 0) {
+        invaderPopupScoreScale = Math.max(
+          invaderPopupScoreScale,
+          getSpaceInvadersHitStreakPopupScale(gameWithHits.hitStreak),
+        );
+      }
+      didScoreWithShot = true;
+    }
+
     nextGame = {
       ...gameWithHits,
       status: activeInvaderCount === 0 ? "won" : nextGame.status,
     };
 
     if (movedShot.kind === "piercing" && nextGame.status !== "won") {
-      activeShots.push(movedShot);
+      activeShots.push({
+        ...movedShot,
+        hasScored: didScoreWithShot,
+      });
     }
+  }
+
+  if (destroyedInvaderBounds.length > 0) {
+    const multiKillBonus = getSpaceInvadersMultiKillBonus(
+      destroyedInvaderBounds.length,
+    );
+
+    destroyedInvaderPopupPoints += multiKillBonus;
+    nextGame = createSpaceInvadersScorePopup(
+      {
+        ...nextGame,
+        score: nextGame.score + multiKillBonus,
+      },
+      getCombinedSpaceInvadersScoreTarget(destroyedInvaderBounds),
+      {
+        label: getSpaceInvadersInvaderScorePopupLabel(
+          destroyedInvaderBounds.length,
+          multiKillBonus,
+        ),
+        points: destroyedInvaderPopupPoints,
+        scoreScale: invaderPopupScoreScale,
+      },
+    );
   }
 
   return {
@@ -734,6 +849,7 @@ function advanceSpaceInvadersUfo(game: SpaceInvadersGameState): SpaceInvadersGam
       return {
         ...game,
         ufo: deactivateSpaceInvadersUfo(movedUfo, game.boardWidth),
+        ufoHitStreak: 0,
       };
     }
 
@@ -842,7 +958,7 @@ function applySpaceInvadersPowerUp(
           score: game.score + SPACE_INVADERS_BONUS_SCORE_POINTS,
         },
         powerUp,
-        SPACE_INVADERS_BONUS_SCORE_POINTS,
+        { points: SPACE_INVADERS_BONUS_SCORE_POINTS },
       );
     case "extra-life":
       return {
@@ -940,6 +1056,7 @@ function advanceInvaderShots(
     invaderBurst: null,
     invaderShotCooldownTicks: INVADER_HIT_RECOVERY_TICKS,
     invaderShots: [],
+    hitStreak: 0,
     lives,
     player: createCenteredPlayer(game.boardWidth, game.boardHeight),
     playerBurst: null,
@@ -1042,14 +1159,16 @@ function createSpaceInvadersExplosion(
 
 function createSpaceInvadersScorePopup(
   game: SpaceInvadersGameState,
-  target: { height: number; width: number; x: number; y: number },
-  points: number,
+  target: SpaceInvadersScoreTarget,
+  { label, points, scoreScale = 1 }: SpaceInvadersScorePopupOptions,
 ): SpaceInvadersGameState {
   const scorePopup: SpaceInvadersScorePopup = {
     ageTicks: 0,
     height: target.height,
     id: `score-popup-${game.nextScorePopupId}`,
+    ...(label === undefined ? {} : { label }),
     points,
+    ...(scoreScale <= 1 ? {} : { scoreScale }),
     ttlTicks: SPACE_INVADERS_SCORE_POPUP_TICKS,
     width: target.width,
     x: target.x,
@@ -1060,6 +1179,125 @@ function createSpaceInvadersScorePopup(
     ...game,
     nextScorePopupId: game.nextScorePopupId + 1,
     scorePopups: [...game.scorePopups, scorePopup],
+  };
+}
+
+function advanceSpaceInvadersHitStreak(
+  game: SpaceInvadersGameState,
+): { bonus: number; game: SpaceInvadersGameState } {
+  const hitStreak = game.hitStreak + 1;
+  const bonus = getSpaceInvadersHitStreakBonus(hitStreak);
+  const gameWithHitStreak = {
+    ...game,
+    hitStreak,
+    score: game.score + bonus,
+  };
+
+  return {
+    bonus,
+    game: gameWithHitStreak,
+  };
+}
+
+function resetSpaceInvadersHitStreak(game: SpaceInvadersGameState) {
+  if (game.hitStreak === 0) {
+    return game;
+  }
+
+  return {
+    ...game,
+    hitStreak: 0,
+  };
+}
+
+function advanceSpaceInvadersUfoChain(
+  game: SpaceInvadersGameState,
+): { bonus: number; game: SpaceInvadersGameState } {
+  const ufoHitStreak = game.ufoHitStreak + 1;
+  const bonus = getSpaceInvadersUfoChainBonus(ufoHitStreak);
+  const gameWithUfoHitStreak = {
+    ...game,
+    ufoHitStreak,
+    score: game.score + bonus,
+  };
+
+  return {
+    bonus,
+    game: gameWithUfoHitStreak,
+  };
+}
+
+function getSpaceInvadersHitStreakBonus(hitStreak: number) {
+  return Math.min(
+    Math.max(0, hitStreak - 1) * SPACE_INVADERS_HIT_STREAK_BONUS_STEP,
+    SPACE_INVADERS_HIT_STREAK_BONUS_CAP,
+  );
+}
+
+function getSpaceInvadersHitStreakPopupScale(hitStreak: number) {
+  const scoreScale = Math.min(
+    1 + Math.max(0, hitStreak - 1) * SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_STEP,
+    SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_CAP,
+  );
+
+  return Number(scoreScale.toFixed(2));
+}
+
+function getSpaceInvadersUfoChainBonus(ufoHitStreak: number) {
+  return Math.min(
+    Math.max(0, ufoHitStreak - 1) * SPACE_INVADERS_UFO_CHAIN_BONUS_STEP,
+    SPACE_INVADERS_UFO_CHAIN_BONUS_CAP,
+  );
+}
+
+function getSpaceInvadersMultiKillBonus(destroyedInvaderCount: number) {
+  if (destroyedInvaderCount >= 4) {
+    return SPACE_INVADERS_MULTI_KILL_BONUSES[4];
+  }
+
+  if (destroyedInvaderCount === 3) {
+    return SPACE_INVADERS_MULTI_KILL_BONUSES[3];
+  }
+
+  if (destroyedInvaderCount === 2) {
+    return SPACE_INVADERS_MULTI_KILL_BONUSES[2];
+  }
+
+  return 0;
+}
+
+function getSpaceInvadersInvaderScorePopupLabel(
+  destroyedInvaderCount: number,
+  multiKillBonus: number,
+) {
+  if (multiKillBonus > 0) {
+    if (destroyedInvaderCount === 2) {
+      return "DOUBLE";
+    }
+
+    if (destroyedInvaderCount === 3) {
+      return "TRIPLE";
+    }
+
+    return "MULTI";
+  }
+
+  return undefined;
+}
+
+function getCombinedSpaceInvadersScoreTarget(
+  targets: SpaceInvadersScoreTarget[],
+): SpaceInvadersScoreTarget {
+  const left = Math.min(...targets.map((target) => target.x));
+  const top = Math.min(...targets.map((target) => target.y));
+  const right = Math.max(...targets.map((target) => target.x + target.width));
+  const bottom = Math.max(...targets.map((target) => target.y + target.height));
+
+  return {
+    height: bottom - top,
+    width: right - left,
+    x: left,
+    y: top,
   };
 }
 
@@ -1484,6 +1722,7 @@ function createPlayerShot(
 ): SpaceInvadersPlayerShot {
   return {
     height: SHOT_HEIGHT,
+    hasScored: false,
     id: `player-shot-${nextPlayerShotId}`,
     kind,
     velocityX,
