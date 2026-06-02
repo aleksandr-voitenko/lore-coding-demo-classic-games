@@ -31,6 +31,7 @@ import {
   SPACE_INVADERS_POWER_UP_SPEED,
   SPACE_INVADERS_ROWS,
   SPACE_INVADERS_SCORE_POPUP_TICKS,
+  SPACE_INVADERS_REVENGE_ALIEN_COUNT,
   SPACE_INVADERS_SHIELD_BEARER_COUNT,
   SPACE_INVADERS_STARTING_LIVES,
   SPACE_INVADERS_UFO_CHAIN_BONUS_CAP,
@@ -63,6 +64,12 @@ function getDiverIds(game: SpaceInvadersGameState) {
 function getShieldBearerIds(game: SpaceInvadersGameState) {
   return game.invaders
     .filter((invader) => invader.kind === "shield-bearer")
+    .map((invader) => invader.id);
+}
+
+function getRevengeAlienIds(game: SpaceInvadersGameState) {
+  return game.invaders
+    .filter((invader) => invader.kind === "revenge")
     .map((invader) => invader.id);
 }
 
@@ -239,6 +246,9 @@ describe("space invaders game engine", () => {
     const shieldBearerInvaders = game.invaders.filter(
       (invader) => invader.kind === "shield-bearer",
     );
+    const revengeAlienInvaders = game.invaders.filter(
+      (invader) => invader.kind === "revenge",
+    );
     const bottomRowInvaders = game.invaders.filter(
       (invader) => invader.row === SPACE_INVADERS_ROWS - 1,
     );
@@ -288,8 +298,14 @@ describe("space invaders game engine", () => {
     expect(diverInvaders).toHaveLength(10);
     expect(diverInvaders.every((invader) => invader.row < SPACE_INVADERS_ROWS - 1)).toBe(true);
     expect(shieldBearerInvaders).toHaveLength(SPACE_INVADERS_SHIELD_BEARER_COUNT);
+    expect(revengeAlienInvaders).toHaveLength(SPACE_INVADERS_REVENGE_ALIEN_COUNT);
     expect(
       shieldBearerInvaders.every(
+        (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
+      ),
+    ).toBe(true);
+    expect(
+      revengeAlienInvaders.every(
         (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
       ),
     ).toBe(true);
@@ -297,6 +313,15 @@ describe("space invaders game engine", () => {
       shieldBearerInvaders.every(
         (invader) =>
           !diverInvaders.some((diverInvader) => diverInvader.id === invader.id),
+      ),
+    ).toBe(true);
+    expect(
+      revengeAlienInvaders.every(
+        (invader) =>
+          !diverInvaders.some((diverInvader) => diverInvader.id === invader.id) &&
+          !shieldBearerInvaders.some(
+            (shieldBearerInvader) => shieldBearerInvader.id === invader.id,
+          ),
       ),
     ).toBe(true);
     expect(bottomRowInvaders.every((invader) => invader.kind === "standard")).toBe(true);
@@ -319,6 +344,10 @@ describe("space invaders game engine", () => {
       points: 20,
     });
     expect(isSpaceInvaderShielded(getInvader(game, 1, 4), game.invaders)).toBe(true);
+    expect(getInvader(game, 1, 5)).toMatchObject({
+      kind: "revenge",
+      points: 20,
+    });
     expect(game.invaders.at(-1)).toMatchObject({
       column: SPACE_INVADERS_COLUMNS - 1,
       kind: "standard",
@@ -334,6 +363,8 @@ describe("space invaders game engine", () => {
     const lastDiverIds = getDiverIds(lastSelection);
     const firstShieldBearerIds = getShieldBearerIds(firstSelection);
     const lastShieldBearerIds = getShieldBearerIds(lastSelection);
+    const firstRevengeAlienIds = getRevengeAlienIds(firstSelection);
+    const lastRevengeAlienIds = getRevengeAlienIds(lastSelection);
     const firstDivers = firstSelection.invaders.filter((invader) => invader.kind === "diver");
     const lastDivers = lastSelection.invaders.filter((invader) => invader.kind === "diver");
     const firstShieldBearers = firstSelection.invaders.filter(
@@ -341,6 +372,12 @@ describe("space invaders game engine", () => {
     );
     const lastShieldBearers = lastSelection.invaders.filter(
       (invader) => invader.kind === "shield-bearer",
+    );
+    const firstRevengeAliens = firstSelection.invaders.filter(
+      (invader) => invader.kind === "revenge",
+    );
+    const lastRevengeAliens = lastSelection.invaders.filter(
+      (invader) => invader.kind === "revenge",
     );
     const firstBottomRowInvaders = firstSelection.invaders.filter(
       (invader) => invader.row === SPACE_INVADERS_ROWS - 1,
@@ -353,8 +390,11 @@ describe("space invaders game engine", () => {
     expect(lastDiverIds).toHaveLength(10);
     expect(firstShieldBearerIds).toHaveLength(SPACE_INVADERS_SHIELD_BEARER_COUNT);
     expect(lastShieldBearerIds).toHaveLength(SPACE_INVADERS_SHIELD_BEARER_COUNT);
+    expect(firstRevengeAlienIds).toHaveLength(SPACE_INVADERS_REVENGE_ALIEN_COUNT);
+    expect(lastRevengeAlienIds).toHaveLength(SPACE_INVADERS_REVENGE_ALIEN_COUNT);
     expect(firstDiverIds).not.toEqual(lastDiverIds);
     expect(firstShieldBearerIds).not.toEqual(lastShieldBearerIds);
+    expect(firstRevengeAlienIds).not.toEqual(lastRevengeAlienIds);
     expect(firstDivers.every((invader) => invader.row < SPACE_INVADERS_ROWS - 1)).toBe(true);
     expect(lastDivers.every((invader) => invader.row < SPACE_INVADERS_ROWS - 1)).toBe(true);
     expect(
@@ -367,8 +407,28 @@ describe("space invaders game engine", () => {
         (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
       ),
     ).toBe(true);
+    expect(
+      firstRevengeAliens.every(
+        (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
+      ),
+    ).toBe(true);
+    expect(
+      lastRevengeAliens.every(
+        (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
+      ),
+    ).toBe(true);
     expect(firstShieldBearerIds.every((id) => !firstDiverIds.includes(id))).toBe(true);
     expect(lastShieldBearerIds.every((id) => !lastDiverIds.includes(id))).toBe(true);
+    expect(
+      firstRevengeAlienIds.every(
+        (id) => !firstDiverIds.includes(id) && !firstShieldBearerIds.includes(id),
+      ),
+    ).toBe(true);
+    expect(
+      lastRevengeAlienIds.every(
+        (id) => !lastDiverIds.includes(id) && !lastShieldBearerIds.includes(id),
+      ),
+    ).toBe(true);
     expect(firstBottomRowInvaders.every((invader) => invader.kind === "standard")).toBe(true);
     expect(lastBottomRowInvaders.every((invader) => invader.kind === "standard")).toBe(true);
   });
@@ -380,6 +440,7 @@ describe("space invaders game engine", () => {
       boardWidth: 480,
     });
     const restarted = restartSpaceInvadersGame(game);
+    const expectedSmallPresetRevengeAlienCount = 2;
 
     expect(game.alienCount).toBe(24);
     expect(game.boardHeight).toBe(640);
@@ -390,6 +451,9 @@ describe("space invaders game engine", () => {
     expect(game.invaders.filter((invader) => invader.kind === "shield-bearer")).toHaveLength(
       SPACE_INVADERS_SHIELD_BEARER_COUNT,
     );
+    expect(game.invaders.filter((invader) => invader.kind === "revenge")).toHaveLength(
+      expectedSmallPresetRevengeAlienCount,
+    );
     expect(game.player.x + game.player.width / 2).toBe(240);
     expect(restarted.alienCount).toBe(24);
     expect(restarted.boardHeight).toBe(640);
@@ -399,6 +463,9 @@ describe("space invaders game engine", () => {
     expect(
       restarted.invaders.filter((invader) => invader.kind === "shield-bearer"),
     ).toHaveLength(SPACE_INVADERS_SHIELD_BEARER_COUNT);
+    expect(restarted.invaders.filter((invader) => invader.kind === "revenge")).toHaveLength(
+      expectedSmallPresetRevengeAlienCount,
+    );
     expect(restarted.status).toBe("running");
   });
 
@@ -1232,6 +1299,223 @@ describe("space invaders game engine", () => {
       hasScored: true,
       kind: "piercing",
     });
+  });
+
+  it("fires immediate shots from every adjacent alien when a revenge alien is destroyed", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const revengeAlien = getInvader(game, 1, 5);
+    const adjacentInvaders = [
+      getInvader(game, 0, 4),
+      getInvader(game, 0, 5),
+      getInvader(game, 0, 6),
+      getInvader(game, 1, 4),
+      getInvader(game, 1, 6),
+      getInvader(game, 2, 4),
+      getInvader(game, 2, 5),
+      getInvader(game, 2, 6),
+    ];
+    const activeInvaderIds = new Set([
+      revengeAlien.id,
+      ...adjacentInvaders.map((invader) => invader.id),
+    ]);
+    const advanced = advanceSpaceInvadersGame(
+      createRunningGame({
+        invaderShotCooldownTicks: 1_000,
+        invaders: game.invaders.map((invader) => ({
+          ...invader,
+          isActive: activeInvaderIds.has(invader.id),
+        })),
+        playerShots: [createPlayerShotAlignedWith(revengeAlien)],
+      }),
+      () => 0,
+    );
+
+    expect(revengeAlien.kind).toBe("revenge");
+    expect(
+      advanced.invaders.find((invader) => invader.id === revengeAlien.id)?.isActive,
+    ).toBe(false);
+    expect(
+      advanced.invaders
+        .filter((invader) => adjacentInvaders.some((source) => source.id === invader.id))
+        .every((invader) => invader.isActive),
+    ).toBe(true);
+    expect(advanced.invaderShots.map((shot) => shot.sourceInvaderId)).toEqual([
+      adjacentInvaders[0]!.id,
+      adjacentInvaders[1]!.id,
+      adjacentInvaders[2]!.id,
+      adjacentInvaders[3]!.id,
+      adjacentInvaders[4]!.id,
+      adjacentInvaders[5]!.id,
+      adjacentInvaders[5]!.id,
+      adjacentInvaders[5]!.id,
+      adjacentInvaders[6]!.id,
+      adjacentInvaders[6]!.id,
+      adjacentInvaders[6]!.id,
+      adjacentInvaders[7]!.id,
+      adjacentInvaders[7]!.id,
+      adjacentInvaders[7]!.id,
+    ]);
+    expect(
+      advanced.invaderShots.map(({ id, kind, sourceColumn, sourceRow, velocityX }) => ({
+        id,
+        kind,
+        sourceColumn,
+        sourceRow,
+        velocityX,
+      })),
+    ).toEqual([
+      {
+        id: "invader-shot-0",
+        kind: "commander",
+        sourceColumn: 4,
+        sourceRow: 0,
+        velocityX: expect.any(Number),
+      },
+      {
+        id: "invader-shot-1",
+        kind: "commander",
+        sourceColumn: 5,
+        sourceRow: 0,
+        velocityX: expect.any(Number),
+      },
+      {
+        id: "invader-shot-2",
+        kind: "commander",
+        sourceColumn: 6,
+        sourceRow: 0,
+        velocityX: expect.any(Number),
+      },
+      {
+        id: "invader-shot-3",
+        kind: "burst",
+        sourceColumn: 4,
+        sourceRow: 1,
+        velocityX: 0,
+      },
+      {
+        id: "invader-shot-4",
+        kind: "burst",
+        sourceColumn: 6,
+        sourceRow: 1,
+        velocityX: 0,
+      },
+      {
+        id: "invader-shot-5",
+        kind: "scatter",
+        sourceColumn: 4,
+        sourceRow: 2,
+        velocityX: -1.25,
+      },
+      {
+        id: "invader-shot-6",
+        kind: "scatter",
+        sourceColumn: 4,
+        sourceRow: 2,
+        velocityX: 0,
+      },
+      {
+        id: "invader-shot-7",
+        kind: "scatter",
+        sourceColumn: 4,
+        sourceRow: 2,
+        velocityX: 1.25,
+      },
+      {
+        id: "invader-shot-8",
+        kind: "scatter",
+        sourceColumn: 5,
+        sourceRow: 2,
+        velocityX: -1.25,
+      },
+      {
+        id: "invader-shot-9",
+        kind: "scatter",
+        sourceColumn: 5,
+        sourceRow: 2,
+        velocityX: 0,
+      },
+      {
+        id: "invader-shot-10",
+        kind: "scatter",
+        sourceColumn: 5,
+        sourceRow: 2,
+        velocityX: 1.25,
+      },
+      {
+        id: "invader-shot-11",
+        kind: "scatter",
+        sourceColumn: 6,
+        sourceRow: 2,
+        velocityX: -1.25,
+      },
+      {
+        id: "invader-shot-12",
+        kind: "scatter",
+        sourceColumn: 6,
+        sourceRow: 2,
+        velocityX: 0,
+      },
+      {
+        id: "invader-shot-13",
+        kind: "scatter",
+        sourceColumn: 6,
+        sourceRow: 2,
+        velocityX: 1.25,
+      },
+    ]);
+    expect(advanced.nextInvaderShotId).toBe(14);
+  });
+
+  it("forces revenge shots even when the active invader shot limit is full", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const revengeAlien = getInvader(game, 1, 5);
+    const leftNeighbor = getInvader(game, 1, 4);
+    const advanced = advanceSpaceInvadersGame(
+      createRunningGame({
+        invaderShotCooldownTicks: 1_000,
+        invaderShots: [
+          createInvaderShotFixture({
+            id: "existing-shot-0",
+            sourceColumn: 0,
+            sourceInvaderId: "4:0",
+            x: 20,
+          }),
+          createInvaderShotFixture({
+            id: "existing-shot-1",
+            sourceColumn: 1,
+            sourceInvaderId: "4:1",
+            x: 40,
+          }),
+          createInvaderShotFixture({
+            id: "existing-shot-2",
+            sourceColumn: 2,
+            sourceInvaderId: "4:2",
+            x: 60,
+          }),
+        ],
+        invaders: game.invaders.map((invader) => ({
+          ...invader,
+          isActive: invader.id === revengeAlien.id || invader.id === leftNeighbor.id,
+        })),
+        nextInvaderShotId: 5,
+        playerShots: [createPlayerShotAlignedWith(revengeAlien)],
+      }),
+      () => 0,
+    );
+
+    expect(advanced.invaderShots).toHaveLength(4);
+    expect(advanced.invaderShots.map((shot) => shot.sourceInvaderId)).toEqual([
+      "4:0",
+      "4:1",
+      "4:2",
+      leftNeighbor.id,
+    ]);
+    expect(advanced.invaderShots[3]).toMatchObject({
+      id: "invader-shot-5",
+      kind: "burst",
+      sourceInvaderId: leftNeighbor.id,
+    });
+    expect(advanced.nextInvaderShotId).toBe(6);
   });
 
   it("adds hit-streak bonus points after consecutive clean hits", () => {

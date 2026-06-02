@@ -2,7 +2,7 @@ export type SpaceInvadersStatus = "ready" | "running" | "paused" | "lost" | "won
 
 export type SpaceInvadersDirection = -1 | 1;
 
-export type SpaceInvaderKind = "standard" | "diver" | "shield-bearer";
+export type SpaceInvaderKind = "standard" | "diver" | "shield-bearer" | "revenge";
 
 export type SpaceInvadersRandomSource = () => number;
 
@@ -251,6 +251,7 @@ const DIVER_INVADER_COUNT = 10;
 const DIVER_DROP_Y = 16;
 const DIVER_STEP_MULTIPLIER = 4.375;
 export const SPACE_INVADERS_SHIELD_BEARER_COUNT = 4;
+export const SPACE_INVADERS_REVENGE_ALIEN_COUNT = 3;
 const EXPLOSION_PADDING_BY_KIND: Record<SpaceInvadersExplosionKind, number> = {
   invader: 16,
   player: 12,
@@ -474,11 +475,21 @@ export function createSpaceInvadersFormation({
     random,
     rows,
   });
+  const revengeAlienIds = selectRevengeAlienIds({
+    columns,
+    excludedIds: shieldBearerInvaderIds,
+    random,
+    rows,
+  });
+  const specialInvaderIds = new Set([
+    ...shieldBearerInvaderIds,
+    ...revengeAlienIds,
+  ]);
   const diverInvaderIds = selectDiverInvaderIds(
     rows,
     columns,
     random,
-    shieldBearerInvaderIds,
+    specialInvaderIds,
   );
 
   return Array.from({ length: rows }, (_, row) =>
@@ -486,6 +497,8 @@ export function createSpaceInvadersFormation({
       const id = `${row}:${column}`;
       const kind: SpaceInvaderKind = shieldBearerInvaderIds.has(id)
         ? "shield-bearer"
+        : revengeAlienIds.has(id)
+          ? "revenge"
         : diverInvaderIds.has(id)
           ? "diver"
           : "standard";
@@ -843,6 +856,11 @@ function advancePlayerShots(
         random,
       );
     }
+
+    gameWithHits = maybeCreateSpaceInvadersRevengeShots(
+      gameWithHits,
+      destroyedInvaders,
+    );
 
     if (!didScoreWithShot) {
       const hitStreakResult = advanceSpaceInvadersHitStreak(gameWithHits);
@@ -1697,6 +1715,71 @@ function createInvaderShots(invader: SpaceInvader, nextInvaderShotId: number) {
   return [createInvaderShot(invader, nextInvaderShotId, spec, spec.velocityX)];
 }
 
+function maybeCreateSpaceInvadersRevengeShots(
+  game: SpaceInvadersGameState,
+  destroyedInvaders: SpaceInvader[],
+): SpaceInvadersGameState {
+  const destroyedRevengeInvaders = destroyedInvaders.filter(
+    (invader) => invader.kind === "revenge",
+  );
+
+  if (destroyedRevengeInvaders.length === 0) {
+    return game;
+  }
+
+  const revengeSources = getRevengeShotSources(
+    destroyedRevengeInvaders,
+    game.invaders,
+  );
+  const revengeShots: SpaceInvadersInvaderShot[] = [];
+  let nextInvaderShotId = game.nextInvaderShotId;
+
+  for (const source of revengeSources) {
+    const createdShots = createInvaderShots(source, nextInvaderShotId);
+
+    revengeShots.push(...createdShots);
+    nextInvaderShotId += createdShots.length;
+  }
+
+  if (revengeShots.length === 0) {
+    return game;
+  }
+
+  return {
+    ...game,
+    invaderShots: [...game.invaderShots, ...revengeShots],
+    nextInvaderShotId,
+  };
+}
+
+function getRevengeShotSources(
+  destroyedRevengeInvaders: SpaceInvader[],
+  invaders: SpaceInvader[],
+) {
+  const sourceById = new Map<string, SpaceInvader>();
+
+  for (const revengeInvader of destroyedRevengeInvaders) {
+    const adjacentInvaders = invaders
+      .filter(
+        (invader) =>
+          invader.isActive &&
+          Math.abs(invader.row - revengeInvader.row) <= 1 &&
+          Math.abs(invader.column - revengeInvader.column) <= 1,
+      )
+      .sort((first, second) =>
+        first.row === second.row
+          ? first.column - second.column
+          : first.row - second.row,
+      );
+
+    for (const adjacentInvader of adjacentInvaders) {
+      sourceById.set(adjacentInvader.id, adjacentInvader);
+    }
+  }
+
+  return [...sourceById.values()];
+}
+
 function createInvaderShot(
   invader: SpaceInvader,
   nextInvaderShotId: number,
@@ -2089,6 +2172,74 @@ function selectShieldBearerInvaderIds({
   }
 
   return selectedIds;
+}
+
+function selectRevengeAlienIds({
+  columns,
+  excludedIds,
+  random,
+  rows,
+}: {
+  columns: number;
+  excludedIds: Set<string>;
+  random: SpaceInvadersRandomSource;
+  rows: number;
+}) {
+  const unavailableIds = getUnavailableRevengeAlienIds(excludedIds, columns);
+  const middleRowIds = Array.from({ length: Math.max(0, rows - 2) }, (_, index) =>
+    Array.from({ length: columns }, (_, column) => `${index + 1}:${column}`),
+  ).flat();
+  const preferredCandidates = middleRowIds.filter((id) => !unavailableIds.has(id));
+  const fallbackCandidates = middleRowIds.filter(
+    (id) => !excludedIds.has(id) && unavailableIds.has(id),
+  );
+  const candidates = [...preferredCandidates, ...fallbackCandidates];
+  const nonBottomSlotCount = Math.max(0, rows - 1) * columns;
+  const maximumRevengeAlienCount = Math.max(
+    0,
+    nonBottomSlotCount - excludedIds.size - DIVER_INVADER_COUNT,
+  );
+  const selectedCount = Math.min(
+    SPACE_INVADERS_REVENGE_ALIEN_COUNT,
+    maximumRevengeAlienCount,
+    candidates.length,
+  );
+  const selectedIds = new Set<string>();
+
+  for (let selectedIndex = 0; selectedIndex < selectedCount; selectedIndex += 1) {
+    const candidateIndex = getRandomIndex(candidates.length, random);
+    const [selectedId] = candidates.splice(candidateIndex, 1);
+
+    if (selectedId !== undefined) {
+      selectedIds.add(selectedId);
+    }
+  }
+
+  return selectedIds;
+}
+
+function getUnavailableRevengeAlienIds(excludedIds: Set<string>, columns: number) {
+  const unavailableIds = new Set<string>(excludedIds);
+
+  for (const id of excludedIds) {
+    const [row, column] = getInvaderGridPositionFromId(id);
+
+    for (let columnOffset = -1; columnOffset <= 1; columnOffset += 1) {
+      const unavailableColumn = column + columnOffset;
+
+      if (unavailableColumn >= 0 && unavailableColumn < columns) {
+        unavailableIds.add(`${row}:${unavailableColumn}`);
+      }
+    }
+  }
+
+  return unavailableIds;
+}
+
+function getInvaderGridPositionFromId(id: string) {
+  const [row = "0", column = "0"] = id.split(":");
+
+  return [Number(row), Number(column)] as const;
 }
 
 export function isSpaceInvaderShielded(

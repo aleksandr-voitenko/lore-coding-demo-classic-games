@@ -172,6 +172,13 @@ const shieldBearerInvaderSprite = {
   src: getSpaceInvadersAssetSrc("alien-shield-bearer"),
 } as const;
 
+const revengeInvaderSprite = {
+  glowClassName:
+    "drop-shadow-[0_0_15px_color-mix(in_oklch,var(--invaders-red)_70%,transparent)]",
+  spriteClassName: "inset-x-[-16%] inset-y-[-24%]",
+  src: getSpaceInvadersAssetSrc("alien-revenge-alien"),
+} as const;
+
 export function getSpaceInvaderSprite(row: number) {
   return spaceInvaderSprites[row % spaceInvaderSprites.length];
 }
@@ -179,6 +186,10 @@ export function getSpaceInvaderSprite(row: number) {
 function getSpaceInvaderRenderSprite(kind: SpaceInvaderKind, row: number) {
   if (kind === "shield-bearer") {
     return shieldBearerInvaderSprite;
+  }
+
+  if (kind === "revenge") {
+    return revengeInvaderSprite;
   }
 
   return {
