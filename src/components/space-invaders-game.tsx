@@ -115,6 +115,7 @@ export const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
       `Destroying multiple invaders in one volley adds ${SPACE_INVADERS_MULTI_KILL_BONUSES[2]}, ${SPACE_INVADERS_MULTI_KILL_BONUSES[3]}, or ${SPACE_INVADERS_MULTI_KILL_BONUSES[4]} bonus points.`,
       `Consecutive UFO hits add ${SPACE_INVADERS_UFO_CHAIN_BONUS_STEP} more points per UFO after the first, up to ${SPACE_INVADERS_UFO_CHAIN_BONUS_CAP}; escaped UFOs reset the chain.`,
       "Clear columns carefully; exposed diver invaders move faster and drop harder than the rest.",
+      "Shield Bearers glow cyan and protect nearby active aliens; destroy the bearer or use Piercing to punch through the shield.",
       `Destroyed diver invaders drop power-up icons: bonus score adds ${SPACE_INVADERS_BONUS_SCORE_POINTS} points, extra life rarely grants a life, Burst, Freeze, Piercing, Shield, and Shotgun grant their matching bonuses.`,
       "Burst, Piercing, and Shotgun change your next shot, then return the cannon to its normal laser.",
       "Each exposed invader row fires its own pattern: tracking bolts, delayed bursts, scatter bursts, needles, or lasers.",

@@ -6,6 +6,7 @@ import {
   fireSpaceInvadersShot,
   getSpaceInvadersPlayerSpeed,
   getSpaceInvadersTickDelay,
+  isSpaceInvaderShielded,
   moveSpaceInvadersPlayer,
   pauseSpaceInvadersGame,
   restartSpaceInvadersGame,
@@ -30,6 +31,7 @@ import {
   SPACE_INVADERS_POWER_UP_SPEED,
   SPACE_INVADERS_ROWS,
   SPACE_INVADERS_SCORE_POPUP_TICKS,
+  SPACE_INVADERS_SHIELD_BEARER_COUNT,
   SPACE_INVADERS_STARTING_LIVES,
   SPACE_INVADERS_UFO_CHAIN_BONUS_CAP,
   SPACE_INVADERS_UFO_CHAIN_BONUS_STEP,
@@ -55,6 +57,12 @@ function createRunningGame(
 function getDiverIds(game: SpaceInvadersGameState) {
   return game.invaders
     .filter((invader) => invader.kind === "diver")
+    .map((invader) => invader.id);
+}
+
+function getShieldBearerIds(game: SpaceInvadersGameState) {
+  return game.invaders
+    .filter((invader) => invader.kind === "shield-bearer")
     .map((invader) => invader.id);
 }
 
@@ -228,6 +236,9 @@ describe("space invaders game engine", () => {
   it("creates a ready formation with a centered player cannon", () => {
     const game = createInitialSpaceInvadersGame({ random: () => 0 });
     const diverInvaders = game.invaders.filter((invader) => invader.kind === "diver");
+    const shieldBearerInvaders = game.invaders.filter(
+      (invader) => invader.kind === "shield-bearer",
+    );
     const bottomRowInvaders = game.invaders.filter(
       (invader) => invader.row === SPACE_INVADERS_ROWS - 1,
     );
@@ -276,6 +287,18 @@ describe("space invaders game engine", () => {
     expect(game.invaders.every((invader) => invader.isActive)).toBe(true);
     expect(diverInvaders).toHaveLength(10);
     expect(diverInvaders.every((invader) => invader.row < SPACE_INVADERS_ROWS - 1)).toBe(true);
+    expect(shieldBearerInvaders).toHaveLength(SPACE_INVADERS_SHIELD_BEARER_COUNT);
+    expect(
+      shieldBearerInvaders.every(
+        (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
+      ),
+    ).toBe(true);
+    expect(
+      shieldBearerInvaders.every(
+        (invader) =>
+          !diverInvaders.some((diverInvader) => diverInvader.id === invader.id),
+      ),
+    ).toBe(true);
     expect(bottomRowInvaders.every((invader) => invader.kind === "standard")).toBe(true);
     expect(game.invaders[0]).toMatchObject({
       column: 0,
@@ -292,9 +315,10 @@ describe("space invaders game engine", () => {
       points: 30,
     });
     expect(getInvader(game, 1, 0)).toMatchObject({
-      kind: "standard",
+      kind: "shield-bearer",
       points: 20,
     });
+    expect(isSpaceInvaderShielded(getInvader(game, 1, 4), game.invaders)).toBe(true);
     expect(game.invaders.at(-1)).toMatchObject({
       column: SPACE_INVADERS_COLUMNS - 1,
       kind: "standard",
@@ -303,13 +327,21 @@ describe("space invaders game engine", () => {
     });
   });
 
-  it("uses the random source to choose ten divers from non-bottom rows", () => {
+  it("uses the random source to choose divers and shield bearers from safe rows", () => {
     const firstSelection = createInitialSpaceInvadersGame({ random: () => 0 });
     const lastSelection = createInitialSpaceInvadersGame({ random: () => 1 });
     const firstDiverIds = getDiverIds(firstSelection);
     const lastDiverIds = getDiverIds(lastSelection);
+    const firstShieldBearerIds = getShieldBearerIds(firstSelection);
+    const lastShieldBearerIds = getShieldBearerIds(lastSelection);
     const firstDivers = firstSelection.invaders.filter((invader) => invader.kind === "diver");
     const lastDivers = lastSelection.invaders.filter((invader) => invader.kind === "diver");
+    const firstShieldBearers = firstSelection.invaders.filter(
+      (invader) => invader.kind === "shield-bearer",
+    );
+    const lastShieldBearers = lastSelection.invaders.filter(
+      (invader) => invader.kind === "shield-bearer",
+    );
     const firstBottomRowInvaders = firstSelection.invaders.filter(
       (invader) => invader.row === SPACE_INVADERS_ROWS - 1,
     );
@@ -319,9 +351,24 @@ describe("space invaders game engine", () => {
 
     expect(firstDiverIds).toHaveLength(10);
     expect(lastDiverIds).toHaveLength(10);
+    expect(firstShieldBearerIds).toHaveLength(SPACE_INVADERS_SHIELD_BEARER_COUNT);
+    expect(lastShieldBearerIds).toHaveLength(SPACE_INVADERS_SHIELD_BEARER_COUNT);
     expect(firstDiverIds).not.toEqual(lastDiverIds);
+    expect(firstShieldBearerIds).not.toEqual(lastShieldBearerIds);
     expect(firstDivers.every((invader) => invader.row < SPACE_INVADERS_ROWS - 1)).toBe(true);
     expect(lastDivers.every((invader) => invader.row < SPACE_INVADERS_ROWS - 1)).toBe(true);
+    expect(
+      firstShieldBearers.every(
+        (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
+      ),
+    ).toBe(true);
+    expect(
+      lastShieldBearers.every(
+        (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
+      ),
+    ).toBe(true);
+    expect(firstShieldBearerIds.every((id) => !firstDiverIds.includes(id))).toBe(true);
+    expect(lastShieldBearerIds.every((id) => !lastDiverIds.includes(id))).toBe(true);
     expect(firstBottomRowInvaders.every((invader) => invader.kind === "standard")).toBe(true);
     expect(lastBottomRowInvaders.every((invader) => invader.kind === "standard")).toBe(true);
   });
@@ -339,11 +386,19 @@ describe("space invaders game engine", () => {
     expect(game.boardWidth).toBe(480);
     expect(game.baseY).toBe(572);
     expect(game.invaders).toHaveLength(24);
+    expect(game.invaders.filter((invader) => invader.kind === "diver")).toHaveLength(10);
+    expect(game.invaders.filter((invader) => invader.kind === "shield-bearer")).toHaveLength(
+      SPACE_INVADERS_SHIELD_BEARER_COUNT,
+    );
     expect(game.player.x + game.player.width / 2).toBe(240);
     expect(restarted.alienCount).toBe(24);
     expect(restarted.boardHeight).toBe(640);
     expect(restarted.boardWidth).toBe(480);
     expect(restarted.invaders).toHaveLength(24);
+    expect(restarted.invaders.filter((invader) => invader.kind === "diver")).toHaveLength(10);
+    expect(
+      restarted.invaders.filter((invader) => invader.kind === "shield-bearer"),
+    ).toHaveLength(SPACE_INVADERS_SHIELD_BEARER_COUNT);
     expect(restarted.status).toBe("running");
   });
 
@@ -1051,6 +1106,132 @@ describe("space invaders game engine", () => {
       },
     ]);
     expect(advanced.nextScorePopupId).toBe(1);
+  });
+
+  it("absorbs normal hits against aliens protected by an active shield bearer", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const shieldBearer = getInvader(game, 1, 3);
+    const protectedInvader = getInvader(game, 1, 4);
+    const runningGame = createRunningGame({
+      hitStreak: 3,
+      invaderShotCooldownTicks: 1_000,
+      invaders: game.invaders.map((invader) => ({
+        ...invader,
+        isActive: invader.id === shieldBearer.id || invader.id === protectedInvader.id,
+      })),
+      playerShots: [createPlayerShotAlignedWith(protectedInvader)],
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
+
+    expect(shieldBearer.kind).toBe("shield-bearer");
+    expect(protectedInvader.kind).toBe("standard");
+    expect(isSpaceInvaderShielded(protectedInvader, runningGame.invaders)).toBe(true);
+    expect(
+      advanced.invaders.find((invader) => invader.id === protectedInvader.id)?.isActive,
+    ).toBe(true);
+    expect(
+      advanced.invaders.find((invader) => invader.id === shieldBearer.id)?.isActive,
+    ).toBe(true);
+    expect(advanced.playerShots).toEqual([]);
+    expect(advanced.score).toBe(0);
+    expect(advanced.hitStreak).toBe(0);
+    expect(advanced.explosions).toEqual([]);
+    expect(advanced.scorePopups).toEqual([]);
+    expect(advanced.playerVolleyHasScored).toBe(false);
+    expect(advanced.playerVolleyHasUnscoredExit).toBe(false);
+  });
+
+  it("lets players destroy shield bearers and then their formerly protected neighbors", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const shieldBearer = getInvader(game, 1, 3);
+    const protectedInvader = getInvader(game, 1, 4);
+    const shieldBearerDestroyed = advanceSpaceInvadersGame(
+      createRunningGame({
+        invaderShotCooldownTicks: 1_000,
+        invaders: game.invaders.map((invader) => ({
+          ...invader,
+          isActive:
+            invader.id === shieldBearer.id || invader.id === protectedInvader.id,
+        })),
+        playerShots: [createPlayerShotAlignedWith(shieldBearer)],
+      }),
+      () => 0,
+    );
+    const exposedInvaderDestroyed = advanceSpaceInvadersGame(
+      {
+        ...shieldBearerDestroyed,
+        invaderShotCooldownTicks: 1_000,
+        playerShots: [createPlayerShotAlignedWith(protectedInvader)],
+      },
+      () => 0,
+    );
+
+    expect(shieldBearer.kind).toBe("shield-bearer");
+    expect(
+      shieldBearerDestroyed.invaders.find((invader) => invader.id === shieldBearer.id)
+        ?.isActive,
+    ).toBe(false);
+    expect(
+      shieldBearerDestroyed.invaders.find((invader) => invader.id === protectedInvader.id)
+        ?.isActive,
+    ).toBe(true);
+    expect(
+      isSpaceInvaderShielded(
+        protectedInvader,
+        shieldBearerDestroyed.invaders,
+      ),
+    ).toBe(false);
+    expect(
+      exposedInvaderDestroyed.invaders.find(
+        (invader) => invader.id === protectedInvader.id,
+      )?.isActive,
+    ).toBe(false);
+    expect(exposedInvaderDestroyed.score).toBe(
+      shieldBearer.points + protectedInvader.points + SPACE_INVADERS_HIT_STREAK_BONUS_STEP,
+    );
+    expect(exposedInvaderDestroyed.explosions).toHaveLength(2);
+  });
+
+  it("lets piercing lasers punch through shield-bearer protection", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const shieldBearer = getInvader(game, 1, 3);
+    const protectedInvader = getInvader(game, 1, 4);
+    const remainingInvader = getInvader(game, SPACE_INVADERS_ROWS - 1, 10);
+    const advanced = advanceSpaceInvadersGame(
+      createRunningGame({
+        invaderShotCooldownTicks: 1_000,
+        invaders: game.invaders.map((invader) => ({
+          ...invader,
+          isActive:
+            invader.id === shieldBearer.id ||
+            invader.id === protectedInvader.id ||
+            invader.id === remainingInvader.id,
+        })),
+        playerShots: [
+          {
+            ...createPlayerShotAlignedWith(protectedInvader),
+            kind: "piercing",
+          },
+        ],
+      }),
+      () => 0,
+    );
+
+    expect(isSpaceInvaderShielded(protectedInvader, game.invaders)).toBe(true);
+    expect(
+      advanced.invaders.find((invader) => invader.id === protectedInvader.id)?.isActive,
+    ).toBe(false);
+    expect(
+      advanced.invaders.find((invader) => invader.id === shieldBearer.id)?.isActive,
+    ).toBe(true);
+    expect(advanced.status).toBe("running");
+    expect(advanced.score).toBe(protectedInvader.points);
+    expect(advanced.hitStreak).toBe(1);
+    expect(advanced.playerShots).toHaveLength(1);
+    expect(advanced.playerShots[0]).toMatchObject({
+      hasScored: true,
+      kind: "piercing",
+    });
   });
 
   it("adds hit-streak bonus points after consecutive clean hits", () => {

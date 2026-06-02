@@ -3,6 +3,7 @@
 import type { CSSProperties, ReactNode } from "react";
 
 import {
+  isSpaceInvaderShielded,
   SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS,
   SPACE_INVADERS_SCORE_POPUP_TICKS,
   type SpaceInvadersExplosionKind,
@@ -164,8 +165,26 @@ export const spaceInvaderSprites = [
   },
 ] as const;
 
+const shieldBearerInvaderSprite = {
+  glowClassName:
+    "drop-shadow-[0_0_14px_color-mix(in_oklch,var(--invaders-cyan)_64%,transparent)]",
+  spriteClassName: "inset-x-[-16%] inset-y-[-24%]",
+  src: getSpaceInvadersAssetSrc("alien-shield-bearer"),
+} as const;
+
 export function getSpaceInvaderSprite(row: number) {
   return spaceInvaderSprites[row % spaceInvaderSprites.length];
+}
+
+function getSpaceInvaderRenderSprite(kind: SpaceInvaderKind, row: number) {
+  if (kind === "shield-bearer") {
+    return shieldBearerInvaderSprite;
+  }
+
+  return {
+    ...getSpaceInvaderSprite(row),
+    spriteClassName: "inset-[-8%]",
+  };
 }
 
 const invaderShotClassNames: Record<SpaceInvadersInvaderShotKind, string> = {
@@ -195,13 +214,24 @@ const explosionSpriteClassNames: Record<SpaceInvadersExplosionVariant, string> =
 };
 
 function getInvaderModifier(kind: SpaceInvaderKind) {
-  if (kind !== "diver") {
-    return null;
+  if (kind === "shield-bearer") {
+    return (
+      <span
+        className="pointer-events-none absolute left-1/2 top-[-18%] z-20 flex size-[34%] -translate-x-1/2 items-center justify-center rounded-full border border-[var(--invaders-cyan)] bg-[color-mix(in_oklch,var(--invaders-cyan)_22%,transparent)] shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-cyan)_82%,transparent)]"
+        data-testid="space-invaders-shield-bearer-blip"
+      >
+        <span className="block size-[42%] rounded-full bg-white/90 shadow-[0_0_8px_white]" />
+      </span>
+    );
   }
 
-  return (
-    <span className="pointer-events-none absolute bottom-[2%] left-1/2 size-[28%] -translate-x-1/2 rotate-45 rounded-[0.12rem] border-b-2 border-r-2 border-white/90 bg-[color-mix(in_oklch,var(--invaders-yellow)_30%,transparent)] shadow-[0_0_10px_color-mix(in_oklch,var(--invaders-yellow)_78%,transparent)]" />
-  );
+  if (kind === "diver") {
+    return (
+      <span className="pointer-events-none absolute bottom-[2%] left-1/2 z-20 size-[28%] -translate-x-1/2 rotate-45 rounded-[0.12rem] border-b-2 border-r-2 border-white/90 bg-[color-mix(in_oklch,var(--invaders-yellow)_30%,transparent)] shadow-[0_0_10px_color-mix(in_oklch,var(--invaders-yellow)_78%,transparent)]" />
+    );
+  }
+
+  return null;
 }
 
 function getPlayerShotSpriteSrc(kind: SpaceInvadersPlayerShotKind) {
@@ -314,7 +344,8 @@ export function SpaceInvadersBoard({
         />
 
         {game.invaders.map((invader) => {
-          const sprite = getSpaceInvaderSprite(invader.row);
+          const sprite = getSpaceInvaderRenderSprite(invader.kind, invader.row);
+          const isShielded = isSpaceInvaderShielded(invader, game.invaders);
 
           return (
             <span
@@ -324,6 +355,7 @@ export function SpaceInvadersBoard({
                 !invader.isActive && "opacity-0",
               )}
               data-invader-kind={invader.kind}
+              data-invader-shielded={isShielded ? "true" : undefined}
               data-testid={invader.isActive ? "space-invaders-invader" : undefined}
               key={invader.id}
               style={getBoardEntityStyle({
@@ -335,10 +367,17 @@ export function SpaceInvadersBoard({
                 y: invader.y,
               })}
             >
+              {isShielded ? (
+                <span
+                  className="space-invaders-invader-shield pointer-events-none absolute inset-[-24%] z-0 rounded-full border border-[color-mix(in_oklch,var(--invaders-cyan)_76%,transparent)] bg-[color-mix(in_oklch,var(--invaders-cyan)_14%,transparent)] shadow-[0_0_14px_color-mix(in_oklch,var(--invaders-cyan)_70%,transparent),inset_0_0_10px_color-mix(in_oklch,var(--invaders-cyan)_28%,transparent)]"
+                  data-testid="space-invaders-invader-shield"
+                />
+              ) : null}
               <span
                 className={cn(
-                  "absolute inset-[-8%] bg-contain bg-center bg-no-repeat [image-rendering:pixelated]",
+                  "absolute z-10 bg-contain bg-center bg-no-repeat [image-rendering:pixelated]",
                   sprite.glowClassName,
+                  sprite.spriteClassName,
                 )}
                 style={{ backgroundImage: `url("${sprite.src}")` }}
               />

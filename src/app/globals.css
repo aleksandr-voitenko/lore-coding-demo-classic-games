@@ -337,6 +337,24 @@
   }
 }
 
+@keyframes space-invaders-invader-shield-pulse {
+  0%,
+  100% {
+    opacity: 0.68;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.05);
+  }
+}
+
+.space-invaders-invader-shield {
+  animation: space-invaders-invader-shield-pulse 1450ms ease-in-out infinite;
+  transform-origin: center;
+  will-change: opacity, transform;
+}
+
 .space-invaders-player-shield {
   pointer-events: none;
 }
@@ -725,7 +743,8 @@
     animation: none;
   }
   .space-invaders-player-shield__surface,
-  .space-invaders-player-shield__surface--flashing {
+  .space-invaders-player-shield__surface--flashing,
+  .space-invaders-invader-shield {
     animation: none;
   }
   .space-invaders-player-shield__surface--flashing {

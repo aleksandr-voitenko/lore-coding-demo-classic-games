@@ -2,7 +2,7 @@ export type SpaceInvadersStatus = "ready" | "running" | "paused" | "lost" | "won
 
 export type SpaceInvadersDirection = -1 | 1;
 
-export type SpaceInvaderKind = "standard" | "diver";
+export type SpaceInvaderKind = "standard" | "diver" | "shield-bearer";
 
 export type SpaceInvadersRandomSource = () => number;
 
@@ -250,6 +250,7 @@ const INVADER_DROP_Y = 4;
 const DIVER_INVADER_COUNT = 10;
 const DIVER_DROP_Y = 16;
 const DIVER_STEP_MULTIPLIER = 4.375;
+export const SPACE_INVADERS_SHIELD_BEARER_COUNT = 4;
 const EXPLOSION_PADDING_BY_KIND: Record<SpaceInvadersExplosionKind, number> = {
   invader: 16,
   player: 12,
@@ -468,12 +469,26 @@ export function createSpaceInvadersFormation({
 } = {}) {
   const formationWidth = columns * INVADER_WIDTH + (columns - 1) * INVADER_GAP_X;
   const startX = Math.max(INVADER_X, (boardWidth - formationWidth) / 2);
-  const diverInvaderIds = selectDiverInvaderIds(rows, columns, random);
+  const shieldBearerInvaderIds = selectShieldBearerInvaderIds({
+    columns,
+    random,
+    rows,
+  });
+  const diverInvaderIds = selectDiverInvaderIds(
+    rows,
+    columns,
+    random,
+    shieldBearerInvaderIds,
+  );
 
   return Array.from({ length: rows }, (_, row) =>
     Array.from({ length: columns }, (_, column): SpaceInvader => {
       const id = `${row}:${column}`;
-      const kind: SpaceInvaderKind = diverInvaderIds.has(id) ? "diver" : "standard";
+      const kind: SpaceInvaderKind = shieldBearerInvaderIds.has(id)
+        ? "shield-bearer"
+        : diverInvaderIds.has(id)
+          ? "diver"
+          : "standard";
       const x = startX + column * (INVADER_WIDTH + INVADER_GAP_X);
       const y = INVADER_TOP + row * (INVADER_HEIGHT + INVADER_GAP_Y);
 
@@ -768,6 +783,12 @@ function advancePlayerShots(
     const hitInvaders = nextGame.invaders.filter(
       (invader) => invader.isActive && rectanglesIntersect(movedShot, invader),
     );
+    const vulnerableHitInvaders =
+      movedShot.kind === "piercing"
+        ? hitInvaders
+        : hitInvaders.filter(
+            (invader) => !isSpaceInvaderShielded(invader, nextGame.invaders),
+          );
 
     if (hitInvaders.length === 0) {
       activeShots.push({
@@ -777,8 +798,18 @@ function advancePlayerShots(
       continue;
     }
 
+    if (vulnerableHitInvaders.length === 0) {
+      if (!didScoreWithShot) {
+        playerVolleyHasUnscoredExit = true;
+      }
+
+      continue;
+    }
+
     const destroyedInvaders =
-      movedShot.kind === "piercing" ? hitInvaders : hitInvaders.slice(0, 1);
+      movedShot.kind === "piercing"
+        ? vulnerableHitInvaders
+        : vulnerableHitInvaders.slice(0, 1);
     const destroyedInvaderIds = new Set(
       destroyedInvaders.map((invader) => invader.id),
     );
@@ -2011,10 +2042,13 @@ function selectDiverInvaderIds(
   rows: number,
   columns: number,
   random: SpaceInvadersRandomSource,
+  excludedIds = new Set<string>(),
 ) {
   const candidates = Array.from({ length: Math.max(0, rows - 1) }, (_, row) =>
     Array.from({ length: columns }, (_, column) => `${row}:${column}`),
-  ).flat();
+  )
+    .flat()
+    .filter((id) => !excludedIds.has(id));
   const selectedCount = Math.min(DIVER_INVADER_COUNT, candidates.length);
   const selectedIds = new Set<string>();
 
@@ -2028,6 +2062,54 @@ function selectDiverInvaderIds(
   }
 
   return selectedIds;
+}
+
+function selectShieldBearerInvaderIds({
+  columns,
+  random,
+  rows,
+}: {
+  columns: number;
+  random: SpaceInvadersRandomSource;
+  rows: number;
+}) {
+  const candidates = Array.from({ length: Math.max(0, rows - 2) }, (_, index) =>
+    Array.from({ length: columns }, (_, column) => `${index + 1}:${column}`),
+  ).flat();
+  const selectedCount = Math.min(SPACE_INVADERS_SHIELD_BEARER_COUNT, candidates.length);
+  const selectedIds = new Set<string>();
+
+  for (let selectedIndex = 0; selectedIndex < selectedCount; selectedIndex += 1) {
+    const candidateIndex = getRandomIndex(candidates.length, random);
+    const [selectedId] = candidates.splice(candidateIndex, 1);
+
+    if (selectedId !== undefined) {
+      selectedIds.add(selectedId);
+    }
+  }
+
+  return selectedIds;
+}
+
+export function isSpaceInvaderShielded(
+  invader: SpaceInvader,
+  invaders: SpaceInvader[],
+) {
+  if (!invader.isActive || invader.kind === "shield-bearer") {
+    return false;
+  }
+
+  const invaderCenterX = getEntityCenterX(invader);
+  const maximumShieldDistanceX = INVADER_WIDTH + INVADER_GAP_X + 1;
+
+  return invaders.some(
+    (candidate) =>
+      candidate.isActive &&
+      candidate.kind === "shield-bearer" &&
+      candidate.row === invader.row &&
+      Math.abs(getEntityCenterX(candidate) - invaderCenterX) <=
+        maximumShieldDistanceX,
+  );
 }
 
 function getRandomIndex(candidateCount: number, random: SpaceInvadersRandomSource) {

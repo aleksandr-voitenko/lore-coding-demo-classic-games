@@ -188,7 +188,7 @@ describe("game board renderers", () => {
   });
 
   it("renders Space Invaders formation, player shot, and remaining count", () => {
-    const game = createInitialSpaceInvadersGame();
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
     const markup = renderToStaticMarkup(
       <SpaceInvadersBoard
         game={{
@@ -350,6 +350,11 @@ describe("game board renderers", () => {
       'data-testid="space-invaders-lives"',
       'data-testid="space-invaders-invader"',
       'data-invader-kind="diver"',
+      'data-invader-kind="shield-bearer"',
+      'data-invader-shielded="true"',
+      'data-testid="space-invaders-invader-shield"',
+      "space-invaders-invader-shield",
+      'data-testid="space-invaders-shield-bearer-blip"',
       'data-testid="space-invaders-player-shot"',
       'data-player-shot-kind="burst"',
       'data-player-shot-kind="piercing"',
@@ -381,6 +386,7 @@ describe("game board renderers", () => {
       "/images/space-invaders/hud-health.png?v=sprite-art-v2",
       "/images/space-invaders/hud-score.png?v=sprite-art-v2",
       "/images/space-invaders/alien-purple.png?v=sprite-art-v2",
+      "/images/space-invaders/alien-shield-bearer.png?v=sprite-art-v2",
       "/images/space-invaders/explosion-3.png?v=sprite-art-v2",
       "/images/space-invaders/ufo.png?v=sprite-art-v2",
       "/images/space-invaders/player-shot.png?v=sprite-art-v2",
