@@ -4,6 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 
 import {
   SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS,
+  SPACE_INVADERS_SCORE_POPUP_TICKS,
   type SpaceInvadersExplosionKind,
   type SpaceInvadersExplosionVariant,
   type SpaceInvadersGameState,
@@ -62,6 +63,30 @@ const spaceInvadersBoardBackgroundStyle: CSSProperties = {
 const spaceInvadersBoardShadeStyle: CSSProperties = {
   background:
     "linear-gradient(180deg, rgb(0 0 0 / 0.34), rgb(0 0 0 / 0.12) 48%, rgb(0 0 0 / 0.42))",
+};
+
+const spaceInvadersScorePopupTextShadow = [
+  "-1px -1px 0 rgb(0 0 0 / 0.95)",
+  "0 -1px 0 rgb(0 0 0 / 0.95)",
+  "1px -1px 0 rgb(0 0 0 / 0.95)",
+  "-1px 0 0 rgb(0 0 0 / 0.95)",
+  "1px 0 0 rgb(0 0 0 / 0.95)",
+  "-1px 1px 0 rgb(0 0 0 / 0.95)",
+  "0 1px 0 rgb(0 0 0 / 0.95)",
+  "1px 1px 0 rgb(0 0 0 / 0.95)",
+].join(", ");
+
+const spaceInvadersScorePopupBaseStyle: CSSProperties = {
+  color: "white",
+  display: "block",
+  fontSize: "0.72rem",
+  fontWeight: 800,
+  letterSpacing: 0,
+  lineHeight: 1,
+  paintOrder: "stroke fill",
+  textShadow: spaceInvadersScorePopupTextShadow,
+  WebkitTextStroke: "0.75px rgb(0 0 0 / 0.9)",
+  willChange: "opacity",
 };
 
 export const spaceInvaderSprites = [
@@ -173,6 +198,13 @@ function getPlayerShieldStyle(game: SpaceInvadersGameState): CSSProperties {
     x: game.player.x + game.player.width / 2 - diameter / 2,
     y: game.player.y + game.player.height / 2 - diameter / 2,
   });
+}
+
+function getScorePopupTextStyle(ttlTicks: number): CSSProperties {
+  return {
+    ...spaceInvadersScorePopupBaseStyle,
+    opacity: ttlTicks / SPACE_INVADERS_SCORE_POPUP_TICKS,
+  };
 }
 
 export function SpaceInvadersBoard({
@@ -398,6 +430,31 @@ export function SpaceInvadersBoard({
                 backgroundImage: `url("${explosionSpriteSrcByVariant[explosion.variant]}")`,
               }}
             />
+          </span>
+        ))}
+
+        {game.scorePopups.map((popup) => (
+          <span
+            aria-hidden="true"
+            className="absolute left-0 top-0 z-20 flex items-center justify-center"
+            data-score-popup-points={popup.points}
+            data-testid="space-invaders-score-popup"
+            key={popup.id}
+            style={getBoardEntityStyle({
+              boardHeight: game.boardHeight,
+              boardWidth: game.boardWidth,
+              height: popup.height,
+              width: popup.width,
+              x: popup.x,
+              y: popup.y,
+            })}
+          >
+            <span
+              className="space-invaders-score-popup__text"
+              style={getScorePopupTextStyle(popup.ttlTicks)}
+            >
+              +{popup.points}
+            </span>
           </span>
         ))}
       </div>

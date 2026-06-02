@@ -23,6 +23,7 @@ import {
   SPACE_INVADERS_POWER_UP_SIZE,
   SPACE_INVADERS_POWER_UP_SPEED,
   SPACE_INVADERS_ROWS,
+  SPACE_INVADERS_SCORE_POPUP_TICKS,
   SPACE_INVADERS_STARTING_LIVES,
   startSpaceInvadersGame,
   type SpaceInvader,
@@ -30,6 +31,7 @@ import {
   type SpaceInvadersGameState,
   type SpaceInvadersInvaderShot,
   type SpaceInvadersPowerUp,
+  type SpaceInvadersScorePopup,
 } from "./space-invaders-game-engine";
 
 function createRunningGame(
@@ -90,6 +92,22 @@ function createExplosionFixture(
     ttlTicks: 12,
     variant: 1,
     width: 46,
+    x: 100,
+    y: 100,
+    ...overrides,
+  };
+}
+
+function createScorePopupFixture(
+  overrides: Partial<SpaceInvadersScorePopup> = {},
+): SpaceInvadersScorePopup {
+  return {
+    ageTicks: 0,
+    height: 22,
+    id: "score-popup-test",
+    points: 30,
+    ttlTicks: SPACE_INVADERS_SCORE_POPUP_TICKS,
+    width: 32,
     x: 100,
     y: 100,
     ...overrides,
@@ -221,12 +239,14 @@ describe("space invaders game engine", () => {
     expect(game.nextInvaderShotId).toBe(0);
     expect(game.nextPlayerShotId).toBe(0);
     expect(game.nextPowerUpId).toBe(0);
+    expect(game.nextScorePopupId).toBe(0);
     expect(game.pendingShotPowerUp).toBeNull();
     expect(game.playerBurst).toBeNull();
     expect(game.playerRespawnTicks).toBe(0);
     expect(game.playerShieldTicks).toBe(0);
     expect(game.playerShots).toEqual([]);
     expect(game.powerUps).toEqual([]);
+    expect(game.scorePopups).toEqual([]);
     expect(game.marchDirection).toBe(1);
     expect(game.invaders.every((invader) => invader.direction === 1)).toBe(true);
     expect(game.ufo).toMatchObject({
@@ -1000,6 +1020,19 @@ describe("space invaders game engine", () => {
       targetInvader.y + targetInvader.height / 2,
     );
     expect(advanced.nextExplosionId).toBe(1);
+    expect(advanced.scorePopups).toEqual([
+      {
+        ageTicks: 0,
+        height: targetInvader.height,
+        id: "score-popup-0",
+        points: targetInvader.points,
+        ttlTicks: SPACE_INVADERS_SCORE_POPUP_TICKS,
+        width: targetInvader.width,
+        x: targetInvader.x,
+        y: targetInvader.y,
+      },
+    ]);
+    expect(advanced.nextScorePopupId).toBe(1);
   });
 
   it("drops a random power-up from destroyed diver invaders only", () => {
@@ -1065,10 +1098,11 @@ describe("space invaders game engine", () => {
 
   it("awards caught bonus-score power-ups and removes expired drops", () => {
     const game = createInitialSpaceInvadersGame();
+    const catchableBonus = createCatchablePowerUp(game, { kind: "bonus-score" });
     const caught = advanceSpaceInvadersGame(
       createRunningGame({
         invaderShotCooldownTicks: 1_000,
-        powerUps: [createCatchablePowerUp(game, { kind: "bonus-score" })],
+        powerUps: [catchableBonus],
         score: 40,
       }),
     );
@@ -1085,6 +1119,19 @@ describe("space invaders game engine", () => {
 
     expect(caught.score).toBe(40 + SPACE_INVADERS_BONUS_SCORE_POINTS);
     expect(caught.powerUps).toEqual([]);
+    expect(caught.scorePopups).toEqual([
+      {
+        ageTicks: 0,
+        height: catchableBonus.height,
+        id: "score-popup-0",
+        points: SPACE_INVADERS_BONUS_SCORE_POINTS,
+        ttlTicks: SPACE_INVADERS_SCORE_POPUP_TICKS,
+        width: catchableBonus.width,
+        x: catchableBonus.x,
+        y: catchableBonus.y + catchableBonus.velocityY,
+      },
+    ]);
+    expect(caught.nextScorePopupId).toBe(1);
     expect(expired.powerUps).toEqual([]);
   });
 
@@ -1195,6 +1242,11 @@ describe("space invaders game engine", () => {
       advanced.invaders.find((invader) => invader.id === remainingInvader.id)?.isActive,
     ).toBe(true);
     expect(advanced.score).toBe(firstTarget.points + secondTarget.points);
+    expect(advanced.scorePopups.map((popup) => popup.points)).toEqual([
+      firstTarget.points,
+      secondTarget.points,
+    ]);
+    expect(advanced.nextScorePopupId).toBe(2);
   });
 
   it("awards the UFO bonus, clears the shot, and leaves invaders intact", () => {
@@ -1228,6 +1280,19 @@ describe("space invaders game engine", () => {
     expect(advanced.explosions[0]!.y + advanced.explosions[0]!.height / 2).toBeCloseTo(
       activeUfo.y + activeUfo.height / 2,
     );
+    expect(advanced.scorePopups).toEqual([
+      {
+        ageTicks: 0,
+        height: activeUfo.height,
+        id: "score-popup-0",
+        points: activeUfo.points,
+        ttlTicks: SPACE_INVADERS_SCORE_POPUP_TICKS,
+        width: activeUfo.width,
+        x: activeUfo.x,
+        y: activeUfo.y,
+      },
+    ]);
+    expect(advanced.nextScorePopupId).toBe(1);
     expect(advanced.invaders.filter((invader) => invader.isActive)).toHaveLength(
       game.invaders.length,
     );
@@ -1268,6 +1333,37 @@ describe("space invaders game engine", () => {
       },
     ]);
     expect(advanced.nextExplosionId).toBe(4);
+  });
+
+  it("expires score popups after the shortened feedback window", () => {
+    const expiredPopup = createScorePopupFixture({
+      ageTicks: SPACE_INVADERS_SCORE_POPUP_TICKS - 1,
+      id: "score-popup-expiring",
+      ttlTicks: 1,
+    });
+    const activePopup = createScorePopupFixture({
+      ageTicks: 12,
+      id: "score-popup-active",
+      points: 20,
+      ttlTicks: 2,
+    });
+    const advanced = advanceSpaceInvadersGame(
+      createRunningGame({
+        invaderShotCooldownTicks: 1_000,
+        nextScorePopupId: 4,
+        scorePopups: [expiredPopup, activePopup],
+      }),
+    );
+
+    expect(SPACE_INVADERS_SCORE_POPUP_TICKS).toBe(47);
+    expect(advanced.scorePopups).toEqual([
+      {
+        ...activePopup,
+        ageTicks: 13,
+        ttlTicks: 1,
+      },
+    ]);
+    expect(advanced.nextScorePopupId).toBe(4);
   });
 
   it("marches invaders horizontally until they hit an edge, then drops and reverses", () => {
@@ -1606,6 +1702,7 @@ describe("space invaders game engine", () => {
       nextInvaderShotId: 1,
       nextPlayerShotId: 1,
       nextPowerUpId: 1,
+      nextScorePopupId: 1,
       pendingShotPowerUp: "shotgun-shot" as const,
       playerBurst: {
         cooldownTicks: 2,
@@ -1625,6 +1722,7 @@ describe("space invaders game engine", () => {
       ],
       powerUps: [createPowerUpFixture()],
       score: 120,
+      scorePopups: [createScorePopupFixture()],
       status: "lost" as const,
       ufo: {
         ...createInitialSpaceInvadersGame().ufo,
@@ -1646,12 +1744,14 @@ describe("space invaders game engine", () => {
     expect(restarted.invaderShots).toEqual([]);
     expect(restarted.nextPlayerShotId).toBe(0);
     expect(restarted.nextPowerUpId).toBe(0);
+    expect(restarted.nextScorePopupId).toBe(0);
     expect(restarted.pendingShotPowerUp).toBeNull();
     expect(restarted.playerBurst).toBeNull();
     expect(restarted.playerRespawnTicks).toBe(0);
     expect(restarted.playerShieldTicks).toBe(0);
     expect(restarted.playerShots).toEqual([]);
     expect(restarted.powerUps).toEqual([]);
+    expect(restarted.scorePopups).toEqual([]);
     expect(restarted.ufo).toMatchObject({
       direction: 1,
       isActive: false,

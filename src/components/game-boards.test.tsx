@@ -20,6 +20,7 @@ import {
   createInitialSpaceInvadersGame,
   SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS,
   SPACE_INVADERS_POWER_UP_SIZE,
+  SPACE_INVADERS_SCORE_POPUP_TICKS,
 } from "@/lib/space-invaders-game-engine";
 import { createInitialTetrisGame } from "@/lib/tetris-game-engine";
 import type { TwentyFortyEightGameState } from "@/lib/twenty-forty-eight-game-engine";
@@ -313,6 +314,18 @@ describe("game board renderers", () => {
               y: 20,
             },
           ],
+          scorePopups: [
+            {
+              ageTicks: 0,
+              height: 22,
+              id: "score-popup-test",
+              points: 30,
+              ttlTicks: SPACE_INVADERS_SCORE_POPUP_TICKS,
+              width: 32,
+              x: 42,
+              y: 72,
+            },
+          ],
           status: "running",
           ufo: {
             ...game.ufo,
@@ -349,6 +362,10 @@ describe("game board renderers", () => {
       'data-explosion-variant="3"',
       "space-invaders-explosion--ufo",
       "space-invaders-explosion__sprite--3",
+      'data-testid="space-invaders-score-popup"',
+      'data-score-popup-points="30"',
+      "space-invaders-score-popup__text",
+      "+30",
       'data-testid="space-invaders-ufo"',
       'data-ufo-points="150"',
       'data-testid="space-invaders-player"',
