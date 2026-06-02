@@ -20,6 +20,7 @@ import {
   SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_CAP,
   SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_STEP,
   SPACE_INVADERS_MULTI_KILL_BONUSES,
+  SPACE_INVADERS_MULTI_KILL_COMBO_TICKS,
   SPACE_INVADERS_PLAYER_BURST_SHOT_COUNT,
   SPACE_INVADERS_PLAYER_BURST_SHOT_DELAY_TICKS,
   SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
@@ -248,6 +249,7 @@ describe("space invaders game engine", () => {
     expect(game.nextPlayerShotId).toBe(0);
     expect(game.nextPowerUpId).toBe(0);
     expect(game.nextScorePopupId).toBe(0);
+    expect(game.multiKillCombo).toBeNull();
     expect(game.pendingShotPowerUp).toBeNull();
     expect(game.playerBurst).toBeNull();
     expect(game.playerRespawnTicks).toBe(0);
@@ -1341,12 +1343,31 @@ describe("space invaders game engine", () => {
     expect(
       advanced.invaders.find((invader) => invader.id === remainingInvader.id)?.isActive,
     ).toBe(true);
-    expect(advanced.score).toBe(
+    expect(advanced.score).toBe(firstTarget.points + secondTarget.points);
+    expect(advanced.multiKillCombo).toEqual(
+      expect.objectContaining({
+        destroyedCount: 2,
+        points: firstTarget.points + secondTarget.points,
+        ticksRemaining: SPACE_INVADERS_MULTI_KILL_COMBO_TICKS,
+      }),
+    );
+    expect(advanced.scorePopups).toEqual([]);
+
+    const finalized = advanceSpaceInvadersGame(
+      {
+        ...advanced,
+        playerShots: [],
+      },
+      () => 0,
+    );
+
+    expect(finalized.score).toBe(
       firstTarget.points +
         secondTarget.points +
         SPACE_INVADERS_MULTI_KILL_BONUSES[2],
     );
-    expect(advanced.scorePopups).toEqual([
+    expect(finalized.multiKillCombo).toBeNull();
+    expect(finalized.scorePopups).toEqual([
       expect.objectContaining({
         label: "DOUBLE",
         points:
@@ -1355,7 +1376,104 @@ describe("space invaders game engine", () => {
           SPACE_INVADERS_MULTI_KILL_BONUSES[2],
       }),
     ]);
-    expect(advanced.nextScorePopupId).toBe(1);
+    expect(finalized.nextScorePopupId).toBe(1);
+  });
+
+  it("combines piercing-laser kills that land within the volley window", () => {
+    const game = createInitialSpaceInvadersGame();
+    const firstTarget = {
+      ...getInvader(game, SPACE_INVADERS_ROWS - 1, 4),
+      kind: "standard" as const,
+      x: 180,
+      y: 250,
+    };
+    const secondTarget = {
+      ...getInvader(game, SPACE_INVADERS_ROWS - 2, 4),
+      kind: "standard" as const,
+      x: firstTarget.x,
+      y: firstTarget.y - firstTarget.height - 14,
+    };
+    const remainingInvader = getInvader(game, 0, 0);
+    const runningGame = createRunningGame({
+      alienFreezeTicks: 100,
+      invaderShotCooldownTicks: 1_000,
+      invaders: game.invaders.map((invader) => {
+        if (invader.id === firstTarget.id) {
+          return firstTarget;
+        }
+
+        if (invader.id === secondTarget.id) {
+          return secondTarget;
+        }
+
+        return {
+          ...invader,
+          isActive: invader.id === remainingInvader.id,
+        };
+      }),
+      playerShots: [
+        {
+          ...createPlayerShotAlignedWith(firstTarget),
+          kind: "piercing",
+        },
+      ],
+    });
+    const firstHit = advanceSpaceInvadersGame(runningGame, () => 0);
+    let secondHit = firstHit;
+
+    for (let tick = 0; tick < SPACE_INVADERS_MULTI_KILL_COMBO_TICKS; tick += 1) {
+      secondHit = advanceSpaceInvadersGame(secondHit, () => 0);
+
+      if (secondHit.multiKillCombo?.destroyedCount === 2) {
+        break;
+      }
+    }
+
+    expect(firstHit.multiKillCombo).toEqual(
+      expect.objectContaining({
+        destroyedCount: 1,
+        points: firstTarget.points,
+      }),
+    );
+    expect(
+      secondHit.invaders.find((invader) => invader.id === firstTarget.id)?.isActive,
+    ).toBe(false);
+    expect(
+      secondHit.invaders.find((invader) => invader.id === secondTarget.id)?.isActive,
+    ).toBe(false);
+    expect(secondHit.multiKillCombo).toEqual(
+      expect.objectContaining({
+        destroyedCount: 2,
+        points: firstTarget.points + secondTarget.points,
+        ticksRemaining: SPACE_INVADERS_MULTI_KILL_COMBO_TICKS,
+      }),
+    );
+    expect(secondHit.score).toBe(firstTarget.points + secondTarget.points);
+    expect(secondHit.scorePopups).toEqual([]);
+
+    const finalized = advanceSpaceInvadersGame(
+      {
+        ...secondHit,
+        playerShots: [],
+      },
+      () => 0,
+    );
+
+    expect(finalized.score).toBe(
+      firstTarget.points +
+        secondTarget.points +
+        SPACE_INVADERS_MULTI_KILL_BONUSES[2],
+    );
+    expect(finalized.multiKillCombo).toBeNull();
+    expect(finalized.scorePopups).toEqual([
+      expect.objectContaining({
+        label: "DOUBLE",
+        points:
+          firstTarget.points +
+          secondTarget.points +
+          SPACE_INVADERS_MULTI_KILL_BONUSES[2],
+      }),
+    ]);
   });
 
   it("uses the largest multi-kill bonus for four or more invaders in one volley", () => {
@@ -1399,13 +1517,32 @@ describe("space invaders game engine", () => {
 
     expect(SPACE_INVADERS_MULTI_KILL_BONUSES[4]).toBe(100);
     expect(advanced.status).toBe("running");
-    expect(advanced.score).toBe(baseScore + SPACE_INVADERS_MULTI_KILL_BONUSES[4]);
+    expect(advanced.score).toBe(baseScore);
     expect(
       advanced.invaders
         .filter((invader) => targetIds.has(invader.id))
         .every((invader) => !invader.isActive),
     ).toBe(true);
-    expect(advanced.scorePopups).toEqual([
+    expect(advanced.multiKillCombo).toEqual(
+      expect.objectContaining({
+        destroyedCount: 4,
+        points: baseScore,
+        ticksRemaining: SPACE_INVADERS_MULTI_KILL_COMBO_TICKS,
+      }),
+    );
+    expect(advanced.scorePopups).toEqual([]);
+
+    const finalized = advanceSpaceInvadersGame(
+      {
+        ...advanced,
+        playerShots: [],
+      },
+      () => 0,
+    );
+
+    expect(finalized.score).toBe(baseScore + SPACE_INVADERS_MULTI_KILL_BONUSES[4]);
+    expect(finalized.multiKillCombo).toBeNull();
+    expect(finalized.scorePopups).toEqual([
       expect.objectContaining({
         label: "MULTI",
         points: baseScore + SPACE_INVADERS_MULTI_KILL_BONUSES[4],
@@ -1925,6 +2062,15 @@ describe("space invaders game engine", () => {
       invaderShotCooldownTicks: 0,
       invaderShots: [createInvaderShotFixture()],
       lives: 0,
+      multiKillCombo: {
+        destroyedCount: 2,
+        height: 23,
+        points: 50,
+        ticksRemaining: 4,
+        width: 60,
+        x: 120,
+        y: 80,
+      },
       nextExplosionId: 1,
       nextInvaderShotId: 1,
       nextPlayerShotId: 1,
@@ -1969,6 +2115,7 @@ describe("space invaders game engine", () => {
     expect(restarted.alienFreezeTicks).toBe(0);
     expect(restarted.explosions).toEqual([]);
     expect(restarted.hitStreak).toBe(0);
+    expect(restarted.multiKillCombo).toBeNull();
     expect(restarted.nextExplosionId).toBe(0);
     expect(restarted.invaderShots).toEqual([]);
     expect(restarted.nextPlayerShotId).toBe(0);

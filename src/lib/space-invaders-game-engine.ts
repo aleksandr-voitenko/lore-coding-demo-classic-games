@@ -130,6 +130,17 @@ export type SpaceInvadersScorePopup = {
   y: number;
 };
 
+export type SpaceInvadersMultiKillCombo = {
+  destroyedCount: number;
+  height: number;
+  points: number;
+  scoreScale?: number;
+  ticksRemaining: number;
+  width: number;
+  x: number;
+  y: number;
+};
+
 type SpaceInvadersScoreTarget = {
   height: number;
   width: number;
@@ -167,6 +178,7 @@ export type SpaceInvadersGameState = {
   invaders: SpaceInvader[];
   lives: number;
   marchDirection: SpaceInvadersDirection;
+  multiKillCombo: SpaceInvadersMultiKillCombo | null;
   nextExplosionId: number;
   nextInvaderShotId: number;
   nextPlayerShotId: number;
@@ -262,6 +274,9 @@ export const SPACE_INVADERS_MULTI_KILL_BONUSES = {
   3: 60,
   4: 100,
 } as const;
+export const SPACE_INVADERS_MULTI_KILL_COMBO_TICKS = Math.round(
+  700 / SPACE_INVADERS_TICK_DELAY_MS,
+);
 export const SPACE_INVADERS_UFO_CHAIN_BONUS_STEP = 50;
 export const SPACE_INVADERS_UFO_CHAIN_BONUS_CAP = 150;
 export const SPACE_INVADERS_EXTRA_LIFE_DROP_CHANCE = 0.05;
@@ -430,6 +445,7 @@ export function createInitialSpaceInvadersGame({
     score: 0,
     scorePopups: [],
     status: "ready",
+    multiKillCombo: null,
     ufo: createInitialSpaceInvadersUfo(),
     ufoHitStreak: 0,
   };
@@ -595,21 +611,25 @@ export function advanceSpaceInvadersGame(
 
   const gameAfterExplosions = advanceExplosions(game);
   const gameAfterScorePopups = advanceScorePopups(gameAfterExplosions);
-  const gameAfterPowerUps = advancePowerUps(gameAfterScorePopups);
+  const gameAfterMultiKillComboWindow =
+    advanceSpaceInvadersMultiKillComboWindow(gameAfterScorePopups);
+  const gameAfterPowerUps = advancePowerUps(gameAfterMultiKillComboWindow);
   const gameAfterShot = advancePlayerShots(gameAfterPowerUps, random);
 
   if (gameAfterShot.status === "won") {
-    return gameAfterShot;
+    return finalizeSpaceInvadersMultiKillCombo(gameAfterShot);
   }
 
   const gameAfterPlayerBurst = advancePlayerBurst(gameAfterShot);
-  const gameAfterInvaderShots = advanceInvaderShots(gameAfterPlayerBurst, random);
+  const gameAfterMultiKillCombo =
+    finalizeSpaceInvadersMultiKillComboIfVolleyEnded(gameAfterPlayerBurst);
+  const gameAfterInvaderShots = advanceInvaderShots(gameAfterMultiKillCombo, random);
 
   if (
     gameAfterInvaderShots.status === "lost" ||
-    gameAfterInvaderShots.lives < gameAfterShot.lives
+    gameAfterInvaderShots.lives < gameAfterMultiKillCombo.lives
   ) {
-    return gameAfterInvaderShots;
+    return finalizeSpaceInvadersMultiKillCombo(gameAfterInvaderShots);
   }
 
   const { game: gameAfterFreezeTick, isFrozen: areAliensFrozen } =
@@ -624,11 +644,11 @@ export function advanceSpaceInvadersGame(
   const marchedGame = marchInvaders(gameAfterUfo);
 
   if (hasInvaderReachedBase(marchedGame)) {
-    return {
+    return finalizeSpaceInvadersMultiKillCombo({
       ...marchedGame,
       lives: 0,
       status: "lost" as const,
-    };
+    });
   }
 
   return advancePlayerRecovery(marchedGame);
@@ -807,25 +827,12 @@ function advancePlayerShots(
   }
 
   if (destroyedInvaderBounds.length > 0) {
-    const multiKillBonus = getSpaceInvadersMultiKillBonus(
-      destroyedInvaderBounds.length,
-    );
-
-    destroyedInvaderPopupPoints += multiKillBonus;
-    nextGame = createSpaceInvadersScorePopup(
-      {
-        ...nextGame,
-        score: nextGame.score + multiKillBonus,
-      },
+    nextGame = continueSpaceInvadersMultiKillCombo(
+      nextGame,
       getCombinedSpaceInvadersScoreTarget(destroyedInvaderBounds),
-      {
-        label: getSpaceInvadersInvaderScorePopupLabel(
-          destroyedInvaderBounds.length,
-          multiKillBonus,
-        ),
-        points: destroyedInvaderPopupPoints,
-        scoreScale: invaderPopupScoreScale,
-      },
+      destroyedInvaderBounds.length,
+      destroyedInvaderPopupPoints,
+      invaderPopupScoreScale,
     );
   }
 
@@ -1123,6 +1130,107 @@ function advanceScorePopups(game: SpaceInvadersGameState): SpaceInvadersGameStat
       }))
       .filter((popup) => popup.ttlTicks > 0),
   };
+}
+
+function advanceSpaceInvadersMultiKillComboWindow(
+  game: SpaceInvadersGameState,
+): SpaceInvadersGameState {
+  const combo = game.multiKillCombo;
+
+  if (combo === null) {
+    return game;
+  }
+
+  if (game.status !== "running" || isSpaceInvadersVolleyFinished(game)) {
+    return finalizeSpaceInvadersMultiKillCombo(game);
+  }
+
+  const nextCombo = {
+    ...combo,
+    ticksRemaining: combo.ticksRemaining - 1,
+  };
+
+  if (nextCombo.ticksRemaining <= 0) {
+    return finalizeSpaceInvadersMultiKillCombo({
+      ...game,
+      multiKillCombo: nextCombo,
+    });
+  }
+
+  return {
+    ...game,
+    multiKillCombo: nextCombo,
+  };
+}
+
+function finalizeSpaceInvadersMultiKillComboIfVolleyEnded(
+  game: SpaceInvadersGameState,
+): SpaceInvadersGameState {
+  if (game.multiKillCombo === null || !isSpaceInvadersVolleyFinished(game)) {
+    return game;
+  }
+
+  return finalizeSpaceInvadersMultiKillCombo(game);
+}
+
+function continueSpaceInvadersMultiKillCombo(
+  game: SpaceInvadersGameState,
+  target: SpaceInvadersScoreTarget,
+  destroyedCount: number,
+  points: number,
+  scoreScale: number,
+): SpaceInvadersGameState {
+  const combo = game.multiKillCombo;
+  const mergedTarget =
+    combo === null
+      ? target
+      : getCombinedSpaceInvadersScoreTarget([combo, target]);
+
+  return {
+    ...game,
+    multiKillCombo: {
+      destroyedCount: (combo?.destroyedCount ?? 0) + destroyedCount,
+      height: mergedTarget.height,
+      points: (combo?.points ?? 0) + points,
+      scoreScale: Math.max(combo?.scoreScale ?? 1, scoreScale),
+      ticksRemaining: SPACE_INVADERS_MULTI_KILL_COMBO_TICKS,
+      width: mergedTarget.width,
+      x: mergedTarget.x,
+      y: mergedTarget.y,
+    },
+  };
+}
+
+function finalizeSpaceInvadersMultiKillCombo(
+  game: SpaceInvadersGameState,
+): SpaceInvadersGameState {
+  const combo = game.multiKillCombo;
+
+  if (combo === null) {
+    return game;
+  }
+
+  const multiKillBonus = getSpaceInvadersMultiKillBonus(combo.destroyedCount);
+  const gameWithBonus = {
+    ...game,
+    multiKillCombo: null,
+    score: game.score + multiKillBonus,
+  };
+
+  return createSpaceInvadersScorePopup(gameWithBonus, combo, {
+    label: getSpaceInvadersInvaderScorePopupLabel(
+      combo.destroyedCount,
+      multiKillBonus,
+    ),
+    points: combo.points + multiKillBonus,
+    scoreScale: combo.scoreScale,
+  });
+}
+
+function isSpaceInvadersVolleyFinished(
+  game: Pick<SpaceInvadersGameState, "playerBurst" | "playerShots">,
+) {
+  return game.playerShots.length === 0 && game.playerBurst === null;
 }
 
 function createSpaceInvadersExplosion(
