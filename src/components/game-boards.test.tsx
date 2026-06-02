@@ -341,8 +341,13 @@ describe("game board renderers", () => {
     );
 
     expectMarkup(markup, [
+      'data-testid="space-invaders-board-frame"',
       'data-testid="space-invaders-board"',
       "Space Invaders board. Field 420 by 560. Score 0. Lives 3. 54 invaders remaining. 7 power ups falling. Running.",
+      'data-testid="space-invaders-score-hud"',
+      'data-testid="space-invaders-score"',
+      'data-testid="space-invaders-health-hud"',
+      'data-testid="space-invaders-lives"',
       'data-testid="space-invaders-invader"',
       'data-invader-kind="diver"',
       'data-testid="space-invaders-player-shot"',
@@ -373,6 +378,8 @@ describe("game board renderers", () => {
       'data-ufo-points="150"',
       'data-testid="space-invaders-player"',
       "/images/space-invaders/background.png?v=sprite-art-v2",
+      "/images/space-invaders/hud-health.png?v=sprite-art-v2",
+      "/images/space-invaders/hud-score.png?v=sprite-art-v2",
       "/images/space-invaders/alien-purple.png?v=sprite-art-v2",
       "/images/space-invaders/explosion-3.png?v=sprite-art-v2",
       "/images/space-invaders/ufo.png?v=sprite-art-v2",

@@ -39,6 +39,8 @@ const playerShipSpriteSrc = getSpaceInvadersAssetSrc("player-ship");
 const playerShotSpriteSrc = getSpaceInvadersAssetSrc("player-shot");
 const playerPiercingShotSpriteSrc = getSpaceInvadersAssetSrc("player-piercing-shot");
 const ufoSpriteSrc = getSpaceInvadersAssetSrc("ufo");
+const hudHealthIconSrc = getSpaceInvadersAssetSrc("hud-health");
+const hudScoreIconSrc = getSpaceInvadersAssetSrc("hud-score");
 const powerUpSpriteSrcByKind: Record<SpaceInvadersPowerUpKind, string> = {
   "bonus-score": getSpaceInvadersAssetSrc("power-up-bonus-score"),
   "burst-shot": getSpaceInvadersAssetSrc("power-up-burst-shot"),
@@ -94,6 +96,44 @@ function getScorePopupNumberStyle(scoreScale: number | undefined): CSSProperties
   return {
     fontSize: `${fontSize}rem`,
   };
+}
+
+function SpaceInvadersHudMetric({
+  align,
+  iconSrc,
+  testId,
+  value,
+  valueTestId,
+}: {
+  align: "left" | "right";
+  iconSrc: string;
+  testId: string;
+  value: number;
+  valueTestId: string;
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      className={cn(
+        "pointer-events-none absolute top-[clamp(0.45rem,2cqw,0.85rem)] z-30 flex min-w-[clamp(3.35rem,10cqw,4.75rem)] items-center gap-[clamp(0.25rem,1cqw,0.45rem)] rounded-[0.35rem] bg-[rgb(0_0_0_/_0.46)] px-[clamp(0.35rem,1.4cqw,0.6rem)] py-[clamp(0.22rem,0.8cqw,0.35rem)] text-[var(--invaders-board-text)] shadow-[0_0_16px_rgb(0_0_0_/_0.58)] backdrop-blur-[1px]",
+        align === "left"
+          ? "left-[clamp(0.45rem,2cqw,0.85rem)]"
+          : "right-[clamp(0.45rem,2cqw,0.85rem)] justify-end",
+      )}
+      data-testid={testId}
+    >
+      <span
+        className="block size-[clamp(1.05rem,4.8cqw,1.65rem)] shrink-0 bg-contain bg-center bg-no-repeat drop-shadow-[0_0_8px_rgb(255_255_255_/_0.34)] [image-rendering:pixelated]"
+        style={{ backgroundImage: `url("${iconSrc}")` }}
+      />
+      <span
+        className="font-mono text-[clamp(0.72rem,3.8cqw,1.35rem)] font-extrabold leading-none tracking-normal tabular-nums text-white"
+        data-testid={valueTestId}
+      >
+        {value}
+      </span>
+    </div>
+  );
 }
 
 export const spaceInvaderSprites = [
@@ -233,12 +273,13 @@ export function SpaceInvadersBoard({
 
   return (
     <div
-      className="relative overflow-hidden rounded-md border border-[var(--invaders-board-border)] bg-[var(--invaders-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--invaders-board)_26%,transparent)]"
+      data-testid="space-invaders-board-frame"
+      className="relative h-svh w-full overflow-hidden rounded-md border border-[var(--invaders-board-border)] bg-[var(--invaders-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--invaders-board)_26%,transparent)]"
       style={{ aspectRatio: `${game.boardWidth} / ${game.boardHeight}` }}
     >
       <div
         aria-label={`Space Invaders board. Field ${game.boardWidth} by ${game.boardHeight}. Score ${game.score}. Lives ${game.lives}. ${activeInvaderCount} invaders remaining. ${powerUpSummary}. ${statusLabel}.`}
-        className="relative size-full overflow-hidden rounded-[0.375rem] bg-[var(--invaders-board)]"
+        className="relative z-0 size-full overflow-hidden rounded-[0.375rem] bg-[var(--invaders-board)]"
         data-testid="space-invaders-board"
         role="img"
         style={spaceInvadersBoardBackgroundStyle}
@@ -247,6 +288,21 @@ export function SpaceInvadersBoard({
           aria-hidden="true"
           className="pointer-events-none absolute inset-0"
           style={spaceInvadersBoardShadeStyle}
+        />
+
+        <SpaceInvadersHudMetric
+          align="left"
+          iconSrc={hudScoreIconSrc}
+          testId="space-invaders-score-hud"
+          value={game.score}
+          valueTestId="space-invaders-score"
+        />
+        <SpaceInvadersHudMetric
+          align="right"
+          iconSrc={hudHealthIconSrc}
+          testId="space-invaders-health-hud"
+          value={game.lives}
+          valueTestId="space-invaders-lives"
         />
 
         <span

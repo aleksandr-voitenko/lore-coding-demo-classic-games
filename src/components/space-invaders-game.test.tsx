@@ -2,12 +2,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import {
-  getSpaceInvadersActivePowerUpKind,
   SPACE_INVADERS_HELP_SECTIONS,
   SpaceInvadersGame,
 } from "./space-invaders-game";
 import {
-  createInitialSpaceInvadersGame,
   SPACE_INVADERS_HIT_STREAK_BONUS_CAP,
   SPACE_INVADERS_HIT_STREAK_BONUS_STEP,
   SPACE_INVADERS_MULTI_KILL_BONUSES,
@@ -16,15 +14,24 @@ import {
 } from "@/lib/space-invaders-game-engine";
 
 describe("SpaceInvadersGame", () => {
-  it("renders an empty power stat when no power-up is active", () => {
+  it("renders score and health in the board HUD instead of the stats strip", () => {
     const markup = renderToStaticMarkup(<SpaceInvadersGame />);
 
-    expect(markup).toContain('data-testid="space-invaders-power"');
-    expect(markup).toContain('data-testid="space-invaders-hit-streak"');
-    expect(markup).toContain('data-testid="space-invaders-ufo-chain"');
-    expect(markup).toContain('data-power-up-kind="none"');
-    expect(markup).toContain('aria-label="No active power"');
-    expect(markup).not.toContain(">None</dd>");
+    expect(markup).toContain('data-testid="space-invaders-score-hud"');
+    expect(markup).toContain('data-testid="space-invaders-health-hud"');
+    expect(markup.indexOf('data-testid="space-invaders-score-hud"')).toBeLessThan(
+      markup.indexOf('data-testid="space-invaders-health-hud"'),
+    );
+    expect(markup).toContain('data-testid="space-invaders-score"');
+    expect(markup).toContain('data-testid="space-invaders-lives"');
+    expect(markup).toContain("/images/space-invaders/hud-score.png?v=sprite-art-v2");
+    expect(markup).toContain("/images/space-invaders/hud-health.png?v=sprite-art-v2");
+    expect(markup).not.toContain('data-testid="game-sidebar"');
+    expect(markup).not.toContain('data-testid="space-invaders-power"');
+    expect(markup).not.toContain('data-testid="space-invaders-remaining"');
+    expect(markup).not.toContain('data-testid="space-invaders-hit-streak"');
+    expect(markup).not.toContain('data-testid="space-invaders-ufo-chain"');
+    expect(markup).not.toContain('data-testid="space-invaders-speed"');
   });
 
   it("explains skill scoring bonuses in Help copy", () => {
@@ -37,32 +44,5 @@ describe("SpaceInvadersGame", () => {
         `Consecutive UFO hits add ${SPACE_INVADERS_UFO_CHAIN_BONUS_STEP} more points per UFO after the first, up to ${SPACE_INVADERS_UFO_CHAIN_BONUS_CAP}; escaped UFOs reset the chain.`,
       ]),
     );
-  });
-
-  it("selects the active power-up kind for the status icon", () => {
-    const game = createInitialSpaceInvadersGame();
-
-    expect(getSpaceInvadersActivePowerUpKind(game)).toBeNull();
-    expect(
-      getSpaceInvadersActivePowerUpKind({
-        ...game,
-        playerShieldTicks: 10,
-      }),
-    ).toBe("shield");
-    expect(
-      getSpaceInvadersActivePowerUpKind({
-        ...game,
-        alienFreezeTicks: 10,
-        playerShieldTicks: 10,
-      }),
-    ).toBe("freeze");
-    expect(
-      getSpaceInvadersActivePowerUpKind({
-        ...game,
-        alienFreezeTicks: 10,
-        pendingShotPowerUp: "piercing-laser",
-        playerShieldTicks: 10,
-      }),
-    ).toBe("piercing-laser");
   });
 });

@@ -81,7 +81,8 @@ const launcherParameterHandoffCases: LauncherParameterHandoffCase[] = [
   {
     assertGameSeeded: async (page) => {
       await expect(page.getByTestId("space-invaders-status")).toHaveText("Ready");
-      await expect(page.getByTestId("space-invaders-remaining")).toHaveText("24");
+      await expect(page.getByTestId("space-invaders-score")).toHaveText("0");
+      await expect(page.getByTestId("space-invaders-lives")).toHaveText("3");
       await expect(page.getByTestId("space-invaders-invader")).toHaveCount(24);
       await expect(page.getByTestId("space-invaders-board")).toHaveAttribute(
         "aria-label",

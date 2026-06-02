@@ -18,9 +18,6 @@ import {
   GameHeader,
   GameHelpScreen,
   GameShell,
-  GameSidebar,
-  GameStatsBar,
-  GameStatCard,
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
@@ -34,7 +31,6 @@ import {
   useHeldDirectionMovementController,
 } from "@/components/game-input";
 import {
-  getSpaceInvadersPowerUpSpriteSrc,
   getSpaceInvaderSprite,
   SpaceInvadersBoard,
 } from "@/components/space-invaders-board";
@@ -61,7 +57,6 @@ import {
   SPACE_INVADERS_UFO_CHAIN_BONUS_STEP,
   startSpaceInvadersGame,
   type SpaceInvadersGameState,
-  type SpaceInvadersPowerUpKind,
   type SpaceInvadersStatus,
 } from "@/lib/space-invaders-game-engine";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
@@ -83,62 +78,6 @@ const statusLabels: Record<SpaceInvadersStatus, string> = {
   running: "Running",
   won: "Earth defended",
 };
-
-const powerUpLabels: Record<SpaceInvadersPowerUpKind, string> = {
-  "bonus-score": "Bonus score",
-  "burst-shot": "Burst",
-  "extra-life": "Extra life",
-  freeze: "Freeze",
-  "piercing-laser": "Piercing",
-  shield: "Shield",
-  "shotgun-shot": "Shotgun",
-};
-
-export function getSpaceInvadersActivePowerUpKind(
-  game: SpaceInvadersGameState,
-): SpaceInvadersPowerUpKind | null {
-  if (game.pendingShotPowerUp !== null) {
-    return game.pendingShotPowerUp;
-  }
-
-  if (game.alienFreezeTicks > 0) {
-    return "freeze";
-  }
-
-  if (game.playerShieldTicks > 0) {
-    return "shield";
-  }
-
-  return null;
-}
-
-function SpaceInvadersPowerStatusIcon({
-  kind,
-}: {
-  kind: SpaceInvadersPowerUpKind | null;
-}) {
-  if (kind === null) {
-    return (
-      <span
-        aria-label="No active power"
-        className="block size-8"
-        data-power-up-kind="none"
-        role="img"
-      />
-    );
-  }
-
-  return (
-    <span
-      aria-label={powerUpLabels[kind]}
-      className="block size-8 bg-contain bg-center bg-no-repeat drop-shadow-[0_0_8px_rgb(255_255_255_/_0.38)] [image-rendering:pixelated]"
-      data-power-up-kind={kind}
-      role="img"
-      style={{ backgroundImage: `url("${getSpaceInvadersPowerUpSpriteSrc(kind)}")` }}
-      title={powerUpLabels[kind]}
-    />
-  );
-}
 
 export const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
   {
@@ -201,7 +140,6 @@ export function SpaceInvadersGame({
     }),
   );
   const tickDelay = game.status === "running" ? getSpaceInvadersTickDelay() : null;
-  const activeInvaderCount = game.invaders.filter((invader) => invader.isActive).length;
   const canPauseGame = game.status === "running" || game.status === "paused";
   const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
   const showStartScreen = game.status === "ready";
@@ -392,72 +330,13 @@ export function SpaceInvadersGame({
   ]);
 
   return (
-    <GameShell className="bg-[var(--invaders-page)] text-[var(--invaders-ink)]">
-      <GameBoardColumn className="w-[min(92vw,37.25rem,calc(75svh_-_9rem))]">
-        <GameSidebar className="border-[var(--invaders-border)] bg-[var(--invaders-panel)]">
-          <GameHeader
-            status={statusLabels[game.status]}
-            statusTestId="space-invaders-status"
-            title="Classic Space Invaders"
-          />
-
-          <GameStatsBar className="grid-flow-row grid-cols-4 sm:grid-cols-7">
-            <GameStatCard
-              className="border-[var(--invaders-border)]"
-              label="Score"
-              labelClassName="text-[var(--invaders-muted)]"
-              value={game.score}
-              valueTestId="space-invaders-score"
-            />
-            <GameStatCard
-              className="border-[var(--invaders-border)]"
-              label="Lives"
-              labelClassName="text-[var(--invaders-muted)]"
-              value={game.lives}
-              valueTestId="space-invaders-lives"
-            />
-            <GameStatCard
-              className="border-[var(--invaders-border)]"
-              label="Invaders"
-              labelClassName="text-[var(--invaders-muted)]"
-              value={activeInvaderCount}
-              valueTestId="space-invaders-remaining"
-            />
-            <GameStatCard
-              className="border-[var(--invaders-border)]"
-              label="Streak"
-              labelClassName="text-[var(--invaders-muted)]"
-              value={game.hitStreak}
-              valueTestId="space-invaders-hit-streak"
-            />
-            <GameStatCard
-              className="border-[var(--invaders-border)]"
-              label="UFO"
-              labelClassName="text-[var(--invaders-muted)]"
-              value={game.ufoHitStreak}
-              valueTestId="space-invaders-ufo-chain"
-            />
-            <GameStatCard
-              className="border-[var(--invaders-border)]"
-              label="Speed"
-              labelClassName="text-[var(--invaders-muted)]"
-              value={tickDelay === null ? "0" : Math.round(1000 / tickDelay)}
-              valueTestId="space-invaders-speed"
-            />
-            <GameStatCard
-              className="border-[var(--invaders-border)]"
-              label="Power"
-              labelClassName="text-[var(--invaders-muted)]"
-              value={
-                <SpaceInvadersPowerStatusIcon
-                  kind={getSpaceInvadersActivePowerUpKind(game)}
-                />
-              }
-              valueClassName="flex h-8 items-center"
-              valueTestId="space-invaders-power"
-            />
-          </GameStatsBar>
-        </GameSidebar>
+    <GameShell className="h-svh overflow-hidden bg-[var(--invaders-page)] px-0 py-0 text-[var(--invaders-ink)] sm:px-0 lg:py-0 [&>section]:h-svh [&>section]:max-w-none [&>section]:items-start xl:[&>section]:min-h-svh xl:[&>section]:items-start">
+      <GameBoardColumn className="w-[min(100vw,75svh)] gap-0">
+        <GameHeader
+          status={statusLabels[game.status]}
+          statusTestId="space-invaders-status"
+          title="Classic Space Invaders"
+        />
 
         <GameBoardStage
           actions={

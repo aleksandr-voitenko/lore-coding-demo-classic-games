@@ -19,8 +19,9 @@ This file covers public image assets under `public/images/`.
 - `space-invaders/` is a sprite-backed exception. It contains the board
   background and transparent PNG sprites for aliens, player ship, standard and
   piercing player shots, `explosion-1` through `explosion-4` effects, and the
-  UFO bonus ship. Power-up pickup icons use `power-up-<kind>.png` filenames
-  matching the engine's power-up kind strings.
+  UFO bonus ship. The in-board HUD uses `hud-health.png` and `hud-score.png`
+  for the top-corner health and score readouts. Power-up pickup icons use
+  `power-up-<kind>.png` filenames matching the engine's power-up kind strings.
   `SpaceInvadersBoard` references these with versioned public URLs and moves
   sprites with board-relative `translate3d(...)` transforms.
 - `snake/` is a sprite-backed exception. It contains 128x128 floor, food,
