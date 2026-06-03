@@ -40,6 +40,7 @@ import {
   registerGameKeyDown,
   shouldIgnoreGameKeyDown,
 } from "@/components/game-input";
+import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { SnakeBoard, snakeSpriteSources } from "@/components/snake-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -58,7 +59,6 @@ import {
 } from "@/lib/snake-game-engine";
 import { createFoodFeedback, type FoodFeedback } from "@/lib/snake-food-feedback";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
-import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
 import { useGameSession } from "@/hooks/use-game-session";
 
 type TimedFoodLifecycleOptions = {
@@ -228,20 +228,17 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
     started: game.status !== "ready",
   });
   const {
-    isSavingLeaderboardScore,
+    finalLeaderboardProps,
     leaderboardBestScore,
-    leaderboardSlots,
-    leaderboardStatusMessage,
+    leaderboardPanelProps,
     pendingLeaderboardEntry,
-    playerName,
     resetLeaderboardForm,
-    saveLeaderboardScore: savePendingLeaderboardScore,
-    scoreSaveFailed,
-    setPlayerName,
-  } = useGameLeaderboard({
+    scoreFormProps,
+  } = useGameLeaderboardPresenter({
     gameSessionId: completedSessionId,
     leaderboardKey,
     pendingScore: pendingLeaderboardScore,
+    testIdPrefix: "snake",
   });
   const bestScore = Math.max(game.bestScore, leaderboardBestScore);
   const speed = getGameTickDelay({
@@ -322,10 +319,6 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
     onResumeGame: resumeGameAfterHelp,
     shouldPauseBeforeConfirm: canPauseGame,
   });
-
-  const saveLeaderboardScore = useCallback(() => {
-    void savePendingLeaderboardScore();
-  }, [savePendingLeaderboardScore]);
 
   useEffect(() => {
     const previousGame = previousGameRef.current;
@@ -538,12 +531,7 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
                     </p>
                   </div>
                 </div>
-                <GameLeaderboardPanel
-                  slotTestIdPrefix="snake-leaderboard-slot"
-                  slots={leaderboardSlots}
-                  statusMessage={leaderboardStatusMessage}
-                  testId="snake-start-leaderboard"
-                />
+                <GameLeaderboardPanel {...leaderboardPanelProps} />
                 <Button
                   className="min-w-32"
                   data-testid="snake-start-button"
@@ -572,21 +560,9 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
                       New game
                     </Button>
                   }
-                  leaderboard={{
-                    slotTestIdPrefix: "snake-final-leaderboard-slot",
-                    slots: leaderboardSlots,
-                    statusMessage: leaderboardStatusMessage,
-                    testId: "snake-final-leaderboard",
-                  }}
+                  leaderboard={finalLeaderboardProps}
                   pendingLeaderboardEntry={pendingLeaderboardEntry}
-                  scoreForm={{
-                    isSaving: isSavingLeaderboardScore,
-                    onPlayerNameChange: setPlayerName,
-                    onSaveScore: saveLeaderboardScore,
-                    playerName,
-                    saveFailed: scoreSaveFailed,
-                    testIdPrefix: "snake",
-                  }}
+                  scoreForm={scoreFormProps}
                   summary={{
                     metricLabel: "Your score:",
                     metricValue: game.score,

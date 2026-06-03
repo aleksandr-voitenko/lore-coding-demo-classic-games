@@ -23,6 +23,7 @@ import {
   type GameHelpSection,
 } from "@/components/game-layout";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
+import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import {
   isGamePauseKey,
   registerGameKeyDown,
@@ -61,7 +62,6 @@ import {
 } from "@/lib/space-invaders-game-engine";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
-import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
 import { useGameSession } from "@/hooks/use-game-session";
 
 type SpaceInvadersGameProps = {
@@ -163,19 +163,16 @@ export function SpaceInvadersGame({
     started: game.status !== "ready",
   });
   const {
-    isSavingLeaderboardScore,
-    leaderboardSlots,
-    leaderboardStatusMessage,
+    finalLeaderboardProps,
+    leaderboardPanelProps,
     pendingLeaderboardEntry,
-    playerName,
     resetLeaderboardForm,
-    saveLeaderboardScore: savePendingLeaderboardScore,
-    scoreSaveFailed,
-    setPlayerName,
-  } = useGameLeaderboard({
+    scoreFormProps,
+  } = useGameLeaderboardPresenter({
     gameSessionId: completedSessionId,
     leaderboardKey,
     pendingScore: showEndScreen ? game.score : null,
+    testIdPrefix: "space-invaders",
   });
 
   const startGame = useCallback(() => {
@@ -214,10 +211,6 @@ export function SpaceInvadersGame({
   const advanceSpaceInvaders = useCallback(() => {
     setGame((current) => advanceSpaceInvadersGame(current));
   }, []);
-
-  const saveLeaderboardScore = useCallback(() => {
-    void savePendingLeaderboardScore();
-  }, [savePendingLeaderboardScore]);
 
   const pauseGameForHelp = useCallback(() => {
     setGame((current) => pauseSpaceInvadersGame(current));
@@ -404,12 +397,7 @@ export function SpaceInvadersGame({
                 <PlayIcon data-icon="inline-start" />
                 Start
               </Button>
-              <GameLeaderboardPanel
-                slotTestIdPrefix="space-invaders-leaderboard-slot"
-                slots={leaderboardSlots}
-                statusMessage={leaderboardStatusMessage}
-                testId="space-invaders-start-leaderboard"
-              />
+              <GameLeaderboardPanel {...leaderboardPanelProps} />
             </div>
           ) : showEndScreen ? (
             <GameEndScreen testId="space-invaders-end-screen">
@@ -427,21 +415,9 @@ export function SpaceInvadersGame({
                     New game
                   </Button>
                 }
-                leaderboard={{
-                  slotTestIdPrefix: "space-invaders-final-leaderboard-slot",
-                  slots: leaderboardSlots,
-                  statusMessage: leaderboardStatusMessage,
-                  testId: "space-invaders-final-leaderboard",
-                }}
+                leaderboard={finalLeaderboardProps}
                 pendingLeaderboardEntry={pendingLeaderboardEntry}
-                scoreForm={{
-                  isSaving: isSavingLeaderboardScore,
-                  onPlayerNameChange: setPlayerName,
-                  onSaveScore: saveLeaderboardScore,
-                  playerName,
-                  saveFailed: scoreSaveFailed,
-                  testIdPrefix: "space-invaders",
-                }}
+                scoreForm={scoreFormProps}
                 summary={{
                   metricLabel: "Final score",
                   metricValue: game.score,

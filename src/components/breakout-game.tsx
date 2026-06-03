@@ -39,6 +39,7 @@ import {
   type GameHelpSection,
 } from "@/components/game-layout";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
+import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { Button } from "@/components/ui/button";
 import {
   advanceBreakoutGame,
@@ -55,7 +56,6 @@ import {
 } from "@/lib/breakout-game-engine";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
-import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
 import { useGameSession } from "@/hooks/use-game-session";
 
 type BreakoutGameProps = {
@@ -146,19 +146,16 @@ export function BreakoutGame({
     started: isBreakoutStarted,
   });
   const {
-    isSavingLeaderboardScore,
-    leaderboardSlots,
-    leaderboardStatusMessage,
+    finalLeaderboardProps,
+    leaderboardPanelProps,
     pendingLeaderboardEntry,
-    playerName,
     resetLeaderboardForm,
-    saveLeaderboardScore: savePendingLeaderboardScore,
-    scoreSaveFailed,
-    setPlayerName,
-  } = useGameLeaderboard({
+    scoreFormProps,
+  } = useGameLeaderboardPresenter({
     gameSessionId: completedSessionId,
     leaderboardKey,
     pendingScore: showEndScreen ? game.score : null,
+    testIdPrefix: "breakout",
   });
 
   const startGame = useCallback(() => {
@@ -191,10 +188,6 @@ export function BreakoutGame({
   const advanceBreakout = useCallback(() => {
     setGame((current) => advanceBreakoutGame(current, { random: Math.random }));
   }, []);
-
-  const saveLeaderboardScore = useCallback(() => {
-    void savePendingLeaderboardScore();
-  }, [savePendingLeaderboardScore]);
 
   const pauseGameForHelp = useCallback(() => {
     setGame((current) => pauseBreakoutGame(current));
@@ -409,12 +402,7 @@ export function BreakoutGame({
                 <PlayIcon data-icon="inline-start" />
                 Start
               </Button>
-              <GameLeaderboardPanel
-                slotTestIdPrefix="breakout-leaderboard-slot"
-                slots={leaderboardSlots}
-                statusMessage={leaderboardStatusMessage}
-                testId="breakout-start-leaderboard"
-              />
+              <GameLeaderboardPanel {...leaderboardPanelProps} />
             </div>
           ) : showLifeLostScreen ? (
             <div
@@ -460,21 +448,9 @@ export function BreakoutGame({
                     New game
                   </Button>
                 }
-                leaderboard={{
-                  slotTestIdPrefix: "breakout-final-leaderboard-slot",
-                  slots: leaderboardSlots,
-                  statusMessage: leaderboardStatusMessage,
-                  testId: "breakout-final-leaderboard",
-                }}
+                leaderboard={finalLeaderboardProps}
                 pendingLeaderboardEntry={pendingLeaderboardEntry}
-                scoreForm={{
-                  isSaving: isSavingLeaderboardScore,
-                  onPlayerNameChange: setPlayerName,
-                  onSaveScore: saveLeaderboardScore,
-                  playerName,
-                  saveFailed: scoreSaveFailed,
-                  testIdPrefix: "breakout",
-                }}
+                scoreForm={scoreFormProps}
                 summary={{
                   metricLabel: "Final score",
                   metricValue: game.score,

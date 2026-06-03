@@ -8,9 +8,9 @@ import {
 } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
 
-type LeaderboardScoreFormatter = (score: number) => string;
+export type LeaderboardScoreFormatter = (score: number) => string;
 
-type GameLeaderboardPanelProps = {
+export type GameLeaderboardPanelProps = {
   className?: string;
   formatScore?: LeaderboardScoreFormatter;
   slotTestIdPrefix: string;
@@ -19,7 +19,7 @@ type GameLeaderboardPanelProps = {
   testId: string;
 };
 
-type GameLeaderboardScoreFormProps = {
+export type GameLeaderboardScoreFormProps = {
   formatScore?: LeaderboardScoreFormatter;
   isSaving: boolean;
   onPlayerNameChange: (playerName: string) => void;

@@ -35,7 +35,7 @@ import {
 } from "@/lib/minesweeper-game-engine";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
-import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
+import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { useGameSession } from "@/hooks/use-game-session";
 
 type MinesweeperGameProps = {
@@ -136,20 +136,19 @@ export function MinesweeperGame({
     started: game.status !== "ready",
   });
   const {
-    isSavingLeaderboardScore,
-    leaderboardSlots,
-    leaderboardStatusMessage,
+    finalLeaderboardProps,
+    leaderboardPanelProps,
     pendingLeaderboardEntry,
-    playerName,
     resetLeaderboardForm,
-    saveLeaderboardScore: savePendingLeaderboardScore,
-    scoreSaveFailed,
-    setPlayerName,
-  } = useGameLeaderboard({
+    scoreFormProps,
+  } = useGameLeaderboardPresenter({
+    formatScore: formatElapsedTime,
     gameSessionId: completedSessionId,
     leaderboardKey,
     pendingScore: game.status === "won" ? elapsedSeconds : null,
+    scoreLabel: "time",
     sortDirection: "asc",
+    testIdPrefix: "minesweeper",
   });
   const { abandonDialogProps, requestBackToMenu } = useGameEscapeToMenu({
     isDisabled: isHelpVisible,
@@ -177,10 +176,6 @@ export function MinesweeperGame({
     setIsStartScreenVisible(true);
     setGame((current) => restartMinesweeperGame(current));
   }, [resetLeaderboardForm]);
-
-  const saveLeaderboardScore = useCallback(() => {
-    void savePendingLeaderboardScore();
-  }, [savePendingLeaderboardScore]);
 
   useEffect(() => {
     if (game.status !== "running" || isHelpVisible) {
@@ -329,13 +324,7 @@ export function MinesweeperGame({
                   <PlayIcon data-icon="inline-start" />
                   Start
                 </Button>
-                <GameLeaderboardPanel
-                  formatScore={formatElapsedTime}
-                  slotTestIdPrefix="minesweeper-leaderboard-slot"
-                  slots={leaderboardSlots}
-                  statusMessage={leaderboardStatusMessage}
-                  testId="minesweeper-start-leaderboard"
-                />
+                <GameLeaderboardPanel {...leaderboardPanelProps} />
               </div>
             ) : showEndScreen ? (
               <GameEndScreen testId="minesweeper-end-screen">
@@ -352,24 +341,9 @@ export function MinesweeperGame({
                       New game
                     </Button>
                   }
-                  leaderboard={{
-                    formatScore: formatElapsedTime,
-                    slotTestIdPrefix: "minesweeper-final-leaderboard-slot",
-                    slots: leaderboardSlots,
-                    statusMessage: leaderboardStatusMessage,
-                    testId: "minesweeper-final-leaderboard",
-                  }}
+                  leaderboard={finalLeaderboardProps}
                   pendingLeaderboardEntry={pendingLeaderboardEntry}
-                  scoreForm={{
-                    formatScore: formatElapsedTime,
-                    isSaving: isSavingLeaderboardScore,
-                    onPlayerNameChange: setPlayerName,
-                    onSaveScore: saveLeaderboardScore,
-                    playerName,
-                    saveFailed: scoreSaveFailed,
-                    scoreLabel: "time",
-                    testIdPrefix: "minesweeper",
-                  }}
+                  scoreForm={scoreFormProps}
                   summary={{
                     metricLabel: "Time",
                     metricValue: formatElapsedTime(elapsedSeconds),

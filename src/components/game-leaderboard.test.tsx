@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { GameLeaderboardPanel, GameLeaderboardScoreForm } from "./game-leaderboard";
+import { createGameLeaderboardPresenterProps } from "./game-leaderboard-presenter";
 
 describe("game leaderboard", () => {
   it("renders fixed leaderboard slots with formatted scores", () => {
@@ -46,5 +47,54 @@ describe("game leaderboard", () => {
     expect(markup).toContain("Top 2 time");
     expect(markup).toContain("0:12");
     expect(markup).toContain('data-testid="minesweeper-save-score-error"');
+  });
+
+  it("builds shared presenter props for start, final, and score form surfaces", () => {
+    const formatScore = (score: number) => `${score}s`;
+    const onPlayerNameChange = vi.fn();
+    const onSaveScore = vi.fn();
+    const slots = [{ name: "Grace", score: 9 }, null, null];
+
+    const props = createGameLeaderboardPresenterProps({
+      formatScore,
+      isSaving: true,
+      onPlayerNameChange,
+      onSaveScore,
+      playerName: "Ada",
+      saveFailed: true,
+      scoreLabel: "time",
+      slots,
+      statusMessage: "Leaderboard unavailable",
+      testIdPrefix: "minesweeper",
+    });
+
+    expect(props.leaderboardPanelProps).toMatchObject({
+      formatScore,
+      slotTestIdPrefix: "minesweeper-leaderboard-slot",
+      slots,
+      statusMessage: "Leaderboard unavailable",
+      testId: "minesweeper-start-leaderboard",
+    });
+    expect(props.finalLeaderboardProps).toMatchObject({
+      formatScore,
+      slotTestIdPrefix: "minesweeper-final-leaderboard-slot",
+      slots,
+      statusMessage: "Leaderboard unavailable",
+      testId: "minesweeper-final-leaderboard",
+    });
+    expect(props.scoreFormProps).toMatchObject({
+      formatScore,
+      isSaving: true,
+      onPlayerNameChange,
+      onSaveScore,
+      playerName: "Ada",
+      saveFailed: true,
+      scoreLabel: "time",
+      testIdPrefix: "minesweeper",
+    });
+
+    props.scoreFormProps.onSaveScore();
+
+    expect(onSaveScore).toHaveBeenCalledOnce();
   });
 });

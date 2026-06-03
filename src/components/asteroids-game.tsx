@@ -42,8 +42,8 @@ import {
   type GameHelpSection,
 } from "@/components/game-layout";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
+import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { Button } from "@/components/ui/button";
-import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
 import { useGameSession } from "@/hooks/use-game-session";
 import {
   advanceAsteroidsGame,
@@ -151,19 +151,16 @@ export function AsteroidsGame({
     started: isAsteroidsStarted,
   });
   const {
-    isSavingLeaderboardScore,
-    leaderboardSlots,
-    leaderboardStatusMessage,
+    finalLeaderboardProps,
+    leaderboardPanelProps,
     pendingLeaderboardEntry,
-    playerName,
     resetLeaderboardForm,
-    saveLeaderboardScore: savePendingLeaderboardScore,
-    scoreSaveFailed,
-    setPlayerName,
-  } = useGameLeaderboard({
+    scoreFormProps,
+  } = useGameLeaderboardPresenter({
     gameSessionId: completedSessionId,
     leaderboardKey,
     pendingScore: showEndScreen ? game.score : null,
+    testIdPrefix: "asteroids",
   });
 
   const resetControls = useCallback(() => {
@@ -201,10 +198,6 @@ export function AsteroidsGame({
   const advanceAsteroids = useCallback(() => {
     setGame((current) => advanceAsteroidsGame(current, getAsteroidsControlInput(controlState)));
   }, [controlState]);
-
-  const saveLeaderboardScore = useCallback(() => {
-    void savePendingLeaderboardScore();
-  }, [savePendingLeaderboardScore]);
 
   const pauseGameForHelp = useCallback(() => {
     resetControls();
@@ -429,12 +422,7 @@ export function AsteroidsGame({
                   <PlayIcon data-icon="inline-start" />
                   Start
                 </Button>
-                <GameLeaderboardPanel
-                  slotTestIdPrefix="asteroids-leaderboard-slot"
-                  slots={leaderboardSlots}
-                  statusMessage={leaderboardStatusMessage}
-                  testId="asteroids-start-leaderboard"
-                />
+                <GameLeaderboardPanel {...leaderboardPanelProps} />
               </div>
             ) : showEndScreen ? (
               <GameEndScreen testId="asteroids-end-screen">
@@ -452,21 +440,9 @@ export function AsteroidsGame({
                       New game
                     </Button>
                   }
-                  leaderboard={{
-                    slotTestIdPrefix: "asteroids-final-leaderboard-slot",
-                    slots: leaderboardSlots,
-                    statusMessage: leaderboardStatusMessage,
-                    testId: "asteroids-final-leaderboard",
-                  }}
+                  leaderboard={finalLeaderboardProps}
                   pendingLeaderboardEntry={pendingLeaderboardEntry}
-                  scoreForm={{
-                    isSaving: isSavingLeaderboardScore,
-                    onPlayerNameChange: setPlayerName,
-                    onSaveScore: saveLeaderboardScore,
-                    playerName,
-                    saveFailed: scoreSaveFailed,
-                    testIdPrefix: "asteroids",
-                  }}
+                  scoreForm={scoreFormProps}
                   summary={{
                     metricLabel: "Final score",
                     metricValue: game.score,

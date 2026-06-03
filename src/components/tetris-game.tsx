@@ -33,6 +33,7 @@ import {
   registerGameKeyDown,
   shouldIgnoreGameKeyDown,
 } from "@/components/game-input";
+import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { TetrisBoard, tetrominoCellClassNames } from "@/components/tetris-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,7 +53,6 @@ import {
 } from "@/lib/tetris-game-engine";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
-import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
 import { useGameSession } from "@/hooks/use-game-session";
 
 type TetrisGameProps = {
@@ -228,19 +228,16 @@ export function TetrisGame({
     started: game.status !== "ready",
   });
   const {
-    isSavingLeaderboardScore,
-    leaderboardSlots,
-    leaderboardStatusMessage,
+    finalLeaderboardProps,
+    leaderboardPanelProps,
     pendingLeaderboardEntry,
-    playerName,
     resetLeaderboardForm,
-    saveLeaderboardScore: savePendingLeaderboardScore,
-    scoreSaveFailed,
-    setPlayerName,
-  } = useGameLeaderboard({
+    scoreFormProps,
+  } = useGameLeaderboardPresenter({
     gameSessionId: completedSessionId,
     leaderboardKey,
     pendingScore: showGameOverScreen ? game.score : null,
+    testIdPrefix: "tetris",
   });
 
   const startGame = useCallback(() => {
@@ -291,10 +288,6 @@ export function TetrisGame({
   const advanceTetris = useCallback(() => {
     setGame((current) => advanceTetrisGame(current, { random: Math.random }));
   }, []);
-
-  const saveLeaderboardScore = useCallback(() => {
-    void savePendingLeaderboardScore();
-  }, [savePendingLeaderboardScore]);
 
   const pauseGameForHelp = useCallback(() => {
     setGame((current) => pauseTetrisGame(current));
@@ -551,12 +544,7 @@ export function TetrisGame({
                   <PlayIcon data-icon="inline-start" />
                   Start
                 </Button>
-                <GameLeaderboardPanel
-                  slotTestIdPrefix="tetris-leaderboard-slot"
-                  slots={leaderboardSlots}
-                  statusMessage={leaderboardStatusMessage}
-                  testId="tetris-start-leaderboard"
-                />
+                <GameLeaderboardPanel {...leaderboardPanelProps} />
               </div>
             ) : showGameOverScreen ? (
               <GameEndScreen testId="tetris-game-over-screen">
@@ -574,21 +562,9 @@ export function TetrisGame({
                       New game
                     </Button>
                   }
-                  leaderboard={{
-                    slotTestIdPrefix: "tetris-final-leaderboard-slot",
-                    slots: leaderboardSlots,
-                    statusMessage: leaderboardStatusMessage,
-                    testId: "tetris-final-leaderboard",
-                  }}
+                  leaderboard={finalLeaderboardProps}
                   pendingLeaderboardEntry={pendingLeaderboardEntry}
-                  scoreForm={{
-                    isSaving: isSavingLeaderboardScore,
-                    onPlayerNameChange: setPlayerName,
-                    onSaveScore: saveLeaderboardScore,
-                    playerName,
-                    saveFailed: scoreSaveFailed,
-                    testIdPrefix: "tetris",
-                  }}
+                  scoreForm={scoreFormProps}
                   summary={{
                     metricLabel: "Final score",
                     metricValue: game.score,

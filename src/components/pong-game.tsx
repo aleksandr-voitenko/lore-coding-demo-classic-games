@@ -28,6 +28,7 @@ import {
   type GameHelpSection,
 } from "@/components/game-layout";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
+import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import {
   createPongPaddleMovementState,
   getPongPaddleMovementKey,
@@ -54,7 +55,6 @@ import {
   type PongStatus,
 } from "@/lib/pong-game-engine";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
-import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
 import { useGameSession } from "@/hooks/use-game-session";
 
 type PongGameProps = {
@@ -155,19 +155,16 @@ export function PongGame({
     started: isUnfinishedMatch || showEndScreen,
   });
   const {
-    isSavingLeaderboardScore,
-    leaderboardSlots,
-    leaderboardStatusMessage,
+    finalLeaderboardProps,
+    leaderboardPanelProps,
     pendingLeaderboardEntry,
-    playerName,
     resetLeaderboardForm,
-    saveLeaderboardScore: savePendingLeaderboardScore,
-    scoreSaveFailed,
-    setPlayerName,
-  } = useGameLeaderboard({
+    scoreFormProps,
+  } = useGameLeaderboardPresenter({
     gameSessionId: completedSessionId,
     leaderboardKey,
     pendingScore: showEndScreen ? game.remainingScore : null,
+    testIdPrefix: "pong",
   });
 
   const movePaddle = useCallback((direction: PongPaddleMovementDirection) => {
@@ -199,10 +196,6 @@ export function PongGame({
   const decrementRemainingScore = useCallback(() => {
     setGame((current) => decrementPongRemainingScore(current));
   }, []);
-
-  const saveLeaderboardScore = useCallback(() => {
-    void savePendingLeaderboardScore();
-  }, [savePendingLeaderboardScore]);
 
   const pauseGameForHelp = useCallback(() => {
     setGame((current) => pausePongGame(current));
@@ -423,12 +416,7 @@ export function PongGame({
                 <PlayIcon data-icon="inline-start" />
                 Start
               </Button>
-              <GameLeaderboardPanel
-                slotTestIdPrefix="pong-leaderboard-slot"
-                slots={leaderboardSlots}
-                statusMessage={leaderboardStatusMessage}
-                testId="pong-start-leaderboard"
-              />
+              <GameLeaderboardPanel {...leaderboardPanelProps} />
             </div>
           ) : showRoundReadyScreen ? (
             <div
@@ -473,21 +461,9 @@ export function PongGame({
                     New game
                   </Button>
                 }
-                leaderboard={{
-                  slotTestIdPrefix: "pong-final-leaderboard-slot",
-                  slots: leaderboardSlots,
-                  statusMessage: leaderboardStatusMessage,
-                  testId: "pong-final-leaderboard",
-                }}
+                leaderboard={finalLeaderboardProps}
                 pendingLeaderboardEntry={pendingLeaderboardEntry}
-                scoreForm={{
-                  isSaving: isSavingLeaderboardScore,
-                  onPlayerNameChange: setPlayerName,
-                  onSaveScore: saveLeaderboardScore,
-                  playerName,
-                  saveFailed: scoreSaveFailed,
-                  testIdPrefix: "pong",
-                }}
+                scoreForm={scoreFormProps}
                 summary={{
                   metricLabel: "Remaining score",
                   metricValue: game.remainingScore,

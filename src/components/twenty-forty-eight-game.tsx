@@ -29,6 +29,7 @@ import {
   type GameHelpSection,
 } from "@/components/game-layout";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
+import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { TwentyFortyEightBoard } from "@/components/twenty-forty-eight-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,7 +44,6 @@ import {
 } from "@/lib/twenty-forty-eight-game-engine";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
-import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
 import { useGameSession } from "@/hooks/use-game-session";
 
 type TwentyFortyEightGameProps = {
@@ -152,20 +152,17 @@ export function TwentyFortyEightGame({
     started: game.status !== "ready",
   });
   const {
-    isSavingLeaderboardScore,
+    finalLeaderboardProps,
     leaderboardBestScore,
-    leaderboardSlots,
-    leaderboardStatusMessage,
+    leaderboardPanelProps,
     pendingLeaderboardEntry,
-    playerName,
     resetLeaderboardForm,
-    saveLeaderboardScore: savePendingLeaderboardScore,
-    scoreSaveFailed,
-    setPlayerName,
-  } = useGameLeaderboard({
+    scoreFormProps,
+  } = useGameLeaderboardPresenter({
     gameSessionId: completedSessionId,
     leaderboardKey,
     pendingScore: showEndScreen ? game.score : null,
+    testIdPrefix: "twenty-forty-eight",
   });
   const bestScore = Math.max(game.bestScore, leaderboardBestScore);
   const { abandonDialogProps, requestBackToMenu } = useGameEscapeToMenu({
@@ -187,10 +184,6 @@ export function TwentyFortyEightGame({
   const moveTiles = useCallback((direction: TwentyFortyEightDirection) => {
     setGame((current) => moveTwentyFortyEightGame(current, direction, { random: Math.random }));
   }, []);
-
-  const saveLeaderboardScore = useCallback(() => {
-    void savePendingLeaderboardScore();
-  }, [savePendingLeaderboardScore]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -311,12 +304,7 @@ export function TwentyFortyEightGame({
                 <PlayIcon data-icon="inline-start" />
                 Start
               </Button>
-              <GameLeaderboardPanel
-                slotTestIdPrefix="twenty-forty-eight-leaderboard-slot"
-                slots={leaderboardSlots}
-                statusMessage={leaderboardStatusMessage}
-                testId="twenty-forty-eight-start-leaderboard"
-              />
+              <GameLeaderboardPanel {...leaderboardPanelProps} />
             </div>
           ) : showEndScreen ? (
             <GameEndScreen testId="twenty-forty-eight-end-screen">
@@ -334,21 +322,9 @@ export function TwentyFortyEightGame({
                     New game
                   </Button>
                 }
-                leaderboard={{
-                  slotTestIdPrefix: "twenty-forty-eight-final-leaderboard-slot",
-                  slots: leaderboardSlots,
-                  statusMessage: leaderboardStatusMessage,
-                  testId: "twenty-forty-eight-final-leaderboard",
-                }}
+                leaderboard={finalLeaderboardProps}
                 pendingLeaderboardEntry={pendingLeaderboardEntry}
-                scoreForm={{
-                  isSaving: isSavingLeaderboardScore,
-                  onPlayerNameChange: setPlayerName,
-                  onSaveScore: saveLeaderboardScore,
-                  playerName,
-                  saveFailed: scoreSaveFailed,
-                  testIdPrefix: "twenty-forty-eight",
-                }}
+                scoreForm={scoreFormProps}
                 summary={{
                   metricLabel: "Final score",
                   metricValue: game.score,

@@ -72,6 +72,11 @@ This file covers React component ownership and shared game UI conventions under
   props, and the action button without adding extra wrappers. Use
   `GameEndSummary` directly for terminal overlays that do not need leaderboard
   branching.
+- Use `useGameLeaderboardPresenter` from
+  `game-leaderboard-presenter.ts` to assemble repeated start-panel, final-panel,
+  score-form, and void-save leaderboard props. Keep game-specific scoring,
+  leaderboard keys, sort direction, formatting, pending-entry checks, and reset
+  behavior in the game component.
 - Use `GameHelpScreen` and `useGameHelpScreen` for Help overlays. Realtime games
   pause when Help opens from an active run and resume only when Help caused the
   pause; turn-based games should block keyboard input while Help is visible.

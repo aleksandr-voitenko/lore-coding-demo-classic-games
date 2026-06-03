@@ -26,6 +26,7 @@ import {
   type GameHelpSection,
 } from "@/components/game-layout";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
+import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { SimonBoard } from "@/components/simon-board";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,7 +48,6 @@ import {
   type SimonStatus,
 } from "@/lib/simon-game-engine";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
-import { useGameLeaderboard } from "@/hooks/use-game-leaderboard";
 import { useGameSession } from "@/hooks/use-game-session";
 
 type SimonGameProps = {
@@ -182,19 +182,16 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
     started: canPauseGame || showEndScreen,
   });
   const {
-    isSavingLeaderboardScore,
-    leaderboardSlots,
-    leaderboardStatusMessage,
+    finalLeaderboardProps,
+    leaderboardPanelProps,
     pendingLeaderboardEntry,
-    playerName,
     resetLeaderboardForm,
-    saveLeaderboardScore: savePendingLeaderboardScore,
-    scoreSaveFailed,
-    setPlayerName,
-  } = useGameLeaderboard({
+    scoreFormProps,
+  } = useGameLeaderboardPresenter({
     gameSessionId: completedSessionId,
     leaderboardKey,
     pendingScore: showEndScreen ? game.score : null,
+    testIdPrefix: "simon",
   });
 
   const startGame = useCallback(() => {
@@ -226,10 +223,6 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
   const pressPad = useCallback((pad: SimonPadId) => {
     setGame((current) => playSimonPad(current, pad));
   }, []);
-
-  const saveLeaderboardScore = useCallback(() => {
-    void savePendingLeaderboardScore();
-  }, [savePendingLeaderboardScore]);
 
   const pauseGameForHelp = useCallback(() => {
     setGame((current) => pauseSimonGame(current));
@@ -446,12 +439,7 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
                 <PlayIcon data-icon="inline-start" />
                 Start
               </Button>
-              <GameLeaderboardPanel
-                slotTestIdPrefix="simon-leaderboard-slot"
-                slots={leaderboardSlots}
-                statusMessage={leaderboardStatusMessage}
-                testId="simon-start-leaderboard"
-              />
+              <GameLeaderboardPanel {...leaderboardPanelProps} />
             </div>
           ) : showCorrectFeedback ? (
             <div
@@ -489,21 +477,9 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
                     New game
                   </Button>
                 }
-                leaderboard={{
-                  slotTestIdPrefix: "simon-final-leaderboard-slot",
-                  slots: leaderboardSlots,
-                  statusMessage: leaderboardStatusMessage,
-                  testId: "simon-final-leaderboard",
-                }}
+                leaderboard={finalLeaderboardProps}
                 pendingLeaderboardEntry={pendingLeaderboardEntry}
-                scoreForm={{
-                  isSaving: isSavingLeaderboardScore,
-                  onPlayerNameChange: setPlayerName,
-                  onSaveScore: saveLeaderboardScore,
-                  playerName,
-                  saveFailed: scoreSaveFailed,
-                  testIdPrefix: "simon",
-                }}
+                scoreForm={scoreFormProps}
                 summary={{
                   metricLabel: "Final score",
                   metricValue: game.score,
