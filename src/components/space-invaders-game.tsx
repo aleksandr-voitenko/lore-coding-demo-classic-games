@@ -118,6 +118,7 @@ export const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
       "Shield Bearers glow cyan and protect nearby active aliens; destroy the bearer or use Piercing to punch through the shield.",
       "Revenge Aliens glow red and make every active adjacent alien fire immediately when destroyed.",
       "Splitter Aliens split into two smaller fragments when destroyed; fragments dive like Divers, do not drop bonuses, and still count as invaders.",
+      "Armored Aliens take three hits to destroy; non-lethal hits change their armor and keep clean streaks alive.",
       `Destroyed diver invaders drop power-up icons: bonus score adds ${SPACE_INVADERS_BONUS_SCORE_POINTS} points, extra life rarely grants a life, Burst, Freeze, Piercing, Shield, and Shotgun grant their matching bonuses.`,
       "Burst, Piercing, and Shotgun change your next shot, then return the cannon to its normal laser.",
       "Standard invader rows fire tracking bolts, delayed bursts, scatter bursts, needles, or lasers; special aliens fire bottom-row lasers.",

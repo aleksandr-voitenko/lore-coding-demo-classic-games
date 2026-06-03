@@ -22,7 +22,9 @@ This file covers public image assets under `public/images/`.
   UFO bonus ship. Shield Bearer aliens use the dedicated
   `alien-shield-bearer.png` sprite, Revenge Aliens use the dedicated
   `alien-revenge-alien.png` sprite, Splitter Aliens and their fragments use the
-  dedicated `alien-splitter.png` sprite, while ordinary formation rows use the
+  dedicated `alien-splitter.png` sprite, Armored Aliens use
+  `alien-armored-1.png`, `alien-armored-2.png`, and `alien-armored-3.png` for
+  one, two, and three remaining HP, while ordinary formation rows use the
   row-colored `alien-<color>.png` sprites. The in-board HUD uses
   `hud-health.png` and `hud-score.png` for the top-corner health and score
   readouts. Power-up pickup icons use `power-up-<kind>.png` filenames matching

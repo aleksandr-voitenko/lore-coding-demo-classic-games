@@ -5,6 +5,7 @@ export type SpaceInvadersDirection = -1 | 1;
 export type SpaceInvaderKind =
   | "standard"
   | "diver"
+  | "armored"
   | "shield-bearer"
   | "revenge"
   | "splitter"
@@ -64,6 +65,7 @@ export type SpaceInvader = {
   column: number;
   direction: SpaceInvadersDirection;
   height: number;
+  hitPoints: number;
   id: string;
   isActive: boolean;
   isDiving: boolean;
@@ -84,6 +86,7 @@ export type SpaceInvadersShot = {
 };
 
 export type SpaceInvadersPlayerShot = SpaceInvadersShot & {
+  damagedInvaderIds?: string[];
   hasScored?: boolean;
   id: string;
   kind: SpaceInvadersPlayerShotKind;
@@ -195,6 +198,7 @@ export type SpaceInvadersGameState = {
   playerBurst: SpaceInvadersPlayerBurst | null;
   playerRespawnTicks: number;
   playerShieldTicks: number;
+  playerVolleyHasArmoredHit: boolean;
   playerShots: SpaceInvadersPlayerShot[];
   playerVolleyHasScored: boolean;
   playerVolleyHasUnscoredExit: boolean;
@@ -259,6 +263,8 @@ const DIVER_STEP_MULTIPLIER = 4.375;
 export const SPACE_INVADERS_SHIELD_BEARER_COUNT = 4;
 export const SPACE_INVADERS_REVENGE_ALIEN_COUNT = 3;
 export const SPACE_INVADERS_SPLITTER_ALIEN_COUNT = 3;
+export const SPACE_INVADERS_ARMORED_ALIEN_COUNT = 3;
+export const SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS = 3;
 const EXPLOSION_PADDING_BY_KIND: Record<SpaceInvadersExplosionKind, number> = {
   invader: 16,
   player: 12,
@@ -456,6 +462,7 @@ export function createInitialSpaceInvadersGame({
     playerBurst: null,
     playerRespawnTicks: 0,
     playerShieldTicks: 0,
+    playerVolleyHasArmoredHit: false,
     playerShots: [],
     playerVolleyHasScored: false,
     playerVolleyHasUnscoredExit: false,
@@ -499,10 +506,21 @@ export function createSpaceInvadersFormation({
     random,
     rows,
   });
+  const armoredAlienIds = selectArmoredAlienIds({
+    columns,
+    excludedIds: new Set([
+      ...shieldBearerInvaderIds,
+      ...revengeAlienIds,
+      ...splitterAlienIds,
+    ]),
+    random,
+    rows,
+  });
   const specialInvaderIds = new Set([
     ...shieldBearerInvaderIds,
     ...revengeAlienIds,
     ...splitterAlienIds,
+    ...armoredAlienIds,
   ]);
   const diverInvaderIds = selectDiverInvaderIds(
     rows,
@@ -520,6 +538,8 @@ export function createSpaceInvadersFormation({
           ? "revenge"
         : splitterAlienIds.has(id)
           ? "splitter"
+        : armoredAlienIds.has(id)
+          ? "armored"
         : diverInvaderIds.has(id)
           ? "diver"
           : "standard";
@@ -530,6 +550,7 @@ export function createSpaceInvadersFormation({
         column,
         direction: 1,
         height: INVADER_HEIGHT,
+        hitPoints: getInitialInvaderHitPoints(kind),
         id,
         isActive: true,
         isDiving: false,
@@ -737,12 +758,14 @@ function advancePlayerShots(
   let playerVolleyHasScored =
     game.playerVolleyHasScored ||
     game.playerShots.some((shot) => shot.hasScored === true);
+  let playerVolleyHasArmoredHit = game.playerVolleyHasArmoredHit;
   let playerVolleyHasUnscoredExit = game.playerVolleyHasUnscoredExit;
   let destroyedInvaderPopupPoints = 0;
   let invaderPopupScoreScale = 1;
 
   for (const shot of game.playerShots) {
     const movedShot = advancePlayerShotPosition(shot);
+    const damagedInvaderIds = new Set(movedShot.damagedInvaderIds ?? []);
     let didScoreWithShot = shot.hasScored === true || playerVolleyHasScored;
 
     if (!isPlayerShotActive(movedShot, game)) {
@@ -815,7 +838,10 @@ function advancePlayerShots(
     }
 
     const hitInvaders = nextGame.invaders.filter(
-      (invader) => invader.isActive && rectanglesIntersect(movedShot, invader),
+      (invader) =>
+        invader.isActive &&
+        !damagedInvaderIds.has(invader.id) &&
+        rectanglesIntersect(movedShot, invader),
     );
     const vulnerableHitInvaders =
       movedShot.kind === "piercing"
@@ -840,20 +866,40 @@ function advancePlayerShots(
       continue;
     }
 
-    const destroyedInvaders =
+    const hitTargets =
       movedShot.kind === "piercing"
         ? vulnerableHitInvaders
         : vulnerableHitInvaders.slice(0, 1);
+    const hitResults = hitTargets.map((invader) => ({
+      hitPoints: getInvaderHitPointsAfterPlayerShot(invader),
+      invader,
+    }));
+    const damagedArmoredInvaders = hitResults.filter(
+      ({ hitPoints, invader }) => invader.kind === "armored" && hitPoints > 0,
+    );
+    const destroyedInvaders = hitResults
+      .filter(({ hitPoints }) => hitPoints <= 0)
+      .map(({ invader }) => invader);
+    const damagedArmoredHitPointsById = new Map(
+      damagedArmoredInvaders.map(({ hitPoints, invader }) => [invader.id, hitPoints]),
+    );
     const destroyedInvaderIds = new Set(
       destroyedInvaders.map((invader) => invader.id),
     );
+    const shotDamagedInvaderIds = [...damagedInvaderIds, ...hitTargets.map(({ id }) => id)];
     const destroyedInvaderPoints = destroyedInvaders.reduce(
       (total, invader) => total + invader.points,
       0,
     );
-    const invadersAfterDestroy = nextGame.invaders.map((invader) =>
-      destroyedInvaderIds.has(invader.id) ? { ...invader, isActive: false } : invader,
-    );
+    const invadersAfterDestroy = nextGame.invaders.map((invader) => {
+      if (destroyedInvaderIds.has(invader.id)) {
+        return { ...invader, hitPoints: 0, isActive: false };
+      }
+
+      const hitPoints = damagedArmoredHitPointsById.get(invader.id);
+
+      return hitPoints === undefined ? invader : { ...invader, hitPoints };
+    });
     const splitterFragments = createSpaceInvadersSplitterFragments(
       destroyedInvaders,
       nextGame.boardWidth,
@@ -888,7 +934,7 @@ function advancePlayerShots(
       destroyedInvaders,
     );
 
-    if (!didScoreWithShot) {
+    if (destroyedInvaders.length > 0 && !didScoreWithShot) {
       const hitStreakResult = advanceSpaceInvadersHitStreak(gameWithHits);
 
       gameWithHits = hitStreakResult.game;
@@ -901,6 +947,8 @@ function advancePlayerShots(
       }
       didScoreWithShot = true;
       playerVolleyHasScored = true;
+    } else if (damagedArmoredInvaders.length > 0) {
+      playerVolleyHasArmoredHit = true;
     }
 
     nextGame = {
@@ -911,6 +959,7 @@ function advancePlayerShots(
     if (movedShot.kind === "piercing" && nextGame.status !== "won") {
       activeShots.push({
         ...movedShot,
+        damagedInvaderIds: shotDamagedInvaderIds,
         hasScored: didScoreWithShot,
       });
     }
@@ -940,6 +989,7 @@ function advancePlayerShots(
   return {
     ...nextGame,
     playerShots: scoredActiveShots,
+    playerVolleyHasArmoredHit,
     playerVolleyHasScored,
     playerVolleyHasUnscoredExit,
   };
@@ -1173,6 +1223,7 @@ function advanceInvaderShots(
     playerRespawnTicks: lives <= 0 ? 0 : SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
     playerShieldTicks: 0,
     playerShots: [],
+    playerVolleyHasArmoredHit: false,
     playerVolleyHasScored: false,
     playerVolleyHasUnscoredExit: false,
     status: lives <= 0 ? "lost" : game.status,
@@ -1284,11 +1335,14 @@ function finalizeSpaceInvadersPlayerVolley(game: SpaceInvadersGameState) {
   }
 
   const resolvedGame =
-    game.playerVolleyHasUnscoredExit && !game.playerVolleyHasScored
+    game.playerVolleyHasUnscoredExit &&
+    !game.playerVolleyHasScored &&
+    !game.playerVolleyHasArmoredHit
       ? resetSpaceInvadersHitStreak(game)
       : game;
 
   if (
+    !resolvedGame.playerVolleyHasArmoredHit &&
     !resolvedGame.playerVolleyHasScored &&
     !resolvedGame.playerVolleyHasUnscoredExit
   ) {
@@ -1297,6 +1351,7 @@ function finalizeSpaceInvadersPlayerVolley(game: SpaceInvadersGameState) {
 
   return {
     ...resolvedGame,
+    playerVolleyHasArmoredHit: false,
     playerVolleyHasScored: false,
     playerVolleyHasUnscoredExit: false,
   };
@@ -1806,6 +1861,7 @@ function createSpaceInvadersSplitterFragment(
     column: invader.column,
     direction: side === "left" ? -1 : 1,
     height: SPLITTER_FRAGMENT_HEIGHT,
+    hitPoints: 1,
     id: `${invader.id}:split-${side}`,
     isActive: true,
     isDiving: true,
@@ -2203,6 +2259,14 @@ function getInvaderPoints(row: number) {
   return 10;
 }
 
+function getInitialInvaderHitPoints(kind: SpaceInvaderKind) {
+  return kind === "armored" ? SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS : 1;
+}
+
+function getInvaderHitPointsAfterPlayerShot(invader: SpaceInvader) {
+  return invader.kind === "armored" ? Math.max(0, invader.hitPoints - 1) : 0;
+}
+
 function selectDiverInvaderIds(
   rows: number,
   columns: number,
@@ -2324,6 +2388,46 @@ function selectSplitterAlienIds({
   const selectedCount = Math.min(
     SPACE_INVADERS_SPLITTER_ALIEN_COUNT,
     maximumSplitterAlienCount,
+    candidates.length,
+  );
+  const selectedIds = new Set<string>();
+
+  for (let selectedIndex = 0; selectedIndex < selectedCount; selectedIndex += 1) {
+    const candidateIndex = getRandomIndex(candidates.length, random);
+    const [selectedId] = candidates.splice(candidateIndex, 1);
+
+    if (selectedId !== undefined) {
+      selectedIds.add(selectedId);
+    }
+  }
+
+  return selectedIds;
+}
+
+function selectArmoredAlienIds({
+  columns,
+  excludedIds,
+  random,
+  rows,
+}: {
+  columns: number;
+  excludedIds: Set<string>;
+  random: SpaceInvadersRandomSource;
+  rows: number;
+}) {
+  const candidates = Array.from({ length: Math.max(0, rows - 2) }, (_, index) =>
+    Array.from({ length: columns }, (_, column) => `${index + 1}:${column}`),
+  )
+    .flat()
+    .filter((id) => !excludedIds.has(id));
+  const nonBottomSlotCount = Math.max(0, rows - 1) * columns;
+  const maximumArmoredAlienCount = Math.max(
+    0,
+    nonBottomSlotCount - excludedIds.size - DIVER_INVADER_COUNT,
+  );
+  const selectedCount = Math.min(
+    SPACE_INVADERS_ARMORED_ALIEN_COUNT,
+    maximumArmoredAlienCount,
     candidates.length,
   );
   const selectedIds = new Set<string>();

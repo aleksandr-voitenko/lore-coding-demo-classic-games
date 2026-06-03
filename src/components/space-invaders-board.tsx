@@ -11,6 +11,7 @@ import {
   type SpaceInvadersGameState,
   type SpaceInvadersInvaderShotKind,
   type SpaceInvadersPlayerShotKind,
+  type SpaceInvader,
   type SpaceInvaderKind,
   type SpaceInvadersPowerUpKind,
 } from "@/lib/space-invaders-game-engine";
@@ -186,25 +187,49 @@ const splitterInvaderSprite = {
   src: getSpaceInvadersAssetSrc("alien-splitter"),
 } as const;
 
+const armoredInvaderSpriteSrcByHitPoints: Record<1 | 2 | 3, string> = {
+  1: getSpaceInvadersAssetSrc("alien-armored-1"),
+  2: getSpaceInvadersAssetSrc("alien-armored-2"),
+  3: getSpaceInvadersAssetSrc("alien-armored-3"),
+};
+
+const armoredInvaderSprite = {
+  glowClassName:
+    "drop-shadow-[0_0_15px_color-mix(in_oklch,var(--invaders-yellow)_62%,transparent)]",
+  spriteClassName: "inset-x-[-16%] inset-y-[-24%]",
+} as const;
+
 export function getSpaceInvaderSprite(row: number) {
   return spaceInvaderSprites[row % spaceInvaderSprites.length];
 }
 
-function getSpaceInvaderRenderSprite(kind: SpaceInvaderKind, row: number) {
-  if (kind === "shield-bearer") {
+function getSpaceInvaderRenderSprite(invader: Pick<SpaceInvader, "hitPoints" | "kind" | "row">) {
+  if (invader.kind === "shield-bearer") {
     return shieldBearerInvaderSprite;
   }
 
-  if (kind === "revenge") {
+  if (invader.kind === "revenge") {
     return revengeInvaderSprite;
   }
 
-  if (kind === "splitter" || kind === "splitter-fragment") {
+  if (invader.kind === "splitter" || invader.kind === "splitter-fragment") {
     return splitterInvaderSprite;
   }
 
+  if (invader.kind === "armored") {
+    const hitPoints = Math.max(1, Math.min(3, Math.floor(invader.hitPoints))) as
+      | 1
+      | 2
+      | 3;
+
+    return {
+      ...armoredInvaderSprite,
+      src: armoredInvaderSpriteSrcByHitPoints[hitPoints],
+    };
+  }
+
   return {
-    ...getSpaceInvaderSprite(row),
+    ...getSpaceInvaderSprite(invader.row),
     spriteClassName: "inset-[-8%]",
   };
 }
@@ -366,7 +391,7 @@ export function SpaceInvadersBoard({
         />
 
         {game.invaders.map((invader) => {
-          const sprite = getSpaceInvaderRenderSprite(invader.kind, invader.row);
+          const sprite = getSpaceInvaderRenderSprite(invader);
           const isShielded = isSpaceInvaderShielded(invader, game.invaders);
 
           return (
@@ -376,6 +401,9 @@ export function SpaceInvadersBoard({
                 "absolute left-0 top-0 transition-opacity will-change-transform",
                 !invader.isActive && "opacity-0",
               )}
+              data-invader-hit-points={
+                invader.kind === "armored" ? invader.hitPoints : undefined
+              }
               data-invader-kind={invader.kind}
               data-invader-shielded={isShielded ? "true" : undefined}
               data-testid={invader.isActive ? "space-invaders-invader" : undefined}

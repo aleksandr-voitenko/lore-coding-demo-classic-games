@@ -190,6 +190,11 @@ describe("game board renderers", () => {
   it("renders Space Invaders formation, player shot, and remaining count", () => {
     const game = createInitialSpaceInvadersGame({ random: () => 0 });
     const splitterAlien = game.invaders.find((invader) => invader.kind === "splitter")!;
+    const armoredHitPointsById = new Map(
+      game.invaders
+        .filter((invader) => invader.kind === "armored")
+        .map((invader, index) => [invader.id, (index + 1) as 1 | 2 | 3]),
+    );
     const splitterFragment = {
       ...splitterAlien,
       height: splitterAlien.height * 0.7,
@@ -206,6 +211,7 @@ describe("game board renderers", () => {
           invaders: [
             ...game.invaders.map((invader, index) => ({
               ...invader,
+              hitPoints: armoredHitPointsById.get(invader.id) ?? invader.hitPoints,
               isActive: index !== 0,
             })),
             splitterFragment,
@@ -367,6 +373,10 @@ describe("game board renderers", () => {
       'data-invader-kind="revenge"',
       'data-invader-kind="splitter"',
       'data-invader-kind="splitter-fragment"',
+      'data-invader-kind="armored"',
+      'data-invader-hit-points="1"',
+      'data-invader-hit-points="2"',
+      'data-invader-hit-points="3"',
       'data-invader-shielded="true"',
       'data-testid="space-invaders-invader-shield"',
       "space-invaders-invader-shield",
@@ -405,6 +415,9 @@ describe("game board renderers", () => {
       "/images/space-invaders/alien-shield-bearer.png?v=sprite-art-v2",
       "/images/space-invaders/alien-revenge-alien.png?v=sprite-art-v2",
       "/images/space-invaders/alien-splitter.png?v=sprite-art-v2",
+      "/images/space-invaders/alien-armored-1.png?v=sprite-art-v2",
+      "/images/space-invaders/alien-armored-2.png?v=sprite-art-v2",
+      "/images/space-invaders/alien-armored-3.png?v=sprite-art-v2",
       "/images/space-invaders/explosion-3.png?v=sprite-art-v2",
       "/images/space-invaders/ufo.png?v=sprite-art-v2",
       "/images/space-invaders/player-shot.png?v=sprite-art-v2",

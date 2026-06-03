@@ -45,6 +45,7 @@ describe("SpaceInvadersGame", () => {
         "Shield Bearers glow cyan and protect nearby active aliens; destroy the bearer or use Piercing to punch through the shield.",
         "Revenge Aliens glow red and make every active adjacent alien fire immediately when destroyed.",
         "Splitter Aliens split into two smaller fragments when destroyed; fragments dive like Divers, do not drop bonuses, and still count as invaders.",
+        "Armored Aliens take three hits to destroy; non-lethal hits change their armor and keep clean streaks alive.",
         "Standard invader rows fire tracking bolts, delayed bursts, scatter bursts, needles, or lasers; special aliens fire bottom-row lasers.",
       ]),
     );

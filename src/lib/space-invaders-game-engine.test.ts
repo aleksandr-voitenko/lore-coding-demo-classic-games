@@ -11,6 +11,8 @@ import {
   pauseSpaceInvadersGame,
   restartSpaceInvadersGame,
   SPACE_INVADERS_ALIEN_FREEZE_TICKS,
+  SPACE_INVADERS_ARMORED_ALIEN_COUNT,
+  SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS,
   SPACE_INVADERS_BASE_Y,
   SPACE_INVADERS_BONUS_SCORE_POINTS,
   SPACE_INVADERS_BOARD_WIDTH,
@@ -77,6 +79,12 @@ function getRevengeAlienIds(game: SpaceInvadersGameState) {
 function getSplitterAlienIds(game: SpaceInvadersGameState) {
   return game.invaders
     .filter((invader) => invader.kind === "splitter")
+    .map((invader) => invader.id);
+}
+
+function getArmoredAlienIds(game: SpaceInvadersGameState) {
+  return game.invaders
+    .filter((invader) => invader.kind === "armored")
     .map((invader) => invader.id);
 }
 
@@ -263,6 +271,9 @@ describe("space invaders game engine", () => {
     const splitterAlienInvaders = game.invaders.filter(
       (invader) => invader.kind === "splitter",
     );
+    const armoredAlienInvaders = game.invaders.filter(
+      (invader) => invader.kind === "armored",
+    );
     const bottomRowInvaders = game.invaders.filter(
       (invader) => invader.row === SPACE_INVADERS_ROWS - 1,
     );
@@ -289,6 +300,7 @@ describe("space invaders game engine", () => {
     expect(game.playerBurst).toBeNull();
     expect(game.playerRespawnTicks).toBe(0);
     expect(game.playerShieldTicks).toBe(0);
+    expect(game.playerVolleyHasArmoredHit).toBe(false);
     expect(game.playerShots).toEqual([]);
     expect(game.playerVolleyHasScored).toBe(false);
     expect(game.playerVolleyHasUnscoredExit).toBe(false);
@@ -314,6 +326,20 @@ describe("space invaders game engine", () => {
     expect(shieldBearerInvaders).toHaveLength(SPACE_INVADERS_SHIELD_BEARER_COUNT);
     expect(revengeAlienInvaders).toHaveLength(SPACE_INVADERS_REVENGE_ALIEN_COUNT);
     expect(splitterAlienInvaders).toHaveLength(SPACE_INVADERS_SPLITTER_ALIEN_COUNT);
+    expect(armoredAlienInvaders).toHaveLength(SPACE_INVADERS_ARMORED_ALIEN_COUNT);
+    expect(
+      armoredAlienInvaders.every(
+        (invader) =>
+          invader.hitPoints === SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS,
+      ),
+    ).toBe(true);
+    expect(
+      game.invaders.every((invader) =>
+        invader.kind === "armored"
+          ? invader.hitPoints === SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS
+          : invader.hitPoints === 1,
+      ),
+    ).toBe(true);
     expect(
       shieldBearerInvaders.every(
         (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
@@ -326,6 +352,11 @@ describe("space invaders game engine", () => {
     ).toBe(true);
     expect(
       splitterAlienInvaders.every(
+        (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
+      ),
+    ).toBe(true);
+    expect(
+      armoredAlienInvaders.every(
         (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
       ),
     ).toBe(true);
@@ -359,6 +390,21 @@ describe("space invaders game engine", () => {
           ),
       ),
     ).toBe(true);
+    expect(
+      armoredAlienInvaders.every(
+        (invader) =>
+          !diverInvaders.some((diverInvader) => diverInvader.id === invader.id) &&
+          !shieldBearerInvaders.some(
+            (shieldBearerInvader) => shieldBearerInvader.id === invader.id,
+          ) &&
+          !revengeAlienInvaders.some(
+            (revengeAlienInvader) => revengeAlienInvader.id === invader.id,
+          ) &&
+          !splitterAlienInvaders.some(
+            (splitterAlienInvader) => splitterAlienInvader.id === invader.id,
+          ),
+      ),
+    ).toBe(true);
     expect(bottomRowInvaders.every((invader) => invader.kind === "standard")).toBe(true);
     expect(game.invaders[0]).toMatchObject({
       column: 0,
@@ -387,6 +433,11 @@ describe("space invaders game engine", () => {
       kind: "revenge",
       points: 20,
     });
+    expect(getInvader(game, 1, 10)).toMatchObject({
+      hitPoints: SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS,
+      kind: "armored",
+      points: 20,
+    });
     expect(game.invaders.at(-1)).toMatchObject({
       column: SPACE_INVADERS_COLUMNS - 1,
       kind: "standard",
@@ -406,6 +457,8 @@ describe("space invaders game engine", () => {
     const lastRevengeAlienIds = getRevengeAlienIds(lastSelection);
     const firstSplitterAlienIds = getSplitterAlienIds(firstSelection);
     const lastSplitterAlienIds = getSplitterAlienIds(lastSelection);
+    const firstArmoredAlienIds = getArmoredAlienIds(firstSelection);
+    const lastArmoredAlienIds = getArmoredAlienIds(lastSelection);
     const firstDivers = firstSelection.invaders.filter((invader) => invader.kind === "diver");
     const lastDivers = lastSelection.invaders.filter((invader) => invader.kind === "diver");
     const firstShieldBearers = firstSelection.invaders.filter(
@@ -426,6 +479,12 @@ describe("space invaders game engine", () => {
     const lastSplitterAliens = lastSelection.invaders.filter(
       (invader) => invader.kind === "splitter",
     );
+    const firstArmoredAliens = firstSelection.invaders.filter(
+      (invader) => invader.kind === "armored",
+    );
+    const lastArmoredAliens = lastSelection.invaders.filter(
+      (invader) => invader.kind === "armored",
+    );
     const firstBottomRowInvaders = firstSelection.invaders.filter(
       (invader) => invader.row === SPACE_INVADERS_ROWS - 1,
     );
@@ -441,10 +500,13 @@ describe("space invaders game engine", () => {
     expect(lastRevengeAlienIds).toHaveLength(SPACE_INVADERS_REVENGE_ALIEN_COUNT);
     expect(firstSplitterAlienIds).toHaveLength(SPACE_INVADERS_SPLITTER_ALIEN_COUNT);
     expect(lastSplitterAlienIds).toHaveLength(SPACE_INVADERS_SPLITTER_ALIEN_COUNT);
+    expect(firstArmoredAlienIds).toHaveLength(SPACE_INVADERS_ARMORED_ALIEN_COUNT);
+    expect(lastArmoredAlienIds).toHaveLength(SPACE_INVADERS_ARMORED_ALIEN_COUNT);
     expect(firstDiverIds).not.toEqual(lastDiverIds);
     expect(firstShieldBearerIds).not.toEqual(lastShieldBearerIds);
     expect(firstRevengeAlienIds).not.toEqual(lastRevengeAlienIds);
     expect(firstSplitterAlienIds).not.toEqual(lastSplitterAlienIds);
+    expect(firstArmoredAlienIds).not.toEqual(lastArmoredAlienIds);
     expect(firstDivers.every((invader) => invader.row < SPACE_INVADERS_ROWS - 1)).toBe(true);
     expect(lastDivers.every((invader) => invader.row < SPACE_INVADERS_ROWS - 1)).toBe(true);
     expect(
@@ -477,6 +539,16 @@ describe("space invaders game engine", () => {
         (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
       ),
     ).toBe(true);
+    expect(
+      firstArmoredAliens.every(
+        (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
+      ),
+    ).toBe(true);
+    expect(
+      lastArmoredAliens.every(
+        (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
+      ),
+    ).toBe(true);
     expect(firstShieldBearerIds.every((id) => !firstDiverIds.includes(id))).toBe(true);
     expect(lastShieldBearerIds.every((id) => !lastDiverIds.includes(id))).toBe(true);
     expect(
@@ -505,6 +577,24 @@ describe("space invaders game engine", () => {
           !lastRevengeAlienIds.includes(id),
       ),
     ).toBe(true);
+    expect(
+      firstArmoredAlienIds.every(
+        (id) =>
+          !firstDiverIds.includes(id) &&
+          !firstShieldBearerIds.includes(id) &&
+          !firstRevengeAlienIds.includes(id) &&
+          !firstSplitterAlienIds.includes(id),
+      ),
+    ).toBe(true);
+    expect(
+      lastArmoredAlienIds.every(
+        (id) =>
+          !lastDiverIds.includes(id) &&
+          !lastShieldBearerIds.includes(id) &&
+          !lastRevengeAlienIds.includes(id) &&
+          !lastSplitterAlienIds.includes(id),
+      ),
+    ).toBe(true);
     expect(firstBottomRowInvaders.every((invader) => invader.kind === "standard")).toBe(true);
     expect(lastBottomRowInvaders.every((invader) => invader.kind === "standard")).toBe(true);
   });
@@ -518,6 +608,7 @@ describe("space invaders game engine", () => {
     const restarted = restartSpaceInvadersGame(game);
     const expectedSmallPresetRevengeAlienCount = 2;
     const expectedSmallPresetSplitterAlienCount = 0;
+    const expectedSmallPresetArmoredAlienCount = 0;
 
     expect(game.alienCount).toBe(24);
     expect(game.boardHeight).toBe(640);
@@ -534,6 +625,9 @@ describe("space invaders game engine", () => {
     expect(game.invaders.filter((invader) => invader.kind === "splitter")).toHaveLength(
       expectedSmallPresetSplitterAlienCount,
     );
+    expect(game.invaders.filter((invader) => invader.kind === "armored")).toHaveLength(
+      expectedSmallPresetArmoredAlienCount,
+    );
     expect(game.player.x + game.player.width / 2).toBe(240);
     expect(restarted.alienCount).toBe(24);
     expect(restarted.boardHeight).toBe(640);
@@ -548,6 +642,9 @@ describe("space invaders game engine", () => {
     );
     expect(restarted.invaders.filter((invader) => invader.kind === "splitter")).toHaveLength(
       expectedSmallPresetSplitterAlienCount,
+    );
+    expect(restarted.invaders.filter((invader) => invader.kind === "armored")).toHaveLength(
+      expectedSmallPresetArmoredAlienCount,
     );
     expect(restarted.status).toBe("running");
   });
@@ -1121,6 +1218,7 @@ describe("space invaders game engine", () => {
         cooldownTicks: 2,
         remainingShots: 3,
       },
+      playerVolleyHasArmoredHit: true,
       playerShots: [playerShot],
     });
     const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
@@ -1147,6 +1245,7 @@ describe("space invaders game engine", () => {
     expect(advanced.hitStreak).toBe(0);
     expect(advanced.playerBurst).toBeNull();
     expect(advanced.playerShots).toEqual([]);
+    expect(advanced.playerVolleyHasArmoredHit).toBe(false);
     expect(advanced.playerRespawnTicks).toBe(SPACE_INVADERS_PLAYER_RESPAWN_TICKS);
     expect(advanced.playerShieldTicks).toBe(0);
     expect(advanced.player.x + advanced.player.width / 2).toBe(
@@ -1309,6 +1408,195 @@ describe("space invaders game engine", () => {
       },
     ]);
     expect(advanced.nextScorePopupId).toBe(1);
+  });
+
+  it("requires three shots to destroy Armored Aliens while preserving clean streaks", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const armoredAlien = game.invaders.find((invader) => invader.kind === "armored")!;
+    const firstHit = advanceSpaceInvadersGame(
+      withOnlyActiveInvader(
+        createRunningGame({
+          hitStreak: 4,
+          invaderShotCooldownTicks: 1_000,
+          invaders: game.invaders,
+          playerShots: [createPlayerShotAlignedWith(armoredAlien)],
+          score: 100,
+        }),
+        armoredAlien,
+      ),
+      () => 0,
+    );
+    const armoredAfterFirstHit = firstHit.invaders.find(
+      (invader) => invader.id === armoredAlien.id,
+    )!;
+    const secondHit = advanceSpaceInvadersGame(
+      {
+        ...firstHit,
+        invaderShotCooldownTicks: 1_000,
+        playerShots: [createPlayerShotAlignedWith(armoredAfterFirstHit, firstHit)],
+      },
+      () => 0,
+    );
+    const armoredAfterSecondHit = secondHit.invaders.find(
+      (invader) => invader.id === armoredAlien.id,
+    )!;
+    const finalHit = advanceSpaceInvadersGame(
+      {
+        ...secondHit,
+        invaderShotCooldownTicks: 1_000,
+        playerShots: [createPlayerShotAlignedWith(armoredAfterSecondHit, secondHit)],
+      },
+      () => 0,
+    );
+    const destroyedArmoredAlien = finalHit.invaders.find(
+      (invader) => invader.id === armoredAlien.id,
+    )!;
+    const expectedFinalStreakBonus = SPACE_INVADERS_HIT_STREAK_BONUS_STEP * 4;
+
+    expect(armoredAlien).toMatchObject({
+      hitPoints: SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS,
+      kind: "armored",
+    });
+    expect(armoredAfterFirstHit).toMatchObject({
+      hitPoints: 2,
+      isActive: true,
+    });
+    expect(firstHit.playerShots).toEqual([]);
+    expect(firstHit.hitStreak).toBe(4);
+    expect(firstHit.score).toBe(100);
+    expect(firstHit.explosions).toEqual([]);
+    expect(firstHit.scorePopups).toEqual([]);
+    expect(firstHit.playerVolleyHasArmoredHit).toBe(false);
+    expect(firstHit.playerVolleyHasScored).toBe(false);
+    expect(firstHit.playerVolleyHasUnscoredExit).toBe(false);
+    expect(armoredAfterSecondHit).toMatchObject({
+      hitPoints: 1,
+      isActive: true,
+    });
+    expect(secondHit.hitStreak).toBe(4);
+    expect(secondHit.score).toBe(100);
+    expect(destroyedArmoredAlien).toMatchObject({
+      hitPoints: 0,
+      isActive: false,
+    });
+    expect(finalHit.status).toBe("won");
+    expect(finalHit.hitStreak).toBe(5);
+    expect(finalHit.score).toBe(100 + armoredAlien.points + expectedFinalStreakBonus);
+    expect(finalHit.explosions).toHaveLength(1);
+    expect(finalHit.scorePopups).toEqual([
+      expect.objectContaining({
+        points: armoredAlien.points + expectedFinalStreakBonus,
+        scoreScale: 1.32,
+      }),
+    ]);
+  });
+
+  it("damages an Armored Alien only once per piercing laser", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const armoredAlien = game.invaders.find((invader) => invader.kind === "armored")!;
+    const firstHit = advanceSpaceInvadersGame(
+      withOnlyActiveInvader(
+        createRunningGame({
+          alienFreezeTicks: 2,
+          invaderShotCooldownTicks: 1_000,
+          invaders: game.invaders,
+          playerShots: [
+            {
+              ...createPlayerShotAlignedWith(armoredAlien),
+              kind: "piercing",
+            },
+          ],
+        }),
+        armoredAlien,
+      ),
+      () => 0,
+    );
+    const secondTick = advanceSpaceInvadersGame(
+      {
+        ...firstHit,
+        invaderShotCooldownTicks: 1_000,
+      },
+      () => 0,
+    );
+    const armoredAfterFirstHit = firstHit.invaders.find(
+      (invader) => invader.id === armoredAlien.id,
+    )!;
+    const armoredAfterSecondTick = secondTick.invaders.find(
+      (invader) => invader.id === armoredAlien.id,
+    )!;
+
+    expect(armoredAfterFirstHit).toMatchObject({
+      hitPoints: 2,
+      isActive: true,
+    });
+    expect(firstHit.playerShots).toHaveLength(1);
+    expect(firstHit.playerShots[0]).toMatchObject({
+      damagedInvaderIds: [armoredAlien.id],
+      hasScored: false,
+      kind: "piercing",
+    });
+    expect(firstHit.playerVolleyHasArmoredHit).toBe(true);
+    expect(firstHit.playerVolleyHasScored).toBe(false);
+    expect(armoredAfterSecondTick).toMatchObject({
+      hitPoints: 2,
+      isActive: true,
+    });
+    expect(secondTick.playerShots[0]).toMatchObject({
+      damagedInvaderIds: [armoredAlien.id],
+      kind: "piercing",
+    });
+    expect(secondTick.score).toBe(0);
+    expect(secondTick.explosions).toEqual([]);
+    expect(secondTick.playerVolleyHasArmoredHit).toBe(true);
+    expect(secondTick.playerVolleyHasScored).toBe(false);
+  });
+
+  it("lets armor-preserved volleys still earn hit-streak bonuses on later kills", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const armoredAlien = game.invaders.find((invader) => invader.kind === "armored")!;
+    const standardInvader = getInvader(game, SPACE_INVADERS_ROWS - 1, 0);
+    const activeInvaderIds = new Set([armoredAlien.id, standardInvader.id]);
+    const armorShot = {
+      ...createPlayerShotAlignedWith(armoredAlien),
+      id: "armor-shot",
+      kind: "shotgun" as const,
+    };
+    const scoringShot = {
+      ...createPlayerShotAlignedWith(standardInvader),
+      id: "scoring-shot",
+      kind: "shotgun" as const,
+    };
+    const advanced = advanceSpaceInvadersGame(
+      createRunningGame({
+        hitStreak: 4,
+        invaderShotCooldownTicks: 1_000,
+        invaders: game.invaders.map((invader) => ({
+          ...invader,
+          isActive: activeInvaderIds.has(invader.id),
+        })),
+        playerShots: [armorShot, scoringShot],
+        score: 100,
+      }),
+      () => 0,
+    );
+    const armoredAfterHit = advanced.invaders.find(
+      (invader) => invader.id === armoredAlien.id,
+    )!;
+
+    expect(armoredAfterHit).toMatchObject({
+      hitPoints: SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS - 1,
+      isActive: true,
+    });
+    expect(
+      advanced.invaders.find((invader) => invader.id === standardInvader.id)?.isActive,
+    ).toBe(false);
+    expect(advanced.hitStreak).toBe(5);
+    expect(advanced.score).toBe(
+      100 + standardInvader.points + SPACE_INVADERS_HIT_STREAK_BONUS_STEP * 4,
+    );
+    expect(advanced.playerVolleyHasArmoredHit).toBe(false);
+    expect(advanced.playerVolleyHasScored).toBe(false);
+    expect(advanced.playerVolleyHasUnscoredExit).toBe(false);
   });
 
   it("splits destroyed Splitter Aliens into two smaller active fragments", () => {
@@ -3072,6 +3360,7 @@ describe("space invaders game engine", () => {
         cooldownTicks: 2,
         remainingShots: 4,
       },
+      playerVolleyHasArmoredHit: true,
       playerShots: [
         {
           height: 14,
@@ -3116,6 +3405,7 @@ describe("space invaders game engine", () => {
     expect(restarted.playerBurst).toBeNull();
     expect(restarted.playerRespawnTicks).toBe(0);
     expect(restarted.playerShieldTicks).toBe(0);
+    expect(restarted.playerVolleyHasArmoredHit).toBe(false);
     expect(restarted.playerShots).toEqual([]);
     expect(restarted.playerVolleyHasScored).toBe(false);
     expect(restarted.playerVolleyHasUnscoredExit).toBe(false);
