@@ -224,7 +224,7 @@ function createPlayerShotAlignedWith(
   return {
     ...shot,
     x: target.x + target.width / 2 - shot.width / 2,
-    y: target.y + target.height + 2,
+    y: target.y + target.height / 2 - shot.height / 2 - shot.velocityY,
   };
 }
 
@@ -1408,6 +1408,50 @@ describe("space invaders game engine", () => {
       },
     ]);
     expect(advanced.nextScorePopupId).toBe(1);
+  });
+
+  it("lets player shots pass transparent padding around alien sprites", () => {
+    const game = createInitialSpaceInvadersGame();
+    const targetInvader = getInvader(game, SPACE_INVADERS_ROWS - 1, 5);
+    const baseShot = fireSpaceInvadersShot(createRunningGame()).playerShots[0]!;
+    const occupiedBottomY = targetInvader.y + targetInvader.height * ((11 + 83) / 112);
+    const movedShotY = occupiedBottomY + 0.01;
+    const runningGame = withOnlyActiveInvader(
+      createRunningGame({
+        alienFreezeTicks: 1,
+        invaderShotCooldownTicks: 1_000,
+        playerShots: [
+          {
+            ...baseShot,
+            x: targetInvader.x + targetInvader.width / 2 - baseShot.width / 2,
+            y: movedShotY - baseShot.velocityY,
+          },
+        ],
+      }),
+      targetInvader,
+    );
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
+    const activeInvader = advanced.invaders.find(
+      (invader) => invader.id === targetInvader.id,
+    );
+
+    expect(targetInvader).toMatchObject({
+      kind: "standard",
+      row: SPACE_INVADERS_ROWS - 1,
+    });
+    expect(activeInvader).toMatchObject({
+      isActive: true,
+    });
+    expect(advanced.playerShots).toHaveLength(1);
+    expect(advanced.playerShots[0]).toMatchObject({
+      hasScored: false,
+      x: targetInvader.x + targetInvader.width / 2 - baseShot.width / 2,
+    });
+    expect(advanced.playerShots[0]!.y).toBeCloseTo(movedShotY);
+    expect(advanced.score).toBe(0);
+    expect(advanced.hitStreak).toBe(0);
+    expect(advanced.explosions).toEqual([]);
+    expect(advanced.scorePopups).toEqual([]);
   });
 
   it("requires three shots to destroy Armored Aliens while preserving clean streaks", () => {

@@ -314,6 +314,7 @@ const INVADER_HEIGHT = 23;
 const INVADER_STEP_X = 0.8;
 const INVADER_TOP = 64;
 const INVADER_WIDTH = 28;
+const INVADER_SPRITE_SIZE = 112;
 const SPLITTER_FRAGMENT_GAP_X = 4;
 const SPLITTER_FRAGMENT_HEIGHT = INVADER_HEIGHT * 0.7;
 const SPLITTER_FRAGMENT_WIDTH = INVADER_WIDTH * 0.7;
@@ -357,6 +358,13 @@ type InvaderShotSpec = {
   width: number;
 };
 
+type InvaderHitboxRatio = {
+  height: number;
+  offsetX: number;
+  offsetY: number;
+  width: number;
+};
+
 const SPACE_INVADERS_ROW_SHOT_KINDS: SpaceInvadersInvaderShotKind[] = [
   "commander",
   "burst",
@@ -366,6 +374,39 @@ const SPACE_INVADERS_ROW_SHOT_KINDS: SpaceInvadersInvaderShotKind[] = [
 ];
 const SPACE_INVADERS_SPECIAL_INVADER_SHOT_KIND =
   SPACE_INVADERS_ROW_SHOT_KINDS[SPACE_INVADERS_ROW_SHOT_KINDS.length - 1] ?? "standard";
+
+// Ratios are derived from non-transparent pixels in the 112x112 alien PNGs.
+const SPACE_INVADERS_ROW_ALIEN_HITBOXES = [
+  createInvaderHitboxRatio({ height: 98, offsetX: 3, offsetY: 6, width: 106 }),
+  createInvaderHitboxRatio({ height: 84, offsetX: 4, offsetY: 12, width: 104 }),
+  createInvaderHitboxRatio({ height: 82, offsetX: 3, offsetY: 11, width: 106 }),
+  createInvaderHitboxRatio({ height: 84, offsetX: 5, offsetY: 13, width: 102 }),
+  createInvaderHitboxRatio({ height: 83, offsetX: 7, offsetY: 11, width: 98 }),
+] as const satisfies readonly InvaderHitboxRatio[];
+
+const SHIELD_BEARER_ALIEN_HITBOX = createInvaderHitboxRatio({
+  height: 77,
+  offsetX: 12,
+  offsetY: 26,
+  width: 88,
+});
+const REVENGE_ALIEN_HITBOX = createInvaderHitboxRatio({
+  height: 98,
+  offsetX: 1,
+  offsetY: 7,
+  width: 110,
+});
+const SPLITTER_ALIEN_HITBOX = createInvaderHitboxRatio({
+  height: 60,
+  offsetX: 4,
+  offsetY: 29,
+  width: 104,
+});
+const ARMORED_ALIEN_HITBOXES = {
+  1: createInvaderHitboxRatio({ height: 85, offsetX: 3, offsetY: 13, width: 107 }),
+  2: createInvaderHitboxRatio({ height: 83, offsetX: 3, offsetY: 14, width: 106 }),
+  3: createInvaderHitboxRatio({ height: 81, offsetX: 3, offsetY: 16, width: 106 }),
+} as const satisfies Record<1 | 2 | 3, InvaderHitboxRatio>;
 
 const INVADER_SHOT_SPECS: Record<SpaceInvadersInvaderShotKind, InvaderShotSpec> = {
   commander: {
@@ -841,7 +882,7 @@ function advancePlayerShots(
       (invader) =>
         invader.isActive &&
         !damagedInvaderIds.has(invader.id) &&
-        rectanglesIntersect(movedShot, invader),
+        rectanglesIntersect(movedShot, getInvaderCollisionBounds(invader)),
     );
     const vulnerableHitInvaders =
       movedShot.kind === "piercing"
@@ -2507,6 +2548,67 @@ function getRandomValue(random: SpaceInvadersRandomSource) {
   }
 
   return Math.max(0, Math.min(1, randomValue));
+}
+
+function createInvaderHitboxRatio({
+  height,
+  offsetX,
+  offsetY,
+  width,
+}: {
+  height: number;
+  offsetX: number;
+  offsetY: number;
+  width: number;
+}): InvaderHitboxRatio {
+  return {
+    height: height / INVADER_SPRITE_SIZE,
+    offsetX: offsetX / INVADER_SPRITE_SIZE,
+    offsetY: offsetY / INVADER_SPRITE_SIZE,
+    width: width / INVADER_SPRITE_SIZE,
+  };
+}
+
+function getInvaderCollisionBounds(invader: SpaceInvader) {
+  const hitbox = getInvaderHitboxRatio(invader);
+
+  return {
+    height: invader.height * hitbox.height,
+    width: invader.width * hitbox.width,
+    x: invader.x + invader.width * hitbox.offsetX,
+    y: invader.y + invader.height * hitbox.offsetY,
+  };
+}
+
+function getInvaderHitboxRatio(
+  invader: Pick<SpaceInvader, "hitPoints" | "kind" | "row">,
+) {
+  if (invader.kind === "shield-bearer") {
+    return SHIELD_BEARER_ALIEN_HITBOX;
+  }
+
+  if (invader.kind === "revenge") {
+    return REVENGE_ALIEN_HITBOX;
+  }
+
+  if (invader.kind === "splitter" || invader.kind === "splitter-fragment") {
+    return SPLITTER_ALIEN_HITBOX;
+  }
+
+  if (invader.kind === "armored") {
+    const hitPoints = Math.max(1, Math.min(3, Math.floor(invader.hitPoints))) as
+      | 1
+      | 2
+      | 3;
+
+    return ARMORED_ALIEN_HITBOXES[hitPoints];
+  }
+
+  return (
+    SPACE_INVADERS_ROW_ALIEN_HITBOXES[
+      invader.row % SPACE_INVADERS_ROW_ALIEN_HITBOXES.length
+    ] ?? SPACE_INVADERS_ROW_ALIEN_HITBOXES[0]
+  );
 }
 
 function rectanglesIntersect(

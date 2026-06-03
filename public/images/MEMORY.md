@@ -31,6 +31,11 @@ This file covers public image assets under `public/images/`.
   the engine's power-up kind strings. `SpaceInvadersBoard` references these with
   versioned public URLs and moves sprites with board-relative `translate3d(...)`
   transforms.
+- Alien player-shot collision in `src/lib/space-invaders-game-engine.ts` uses
+  occupied-pixel hitbox ratios derived from the non-transparent bounds of these
+  112x112 alien PNGs. When alien sprites change shape or padding, update those
+  ratios alongside the asset swap so visually smaller aliens remain harder to
+  hit.
 - `snake/` is a sprite-backed exception. It contains 128x128 floor, food,
   obstacle, head, tail, straight-body, and corner-body assets. `SnakeBoard`
   references these with versioned public URLs and derives segment orientation
