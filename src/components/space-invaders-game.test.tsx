@@ -44,6 +44,7 @@ describe("SpaceInvadersGame", () => {
         `Consecutive UFO hits add ${SPACE_INVADERS_UFO_CHAIN_BONUS_STEP} more points per UFO after the first, up to ${SPACE_INVADERS_UFO_CHAIN_BONUS_CAP}; escaped UFOs reset the chain.`,
         "Shield Bearers glow cyan and protect nearby active aliens; destroy the bearer or use Piercing to punch through the shield.",
         "Revenge Aliens glow red and make every active adjacent alien fire immediately when destroyed.",
+        "Standard invader rows fire tracking bolts, delayed bursts, scatter bursts, needles, or lasers; special aliens fire bottom-row lasers.",
       ]),
     );
   });

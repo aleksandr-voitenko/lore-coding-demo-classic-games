@@ -78,6 +78,7 @@ function withOnlyActiveInvader(game: SpaceInvadersGameState, activeInvader: Spac
     ...game,
     invaders: game.invaders.map((invader) => ({
       ...invader,
+      ...(invader.id === activeInvader.id ? activeInvader : {}),
       isActive: invader.id === activeInvader.id,
     })),
   };
@@ -214,7 +215,10 @@ function createPlayerShotAlignedWith(
 
 function fireFromOnlyInvader(row: number, column = 5) {
   const game = createInitialSpaceInvadersGame();
-  const shooter = getInvader(game, row, column);
+  const shooter = {
+    ...getInvader(game, row, column),
+    kind: "standard" as const,
+  };
   const runningGame = withOnlyActiveInvader(
     createRunningGame({
       invaderShotCooldownTicks: 0,
@@ -713,14 +717,25 @@ describe("space invaders game engine", () => {
   });
 
   it("lets the next lowest invader in a column fire after the bottom invader is cleared", () => {
-    const game = createInitialSpaceInvadersGame();
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
     const bottomInvader = getInvader(game, SPACE_INVADERS_ROWS - 1, 5);
-    const nextShooter = getInvader(game, SPACE_INVADERS_ROWS - 2, bottomInvader.column);
+    const nextShooter = {
+      ...getInvader(game, SPACE_INVADERS_ROWS - 2, bottomInvader.column),
+      kind: "standard" as const,
+    };
     const runningGame = createRunningGame({
       invaderShotCooldownTicks: 0,
-      invaders: game.invaders.map((invader) =>
-        invader.id === bottomInvader.id ? { ...invader, isActive: false } : invader,
-      ),
+      invaders: game.invaders.map((invader) => {
+        if (invader.id === bottomInvader.id) {
+          return { ...invader, isActive: false };
+        }
+
+        if (invader.id === nextShooter.id) {
+          return nextShooter;
+        }
+
+        return invader;
+      }),
       player: centerPlayerUnderInvader(game, nextShooter),
     });
     const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
@@ -733,7 +748,7 @@ describe("space invaders game engine", () => {
     });
   });
 
-  it("assigns each invader row its own shot variant and cooldown", () => {
+  it("assigns each standard invader row its own shot variant and cooldown", () => {
     const commander = fireFromOnlyInvader(0).advanced;
     const burst = fireFromOnlyInvader(1).advanced;
     const scatter = fireFromOnlyInvader(2).advanced;
@@ -808,6 +823,42 @@ describe("space invaders game engine", () => {
       standard.invaderShotCooldownTicks,
     );
     expect(scatter.nextInvaderShotId).toBe(3);
+  });
+
+  it("fires bottom-row standard shots from every special invader kind", () => {
+    const specialKinds = ["diver", "shield-bearer", "revenge"] as const;
+    const bottomRowCooldown = fireFromOnlyInvader(SPACE_INVADERS_ROWS - 1).advanced
+      .invaderShotCooldownTicks;
+
+    for (const kind of specialKinds) {
+      const game = createInitialSpaceInvadersGame({ random: () => 0 });
+      const shooter = {
+        ...getInvader(game, 1, 5),
+        kind,
+      };
+      const runningGame = withOnlyActiveInvader(
+        createRunningGame({
+          invaderShotCooldownTicks: 0,
+          player: centerPlayerUnderInvader(game, shooter),
+        }),
+        shooter,
+      );
+      const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
+
+      expect(advanced.invaderShots).toHaveLength(1);
+      expect(advanced.invaderShots[0]).toMatchObject({
+        height: 20,
+        kind: "standard",
+        sourceInvaderId: shooter.id,
+        sourceRow: shooter.row,
+        velocityX: 0,
+        velocityY: 3.2,
+        width: 5,
+      });
+      expect(advanced.invaderBurst).toBeNull();
+      expect(advanced.nextInvaderShotId).toBe(1);
+      expect(advanced.invaderShotCooldownTicks).toBe(bottomRowCooldown);
+    }
   });
 
   it("fires burst-row shots one second apart from the same invader", () => {
@@ -1366,24 +1417,24 @@ describe("space invaders game engine", () => {
     ).toEqual([
       {
         id: "invader-shot-0",
-        kind: "commander",
+        kind: "standard",
         sourceColumn: 4,
         sourceRow: 0,
-        velocityX: expect.any(Number),
+        velocityX: 0,
       },
       {
         id: "invader-shot-1",
-        kind: "commander",
+        kind: "standard",
         sourceColumn: 5,
         sourceRow: 0,
-        velocityX: expect.any(Number),
+        velocityX: 0,
       },
       {
         id: "invader-shot-2",
-        kind: "commander",
+        kind: "standard",
         sourceColumn: 6,
         sourceRow: 0,
-        velocityX: expect.any(Number),
+        velocityX: 0,
       },
       {
         id: "invader-shot-3",
@@ -1394,7 +1445,7 @@ describe("space invaders game engine", () => {
       },
       {
         id: "invader-shot-4",
-        kind: "burst",
+        kind: "standard",
         sourceColumn: 6,
         sourceRow: 1,
         velocityX: 0,

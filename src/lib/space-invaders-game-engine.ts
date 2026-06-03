@@ -348,6 +348,8 @@ const SPACE_INVADERS_ROW_SHOT_KINDS: SpaceInvadersInvaderShotKind[] = [
   "needle",
   "standard",
 ];
+const SPACE_INVADERS_SPECIAL_INVADER_SHOT_KIND =
+  SPACE_INVADERS_ROW_SHOT_KINDS[SPACE_INVADERS_ROW_SHOT_KINDS.length - 1] ?? "standard";
 
 const INVADER_SHOT_SPECS: Record<SpaceInvadersInvaderShotKind, InvaderShotSpec> = {
   commander: {
@@ -1543,7 +1545,7 @@ function maybeFireInvaderShot(game: SpaceInvadersGameState): SpaceInvadersGameSt
     return game;
   }
 
-  const spec = getInvaderShotSpec(shooter.row);
+  const spec = getInvaderShotSpec(shooter);
 
   return {
     ...game,
@@ -1600,7 +1602,7 @@ function continueInvaderBurst(game: SpaceInvadersGameState): SpaceInvadersGameSt
     invaderShotCooldownTicks:
       remainingShots > 0
         ? BURST_SHOT_DELAY_TICKS
-        : getInvaderShotSpec(shooter.row).cooldownTicks,
+        : getInvaderShotSpec(shooter).cooldownTicks,
     invaderShots: [...game.invaderShots, ...createdShots],
     nextInvaderShotId: game.nextInvaderShotId + createdShots.length,
   };
@@ -1704,7 +1706,7 @@ function isInvaderShotActive(
 }
 
 function createInvaderShots(invader: SpaceInvader, nextInvaderShotId: number) {
-  const spec = getInvaderShotSpec(invader.row);
+  const spec = getInvaderShotSpec(invader);
 
   if (spec.kind === "scatter") {
     return SCATTER_SHOT_VELOCITIES_X.map((velocityX, index) =>
@@ -1803,12 +1805,16 @@ function createInvaderShot(
   };
 }
 
-function getInvaderShotSpec(row: number) {
-  return INVADER_SHOT_SPECS[getInvaderShotKind(row)];
+function getInvaderShotSpec(invader: Pick<SpaceInvader, "kind" | "row">) {
+  return INVADER_SHOT_SPECS[getInvaderShotKind(invader)];
 }
 
-function getInvaderShotKind(row: number) {
-  return SPACE_INVADERS_ROW_SHOT_KINDS[row] ?? "scatter";
+function getInvaderShotKind(invader: Pick<SpaceInvader, "kind" | "row">) {
+  if (invader.kind !== "standard") {
+    return SPACE_INVADERS_SPECIAL_INVADER_SHOT_KIND;
+  }
+
+  return SPACE_INVADERS_ROW_SHOT_KINDS[invader.row] ?? "scatter";
 }
 
 function marchInvaders(game: SpaceInvadersGameState): SpaceInvadersGameState {
