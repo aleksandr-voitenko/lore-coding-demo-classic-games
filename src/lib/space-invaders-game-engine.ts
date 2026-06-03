@@ -1,460 +1,158 @@
-export type SpaceInvadersStatus = "ready" | "running" | "paused" | "lost" | "won";
-
-export type SpaceInvadersDirection = -1 | 1;
-
-export type SpaceInvaderKind =
-  | "standard"
-  | "diver"
-  | "armored"
-  | "shield-bearer"
-  | "revenge"
-  | "splitter"
-  | "splitter-fragment";
-
-export type SpaceInvadersRandomSource = () => number;
-
-export type SpaceInvadersInvaderShotKind =
-  | "commander"
-  | "burst"
-  | "standard"
-  | "needle"
-  | "scatter";
-
-export type SpaceInvadersPowerUpKind =
-  | "bonus-score"
-  | "burst-shot"
-  | "extra-life"
-  | "freeze"
-  | "piercing-laser"
-  | "shield"
-  | "shotgun-shot";
-
-export type SpaceInvadersPendingShotPowerUp = Extract<
+import {
+  DIVER_DROP_Y,
+  DIVER_STEP_MULTIPLIER,
+  EXPLOSION_PADDING_BY_KIND,
+  EXPLOSION_TTL_TICKS,
+  INVADER_DROP_Y,
+  INVADER_FIRE_COOLDOWN_TICKS,
+  INVADER_HIT_RECOVERY_TICKS,
+  INVADER_STEP_X,
+  PLAYER_BOTTOM_MARGIN,
+  PLAYER_HEIGHT,
+  PLAYER_SPEED,
+  PLAYER_WIDTH,
+  SPACE_INVADERS_ALIEN_FREEZE_TICKS,
+  SPACE_INVADERS_BOARD_HEIGHT,
+  SPACE_INVADERS_BOARD_WIDTH,
+  SPACE_INVADERS_BONUS_SCORE_POINTS,
+  SPACE_INVADERS_COLUMNS,
+  SPACE_INVADERS_COMMON_POWER_UP_KINDS,
+  SPACE_INVADERS_EXPLOSION_VARIANTS,
+  SPACE_INVADERS_EXTRA_LIFE_DROP_CHANCE,
+  SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
+  SPACE_INVADERS_PLAYER_SHIELD_TICKS,
+  SPACE_INVADERS_POWER_UP_SHIELD_TICKS,
+  SPACE_INVADERS_POWER_UP_SIZE,
+  SPACE_INVADERS_POWER_UP_SPEED,
+  SPACE_INVADERS_MULTI_KILL_COMBO_TICKS,
+  SPACE_INVADERS_ROWS,
+  SPACE_INVADERS_SCORE_POPUP_TICKS,
+  SPACE_INVADERS_STARTING_LIVES,
+  SPACE_INVADERS_TICK_DELAY_MS,
+  UFO_COOLDOWN_TICKS,
+  UFO_HEIGHT,
+  UFO_POINT_VALUES,
+  UFO_SPEED,
+  UFO_WIDTH,
+  UFO_Y,
+} from "./space-invaders/constants";
+export {
+  SPACE_INVADERS_ALIEN_COUNT_OPTIONS,
+  SPACE_INVADERS_ALIEN_FREEZE_TICKS,
+  SPACE_INVADERS_ARMORED_ALIEN_COUNT,
+  SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS,
+  SPACE_INVADERS_BASE_Y,
+  SPACE_INVADERS_BOARD_HEIGHT,
+  SPACE_INVADERS_BOARD_SIZE_OPTIONS,
+  SPACE_INVADERS_BOARD_WIDTH,
+  SPACE_INVADERS_BONUS_SCORE_POINTS,
+  SPACE_INVADERS_COLUMNS,
+  SPACE_INVADERS_EXTRA_LIFE_DROP_CHANCE,
+  SPACE_INVADERS_HIT_STREAK_BONUS_CAP,
+  SPACE_INVADERS_HIT_STREAK_BONUS_STEP,
+  SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_CAP,
+  SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_STEP,
+  SPACE_INVADERS_MULTI_KILL_BONUSES,
+  SPACE_INVADERS_MULTI_KILL_COMBO_TICKS,
+  SPACE_INVADERS_PLAYER_BURST_SHOT_COUNT,
+  SPACE_INVADERS_PLAYER_BURST_SHOT_DELAY_TICKS,
+  SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
+  SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS,
+  SPACE_INVADERS_PLAYER_SHIELD_TICKS,
+  SPACE_INVADERS_POWER_UP_KINDS,
+  SPACE_INVADERS_POWER_UP_SHIELD_TICKS,
+  SPACE_INVADERS_POWER_UP_SIZE,
+  SPACE_INVADERS_POWER_UP_SPEED,
+  SPACE_INVADERS_REVENGE_ALIEN_COUNT,
+  SPACE_INVADERS_ROWS,
+  SPACE_INVADERS_SCORE_POPUP_TICKS,
+  SPACE_INVADERS_SHIELD_BEARER_COUNT,
+  SPACE_INVADERS_SPLITTER_ALIEN_COUNT,
+  SPACE_INVADERS_STARTING_LIVES,
+  SPACE_INVADERS_TICK_DELAY_MS,
+  SPACE_INVADERS_UFO_CHAIN_BONUS_CAP,
+  SPACE_INVADERS_UFO_CHAIN_BONUS_STEP,
+} from "./space-invaders/constants";
+import {
+  createSpaceInvadersFormation,
+  createSpaceInvadersSplitterFragments,
+  getInvaderHitPointsAfterPlayerShot,
+  getSpaceInvadersFormationSpec,
+  isSpaceInvaderShielded,
+} from "./space-invaders/formation";
+export {
+  createSpaceInvadersFormation,
+  isSpaceInvaderShielded,
+} from "./space-invaders/formation";
+import {
+  clamp,
+  normalizeSpaceInvadersDimension,
+  rectanglesIntersect,
+} from "./space-invaders/geometry";
+import { getInvaderCollisionBounds } from "./space-invaders/hitboxes";
+import {
+  advanceInvaderShot,
+  advancePlayerShotPosition,
+  createInitialPlayerBurstState,
+  createNextPlayerBurstShot,
+  createPlayerShots,
+  isInvaderShotActive,
+  isPlayerShotActive,
+  maybeCreateSpaceInvadersRevengeShots,
+  maybeFireInvaderShot,
+} from "./space-invaders/projectiles";
+import { getRandomIndex, getRandomValue } from "./space-invaders/random";
+import {
+  advanceSpaceInvadersHitStreak,
+  advanceSpaceInvadersUfoChain,
+  getCombinedSpaceInvadersScoreTarget,
+  getSpaceInvadersHitStreakPopupScale,
+  getSpaceInvadersInvaderScorePopupLabel,
+  getSpaceInvadersMultiKillBonus,
+  resetSpaceInvadersHitStreak,
+} from "./space-invaders/scoring";
+import type {
+  CreateSpaceInvadersGameOptions,
+  SpaceInvader,
+  SpaceInvadersDirection,
+  SpaceInvadersExplosion,
+  SpaceInvadersExplosionKind,
+  SpaceInvadersGameState,
+  SpaceInvadersPlayer,
+  SpaceInvadersPlayerShot,
+  SpaceInvadersPowerUp,
+  SpaceInvadersRandomSource,
+  SpaceInvadersScorePopup,
+  SpaceInvadersScorePopupOptions,
+  SpaceInvadersScoreTarget,
+  SpaceInvadersUfoState,
+} from "./space-invaders/types";
+export type {
+  CreateSpaceInvadersGameOptions,
+  SpaceInvader,
+  SpaceInvaderKind,
+  SpaceInvadersDirection,
+  SpaceInvadersExplosion,
+  SpaceInvadersExplosionKind,
+  SpaceInvadersExplosionVariant,
+  SpaceInvadersGameState,
+  SpaceInvadersInvaderBurst,
+  SpaceInvadersInvaderShot,
+  SpaceInvadersInvaderShotKind,
+  SpaceInvadersMultiKillCombo,
+  SpaceInvadersPendingShotPowerUp,
+  SpaceInvadersPlayer,
+  SpaceInvadersPlayerBurst,
+  SpaceInvadersPlayerShot,
+  SpaceInvadersPlayerShotKind,
+  SpaceInvadersPowerUp,
   SpaceInvadersPowerUpKind,
-  "burst-shot" | "piercing-laser" | "shotgun-shot"
->;
-
-export type SpaceInvadersPlayerShotKind =
-  | "standard"
-  | "burst"
-  | "piercing"
-  | "shotgun";
-
-export type SpaceInvadersExplosionKind = "invader" | "player" | "ufo";
-export type SpaceInvadersExplosionVariant = 1 | 2 | 3 | 4;
-
-export type SpaceInvadersPlayer = {
-  height: number;
-  width: number;
-  x: number;
-  y: number;
-};
-
-export type SpaceInvadersUfoState = {
-  cooldownTicks: number;
-  direction: SpaceInvadersDirection;
-  height: number;
-  isActive: boolean;
-  points: number;
-  width: number;
-  x: number;
-  y: number;
-};
-
-export type SpaceInvader = {
-  column: number;
-  direction: SpaceInvadersDirection;
-  height: number;
-  hitPoints: number;
-  id: string;
-  isActive: boolean;
-  isDiving: boolean;
-  kind: SpaceInvaderKind;
-  points: number;
-  row: number;
-  width: number;
-  x: number;
-  y: number;
-};
-
-export type SpaceInvadersShot = {
-  height: number;
-  velocityY: number;
-  width: number;
-  x: number;
-  y: number;
-};
-
-export type SpaceInvadersPlayerShot = SpaceInvadersShot & {
-  damagedInvaderIds?: string[];
-  hasScored?: boolean;
-  id: string;
-  kind: SpaceInvadersPlayerShotKind;
-  velocityX: number;
-};
-
-export type SpaceInvadersInvaderShot = SpaceInvadersShot & {
-  ageTicks: number;
-  id: string;
-  kind: SpaceInvadersInvaderShotKind;
-  sourceColumn: number;
-  sourceInvaderId: string;
-  sourceRow: number;
-  ttlTicks: number | null;
-  velocityX: number;
-};
-
-export type SpaceInvadersPowerUp = {
-  height: number;
-  id: string;
-  kind: SpaceInvadersPowerUpKind;
-  velocityY: number;
-  width: number;
-  x: number;
-  y: number;
-};
-
-export type SpaceInvadersExplosion = {
-  ageTicks: number;
-  height: number;
-  id: string;
-  kind: SpaceInvadersExplosionKind;
-  ttlTicks: number;
-  variant: SpaceInvadersExplosionVariant;
-  width: number;
-  x: number;
-  y: number;
-};
-
-export type SpaceInvadersScorePopup = {
-  ageTicks: number;
-  height: number;
-  id: string;
-  label?: string;
-  points: number;
-  scoreScale?: number;
-  ttlTicks: number;
-  width: number;
-  x: number;
-  y: number;
-};
-
-export type SpaceInvadersMultiKillCombo = {
-  destroyedCount: number;
-  height: number;
-  points: number;
-  scoreScale?: number;
-  ticksRemaining: number;
-  width: number;
-  x: number;
-  y: number;
-};
-
-type SpaceInvadersScoreTarget = {
-  height: number;
-  width: number;
-  x: number;
-  y: number;
-};
-
-type SpaceInvadersScorePopupOptions = {
-  label?: string;
-  points: number;
-  scoreScale?: number;
-};
-
-export type SpaceInvadersInvaderBurst = {
-  remainingShots: number;
-  sourceInvaderId: string;
-};
-
-export type SpaceInvadersPlayerBurst = {
-  cooldownTicks: number;
-  remainingShots: number;
-};
-
-export type SpaceInvadersGameState = {
-  alienCount: number;
-  alienFreezeTicks: number;
-  baseY: number;
-  boardHeight: number;
-  boardWidth: number;
-  explosions: SpaceInvadersExplosion[];
-  hitStreak: number;
-  invaderBurst: SpaceInvadersInvaderBurst | null;
-  invaderShotCooldownTicks: number;
-  invaderShots: SpaceInvadersInvaderShot[];
-  invaders: SpaceInvader[];
-  lives: number;
-  marchDirection: SpaceInvadersDirection;
-  multiKillCombo: SpaceInvadersMultiKillCombo | null;
-  nextExplosionId: number;
-  nextInvaderShotId: number;
-  nextPlayerShotId: number;
-  nextPowerUpId: number;
-  nextScorePopupId: number;
-  pendingShotPowerUp: SpaceInvadersPendingShotPowerUp | null;
-  player: SpaceInvadersPlayer;
-  playerBurst: SpaceInvadersPlayerBurst | null;
-  playerRespawnTicks: number;
-  playerShieldTicks: number;
-  playerVolleyHasArmoredHit: boolean;
-  playerShots: SpaceInvadersPlayerShot[];
-  playerVolleyHasScored: boolean;
-  playerVolleyHasUnscoredExit: boolean;
-  powerUps: SpaceInvadersPowerUp[];
-  score: number;
-  scorePopups: SpaceInvadersScorePopup[];
-  status: SpaceInvadersStatus;
-  ufo: SpaceInvadersUfoState;
-  ufoHitStreak: number;
-};
-
-export type CreateSpaceInvadersGameOptions = {
-  alienCount?: number;
-  boardHeight?: number;
-  boardWidth?: number;
-  random?: SpaceInvadersRandomSource;
-};
-
-export const SPACE_INVADERS_BOARD_WIDTH = 420;
-export const SPACE_INVADERS_BOARD_HEIGHT = 560;
-export const SPACE_INVADERS_COLUMNS = 11;
-export const SPACE_INVADERS_ROWS = 5;
-export const SPACE_INVADERS_STARTING_LIVES = 3;
-export const SPACE_INVADERS_BASE_Y = 492;
-export const SPACE_INVADERS_TICK_DELAY_MS = 34;
-export const SPACE_INVADERS_BOARD_SIZE_OPTIONS = [
-  { height: 560, label: "420 x 560", width: 420 },
-  { height: 640, label: "480 x 640", width: 480 },
-  { height: 720, label: "540 x 720", width: 540 },
-] as const;
-export const SPACE_INVADERS_ALIEN_COUNT_OPTIONS = [
-  { alienCount: 24, columns: 8, label: "24", rows: 3 },
-  { alienCount: 40, columns: 10, label: "40", rows: 4 },
-  { alienCount: 55, columns: 11, label: "55", rows: 5 },
-] as const;
-export const SPACE_INVADERS_EXPLOSION_VARIANTS = [1, 2, 3, 4] as const;
-export const SPACE_INVADERS_POWER_UP_KINDS: SpaceInvadersPowerUpKind[] = [
-  "bonus-score",
-  "burst-shot",
-  "extra-life",
-  "freeze",
-  "piercing-laser",
-  "shield",
-  "shotgun-shot",
-];
-const SPACE_INVADERS_COMMON_POWER_UP_KINDS: Exclude<
-  SpaceInvadersPowerUpKind,
-  "extra-life"
->[] = [
-  "bonus-score",
-  "burst-shot",
-  "freeze",
-  "piercing-laser",
-  "shield",
-  "shotgun-shot",
-];
-
-const INVADER_DROP_Y = 4;
-const DIVER_INVADER_COUNT = 10;
-const DIVER_DROP_Y = 16;
-const DIVER_STEP_MULTIPLIER = 4.375;
-export const SPACE_INVADERS_SHIELD_BEARER_COUNT = 4;
-export const SPACE_INVADERS_REVENGE_ALIEN_COUNT = 3;
-export const SPACE_INVADERS_SPLITTER_ALIEN_COUNT = 3;
-export const SPACE_INVADERS_ARMORED_ALIEN_COUNT = 3;
-export const SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS = 3;
-const EXPLOSION_PADDING_BY_KIND: Record<SpaceInvadersExplosionKind, number> = {
-  invader: 16,
-  player: 12,
-  ufo: 18,
-};
-const EXPLOSION_TTL_TICKS = 12;
-export const SPACE_INVADERS_SCORE_POPUP_TICKS = Math.round(
-  1_600 / SPACE_INVADERS_TICK_DELAY_MS,
-);
-export const SPACE_INVADERS_PLAYER_RESPAWN_TICKS = EXPLOSION_TTL_TICKS;
-export const SPACE_INVADERS_PLAYER_SHIELD_TICKS = Math.round(
-  5_000 / SPACE_INVADERS_TICK_DELAY_MS,
-);
-export const SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS = Math.round(
-  2_000 / SPACE_INVADERS_TICK_DELAY_MS,
-);
-export const SPACE_INVADERS_BONUS_SCORE_POINTS = 50;
-export const SPACE_INVADERS_HIT_STREAK_BONUS_STEP = 5;
-export const SPACE_INVADERS_HIT_STREAK_BONUS_CAP = 30;
-export const SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_STEP = 0.08;
-export const SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_CAP = 1.48;
-export const SPACE_INVADERS_MULTI_KILL_BONUSES = {
-  2: 25,
-  3: 60,
-  4: 100,
-} as const;
-export const SPACE_INVADERS_MULTI_KILL_COMBO_TICKS = Math.round(
-  700 / SPACE_INVADERS_TICK_DELAY_MS,
-);
-export const SPACE_INVADERS_UFO_CHAIN_BONUS_STEP = 50;
-export const SPACE_INVADERS_UFO_CHAIN_BONUS_CAP = 150;
-export const SPACE_INVADERS_EXTRA_LIFE_DROP_CHANCE = 0.05;
-export const SPACE_INVADERS_ALIEN_FREEZE_TICKS = Math.round(
-  5_000 / SPACE_INVADERS_TICK_DELAY_MS,
-);
-export const SPACE_INVADERS_POWER_UP_SHIELD_TICKS = Math.round(
-  10_000 / SPACE_INVADERS_TICK_DELAY_MS,
-);
-export const SPACE_INVADERS_PLAYER_BURST_SHOT_COUNT = 5;
-export const SPACE_INVADERS_PLAYER_BURST_SHOT_DELAY_TICKS = Math.max(
-  0,
-  Math.round(300 / SPACE_INVADERS_TICK_DELAY_MS) - 1,
-);
-const INVADER_GAP_X = 5;
-const INVADER_GAP_Y = 14;
-const INVADER_HEIGHT = 23;
-const INVADER_STEP_X = 0.8;
-const INVADER_TOP = 64;
-const INVADER_WIDTH = 28;
-const INVADER_SPRITE_SIZE = 112;
-const SPLITTER_FRAGMENT_GAP_X = 4;
-const SPLITTER_FRAGMENT_HEIGHT = INVADER_HEIGHT * 0.7;
-const SPLITTER_FRAGMENT_WIDTH = INVADER_WIDTH * 0.7;
-const INVADER_FIRE_COOLDOWN_TICKS = 80;
-const INVADER_HIT_RECOVERY_TICKS = 120;
-const MAX_INVADER_SHOTS = 3;
-const PLAYER_BOTTOM_MARGIN = 10;
-const PLAYER_SIZE_SCALE = 0.8;
-const INVADER_X = 38;
-const PLAYER_HEIGHT = 50 * PLAYER_SIZE_SCALE;
-const PLAYER_SPEED = 9.6;
-const PLAYER_WIDTH = 62 * PLAYER_SIZE_SCALE;
-const SHOT_HEIGHT = 22;
-const SHOT_SPEED = -6.4;
-const SHOT_WIDTH = 6;
-export const SPACE_INVADERS_POWER_UP_SIZE = 36;
-export const SPACE_INVADERS_POWER_UP_SPEED = Math.abs(SHOT_SPEED) * 0.75;
-const UFO_COOLDOWN_TICKS = 420;
-const UFO_HEIGHT = 18;
-const UFO_POINT_VALUES = [100, 150, 200, 300] as const;
-const UFO_SPEED = 2.4;
-const UFO_WIDTH = 48;
-const UFO_Y = 34;
-const BURST_SHOT_COUNT = 3;
-const BURST_SHOT_DELAY_TICKS = Math.max(
-  0,
-  Math.round(1_000 / SPACE_INVADERS_TICK_DELAY_MS) - 1,
-);
-const COMMANDER_SHOT_MAX_SPEED_X = 1.1;
-const COMMANDER_SHOT_STEER_X = 0.14;
-const SCATTER_SHOT_VELOCITIES_X = [-1.25, 0, 1.25] as const;
-const SHOTGUN_SHOT_VELOCITIES_X = [-2.4, -1.2, 0, 1.2, 2.4] as const;
-
-type InvaderShotSpec = {
-  cooldownTicks: number;
-  height: number;
-  kind: SpaceInvadersInvaderShotKind;
-  ttlTicks: number | null;
-  velocityX: number;
-  velocityY: number;
-  width: number;
-};
-
-type InvaderHitboxRatio = {
-  height: number;
-  offsetX: number;
-  offsetY: number;
-  width: number;
-};
-
-const SPACE_INVADERS_ROW_SHOT_KINDS: SpaceInvadersInvaderShotKind[] = [
-  "commander",
-  "burst",
-  "scatter",
-  "needle",
-  "standard",
-];
-const SPACE_INVADERS_SPECIAL_INVADER_SHOT_KIND =
-  SPACE_INVADERS_ROW_SHOT_KINDS[SPACE_INVADERS_ROW_SHOT_KINDS.length - 1] ?? "standard";
-
-// Ratios are derived from non-transparent pixels in the 112x112 alien PNGs.
-const SPACE_INVADERS_ROW_ALIEN_HITBOXES = [
-  createInvaderHitboxRatio({ height: 98, offsetX: 3, offsetY: 6, width: 106 }),
-  createInvaderHitboxRatio({ height: 84, offsetX: 4, offsetY: 12, width: 104 }),
-  createInvaderHitboxRatio({ height: 82, offsetX: 3, offsetY: 11, width: 106 }),
-  createInvaderHitboxRatio({ height: 84, offsetX: 5, offsetY: 13, width: 102 }),
-  createInvaderHitboxRatio({ height: 83, offsetX: 7, offsetY: 11, width: 98 }),
-] as const satisfies readonly InvaderHitboxRatio[];
-
-const SHIELD_BEARER_ALIEN_HITBOX = createInvaderHitboxRatio({
-  height: 77,
-  offsetX: 12,
-  offsetY: 26,
-  width: 88,
-});
-const REVENGE_ALIEN_HITBOX = createInvaderHitboxRatio({
-  height: 98,
-  offsetX: 1,
-  offsetY: 7,
-  width: 110,
-});
-const SPLITTER_ALIEN_HITBOX = createInvaderHitboxRatio({
-  height: 60,
-  offsetX: 4,
-  offsetY: 29,
-  width: 104,
-});
-const ARMORED_ALIEN_HITBOXES = {
-  1: createInvaderHitboxRatio({ height: 85, offsetX: 3, offsetY: 13, width: 107 }),
-  2: createInvaderHitboxRatio({ height: 83, offsetX: 3, offsetY: 14, width: 106 }),
-  3: createInvaderHitboxRatio({ height: 81, offsetX: 3, offsetY: 16, width: 106 }),
-} as const satisfies Record<1 | 2 | 3, InvaderHitboxRatio>;
-
-const INVADER_SHOT_SPECS: Record<SpaceInvadersInvaderShotKind, InvaderShotSpec> = {
-  commander: {
-    cooldownTicks: 132,
-    height: 24,
-    kind: "commander",
-    ttlTicks: null,
-    velocityX: 0,
-    velocityY: 2.35,
-    width: 8,
-  },
-  burst: {
-    cooldownTicks: 92,
-    height: 18,
-    kind: "burst",
-    ttlTicks: null,
-    velocityX: 0,
-    velocityY: 3.45,
-    width: 7,
-  },
-  standard: {
-    cooldownTicks: INVADER_FIRE_COOLDOWN_TICKS,
-    height: 20,
-    kind: "standard",
-    ttlTicks: null,
-    velocityX: 0,
-    velocityY: 3.2,
-    width: 5,
-  },
-  needle: {
-    cooldownTicks: 56,
-    height: 24,
-    kind: "needle",
-    ttlTicks: null,
-    velocityX: 0,
-    velocityY: 4.9,
-    width: 3,
-  },
-  scatter: {
-    cooldownTicks: 112,
-    height: 12,
-    kind: "scatter",
-    ttlTicks: 96,
-    velocityX: 0,
-    velocityY: 2.8,
-    width: 5,
-  },
-};
+  SpaceInvadersRandomSource,
+  SpaceInvadersScorePopup,
+  SpaceInvadersShot,
+  SpaceInvadersStatus,
+  SpaceInvadersUfoState,
+} from "./space-invaders/types";
 
 export function createInitialSpaceInvadersGame({
   alienCount = SPACE_INVADERS_COLUMNS * SPACE_INVADERS_ROWS,
@@ -515,95 +213,6 @@ export function createInitialSpaceInvadersGame({
     ufo: createInitialSpaceInvadersUfo(),
     ufoHitStreak: 0,
   };
-}
-
-export function createSpaceInvadersFormation({
-  boardWidth = SPACE_INVADERS_BOARD_WIDTH,
-  columns = SPACE_INVADERS_COLUMNS,
-  random = Math.random,
-  rows = SPACE_INVADERS_ROWS,
-}: {
-  boardWidth?: number;
-  columns?: number;
-  random?: SpaceInvadersRandomSource;
-  rows?: number;
-} = {}) {
-  const formationWidth = columns * INVADER_WIDTH + (columns - 1) * INVADER_GAP_X;
-  const startX = Math.max(INVADER_X, (boardWidth - formationWidth) / 2);
-  const shieldBearerInvaderIds = selectShieldBearerInvaderIds({
-    columns,
-    random,
-    rows,
-  });
-  const revengeAlienIds = selectRevengeAlienIds({
-    columns,
-    excludedIds: shieldBearerInvaderIds,
-    random,
-    rows,
-  });
-  const splitterAlienIds = selectSplitterAlienIds({
-    columns,
-    excludedIds: new Set([...shieldBearerInvaderIds, ...revengeAlienIds]),
-    random,
-    rows,
-  });
-  const armoredAlienIds = selectArmoredAlienIds({
-    columns,
-    excludedIds: new Set([
-      ...shieldBearerInvaderIds,
-      ...revengeAlienIds,
-      ...splitterAlienIds,
-    ]),
-    random,
-    rows,
-  });
-  const specialInvaderIds = new Set([
-    ...shieldBearerInvaderIds,
-    ...revengeAlienIds,
-    ...splitterAlienIds,
-    ...armoredAlienIds,
-  ]);
-  const diverInvaderIds = selectDiverInvaderIds(
-    rows,
-    columns,
-    random,
-    specialInvaderIds,
-  );
-
-  return Array.from({ length: rows }, (_, row) =>
-    Array.from({ length: columns }, (_, column): SpaceInvader => {
-      const id = `${row}:${column}`;
-      const kind: SpaceInvaderKind = shieldBearerInvaderIds.has(id)
-        ? "shield-bearer"
-        : revengeAlienIds.has(id)
-          ? "revenge"
-        : splitterAlienIds.has(id)
-          ? "splitter"
-        : armoredAlienIds.has(id)
-          ? "armored"
-        : diverInvaderIds.has(id)
-          ? "diver"
-          : "standard";
-      const x = startX + column * (INVADER_WIDTH + INVADER_GAP_X);
-      const y = INVADER_TOP + row * (INVADER_HEIGHT + INVADER_GAP_Y);
-
-      return {
-        column,
-        direction: 1,
-        height: INVADER_HEIGHT,
-        hitPoints: getInitialInvaderHitPoints(kind),
-        id,
-        isActive: true,
-        isDiving: false,
-        kind,
-        points: getInvaderPoints(row),
-        row,
-        width: INVADER_WIDTH,
-        x,
-        y,
-      };
-    }),
-  ).flat();
 }
 
 export function startSpaceInvadersGame(
@@ -707,10 +316,7 @@ export function fireSpaceInvadersShot(game: SpaceInvadersGameState): SpaceInvade
     pendingShotPowerUp: null,
     playerBurst:
       game.pendingShotPowerUp === "burst-shot"
-        ? {
-            cooldownTicks: SPACE_INVADERS_PLAYER_BURST_SHOT_DELAY_TICKS,
-            remainingShots: SPACE_INVADERS_PLAYER_BURST_SHOT_COUNT - createdShots.length,
-          }
+        ? createInitialPlayerBurstState(createdShots.length)
         : null,
     playerShots: createdShots,
   };
@@ -1095,25 +701,9 @@ function advancePlayerBurst(game: SpaceInvadersGameState): SpaceInvadersGameStat
     };
   }
 
-  const createdShot = createPlayerShot(
-    game.player,
-    game.nextPlayerShotId,
-    "burst",
-    0,
-  );
-  const remainingShots = game.playerBurst.remainingShots - 1;
-
   return {
     ...game,
-    nextPlayerShotId: game.nextPlayerShotId + 1,
-    playerBurst:
-      remainingShots > 0
-        ? {
-            cooldownTicks: SPACE_INVADERS_PLAYER_BURST_SHOT_DELAY_TICKS,
-            remainingShots,
-          }
-        : null,
-    playerShots: [...game.playerShots, createdShot],
+    ...createNextPlayerBurstShot(game),
   };
 }
 
@@ -1515,477 +1105,6 @@ function createSpaceInvadersScorePopup(
   };
 }
 
-function advanceSpaceInvadersHitStreak(
-  game: SpaceInvadersGameState,
-): { bonus: number; game: SpaceInvadersGameState } {
-  const hitStreak = game.hitStreak + 1;
-  const bonus = getSpaceInvadersHitStreakBonus(hitStreak);
-  const gameWithHitStreak = {
-    ...game,
-    hitStreak,
-    score: game.score + bonus,
-  };
-
-  return {
-    bonus,
-    game: gameWithHitStreak,
-  };
-}
-
-function resetSpaceInvadersHitStreak(game: SpaceInvadersGameState) {
-  if (game.hitStreak === 0) {
-    return game;
-  }
-
-  return {
-    ...game,
-    hitStreak: 0,
-  };
-}
-
-function advanceSpaceInvadersUfoChain(
-  game: SpaceInvadersGameState,
-): { bonus: number; game: SpaceInvadersGameState } {
-  const ufoHitStreak = game.ufoHitStreak + 1;
-  const bonus = getSpaceInvadersUfoChainBonus(ufoHitStreak);
-  const gameWithUfoHitStreak = {
-    ...game,
-    ufoHitStreak,
-    score: game.score + bonus,
-  };
-
-  return {
-    bonus,
-    game: gameWithUfoHitStreak,
-  };
-}
-
-function getSpaceInvadersHitStreakBonus(hitStreak: number) {
-  return Math.min(
-    Math.max(0, hitStreak - 1) * SPACE_INVADERS_HIT_STREAK_BONUS_STEP,
-    SPACE_INVADERS_HIT_STREAK_BONUS_CAP,
-  );
-}
-
-function getSpaceInvadersHitStreakPopupScale(hitStreak: number) {
-  const scoreScale = Math.min(
-    1 + Math.max(0, hitStreak - 1) * SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_STEP,
-    SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_CAP,
-  );
-
-  return Number(scoreScale.toFixed(2));
-}
-
-function getSpaceInvadersUfoChainBonus(ufoHitStreak: number) {
-  return Math.min(
-    Math.max(0, ufoHitStreak - 1) * SPACE_INVADERS_UFO_CHAIN_BONUS_STEP,
-    SPACE_INVADERS_UFO_CHAIN_BONUS_CAP,
-  );
-}
-
-function getSpaceInvadersMultiKillBonus(destroyedInvaderCount: number) {
-  if (destroyedInvaderCount >= 4) {
-    return SPACE_INVADERS_MULTI_KILL_BONUSES[4];
-  }
-
-  if (destroyedInvaderCount === 3) {
-    return SPACE_INVADERS_MULTI_KILL_BONUSES[3];
-  }
-
-  if (destroyedInvaderCount === 2) {
-    return SPACE_INVADERS_MULTI_KILL_BONUSES[2];
-  }
-
-  return 0;
-}
-
-function getSpaceInvadersInvaderScorePopupLabel(
-  destroyedInvaderCount: number,
-  multiKillBonus: number,
-) {
-  if (multiKillBonus > 0) {
-    if (destroyedInvaderCount === 2) {
-      return "DOUBLE";
-    }
-
-    if (destroyedInvaderCount === 3) {
-      return "TRIPLE";
-    }
-
-    return "MULTI";
-  }
-
-  return undefined;
-}
-
-function getCombinedSpaceInvadersScoreTarget(
-  targets: SpaceInvadersScoreTarget[],
-): SpaceInvadersScoreTarget {
-  const left = Math.min(...targets.map((target) => target.x));
-  const top = Math.min(...targets.map((target) => target.y));
-  const right = Math.max(...targets.map((target) => target.x + target.width));
-  const bottom = Math.max(...targets.map((target) => target.y + target.height));
-
-  return {
-    height: bottom - top,
-    width: right - left,
-    x: left,
-    y: top,
-  };
-}
-
-function maybeFireInvaderShot(game: SpaceInvadersGameState): SpaceInvadersGameState {
-  if (game.invaderShotCooldownTicks > 0) {
-    return {
-      ...game,
-      invaderShotCooldownTicks: game.invaderShotCooldownTicks - 1,
-    };
-  }
-
-  if (game.invaderBurst !== null) {
-    return continueInvaderBurst(game);
-  }
-
-  if (game.invaderShots.length >= MAX_INVADER_SHOTS) {
-    return game;
-  }
-
-  const shooter = selectInvaderShotSource(game);
-
-  if (shooter === undefined) {
-    return {
-      ...game,
-      invaderShotCooldownTicks: INVADER_FIRE_COOLDOWN_TICKS,
-    };
-  }
-
-  const createdShots = createInvaderShots(shooter, game.nextInvaderShotId);
-
-  if (game.invaderShots.length + createdShots.length > MAX_INVADER_SHOTS) {
-    return game;
-  }
-
-  const spec = getInvaderShotSpec(shooter);
-
-  return {
-    ...game,
-    invaderBurst:
-      spec.kind === "burst"
-        ? {
-            remainingShots: BURST_SHOT_COUNT - createdShots.length,
-            sourceInvaderId: shooter.id,
-          }
-        : null,
-    invaderShotCooldownTicks:
-      spec.kind === "burst" ? BURST_SHOT_DELAY_TICKS : spec.cooldownTicks,
-    invaderShots: [...game.invaderShots, ...createdShots],
-    nextInvaderShotId: game.nextInvaderShotId + createdShots.length,
-  };
-}
-
-function continueInvaderBurst(game: SpaceInvadersGameState): SpaceInvadersGameState {
-  const burst = game.invaderBurst;
-
-  if (burst === null) {
-    return game;
-  }
-
-  const shooter = game.invaders.find(
-    (invader) => invader.id === burst.sourceInvaderId && invader.isActive,
-  );
-
-  if (shooter === undefined) {
-    return {
-      ...game,
-      invaderBurst: null,
-      invaderShotCooldownTicks: INVADER_FIRE_COOLDOWN_TICKS,
-    };
-  }
-
-  const createdShots = createInvaderShots(shooter, game.nextInvaderShotId);
-
-  if (game.invaderShots.length + createdShots.length > MAX_INVADER_SHOTS) {
-    return game;
-  }
-
-  const remainingShots = burst.remainingShots - createdShots.length;
-
-  return {
-    ...game,
-    invaderBurst:
-      remainingShots > 0
-        ? {
-            ...burst,
-            remainingShots,
-          }
-        : null,
-    invaderShotCooldownTicks:
-      remainingShots > 0
-        ? BURST_SHOT_DELAY_TICKS
-        : getInvaderShotSpec(shooter).cooldownTicks,
-    invaderShots: [...game.invaderShots, ...createdShots],
-    nextInvaderShotId: game.nextInvaderShotId + createdShots.length,
-  };
-}
-
-function selectInvaderShotSource(game: SpaceInvadersGameState) {
-  const lowestInvaders = getLowestActiveInvadersByColumn(game.invaders);
-  const blockedColumns = new Set(game.invaderShots.map((shot) => shot.sourceColumn));
-  const unblockedInvaders = lowestInvaders.filter(
-    (invader) => !blockedColumns.has(invader.column),
-  );
-  const candidates = unblockedInvaders.length > 0 ? unblockedInvaders : lowestInvaders;
-
-  if (candidates.length === 0) {
-    return undefined;
-  }
-
-  const playerCenterX = game.player.x + game.player.width / 2;
-
-  return [...candidates].sort((first, second) => {
-    const firstDistance = Math.abs(getEntityCenterX(first) - playerCenterX);
-    const secondDistance = Math.abs(getEntityCenterX(second) - playerCenterX);
-
-    if (firstDistance !== secondDistance) {
-      return firstDistance - secondDistance;
-    }
-
-    return first.column - second.column;
-  })[0];
-}
-
-function getLowestActiveInvadersByColumn(invaders: SpaceInvader[]) {
-  const lowestInvaderByColumn = new Map<number, SpaceInvader>();
-
-  for (const invader of invaders) {
-    if (!invader.isActive) {
-      continue;
-    }
-
-    const current = lowestInvaderByColumn.get(invader.column);
-
-    if (
-      current === undefined ||
-      invader.y > current.y ||
-      (invader.y === current.y && invader.row > current.row)
-    ) {
-      lowestInvaderByColumn.set(invader.column, invader);
-    }
-  }
-
-  return [...lowestInvaderByColumn.values()];
-}
-
-function advanceInvaderShot(
-  shot: SpaceInvadersInvaderShot,
-  game: SpaceInvadersGameState,
-): SpaceInvadersInvaderShot {
-  const velocityX = getNextInvaderShotVelocityX(shot, game.player);
-
-  return {
-    ...shot,
-    ageTicks: shot.ageTicks + 1,
-    ttlTicks: shot.ttlTicks === null ? null : shot.ttlTicks - 1,
-    velocityX,
-    x: shot.x + velocityX,
-    y: shot.y + shot.velocityY,
-  };
-}
-
-function getNextInvaderShotVelocityX(
-  shot: SpaceInvadersInvaderShot,
-  player: SpaceInvadersPlayer,
-) {
-  if (shot.kind === "commander") {
-    const deltaX = getEntityCenterX(player) - getEntityCenterX(shot);
-
-    if (Math.abs(deltaX) < 1) {
-      return shot.velocityX;
-    }
-
-    return clamp(
-      shot.velocityX + Math.sign(deltaX) * COMMANDER_SHOT_STEER_X,
-      -COMMANDER_SHOT_MAX_SPEED_X,
-      COMMANDER_SHOT_MAX_SPEED_X,
-    );
-  }
-
-  return shot.velocityX;
-}
-
-function isInvaderShotActive(
-  shot: SpaceInvadersInvaderShot,
-  game: Pick<SpaceInvadersGameState, "boardHeight" | "boardWidth">,
-) {
-  return (
-    (shot.ttlTicks === null || shot.ttlTicks > 0) &&
-    shot.y <= game.boardHeight &&
-    shot.x + shot.width >= 0 &&
-    shot.x <= game.boardWidth
-  );
-}
-
-function createInvaderShots(invader: SpaceInvader, nextInvaderShotId: number) {
-  const spec = getInvaderShotSpec(invader);
-
-  if (spec.kind === "scatter") {
-    return SCATTER_SHOT_VELOCITIES_X.map((velocityX, index) =>
-      createInvaderShot(invader, nextInvaderShotId + index, spec, velocityX),
-    );
-  }
-
-  return [createInvaderShot(invader, nextInvaderShotId, spec, spec.velocityX)];
-}
-
-function maybeCreateSpaceInvadersRevengeShots(
-  game: SpaceInvadersGameState,
-  destroyedInvaders: SpaceInvader[],
-): SpaceInvadersGameState {
-  const destroyedRevengeInvaders = destroyedInvaders.filter(
-    (invader) => invader.kind === "revenge",
-  );
-
-  if (destroyedRevengeInvaders.length === 0) {
-    return game;
-  }
-
-  const revengeSources = getRevengeShotSources(
-    destroyedRevengeInvaders,
-    game.invaders,
-  );
-  const revengeShots: SpaceInvadersInvaderShot[] = [];
-  let nextInvaderShotId = game.nextInvaderShotId;
-
-  for (const source of revengeSources) {
-    const createdShots = createInvaderShots(source, nextInvaderShotId);
-
-    revengeShots.push(...createdShots);
-    nextInvaderShotId += createdShots.length;
-  }
-
-  if (revengeShots.length === 0) {
-    return game;
-  }
-
-  return {
-    ...game,
-    invaderShots: [...game.invaderShots, ...revengeShots],
-    nextInvaderShotId,
-  };
-}
-
-function createSpaceInvadersSplitterFragments(
-  destroyedInvaders: SpaceInvader[],
-  boardWidth: number,
-) {
-  return destroyedInvaders
-    .filter((invader) => invader.kind === "splitter")
-    .flatMap((invader) => [
-      createSpaceInvadersSplitterFragment(invader, "left", boardWidth),
-      createSpaceInvadersSplitterFragment(invader, "right", boardWidth),
-    ]);
-}
-
-function createSpaceInvadersSplitterFragment(
-  invader: SpaceInvader,
-  side: "left" | "right",
-  boardWidth: number,
-): SpaceInvader {
-  const invaderCenterX = getEntityCenterX(invader);
-  const invaderCenterY = invader.y + invader.height / 2;
-  const centerOffset =
-    side === "left"
-      ? -(SPLITTER_FRAGMENT_WIDTH + SPLITTER_FRAGMENT_GAP_X) / 2
-      : (SPLITTER_FRAGMENT_WIDTH + SPLITTER_FRAGMENT_GAP_X) / 2;
-
-  return {
-    column: invader.column,
-    direction: side === "left" ? -1 : 1,
-    height: SPLITTER_FRAGMENT_HEIGHT,
-    hitPoints: 1,
-    id: `${invader.id}:split-${side}`,
-    isActive: true,
-    isDiving: true,
-    kind: "splitter-fragment",
-    points: getSplitterFragmentPoints(invader),
-    row: invader.row,
-    width: SPLITTER_FRAGMENT_WIDTH,
-    x: clamp(
-      invaderCenterX + centerOffset - SPLITTER_FRAGMENT_WIDTH / 2,
-      0,
-      boardWidth - SPLITTER_FRAGMENT_WIDTH,
-    ),
-    y: invaderCenterY - SPLITTER_FRAGMENT_HEIGHT / 2,
-  };
-}
-
-function getSplitterFragmentPoints(invader: Pick<SpaceInvader, "points">) {
-  return Math.max(5, Math.floor(invader.points / 2));
-}
-
-function getRevengeShotSources(
-  destroyedRevengeInvaders: SpaceInvader[],
-  invaders: SpaceInvader[],
-) {
-  const sourceById = new Map<string, SpaceInvader>();
-
-  for (const revengeInvader of destroyedRevengeInvaders) {
-    const adjacentInvaders = invaders
-      .filter(
-        (invader) =>
-          invader.isActive &&
-          Math.abs(invader.row - revengeInvader.row) <= 1 &&
-          Math.abs(invader.column - revengeInvader.column) <= 1,
-      )
-      .sort((first, second) =>
-        first.row === second.row
-          ? first.column - second.column
-          : first.row - second.row,
-      );
-
-    for (const adjacentInvader of adjacentInvaders) {
-      sourceById.set(adjacentInvader.id, adjacentInvader);
-    }
-  }
-
-  return [...sourceById.values()];
-}
-
-function createInvaderShot(
-  invader: SpaceInvader,
-  nextInvaderShotId: number,
-  spec: InvaderShotSpec,
-  velocityX: number,
-): SpaceInvadersInvaderShot {
-  return {
-    ageTicks: 0,
-    height: spec.height,
-    id: `invader-shot-${nextInvaderShotId}`,
-    kind: spec.kind,
-    sourceColumn: invader.column,
-    sourceInvaderId: invader.id,
-    sourceRow: invader.row,
-    ttlTicks: spec.ttlTicks,
-    velocityX,
-    velocityY: spec.velocityY,
-    width: spec.width,
-    x: invader.x + invader.width / 2 - spec.width / 2,
-    y: invader.y + invader.height + 1,
-  };
-}
-
-function getInvaderShotSpec(invader: Pick<SpaceInvader, "kind" | "row">) {
-  return INVADER_SHOT_SPECS[getInvaderShotKind(invader)];
-}
-
-function getInvaderShotKind(invader: Pick<SpaceInvader, "kind" | "row">) {
-  if (invader.kind !== "standard") {
-    return SPACE_INVADERS_SPECIAL_INVADER_SHOT_KIND;
-  }
-
-  return SPACE_INVADERS_ROW_SHOT_KINDS[invader.row] ?? "scatter";
-}
-
 function marchInvaders(game: SpaceInvadersGameState): SpaceInvadersGameState {
   const activeInvaders = game.invaders.filter((invader) => invader.isActive);
 
@@ -2134,80 +1253,6 @@ function createCenteredPlayer(
   };
 }
 
-function createPlayerShots(
-  player: SpaceInvadersPlayer,
-  nextPlayerShotId: number,
-  pendingShotPowerUp: SpaceInvadersPendingShotPowerUp | null,
-): SpaceInvadersPlayerShot[] {
-  if (pendingShotPowerUp === "shotgun-shot") {
-    return SHOTGUN_SHOT_VELOCITIES_X.map((velocityX, index) =>
-      createPlayerShot(player, nextPlayerShotId + index, "shotgun", velocityX),
-    );
-  }
-
-  return [
-    createPlayerShot(
-      player,
-      nextPlayerShotId,
-      getPlayerShotKind(pendingShotPowerUp),
-      0,
-    ),
-  ];
-}
-
-function getPlayerShotKind(
-  pendingShotPowerUp: SpaceInvadersPendingShotPowerUp | null,
-): SpaceInvadersPlayerShotKind {
-  if (pendingShotPowerUp === "burst-shot") {
-    return "burst";
-  }
-
-  if (pendingShotPowerUp === "piercing-laser") {
-    return "piercing";
-  }
-
-  return "standard";
-}
-
-function createPlayerShot(
-  player: SpaceInvadersPlayer,
-  nextPlayerShotId: number,
-  kind: SpaceInvadersPlayerShotKind,
-  velocityX: number,
-): SpaceInvadersPlayerShot {
-  return {
-    height: SHOT_HEIGHT,
-    hasScored: false,
-    id: `player-shot-${nextPlayerShotId}`,
-    kind,
-    velocityX,
-    velocityY: SHOT_SPEED,
-    width: SHOT_WIDTH,
-    x: player.x + player.width / 2 - SHOT_WIDTH / 2,
-    y: player.y - SHOT_HEIGHT - 2,
-  };
-}
-
-function advancePlayerShotPosition(shot: SpaceInvadersPlayerShot): SpaceInvadersPlayerShot {
-  return {
-    ...shot,
-    x: shot.x + shot.velocityX,
-    y: shot.y + shot.velocityY,
-  };
-}
-
-function isPlayerShotActive(
-  shot: SpaceInvadersPlayerShot,
-  game: Pick<SpaceInvadersGameState, "boardHeight" | "boardWidth">,
-) {
-  return (
-    shot.y + shot.height >= 0 &&
-    shot.x + shot.width >= 0 &&
-    shot.x <= game.boardWidth &&
-    shot.y <= game.boardHeight
-  );
-}
-
 function maybeCreateSpaceInvadersPowerUpDrop(
   game: SpaceInvadersGameState,
   invader: SpaceInvader,
@@ -2286,371 +1331,4 @@ function getNextSpaceInvadersUfoPoints(points: number) {
   const nextIndex = pointIndex === -1 ? 0 : (pointIndex + 1) % UFO_POINT_VALUES.length;
 
   return UFO_POINT_VALUES[nextIndex] ?? UFO_POINT_VALUES[0];
-}
-
-function getInvaderPoints(row: number) {
-  if (row === 0) {
-    return 30;
-  }
-
-  if (row <= 2) {
-    return 20;
-  }
-
-  return 10;
-}
-
-function getInitialInvaderHitPoints(kind: SpaceInvaderKind) {
-  return kind === "armored" ? SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS : 1;
-}
-
-function getInvaderHitPointsAfterPlayerShot(invader: SpaceInvader) {
-  return invader.kind === "armored" ? Math.max(0, invader.hitPoints - 1) : 0;
-}
-
-function selectDiverInvaderIds(
-  rows: number,
-  columns: number,
-  random: SpaceInvadersRandomSource,
-  excludedIds = new Set<string>(),
-) {
-  const candidates = Array.from({ length: Math.max(0, rows - 1) }, (_, row) =>
-    Array.from({ length: columns }, (_, column) => `${row}:${column}`),
-  )
-    .flat()
-    .filter((id) => !excludedIds.has(id));
-  const selectedCount = Math.min(DIVER_INVADER_COUNT, candidates.length);
-  const selectedIds = new Set<string>();
-
-  for (let selectedIndex = 0; selectedIndex < selectedCount; selectedIndex += 1) {
-    const candidateIndex = getRandomIndex(candidates.length, random);
-    const [selectedId] = candidates.splice(candidateIndex, 1);
-
-    if (selectedId !== undefined) {
-      selectedIds.add(selectedId);
-    }
-  }
-
-  return selectedIds;
-}
-
-function selectShieldBearerInvaderIds({
-  columns,
-  random,
-  rows,
-}: {
-  columns: number;
-  random: SpaceInvadersRandomSource;
-  rows: number;
-}) {
-  const candidates = Array.from({ length: Math.max(0, rows - 2) }, (_, index) =>
-    Array.from({ length: columns }, (_, column) => `${index + 1}:${column}`),
-  ).flat();
-  const selectedCount = Math.min(SPACE_INVADERS_SHIELD_BEARER_COUNT, candidates.length);
-  const selectedIds = new Set<string>();
-
-  for (let selectedIndex = 0; selectedIndex < selectedCount; selectedIndex += 1) {
-    const candidateIndex = getRandomIndex(candidates.length, random);
-    const [selectedId] = candidates.splice(candidateIndex, 1);
-
-    if (selectedId !== undefined) {
-      selectedIds.add(selectedId);
-    }
-  }
-
-  return selectedIds;
-}
-
-function selectRevengeAlienIds({
-  columns,
-  excludedIds,
-  random,
-  rows,
-}: {
-  columns: number;
-  excludedIds: Set<string>;
-  random: SpaceInvadersRandomSource;
-  rows: number;
-}) {
-  const unavailableIds = getUnavailableRevengeAlienIds(excludedIds, columns);
-  const middleRowIds = Array.from({ length: Math.max(0, rows - 2) }, (_, index) =>
-    Array.from({ length: columns }, (_, column) => `${index + 1}:${column}`),
-  ).flat();
-  const preferredCandidates = middleRowIds.filter((id) => !unavailableIds.has(id));
-  const fallbackCandidates = middleRowIds.filter(
-    (id) => !excludedIds.has(id) && unavailableIds.has(id),
-  );
-  const candidates = [...preferredCandidates, ...fallbackCandidates];
-  const nonBottomSlotCount = Math.max(0, rows - 1) * columns;
-  const maximumRevengeAlienCount = Math.max(
-    0,
-    nonBottomSlotCount - excludedIds.size - DIVER_INVADER_COUNT,
-  );
-  const selectedCount = Math.min(
-    SPACE_INVADERS_REVENGE_ALIEN_COUNT,
-    maximumRevengeAlienCount,
-    candidates.length,
-  );
-  const selectedIds = new Set<string>();
-
-  for (let selectedIndex = 0; selectedIndex < selectedCount; selectedIndex += 1) {
-    const candidateIndex = getRandomIndex(candidates.length, random);
-    const [selectedId] = candidates.splice(candidateIndex, 1);
-
-    if (selectedId !== undefined) {
-      selectedIds.add(selectedId);
-    }
-  }
-
-  return selectedIds;
-}
-
-function selectSplitterAlienIds({
-  columns,
-  excludedIds,
-  random,
-  rows,
-}: {
-  columns: number;
-  excludedIds: Set<string>;
-  random: SpaceInvadersRandomSource;
-  rows: number;
-}) {
-  const candidates = Array.from({ length: Math.max(0, rows - 2) }, (_, index) =>
-    Array.from({ length: columns }, (_, column) => `${index + 1}:${column}`),
-  )
-    .flat()
-    .filter((id) => !excludedIds.has(id));
-  const nonBottomSlotCount = Math.max(0, rows - 1) * columns;
-  const maximumSplitterAlienCount = Math.max(
-    0,
-    nonBottomSlotCount - excludedIds.size - DIVER_INVADER_COUNT,
-  );
-  const selectedCount = Math.min(
-    SPACE_INVADERS_SPLITTER_ALIEN_COUNT,
-    maximumSplitterAlienCount,
-    candidates.length,
-  );
-  const selectedIds = new Set<string>();
-
-  for (let selectedIndex = 0; selectedIndex < selectedCount; selectedIndex += 1) {
-    const candidateIndex = getRandomIndex(candidates.length, random);
-    const [selectedId] = candidates.splice(candidateIndex, 1);
-
-    if (selectedId !== undefined) {
-      selectedIds.add(selectedId);
-    }
-  }
-
-  return selectedIds;
-}
-
-function selectArmoredAlienIds({
-  columns,
-  excludedIds,
-  random,
-  rows,
-}: {
-  columns: number;
-  excludedIds: Set<string>;
-  random: SpaceInvadersRandomSource;
-  rows: number;
-}) {
-  const candidates = Array.from({ length: Math.max(0, rows - 2) }, (_, index) =>
-    Array.from({ length: columns }, (_, column) => `${index + 1}:${column}`),
-  )
-    .flat()
-    .filter((id) => !excludedIds.has(id));
-  const nonBottomSlotCount = Math.max(0, rows - 1) * columns;
-  const maximumArmoredAlienCount = Math.max(
-    0,
-    nonBottomSlotCount - excludedIds.size - DIVER_INVADER_COUNT,
-  );
-  const selectedCount = Math.min(
-    SPACE_INVADERS_ARMORED_ALIEN_COUNT,
-    maximumArmoredAlienCount,
-    candidates.length,
-  );
-  const selectedIds = new Set<string>();
-
-  for (let selectedIndex = 0; selectedIndex < selectedCount; selectedIndex += 1) {
-    const candidateIndex = getRandomIndex(candidates.length, random);
-    const [selectedId] = candidates.splice(candidateIndex, 1);
-
-    if (selectedId !== undefined) {
-      selectedIds.add(selectedId);
-    }
-  }
-
-  return selectedIds;
-}
-
-function getUnavailableRevengeAlienIds(excludedIds: Set<string>, columns: number) {
-  const unavailableIds = new Set<string>(excludedIds);
-
-  for (const id of excludedIds) {
-    const [row, column] = getInvaderGridPositionFromId(id);
-
-    for (let columnOffset = -1; columnOffset <= 1; columnOffset += 1) {
-      const unavailableColumn = column + columnOffset;
-
-      if (unavailableColumn >= 0 && unavailableColumn < columns) {
-        unavailableIds.add(`${row}:${unavailableColumn}`);
-      }
-    }
-  }
-
-  return unavailableIds;
-}
-
-function getInvaderGridPositionFromId(id: string) {
-  const [row = "0", column = "0"] = id.split(":");
-
-  return [Number(row), Number(column)] as const;
-}
-
-export function isSpaceInvaderShielded(
-  invader: SpaceInvader,
-  invaders: SpaceInvader[],
-) {
-  if (!invader.isActive || invader.kind === "shield-bearer") {
-    return false;
-  }
-
-  const invaderCenterX = getEntityCenterX(invader);
-  const maximumShieldDistanceX = INVADER_WIDTH + INVADER_GAP_X + 1;
-
-  return invaders.some(
-    (candidate) =>
-      candidate.isActive &&
-      candidate.kind === "shield-bearer" &&
-      candidate.row === invader.row &&
-      Math.abs(getEntityCenterX(candidate) - invaderCenterX) <=
-        maximumShieldDistanceX,
-  );
-}
-
-function getRandomIndex(candidateCount: number, random: SpaceInvadersRandomSource) {
-  if (candidateCount <= 1) {
-    return 0;
-  }
-
-  const randomValue = getRandomValue(random);
-
-  return Math.max(0, Math.min(candidateCount - 1, Math.floor(randomValue * candidateCount)));
-}
-
-function getRandomValue(random: SpaceInvadersRandomSource) {
-  const randomValue = random();
-
-  if (!Number.isFinite(randomValue)) {
-    return 0;
-  }
-
-  return Math.max(0, Math.min(1, randomValue));
-}
-
-function createInvaderHitboxRatio({
-  height,
-  offsetX,
-  offsetY,
-  width,
-}: {
-  height: number;
-  offsetX: number;
-  offsetY: number;
-  width: number;
-}): InvaderHitboxRatio {
-  return {
-    height: height / INVADER_SPRITE_SIZE,
-    offsetX: offsetX / INVADER_SPRITE_SIZE,
-    offsetY: offsetY / INVADER_SPRITE_SIZE,
-    width: width / INVADER_SPRITE_SIZE,
-  };
-}
-
-function getInvaderCollisionBounds(invader: SpaceInvader) {
-  const hitbox = getInvaderHitboxRatio(invader);
-
-  return {
-    height: invader.height * hitbox.height,
-    width: invader.width * hitbox.width,
-    x: invader.x + invader.width * hitbox.offsetX,
-    y: invader.y + invader.height * hitbox.offsetY,
-  };
-}
-
-function getInvaderHitboxRatio(
-  invader: Pick<SpaceInvader, "hitPoints" | "kind" | "row">,
-) {
-  if (invader.kind === "shield-bearer") {
-    return SHIELD_BEARER_ALIEN_HITBOX;
-  }
-
-  if (invader.kind === "revenge") {
-    return REVENGE_ALIEN_HITBOX;
-  }
-
-  if (invader.kind === "splitter" || invader.kind === "splitter-fragment") {
-    return SPLITTER_ALIEN_HITBOX;
-  }
-
-  if (invader.kind === "armored") {
-    const hitPoints = Math.max(1, Math.min(3, Math.floor(invader.hitPoints))) as
-      | 1
-      | 2
-      | 3;
-
-    return ARMORED_ALIEN_HITBOXES[hitPoints];
-  }
-
-  return (
-    SPACE_INVADERS_ROW_ALIEN_HITBOXES[
-      invader.row % SPACE_INVADERS_ROW_ALIEN_HITBOXES.length
-    ] ?? SPACE_INVADERS_ROW_ALIEN_HITBOXES[0]
-  );
-}
-
-function rectanglesIntersect(
-  first: { height: number; width: number; x: number; y: number },
-  second: { height: number; width: number; x: number; y: number },
-) {
-  return (
-    first.x < second.x + second.width &&
-    first.x + first.width > second.x &&
-    first.y < second.y + second.height &&
-    first.y + first.height > second.y
-  );
-}
-
-function getEntityCenterX(entity: { width: number; x: number }) {
-  return entity.x + entity.width / 2;
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function getSpaceInvadersFormationSpec(alienCount: number) {
-  const normalizedAlienCount = Number.isFinite(alienCount)
-    ? Math.max(1, Math.floor(alienCount))
-    : SPACE_INVADERS_COLUMNS * SPACE_INVADERS_ROWS;
-
-  return (
-    SPACE_INVADERS_ALIEN_COUNT_OPTIONS.find(
-      (option) => option.alienCount === normalizedAlienCount,
-    ) ??
-    SPACE_INVADERS_ALIEN_COUNT_OPTIONS.find(
-      (option) => option.alienCount === SPACE_INVADERS_COLUMNS * SPACE_INVADERS_ROWS,
-    ) ??
-    SPACE_INVADERS_ALIEN_COUNT_OPTIONS[SPACE_INVADERS_ALIEN_COUNT_OPTIONS.length - 1]
-  );
-}
-
-function normalizeSpaceInvadersDimension(value: number, fallback: number, minimum: number) {
-  if (!Number.isFinite(value)) {
-    return fallback;
-  }
-
-  return Math.max(minimum, Math.floor(value));
 }

@@ -7,6 +7,15 @@ This file covers deterministic game engines and shared source logic under
 
 - `*-game-engine.ts` files own deterministic rules, scoring, progression,
   win/loss states, launcher preset normalization, and state transitions.
+- Keep `*-game-engine.ts` as the public facade imported by components and tests.
+  Large engines may split implementation internals under `src/lib/<game>/`
+  when cohesive subsystems outgrow one file, but smaller engines should stay
+  single-file until the added navigation cost is justified.
+- Space Invaders uses `src/lib/space-invaders/` internals behind
+  `space-invaders-game-engine.ts`: `types.ts`, `constants.ts`, `formation.ts`,
+  `hitboxes.ts`, `projectiles.ts`, `scoring.ts`, plus shared geometry/random
+  helpers. Keep lifecycle orchestration in the facade unless a later refactor
+  can move it without obscuring cross-system behavior.
 - Engines that expose launcher presets keep those values in game state so
   restart, terminal replay, board rendering, accessibility labels, and leaderboard
   keys preserve the selected board size, target, lives, mines, alien count, or
