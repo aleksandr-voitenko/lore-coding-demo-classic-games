@@ -5,6 +5,7 @@ import { GAME_CATALOG } from "@/lib/game-catalog";
 
 import { GameLauncher } from "./game-launcher";
 import { GAME_CARDS } from "./game-launcher-config";
+import { PLAYABLE_GAME_COMPONENTS } from "./game-launcher-playables";
 
 const EXPECTED_PARAMETER_SELECTS = [
   {
@@ -108,6 +109,12 @@ const EXPECTED_PARAMETER_SELECTS = [
 describe("game launcher", () => {
   it("uses the shared game catalog ids and labels for launcher cards", () => {
     expect(GAME_CARDS.map(({ id, label }) => ({ id, label }))).toEqual(GAME_CATALOG);
+  });
+
+  it("keeps a lazy playable component for every launcher card", () => {
+    expect(Object.keys(PLAYABLE_GAME_COMPONENTS).sort()).toEqual(
+      GAME_CARDS.map((game) => game.id).sort(),
+    );
   });
 
   it("renders only configurable card parameters on the launch screen", () => {

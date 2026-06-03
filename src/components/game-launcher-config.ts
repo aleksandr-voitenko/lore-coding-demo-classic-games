@@ -1,14 +1,3 @@
-import type { ComponentType } from "react";
-
-import { AsteroidsGame } from "@/components/asteroids-game";
-import { BreakoutGame } from "@/components/breakout-game";
-import { MinesweeperGame } from "@/components/minesweeper-game";
-import { PongGame } from "@/components/pong-game";
-import { SimonGame } from "@/components/simon-game";
-import { SnakeGame } from "@/components/snake-game";
-import { SpaceInvadersGame } from "@/components/space-invaders-game";
-import { TetrisGame } from "@/components/tetris-game";
-import { TwentyFortyEightGame } from "@/components/twenty-forty-eight-game";
 import {
   ASTEROIDS_ASTEROID_COUNT_OPTIONS,
   ASTEROIDS_BOARD_HEIGHT,
@@ -261,7 +250,6 @@ export type GameCard = {
     src: string;
     width: number;
   };
-  component: ComponentType<PlayableGameProps>;
   description: string;
   id: GameId;
   label: string;
@@ -290,7 +278,6 @@ export const GAME_CARDS: readonly GameCard[] = [
       src: "/images/snake-game-card.png",
       width: 1672,
     },
-    component: SnakeGame,
     description: "A classic score chase with obstacles, timed food, and saved best runs.",
     id: snakeCatalogEntry.id,
     label: snakeCatalogEntry.label,
@@ -305,7 +292,6 @@ export const GAME_CARDS: readonly GameCard[] = [
       src: "/images/tetris-game-card.png",
       width: 1672,
     },
-    component: TetrisGame,
     description: "A falling-block survival game with line clears, scoring, and rising speed.",
     id: tetrisCatalogEntry.id,
     label: tetrisCatalogEntry.label,
@@ -320,7 +306,6 @@ export const GAME_CARDS: readonly GameCard[] = [
       src: "/images/breakout-game-card.png",
       width: 1672,
     },
-    component: BreakoutGame,
     description: "A paddle-and-ball brick breaker with lives, scoring, and wall clears.",
     id: breakoutCatalogEntry.id,
     label: breakoutCatalogEntry.label,
@@ -335,7 +320,6 @@ export const GAME_CARDS: readonly GameCard[] = [
       src: "/images/minesweeper-game-card.png",
       width: 1672,
     },
-    component: MinesweeperGame,
     description: "A classic minefield puzzle with safe first clicks, flags, and flood reveals.",
     id: minesweeperCatalogEntry.id,
     label: minesweeperCatalogEntry.label,
@@ -350,7 +334,6 @@ export const GAME_CARDS: readonly GameCard[] = [
       src: "/images/space-invaders-game-card.png",
       width: 1672,
     },
-    component: SpaceInvadersGame,
     description: "A cannon defense arcade game with marching invaders, shots, and scoring.",
     id: spaceInvadersCatalogEntry.id,
     label: spaceInvadersCatalogEntry.label,
@@ -365,7 +348,6 @@ export const GAME_CARDS: readonly GameCard[] = [
       src: "/images/twenty-forty-eight-game-card.png",
       width: 1672,
     },
-    component: TwentyFortyEightGame,
     description: "A sliding tile puzzle with merges, score chasing, and a 2048 goal tile.",
     id: twentyFortyEightCatalogEntry.id,
     label: twentyFortyEightCatalogEntry.label,
@@ -380,7 +362,6 @@ export const GAME_CARDS: readonly GameCard[] = [
       src: "/images/pong-game-card.png",
       width: 1672,
     },
-    component: PongGame,
     description: "A paddle duel against a computer opponent with rebounds, rallies, and scoring.",
     id: pongCatalogEntry.id,
     label: pongCatalogEntry.label,
@@ -394,7 +375,6 @@ export const GAME_CARDS: readonly GameCard[] = [
       src: "/images/simon-game-card.png",
       width: 1672,
     },
-    component: SimonGame,
     description: "A memory pattern game with four pads, growing sequences, and strict misses.",
     id: simonCatalogEntry.id,
     label: simonCatalogEntry.label,
@@ -409,7 +389,6 @@ export const GAME_CARDS: readonly GameCard[] = [
       src: "/images/asteroids-game-card.png",
       width: 1672,
     },
-    component: AsteroidsGame,
     description: "A vector space survival game with thrust, wraparound, rocks, and waves.",
     id: asteroidsCatalogEntry.id,
     label: asteroidsCatalogEntry.label,

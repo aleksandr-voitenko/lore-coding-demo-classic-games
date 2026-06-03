@@ -20,6 +20,7 @@ import {
   type GameParameterKind,
   type GameParameterValues,
 } from "@/components/game-launcher-config";
+import { PLAYABLE_GAME_COMPONENTS } from "@/components/game-launcher-playables";
 import { UserAccountControls } from "@/components/user-account-controls";
 import type { UserAuthMode } from "@/lib/user-profile";
 
@@ -78,7 +79,7 @@ export function GameLauncher({ initialAuthMode = null }: GameLauncherProps) {
   }, []);
 
   if (selectedGame !== null) {
-    const SelectedGame = selectedGame.component;
+    const SelectedGame = PLAYABLE_GAME_COMPONENTS[selectedGame.id];
     const initialGameProps = createInitialGameProps(selectedGame, parameterValues);
 
     return (

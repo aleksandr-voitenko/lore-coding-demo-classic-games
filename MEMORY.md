@@ -24,8 +24,10 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
 
 - The root route is the game launcher: `src/app/page.tsx` renders
   `GameLauncher`; `src/components/game-launcher-config.ts` owns the game-card
-  catalog and parameter registry, while `src/components/game-launcher.tsx`
-  owns selected-game browser state and menu rendering.
+  catalog and parameter registry, `src/components/game-launcher-playables.ts`
+  owns the lazy playable component registry, and
+  `src/components/game-launcher.tsx` owns selected-game browser state and menu
+  rendering.
 - Games split browser orchestration from reusable rules: `src/components/*-game.tsx`
   owns React state and browser events, `src/components/*-board.tsx` renders the
   board, and `src/lib/*-game-engine.ts` owns deterministic game state transitions.
