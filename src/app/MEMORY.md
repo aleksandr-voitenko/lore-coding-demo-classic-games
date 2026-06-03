@@ -13,7 +13,9 @@ This file covers routes and App Router conventions under `src/app/`.
 - `profile/page.tsx` renders signed-in aggregate stats from the server-side
   profile store. It is dynamic and Node-only because it reads the session cookie
   and SQLite-backed session rows. Signed-out profile requests redirect to
-  `/?auth=login` instead of rendering private profile content.
+  `/?auth=login` instead of rendering private profile content. It renders a
+  tiny client shortcut component so Escape mirrors the visible Back to games
+  action and returns signed-in users to the launcher.
 - `layout.tsx` owns the global HTML shell, Geist font variables, `globals.css`
   import, and app metadata. Keep public title/description changes aligned with
   README when the visible catalog changes.

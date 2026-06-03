@@ -9,14 +9,14 @@ This file covers React component ownership and shared game UI conventions under
   pause/resume/restart flows, leaderboard hook usage, and menu return behavior.
 - `*-board.tsx` files render board cells, game pieces, code-native board art, and
   board accessibility labels for the active state.
-- `game-launcher-config.ts` owns the launcher-only game-card catalog, launcher
-  artwork metadata/versioning, parameter registry, and pure
+- `game-launcher-config.ts` owns the launcher-only game-card catalog,
+  descriptions, accent styling, parameter registry, and pure
   default-value/initial-prop helpers. `game-launcher-playables.ts` owns the lazy
   playable component mapping with `next/dynamic`, so the initial launcher bundle
-  does not import every `*-game.tsx` module. Config imports ids and display
-  labels from the server-safe catalog in `src/lib/game-catalog.ts` so server
-  routes and pages can share profile-safe game metadata without importing
-  playable components.
+  does not import every `*-game.tsx` module. Config imports ids, display labels,
+  and versioned card-art metadata from the server-safe catalog in
+  `src/lib/game-catalog.ts` so server routes and pages can share profile-safe
+  game metadata without importing playable components.
 - `game-launcher.tsx` owns selected game state, launcher card parameter state,
   menu rendering, menu viewport preservation, and placement of the shared
   `UserAccountControls`. Keep browser-only `window` access in this client

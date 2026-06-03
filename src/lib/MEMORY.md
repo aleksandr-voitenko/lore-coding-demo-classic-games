@@ -34,11 +34,12 @@ This file covers deterministic game engines and shared source logic under
 - `user-profile.ts` owns shared auth, user, game-session, and profile-stat
   types; display-name/password/game-id/session-id validation; and client helpers
   for `/api/auth/*`, `/api/me`, and `/api/game-sessions`.
-- `game-catalog.ts` owns the pure playable-game id and label catalog. Launcher
-  config should enrich these entries with artwork, descriptions, and parameters
-  locally, while `src/components/game-launcher-playables.ts` keeps the dynamic
-  playable component mapping; server pages should use the catalog formatter
-  instead of importing launcher config.
+- `game-catalog.ts` owns the pure playable-game id and label catalog plus
+  server-safe card artwork metadata and versioned artwork URLs. Launcher config
+  should enrich these entries with descriptions and parameters locally, while
+  `src/components/game-launcher-playables.ts` keeps the dynamic playable
+  component mapping; server pages should use catalog helpers instead of
+  importing launcher config.
 - `game-ui-flow.ts` owns pure Help and Escape/back-to-menu state transitions.
   React hooks in `src/components/game-ui-hooks.ts` should delegate decisions here
   and only apply effects such as pause, resume, or back-to-menu callbacks.

@@ -58,7 +58,13 @@ import {
   TWENTY_FORTY_EIGHT_WIN_TILE,
   TWENTY_FORTY_EIGHT_WIN_TILE_OPTIONS,
 } from "@/lib/twenty-forty-eight-game-engine";
-import { getGameCatalogEntry, type GameId } from "@/lib/game-catalog";
+import {
+  getGameCatalogArtwork,
+  getGameCatalogEntry,
+  getVersionedGameCatalogArtworkSrc,
+  type GameCatalogArtwork,
+  type GameId,
+} from "@/lib/game-catalog";
 
 export type { GameId } from "@/lib/game-catalog";
 
@@ -243,20 +249,15 @@ export type GameParameterValues = Record<GameParameterKind, string>;
 
 export type GameCard = {
   accentClassName: string;
-  artwork: {
-    height: number;
+  artwork: GameCatalogArtwork & {
     loading?: "eager" | "lazy";
     priority?: boolean;
-    src: string;
-    width: number;
   };
   description: string;
   id: GameId;
   label: string;
   parameters: readonly GameParameterKind[];
 };
-
-const GAME_CARD_ARTWORK_VERSION = "ai-key-art-v2";
 
 const snakeCatalogEntry = getGameCatalogEntry("snake");
 const tetrisCatalogEntry = getGameCatalogEntry("tetris");
@@ -273,10 +274,8 @@ export const GAME_CARDS: readonly GameCard[] = [
     accentClassName:
       "bg-[linear-gradient(90deg,var(--snake-head),var(--snake-bonus-food),var(--snake-speed-food),var(--snake-slow-food),var(--snake-shrink-food))]",
     artwork: {
-      height: 941,
+      ...getGameCatalogArtwork("snake"),
       priority: true,
-      src: "/images/snake-game-card.png",
-      width: 1672,
     },
     description: "A classic score chase with obstacles, timed food, and saved best runs.",
     id: snakeCatalogEntry.id,
@@ -287,10 +286,8 @@ export const GAME_CARDS: readonly GameCard[] = [
     accentClassName:
       "bg-[linear-gradient(90deg,var(--tetris-cyan),var(--tetris-yellow),var(--tetris-purple),var(--tetris-red))]",
     artwork: {
-      height: 941,
+      ...getGameCatalogArtwork("tetris"),
       loading: "eager",
-      src: "/images/tetris-game-card.png",
-      width: 1672,
     },
     description: "A falling-block survival game with line clears, scoring, and rising speed.",
     id: tetrisCatalogEntry.id,
@@ -301,10 +298,8 @@ export const GAME_CARDS: readonly GameCard[] = [
     accentClassName:
       "bg-[linear-gradient(90deg,var(--breakout-red),var(--breakout-yellow),var(--breakout-green),var(--breakout-blue))]",
     artwork: {
-      height: 941,
+      ...getGameCatalogArtwork("breakout"),
       loading: "eager",
-      src: "/images/breakout-game-card.png",
-      width: 1672,
     },
     description: "A paddle-and-ball brick breaker with lives, scoring, and wall clears.",
     id: breakoutCatalogEntry.id,
@@ -315,10 +310,8 @@ export const GAME_CARDS: readonly GameCard[] = [
     accentClassName:
       "bg-[linear-gradient(90deg,var(--minesweeper-flag),var(--minesweeper-one),var(--minesweeper-two),var(--minesweeper-three))]",
     artwork: {
-      height: 941,
+      ...getGameCatalogArtwork("minesweeper"),
       loading: "eager",
-      src: "/images/minesweeper-game-card.png",
-      width: 1672,
     },
     description: "A classic minefield puzzle with safe first clicks, flags, and flood reveals.",
     id: minesweeperCatalogEntry.id,
@@ -329,10 +322,8 @@ export const GAME_CARDS: readonly GameCard[] = [
     accentClassName:
       "bg-[linear-gradient(90deg,var(--invaders-lime),var(--invaders-cyan),var(--invaders-magenta),var(--invaders-yellow))]",
     artwork: {
-      height: 941,
+      ...getGameCatalogArtwork("space-invaders"),
       loading: "eager",
-      src: "/images/space-invaders-game-card.png",
-      width: 1672,
     },
     description: "A cannon defense arcade game with marching invaders, shots, and scoring.",
     id: spaceInvadersCatalogEntry.id,
@@ -343,10 +334,8 @@ export const GAME_CARDS: readonly GameCard[] = [
     accentClassName:
       "bg-[linear-gradient(90deg,var(--twenty-tile-8),var(--twenty-tile-128),var(--twenty-tile-2048))]",
     artwork: {
-      height: 941,
+      ...getGameCatalogArtwork("twenty-forty-eight"),
       loading: "eager",
-      src: "/images/twenty-forty-eight-game-card.png",
-      width: 1672,
     },
     description: "A sliding tile puzzle with merges, score chasing, and a 2048 goal tile.",
     id: twentyFortyEightCatalogEntry.id,
@@ -357,10 +346,8 @@ export const GAME_CARDS: readonly GameCard[] = [
     accentClassName:
       "bg-[linear-gradient(90deg,var(--pong-blue),var(--pong-ball),var(--pong-pink))]",
     artwork: {
-      height: 941,
+      ...getGameCatalogArtwork("pong"),
       loading: "eager",
-      src: "/images/pong-game-card.png",
-      width: 1672,
     },
     description: "A paddle duel against a computer opponent with rebounds, rallies, and scoring.",
     id: pongCatalogEntry.id,
@@ -370,10 +357,8 @@ export const GAME_CARDS: readonly GameCard[] = [
   {
     accentClassName: "bg-[linear-gradient(90deg,#25a75a,#d73548,#f0bd38,#1d7ed0)]",
     artwork: {
-      height: 941,
+      ...getGameCatalogArtwork("simon"),
       loading: "eager",
-      src: "/images/simon-game-card.png",
-      width: 1672,
     },
     description: "A memory pattern game with four pads, growing sequences, and strict misses.",
     id: simonCatalogEntry.id,
@@ -384,10 +369,8 @@ export const GAME_CARDS: readonly GameCard[] = [
     accentClassName:
       "bg-[linear-gradient(90deg,var(--asteroids-ship),var(--asteroids-bullet),var(--asteroids-asteroid))]",
     artwork: {
-      height: 941,
+      ...getGameCatalogArtwork("asteroids"),
       loading: "eager",
-      src: "/images/asteroids-game-card.png",
-      width: 1672,
     },
     description: "A vector space survival game with thrust, wraparound, rocks, and waves.",
     id: asteroidsCatalogEntry.id,
@@ -418,7 +401,7 @@ export function createInitialGameProps(game: GameCard, parameterValues: GamePara
 }
 
 export function getVersionedGameArtworkSrc(game: GameCard) {
-  return `${game.artwork.src}?v=${GAME_CARD_ARTWORK_VERSION}`;
+  return getVersionedGameCatalogArtworkSrc(game.artwork);
 }
 
 function defineGameParameterConfig<const ParameterConfig extends Record<string, GameParameterConfig>>(

@@ -1,11 +1,19 @@
+import Image from "next/image";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { formatGameCatalogLabel } from "@/lib/game-catalog";
+import {
+  compareGameCatalogOrder,
+  formatGameCatalogLabel,
+  getGameCatalogArtwork,
+  getVersionedGameCatalogArtworkSrc,
+} from "@/lib/game-catalog";
+import { formatProfileLastPlayed } from "@/lib/profile-time";
 import { getUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
 import { USER_SESSION_COOKIE_NAME } from "@/lib/server/user-session-cookie";
 import type { UserProfileGameStat } from "@/lib/user-profile";
+import { ProfileEscapeToLauncher } from "./profile-escape-to-launcher";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,13 +33,6 @@ function formatDuration(ms: number) {
   }
 
   return `${seconds}s`;
-}
-
-function formatLastPlayed(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
 }
 
 function getBestMetric(game: UserProfileGameStat) {
@@ -66,9 +67,13 @@ export default async function ProfilePage() {
   }
 
   const profile = await store.getUserProfile(user);
+  const games = [...profile.games].sort((leftGame, rightGame) =>
+    compareGameCatalogOrder(leftGame.gameId, rightGame.gameId),
+  );
 
   return (
     <main className="min-h-svh bg-[var(--snake-page)] px-4 py-6 text-[var(--snake-ink)] sm:px-6 lg:py-8">
+      <ProfileEscapeToLauncher />
       <section className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex flex-col gap-1">
@@ -95,10 +100,11 @@ export default async function ProfilePage() {
           />
         </div>
 
-        {profile.games.length > 0 ? (
+        {games.length > 0 ? (
           <div className="overflow-hidden rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] shadow-sm">
-            <div className="grid grid-cols-[minmax(9rem,1.2fr)_repeat(5,minmax(5rem,0.7fr))] gap-0 overflow-x-auto">
+            <div className="grid grid-cols-[5.5rem_minmax(9rem,1.2fr)_repeat(5,minmax(5rem,0.7fr))] gap-0 overflow-x-auto">
               <div className="contents text-xs font-semibold uppercase tracking-normal text-[var(--snake-muted)]">
+                <div className="border-b border-[var(--snake-border)] px-3 py-2">Preview</div>
                 <div className="border-b border-[var(--snake-border)] px-3 py-2">Game</div>
                 <div className="border-b border-[var(--snake-border)] px-3 py-2 text-right">
                   Time
@@ -116,31 +122,55 @@ export default async function ProfilePage() {
                   Last played
                 </div>
               </div>
-              {profile.games.map((game) => {
+              {games.map((game) => {
                 const bestMetric = getBestMetric(game);
+                const gameArtwork = getGameCatalogArtwork(game.gameId);
+                const gameLabel = formatGameCatalogLabel(game.gameId);
 
                 return (
                   <div className="contents text-sm" key={game.gameId}>
-                    <div className="border-b border-[var(--snake-border)] px-3 py-3 font-semibold">
-                      {formatGameCatalogLabel(game.gameId)}
+                    <div className="flex items-center border-b border-[var(--snake-border)] px-3 py-2">
+                      <span className="relative block h-10 w-16 overflow-hidden rounded border border-[color-mix(in_oklch,var(--snake-border)_70%,white)] bg-[var(--snake-board)]">
+                        {gameArtwork !== null ? (
+                          <Image
+                            alt=""
+                            aria-hidden="true"
+                            className="h-full w-full object-cover"
+                            height={gameArtwork.height}
+                            src={getVersionedGameCatalogArtworkSrc(gameArtwork)}
+                            unoptimized
+                            width={gameArtwork.width}
+                          />
+                        ) : (
+                          <span
+                            aria-hidden="true"
+                            className="flex h-full w-full items-center justify-center text-xs text-[var(--snake-muted)]"
+                          >
+                            -
+                          </span>
+                        )}
+                      </span>
                     </div>
-                    <div className="border-b border-[var(--snake-border)] px-3 py-3 text-right font-mono">
+                    <div className="flex items-center border-b border-[var(--snake-border)] px-3 py-3 font-semibold">
+                      {gameLabel}
+                    </div>
+                    <div className="flex items-center justify-end border-b border-[var(--snake-border)] px-3 py-3 text-right font-mono">
                       {formatDuration(game.totalActiveDurationMs)}
                     </div>
-                    <div className="border-b border-[var(--snake-border)] px-3 py-3 text-right font-mono">
+                    <div className="flex items-center justify-end border-b border-[var(--snake-border)] px-3 py-3 text-right font-mono">
                       {game.sessionsPlayed}
                     </div>
-                    <div className="border-b border-[var(--snake-border)] px-3 py-3 text-right font-mono">
+                    <div className="flex items-center justify-end border-b border-[var(--snake-border)] px-3 py-3 text-right font-mono">
                       {game.wins}
                     </div>
                     <div
-                      className="border-b border-[var(--snake-border)] px-3 py-3 text-right font-mono"
+                      className="flex items-center justify-end border-b border-[var(--snake-border)] px-3 py-3 text-right font-mono"
                       title={bestMetric.label}
                     >
                       {bestMetric.value}
                     </div>
-                    <div className="border-b border-[var(--snake-border)] px-3 py-3 text-right text-[var(--snake-muted)]">
-                      {formatLastPlayed(game.lastPlayedAt)}
+                    <div className="flex items-center justify-end border-b border-[var(--snake-border)] px-3 py-3 text-right text-[var(--snake-muted)]">
+                      {formatProfileLastPlayed(game.lastPlayedAt)}
                     </div>
                   </div>
                 );

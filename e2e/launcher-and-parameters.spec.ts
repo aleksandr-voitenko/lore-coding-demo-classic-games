@@ -427,6 +427,19 @@ test("profile page shows only the current signed-in user", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Private Alice" })).toHaveCount(0);
 });
 
+test("profile page Escape returns to the game launcher", async ({ page }) => {
+  await openLauncher(page);
+  await signUpFromLauncher(page, "Profile Escape Hero");
+  await page.getByTestId("profile-link").click();
+  await expect(page.getByRole("heading", { name: "Profile Escape Hero" })).toBeVisible();
+
+  await page.keyboard.press("Escape");
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("game-menu")).toBeVisible();
+  await expect(page.getByTestId("profile-link")).toContainText("Profile Escape Hero");
+});
+
 for (const handoffCase of launcherParameterHandoffCases) {
   test(`launcher-selected ${handoffCase.name} parameters seed the opened game`, async ({
     page,

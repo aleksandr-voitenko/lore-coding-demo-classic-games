@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   GAME_CATALOG,
+  compareGameCatalogOrder,
   formatGameCatalogLabel,
+  getGameCatalogArtwork,
   getGameCatalogEntry,
+  getVersionedGameCatalogArtworkSrc,
   isGameId,
 } from "./game-catalog";
 
@@ -34,5 +37,27 @@ describe("game catalog", () => {
     expect(isGameId("custom-game")).toBe(false);
     expect(isGameId("toString")).toBe(false);
     expect(getGameCatalogEntry("snake")).toEqual({ id: "snake", label: "Classic Snake" });
+  });
+
+  it("shares launcher card artwork for server-rendered profile previews", () => {
+    const artwork = getGameCatalogArtwork("snake");
+
+    expect(artwork).toEqual({
+      height: 941,
+      src: "/images/snake-game-card.png",
+      width: 1672,
+    });
+    expect(getVersionedGameCatalogArtworkSrc(artwork)).toBe(
+      "/images/snake-game-card.png?v=ai-key-art-v2",
+    );
+    expect(getGameCatalogArtwork("custom-game")).toBeNull();
+  });
+
+  it("sorts persisted profile game ids in launcher menu order", () => {
+    expect(
+      ["custom-game", "asteroids", "snake", "pong", "breakout", "unknown-game"].sort(
+        compareGameCatalogOrder,
+      ),
+    ).toEqual(["snake", "breakout", "pong", "asteroids", "custom-game", "unknown-game"]);
   });
 });
