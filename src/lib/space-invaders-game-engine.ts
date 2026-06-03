@@ -2,7 +2,13 @@ export type SpaceInvadersStatus = "ready" | "running" | "paused" | "lost" | "won
 
 export type SpaceInvadersDirection = -1 | 1;
 
-export type SpaceInvaderKind = "standard" | "diver" | "shield-bearer" | "revenge";
+export type SpaceInvaderKind =
+  | "standard"
+  | "diver"
+  | "shield-bearer"
+  | "revenge"
+  | "splitter"
+  | "splitter-fragment";
 
 export type SpaceInvadersRandomSource = () => number;
 
@@ -252,6 +258,7 @@ const DIVER_DROP_Y = 16;
 const DIVER_STEP_MULTIPLIER = 4.375;
 export const SPACE_INVADERS_SHIELD_BEARER_COUNT = 4;
 export const SPACE_INVADERS_REVENGE_ALIEN_COUNT = 3;
+export const SPACE_INVADERS_SPLITTER_ALIEN_COUNT = 3;
 const EXPLOSION_PADDING_BY_KIND: Record<SpaceInvadersExplosionKind, number> = {
   invader: 16,
   player: 12,
@@ -301,6 +308,9 @@ const INVADER_HEIGHT = 23;
 const INVADER_STEP_X = 0.8;
 const INVADER_TOP = 64;
 const INVADER_WIDTH = 28;
+const SPLITTER_FRAGMENT_GAP_X = 4;
+const SPLITTER_FRAGMENT_HEIGHT = INVADER_HEIGHT * 0.7;
+const SPLITTER_FRAGMENT_WIDTH = INVADER_WIDTH * 0.7;
 const INVADER_FIRE_COOLDOWN_TICKS = 80;
 const INVADER_HIT_RECOVERY_TICKS = 120;
 const MAX_INVADER_SHOTS = 3;
@@ -483,9 +493,16 @@ export function createSpaceInvadersFormation({
     random,
     rows,
   });
+  const splitterAlienIds = selectSplitterAlienIds({
+    columns,
+    excludedIds: new Set([...shieldBearerInvaderIds, ...revengeAlienIds]),
+    random,
+    rows,
+  });
   const specialInvaderIds = new Set([
     ...shieldBearerInvaderIds,
     ...revengeAlienIds,
+    ...splitterAlienIds,
   ]);
   const diverInvaderIds = selectDiverInvaderIds(
     rows,
@@ -501,6 +518,8 @@ export function createSpaceInvadersFormation({
         ? "shield-bearer"
         : revengeAlienIds.has(id)
           ? "revenge"
+        : splitterAlienIds.has(id)
+          ? "splitter"
         : diverInvaderIds.has(id)
           ? "diver"
           : "standard";
@@ -832,9 +851,14 @@ function advancePlayerShots(
       (total, invader) => total + invader.points,
       0,
     );
-    const invaders = nextGame.invaders.map((invader) =>
+    const invadersAfterDestroy = nextGame.invaders.map((invader) =>
       destroyedInvaderIds.has(invader.id) ? { ...invader, isActive: false } : invader,
     );
+    const splitterFragments = createSpaceInvadersSplitterFragments(
+      destroyedInvaders,
+      nextGame.boardWidth,
+    );
+    const invaders = [...invadersAfterDestroy, ...splitterFragments];
     const activeInvaderCount = invaders.filter((invader) => invader.isActive).length;
     let gameWithHits: SpaceInvadersGameState = {
       ...nextGame,
@@ -1754,6 +1778,54 @@ function maybeCreateSpaceInvadersRevengeShots(
   };
 }
 
+function createSpaceInvadersSplitterFragments(
+  destroyedInvaders: SpaceInvader[],
+  boardWidth: number,
+) {
+  return destroyedInvaders
+    .filter((invader) => invader.kind === "splitter")
+    .flatMap((invader) => [
+      createSpaceInvadersSplitterFragment(invader, "left", boardWidth),
+      createSpaceInvadersSplitterFragment(invader, "right", boardWidth),
+    ]);
+}
+
+function createSpaceInvadersSplitterFragment(
+  invader: SpaceInvader,
+  side: "left" | "right",
+  boardWidth: number,
+): SpaceInvader {
+  const invaderCenterX = getEntityCenterX(invader);
+  const invaderCenterY = invader.y + invader.height / 2;
+  const centerOffset =
+    side === "left"
+      ? -(SPLITTER_FRAGMENT_WIDTH + SPLITTER_FRAGMENT_GAP_X) / 2
+      : (SPLITTER_FRAGMENT_WIDTH + SPLITTER_FRAGMENT_GAP_X) / 2;
+
+  return {
+    column: invader.column,
+    direction: side === "left" ? -1 : 1,
+    height: SPLITTER_FRAGMENT_HEIGHT,
+    id: `${invader.id}:split-${side}`,
+    isActive: true,
+    isDiving: true,
+    kind: "splitter-fragment",
+    points: getSplitterFragmentPoints(invader),
+    row: invader.row,
+    width: SPLITTER_FRAGMENT_WIDTH,
+    x: clamp(
+      invaderCenterX + centerOffset - SPLITTER_FRAGMENT_WIDTH / 2,
+      0,
+      boardWidth - SPLITTER_FRAGMENT_WIDTH,
+    ),
+    y: invaderCenterY - SPLITTER_FRAGMENT_HEIGHT / 2,
+  };
+}
+
+function getSplitterFragmentPoints(invader: Pick<SpaceInvader, "points">) {
+  return Math.max(5, Math.floor(invader.points / 2));
+}
+
 function getRevengeShotSources(
   destroyedRevengeInvaders: SpaceInvader[],
   invaders: SpaceInvader[],
@@ -1907,7 +1979,7 @@ function advanceDivingInvader(
 function getExposedDiverIds(activeInvaders: SpaceInvader[]) {
   return new Set(
     activeInvaders
-      .filter((invader) => invader.kind === "diver")
+      .filter(isDiverMovementInvader)
       .filter((invader) => invader.isDiving || isDiverLaneClear(invader, activeInvaders))
       .map((invader) => invader.id),
   );
@@ -1940,7 +2012,11 @@ function getNextDiverState(invader: SpaceInvader, exposedDiverIds: Set<string>) 
 }
 
 function isExposedDiver(invader: SpaceInvader, exposedDiverIds: Set<string>) {
-  return invader.kind === "diver" && exposedDiverIds.has(invader.id);
+  return isDiverMovementInvader(invader) && exposedDiverIds.has(invader.id);
+}
+
+function isDiverMovementInvader(invader: Pick<SpaceInvader, "kind">) {
+  return invader.kind === "diver" || invader.kind === "splitter-fragment";
 }
 
 function hasInvaderReachedBase(game: SpaceInvadersGameState) {
@@ -2208,6 +2284,46 @@ function selectRevengeAlienIds({
   const selectedCount = Math.min(
     SPACE_INVADERS_REVENGE_ALIEN_COUNT,
     maximumRevengeAlienCount,
+    candidates.length,
+  );
+  const selectedIds = new Set<string>();
+
+  for (let selectedIndex = 0; selectedIndex < selectedCount; selectedIndex += 1) {
+    const candidateIndex = getRandomIndex(candidates.length, random);
+    const [selectedId] = candidates.splice(candidateIndex, 1);
+
+    if (selectedId !== undefined) {
+      selectedIds.add(selectedId);
+    }
+  }
+
+  return selectedIds;
+}
+
+function selectSplitterAlienIds({
+  columns,
+  excludedIds,
+  random,
+  rows,
+}: {
+  columns: number;
+  excludedIds: Set<string>;
+  random: SpaceInvadersRandomSource;
+  rows: number;
+}) {
+  const candidates = Array.from({ length: Math.max(0, rows - 2) }, (_, index) =>
+    Array.from({ length: columns }, (_, column) => `${index + 1}:${column}`),
+  )
+    .flat()
+    .filter((id) => !excludedIds.has(id));
+  const nonBottomSlotCount = Math.max(0, rows - 1) * columns;
+  const maximumSplitterAlienCount = Math.max(
+    0,
+    nonBottomSlotCount - excludedIds.size - DIVER_INVADER_COUNT,
+  );
+  const selectedCount = Math.min(
+    SPACE_INVADERS_SPLITTER_ALIEN_COUNT,
+    maximumSplitterAlienCount,
     candidates.length,
   );
   const selectedIds = new Set<string>();

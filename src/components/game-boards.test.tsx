@@ -189,14 +189,27 @@ describe("game board renderers", () => {
 
   it("renders Space Invaders formation, player shot, and remaining count", () => {
     const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const splitterAlien = game.invaders.find((invader) => invader.kind === "splitter")!;
+    const splitterFragment = {
+      ...splitterAlien,
+      height: splitterAlien.height * 0.7,
+      id: "splitter-fragment-test",
+      kind: "splitter-fragment" as const,
+      width: splitterAlien.width * 0.7,
+      x: 302,
+      y: 214,
+    };
     const markup = renderToStaticMarkup(
       <SpaceInvadersBoard
         game={{
           ...game,
-          invaders: game.invaders.map((invader, index) => ({
-            ...invader,
-            isActive: index !== 0,
-          })),
+          invaders: [
+            ...game.invaders.map((invader, index) => ({
+              ...invader,
+              isActive: index !== 0,
+            })),
+            splitterFragment,
+          ],
           playerShots: [
             {
               height: 14,
@@ -343,7 +356,7 @@ describe("game board renderers", () => {
     expectMarkup(markup, [
       'data-testid="space-invaders-board-frame"',
       'data-testid="space-invaders-board"',
-      "Space Invaders board. Field 420 by 560. Score 0. Lives 3. 54 invaders remaining. 7 power ups falling. Running.",
+      "Space Invaders board. Field 420 by 560. Score 0. Lives 3. 55 invaders remaining. 7 power ups falling. Running.",
       'data-testid="space-invaders-score-hud"',
       'data-testid="space-invaders-score"',
       'data-testid="space-invaders-health-hud"',
@@ -352,6 +365,8 @@ describe("game board renderers", () => {
       'data-invader-kind="diver"',
       'data-invader-kind="shield-bearer"',
       'data-invader-kind="revenge"',
+      'data-invader-kind="splitter"',
+      'data-invader-kind="splitter-fragment"',
       'data-invader-shielded="true"',
       'data-testid="space-invaders-invader-shield"',
       "space-invaders-invader-shield",
@@ -389,6 +404,7 @@ describe("game board renderers", () => {
       "/images/space-invaders/alien-purple.png?v=sprite-art-v2",
       "/images/space-invaders/alien-shield-bearer.png?v=sprite-art-v2",
       "/images/space-invaders/alien-revenge-alien.png?v=sprite-art-v2",
+      "/images/space-invaders/alien-splitter.png?v=sprite-art-v2",
       "/images/space-invaders/explosion-3.png?v=sprite-art-v2",
       "/images/space-invaders/ufo.png?v=sprite-art-v2",
       "/images/space-invaders/player-shot.png?v=sprite-art-v2",
