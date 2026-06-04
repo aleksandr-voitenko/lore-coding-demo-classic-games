@@ -228,7 +228,7 @@ export function TwentyFortyEightGame({
           <GameHeader
             status={statusLabel}
             statusTestId="twenty-forty-eight-status"
-            title="Classic 2048"
+            title="2048"
           />
 
           <GameStatsBar>
@@ -286,7 +286,7 @@ export function TwentyFortyEightGame({
                 <StartPreview />
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-3xl font-semibold tracking-normal text-balance">
-                    Classic 2048
+                    2048
                   </p>
                   <p className="text-sm font-medium text-[color-mix(in_oklch,var(--twenty-board-text)_74%,transparent)]">
                     {statusLabel}
@@ -339,7 +339,7 @@ export function TwentyFortyEightGame({
               onClose={closeHelp}
               sections={helpSections}
               testId="twenty-forty-eight-help-screen"
-              title="Classic 2048"
+              title="2048"
             />
           ) : null}
           </TwentyFortyEightBoard>

@@ -306,7 +306,7 @@ export function BreakoutGame({
           <GameHeader
             status={statusLabels[game.status]}
             statusTestId="breakout-status"
-            title="Classic Breakout"
+            title="Breakout"
           />
 
           <GameStatsBar>
@@ -384,7 +384,7 @@ export function BreakoutGame({
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-3xl font-semibold tracking-normal text-balance">
-                    Classic Breakout
+                    Breakout
                   </p>
                   <p className="text-sm font-medium text-[color-mix(in_oklch,var(--breakout-board-text)_74%,transparent)]">
                     {statusLabels[game.status]}
@@ -484,7 +484,7 @@ export function BreakoutGame({
               onClose={closeHelp}
               sections={BREAKOUT_HELP_SECTIONS}
               testId="breakout-help-screen"
-              title="Classic Breakout"
+              title="Breakout"
             />
           ) : null}
           </BreakoutBoard>

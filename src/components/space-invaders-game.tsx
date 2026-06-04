@@ -332,7 +332,7 @@ export function SpaceInvadersGame({
         <GameHeader
           status={statusLabels[game.status]}
           statusTestId="space-invaders-status"
-          title="Classic Space Invaders"
+          title="Space Invaders"
         />
 
         <GameBoardStage
@@ -379,7 +379,7 @@ export function SpaceInvadersGame({
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-3xl font-semibold tracking-normal text-balance">
-                    Classic Space Invaders
+                    Space Invaders
                   </p>
                   <p className="text-sm font-medium text-[color-mix(in_oklch,var(--invaders-board-text)_74%,transparent)]">
                     {statusLabels[game.status]}
@@ -451,7 +451,7 @@ export function SpaceInvadersGame({
               onClose={closeHelp}
               sections={SPACE_INVADERS_HELP_SECTIONS}
               testId="space-invaders-help-screen"
-              title="Classic Space Invaders"
+              title="Space Invaders"
             />
           ) : null}
           </SpaceInvadersBoard>

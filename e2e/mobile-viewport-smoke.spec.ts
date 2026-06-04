@@ -69,7 +69,7 @@ test("mobile viewport keeps launcher card, actions, Help, and leaderboard usable
   const snakeCard = page.getByTestId("game-card-snake");
 
   await expect(page.viewportSize()).toEqual(mobileViewport);
-  await expect(snakeCard).toHaveAccessibleName("Play Classic Snake");
+  await expect(snakeCard).toHaveAccessibleName("Play Snake");
   await expectHorizontallyFitsViewport(page, snakeCard);
 
   await openGame(page, "snake");
@@ -96,7 +96,7 @@ test("mobile viewport keeps launcher card, actions, Help, and leaderboard usable
   const helpScreen = page.getByTestId("snake-help-screen");
 
   await expect(helpScreen).toBeVisible();
-  await expect(page.getByRole("dialog", { name: "Classic Snake help" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Snake help" })).toBeVisible();
   await expectHorizontallyFitsViewport(page, page.getByTestId("snake-help-screen-close"));
 
   await page.getByTestId("snake-help-screen-close").click();

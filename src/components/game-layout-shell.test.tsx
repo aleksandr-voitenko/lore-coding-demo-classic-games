@@ -44,11 +44,11 @@ describe("game layout shell", () => {
 
   it("keeps game status available without rendering a visible sidebar title block", () => {
     const markup = renderToStaticMarkup(
-      <GameHeader status="Ready" statusTestId="snake-status" title="Classic Snake" />,
+      <GameHeader status="Ready" statusTestId="snake-status" title="Snake" />,
     );
 
     expect(markup).toContain('class="sr-only"');
-    expect(markup).toContain("<h1>Classic Snake</h1>");
+    expect(markup).toContain("<h1>Snake</h1>");
     expect(markup).toContain('data-testid="snake-status"');
     expect(markup).toContain(">Ready</p>");
   });

@@ -335,7 +335,7 @@ export function PongGame({
     <GameShell className="bg-[var(--pong-page)] text-[var(--pong-ink)]">
       <GameBoardColumn className="w-[min(92vw,37.25rem,calc(75svh_-_9rem))]">
         <GameSidebar className="border-[var(--pong-border)] bg-[var(--pong-panel)]">
-          <GameHeader status={statusLabel} statusTestId="pong-status" title="Classic Pong" />
+          <GameHeader status={statusLabel} statusTestId="pong-status" title="Pong" />
 
           <GameStatsBar>
             <GameStatCard
@@ -401,7 +401,7 @@ export function PongGame({
                   <span className="absolute left-1/2 top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#f8fafc]" />
                 </div>
                 <div className="flex flex-col items-center gap-1">
-                  <p className="text-3xl font-semibold tracking-normal text-balance">Classic Pong</p>
+                  <p className="text-3xl font-semibold tracking-normal text-balance">Pong</p>
                   <p className="text-sm font-medium text-[#9fb6c9]">First to {game.targetScore}</p>
                 </div>
               </div>
@@ -497,7 +497,7 @@ export function PongGame({
               onClose={closeHelp}
               sections={helpSections}
               testId="pong-help-screen"
-              title="Classic Pong"
+              title="Pong"
             />
           ) : null}
           </PongBoard>

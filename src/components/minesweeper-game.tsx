@@ -232,7 +232,7 @@ export function MinesweeperGame({
           <GameHeader
             status={statusLabels[game.status]}
             statusTestId="minesweeper-status"
-            title="Classic Minesweeper"
+            title="Minesweeper"
           />
 
           <GameStatsBar>
@@ -306,7 +306,7 @@ export function MinesweeperGame({
                   <MinesweeperStartPreview />
                   <div className="flex flex-col items-center gap-1">
                     <p className="text-3xl font-semibold tracking-normal text-balance">
-                      Classic Minesweeper
+                      Minesweeper
                     </p>
                     <p className="text-sm font-medium text-[color-mix(in_oklch,var(--minesweeper-board-text)_74%,transparent)]">
                       {statusLabels[game.status]}
@@ -358,7 +358,7 @@ export function MinesweeperGame({
                 onClose={closeHelp}
                 sections={MINESWEEPER_HELP_SECTIONS}
                 testId="minesweeper-help-screen"
-                title="Classic Minesweeper"
+                title="Minesweeper"
               />
             ) : null}
           </MinesweeperBoard>

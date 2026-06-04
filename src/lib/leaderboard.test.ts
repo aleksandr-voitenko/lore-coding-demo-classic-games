@@ -22,11 +22,11 @@ describe("leaderboard", () => {
 
   it("creates stable game-and-parameter leaderboard keys", () => {
     expect(
-      createGameLeaderboardKey("Classic Tetris", [
+      createGameLeaderboardKey("Tetris", [
         { name: "Board", value: "10 x 20" },
         { name: "Level", value: 3 },
       ]),
-    ).toBe("classic-tetris|board=10-x-20|level=3");
+    ).toBe("tetris|board=10-x-20|level=3");
     expect(
       createGameLeaderboardKey("tetris", [
         { name: "board", value: "10x20" },

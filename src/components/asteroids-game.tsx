@@ -327,7 +327,7 @@ export function AsteroidsGame({
           <GameHeader
             status={statusLabels[game.status]}
             statusTestId="asteroids-status"
-            title="Classic Asteroids"
+            title="Asteroids"
           />
 
           <GameStatsBar>
@@ -404,7 +404,7 @@ export function AsteroidsGame({
                   </div>
                   <div className="flex flex-col items-center gap-1">
                     <p className="text-3xl font-semibold tracking-normal text-balance">
-                      Classic Asteroids
+                      Asteroids
                     </p>
                     <p className="text-sm font-medium text-[color-mix(in_oklch,var(--asteroids-board-text)_74%,transparent)]">
                       {game.startingAsteroidCount} rocks. Endless waves.
@@ -476,7 +476,7 @@ export function AsteroidsGame({
                 onClose={closeHelp}
                 sections={ASTEROIDS_HELP_SECTIONS}
                 testId="asteroids-help-screen"
-                title="Classic Asteroids"
+                title="Asteroids"
               />
             ) : null}
           </AsteroidsBoard>

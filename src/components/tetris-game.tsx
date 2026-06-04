@@ -412,7 +412,7 @@ export function TetrisGame({
           <GameHeader
             status={statusLabels[game.status]}
             statusTestId="tetris-status"
-            title="Classic Tetris"
+            title="Tetris"
           />
 
           <GameStatsBar>
@@ -526,7 +526,7 @@ export function TetrisGame({
                   </div>
                   <div className="flex flex-col items-center gap-1">
                     <p className="text-3xl font-semibold tracking-normal text-balance">
-                      Classic Tetris
+                      Tetris
                     </p>
                     <p className="text-sm font-medium text-[color-mix(in_oklch,var(--tetris-board-text)_74%,transparent)]">
                       {statusLabels[game.status]}
@@ -600,7 +600,7 @@ export function TetrisGame({
                 onClose={closeHelp}
                 sections={TETRIS_HELP_SECTIONS}
                 testId="tetris-help-screen"
-                title="Classic Tetris"
+                title="Tetris"
               />
             ) : null}
           </TetrisBoard>

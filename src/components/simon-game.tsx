@@ -343,7 +343,7 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
     <GameShell className="bg-[#f6f9fc] text-[#172033]">
       <GameBoardColumn className="w-[min(92vw,37.25rem,calc(100svh_-_12rem))]">
         <GameSidebar className="border-[#d6dfeb] bg-white">
-          <GameHeader status={statusLabel} statusTestId="simon-status" title="Classic Simon" />
+          <GameHeader status={statusLabel} statusTestId="simon-status" title="Simon" />
 
           <GameStatsBar>
             <GameStatCard
@@ -421,7 +421,7 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-3xl font-semibold tracking-normal text-balance">
-                    Classic Simon
+                    Simon
                   </p>
                   <p className="text-sm font-medium text-[#59687d]">
                     {statusLabels[game.status]}
@@ -513,7 +513,7 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
               onClose={closeHelp}
               sections={SIMON_HELP_SECTIONS}
               testId="simon-help-screen"
-              title="Classic Simon"
+              title="Simon"
             />
           ) : null}
           </SimonBoard>

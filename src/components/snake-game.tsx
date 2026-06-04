@@ -431,7 +431,7 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
           <GameHeader
             status={statusLabels[game.status]}
             statusTestId="snake-status"
-            title="Classic Snake"
+            title="Snake"
           />
 
           <GameStatsBar>
@@ -521,7 +521,7 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
                   </div>
                   <div className="flex flex-col items-center gap-1">
                     <p className="text-3xl font-semibold tracking-normal text-balance">
-                      Classic Snake
+                      Snake
                     </p>
                     <p
                       className="text-sm font-medium text-[color-mix(in_oklch,var(--snake-board-text)_74%,transparent)]"
@@ -586,7 +586,7 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
                 onClose={closeHelp}
                 sections={SNAKE_HELP_SECTIONS}
                 testId="snake-help-screen"
-                title="Classic Snake"
+                title="Snake"
               />
             ) : null}
           </SnakeBoard>

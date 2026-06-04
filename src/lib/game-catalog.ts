@@ -1,39 +1,39 @@
 export const GAME_CATALOG = [
   {
     id: "snake",
-    label: "Classic Snake",
+    label: "Snake",
   },
   {
     id: "tetris",
-    label: "Classic Tetris",
+    label: "Tetris",
   },
   {
     id: "breakout",
-    label: "Classic Breakout",
+    label: "Breakout",
   },
   {
     id: "minesweeper",
-    label: "Classic Minesweeper",
+    label: "Minesweeper",
   },
   {
     id: "space-invaders",
-    label: "Classic Space Invaders",
+    label: "Space Invaders",
   },
   {
     id: "twenty-forty-eight",
-    label: "Classic 2048",
+    label: "2048",
   },
   {
     id: "pong",
-    label: "Classic Pong",
+    label: "Pong",
   },
   {
     id: "simon",
-    label: "Classic Simon",
+    label: "Simon",
   },
   {
     id: "asteroids",
-    label: "Classic Asteroids",
+    label: "Asteroids",
   },
 ] as const;
 
