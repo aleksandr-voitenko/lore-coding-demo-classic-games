@@ -88,6 +88,14 @@ function getColorLightness(color: string) {
     return Number(labMatch[1]);
   }
 
+  const oklabMatch = color.match(/^oklab\(\s*(-?\d+(?:\.\d+)?)(%)?/);
+
+  if (oklabMatch) {
+    const lightness = Number(oklabMatch[1]);
+
+    return oklabMatch[2] ? lightness : lightness * 100;
+  }
+
   const oklchMatch = color.match(/^oklch\((\d+(?:\.\d+)?)(%)?/);
 
   if (oklchMatch) {
@@ -106,6 +114,14 @@ function expectLightColor(color: string) {
 function expectDarkColor(color: string) {
   expect(getColorLightness(color)).toBeLessThanOrEqual(35);
 }
+
+test("shared Help color parser accepts browser color serializations", () => {
+  expectLightColor("rgb(255, 255, 255)");
+  expectLightColor("lab(98.1434 -0.369519 -1.05966)");
+  expectLightColor("oklab(0.999994 0.0000455678 0.0000200868)");
+  expectLightColor("oklch(0.999994 0.0000455678 0.0000200868)");
+  expectDarkColor("lab(7.78673 1.82345 -15.0537)");
+});
 
 async function expectAbandonDialogHidden(page: Page) {
   await expect(page.getByTestId("game-abandon-dialog")).toBeHidden();
