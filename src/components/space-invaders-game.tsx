@@ -18,6 +18,8 @@ import {
   GameHeader,
   GameHelpScreen,
   GameShell,
+  GameStartScreen,
+  GameStartScreenHeader,
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
@@ -356,36 +358,29 @@ export function SpaceInvadersGame({
         >
           <SpaceInvadersBoard game={game} statusLabel={statusLabels[game.status]}>
           {showStartScreen ? (
-            <div
-              className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[var(--invaders-board)] px-4 py-5 text-center text-[var(--invaders-board-text)]"
-              data-testid="space-invaders-start-screen"
-            >
-              <div className="flex flex-col items-center gap-3">
-                <div className="grid grid-cols-6 gap-1" aria-hidden="true">
-                  {Array.from({ length: 24 }, (_, index) => {
-                    const sprite = getSpaceInvaderSprite(Math.floor(index / 6));
+            <GameStartScreen testId="space-invaders-start-screen">
+              <GameStartScreenHeader
+                preview={
+                  <div className="grid grid-cols-6 gap-1" aria-hidden="true">
+                    {Array.from({ length: 24 }, (_, index) => {
+                      const sprite = getSpaceInvaderSprite(Math.floor(index / 6));
 
-                    return (
-                      <span
-                        className={cn(
-                          "h-4 w-6 bg-contain bg-center bg-no-repeat [image-rendering:pixelated]",
-                          sprite.glowClassName,
-                        )}
-                        key={index}
-                        style={{ backgroundImage: `url("${sprite.src}")` }}
-                      />
-                    );
-                  })}
-                </div>
-                <div className="flex flex-col items-center gap-1">
-                  <p className="text-3xl font-semibold tracking-normal text-balance">
-                    Space Invaders
-                  </p>
-                  <p className="text-sm font-medium text-[color-mix(in_oklch,var(--invaders-board-text)_74%,transparent)]">
-                    {statusLabels[game.status]}
-                  </p>
-                </div>
-              </div>
+                      return (
+                        <span
+                          className={cn(
+                            "h-4 w-6 bg-contain bg-center bg-no-repeat [image-rendering:pixelated]",
+                            sprite.glowClassName,
+                          )}
+                          key={index}
+                          style={{ backgroundImage: `url("${sprite.src}")` }}
+                        />
+                      );
+                    })}
+                  </div>
+                }
+                status={statusLabels[game.status]}
+                title="Space Invaders"
+              />
               <Button
                 className="min-w-32"
                 data-testid="space-invaders-start-button"
@@ -398,7 +393,7 @@ export function SpaceInvadersGame({
                 Start
               </Button>
               <GameLeaderboardPanel {...leaderboardPanelProps} />
-            </div>
+            </GameStartScreen>
           ) : showEndScreen ? (
             <GameEndScreen testId="space-invaders-end-screen">
               <GameEndLeaderboardContent

@@ -19,6 +19,8 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStartScreen,
+  GameStartScreenHeader,
   GameStatsBar,
   GameStatCard,
   useGameEscapeToMenu,
@@ -405,29 +407,22 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
         >
           <SimonBoard game={game} onPadPress={pressPad} statusLabel={statusLabel}>
           {showStartScreen ? (
-            <div
-              className="absolute inset-3 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[#f8fbff]/92 px-4 py-5 text-center text-[#172033] backdrop-blur-[2px]"
-              data-testid="simon-start-screen"
-            >
-              <div className="flex flex-col items-center gap-2">
-                <div
-                  className="grid size-20 grid-cols-2 gap-1 rounded-full border-8 border-[#141923] bg-[#141923] p-1"
-                  aria-hidden="true"
-                >
-                  <span className="rounded-tl-full bg-[#25a75a]" />
-                  <span className="rounded-tr-full bg-[#d73548]" />
-                  <span className="rounded-bl-full bg-[#f0bd38]" />
-                  <span className="rounded-br-full bg-[#1d7ed0]" />
-                </div>
-                <div className="flex flex-col items-center gap-1">
-                  <p className="text-3xl font-semibold tracking-normal text-balance">
-                    Simon
-                  </p>
-                  <p className="text-sm font-medium text-[#59687d]">
-                    {statusLabels[game.status]}
-                  </p>
-                </div>
-              </div>
+            <GameStartScreen testId="simon-start-screen">
+              <GameStartScreenHeader
+                preview={
+                  <div
+                    className="grid size-20 grid-cols-2 gap-1 rounded-full border-8 border-[#141923] bg-[#141923] p-1"
+                    aria-hidden="true"
+                  >
+                    <span className="rounded-tl-full bg-[#25a75a]" />
+                    <span className="rounded-tr-full bg-[#d73548]" />
+                    <span className="rounded-bl-full bg-[#f0bd38]" />
+                    <span className="rounded-br-full bg-[#1d7ed0]" />
+                  </div>
+                }
+                status={statusLabels[game.status]}
+                title="Simon"
+              />
               <Button
                 className="min-w-32"
                 data-testid="simon-start-button"
@@ -440,7 +435,7 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
                 Start
               </Button>
               <GameLeaderboardPanel {...leaderboardPanelProps} />
-            </div>
+            </GameStartScreen>
           ) : showCorrectFeedback ? (
             <div
               className="pointer-events-none absolute inset-3 flex items-center justify-center rounded-[0.375rem] text-center text-[#172033]"

@@ -72,6 +72,10 @@ This file covers React component ownership and shared game UI conventions under
   props, and the action button without adding extra wrappers. Use
   `GameEndSummary` directly for terminal overlays that do not need leaderboard
   branching.
+- Use `GameStartScreen` and `GameStartScreenHeader` for ready overlays. The
+  shared shell owns the high-contrast neutral start-screen palette and marker
+  used by browser coverage, while each game keeps its own preview art, start
+  action, status copy, and leaderboard ordering local.
 - Use `useGameLeaderboardPresenter` from
   `game-leaderboard-presenter.ts` to assemble repeated start-panel, final-panel,
   score-form, and void-save leaderboard props. Keep game-specific scoring,

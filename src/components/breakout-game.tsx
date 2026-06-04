@@ -32,6 +32,8 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStartScreen,
+  GameStartScreenHeader,
   GameStatsBar,
   GameStatCard,
   useGameEscapeToMenu,
@@ -362,35 +364,28 @@ export function BreakoutGame({
         >
           <BreakoutBoard game={game} statusLabel={statusLabels[game.status]}>
           {showStartScreen ? (
-            <div
-              className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[var(--breakout-board)] px-4 py-5 text-center text-[var(--breakout-board-text)]"
-              data-testid="breakout-start-screen"
-            >
-              <div className="flex flex-col items-center gap-3">
-                <div className="grid grid-cols-10 gap-1" aria-hidden="true">
-                  {Array.from({ length: 30 }, (_, index) => {
-                    const row = Math.floor(index / 10);
+            <GameStartScreen testId="breakout-start-screen">
+              <GameStartScreenHeader
+                preview={
+                  <div className="grid grid-cols-10 gap-1" aria-hidden="true">
+                    {Array.from({ length: 30 }, (_, index) => {
+                      const row = Math.floor(index / 10);
 
-                    return (
-                      <span
-                        className={cn(
-                          "h-2.5 w-4 rounded-[0.16rem]",
-                          breakoutBrickClassNames[row],
-                        )}
-                        key={index}
-                      />
-                    );
-                  })}
-                </div>
-                <div className="flex flex-col items-center gap-1">
-                  <p className="text-3xl font-semibold tracking-normal text-balance">
-                    Breakout
-                  </p>
-                  <p className="text-sm font-medium text-[color-mix(in_oklch,var(--breakout-board-text)_74%,transparent)]">
-                    {statusLabels[game.status]}
-                  </p>
-                </div>
-              </div>
+                      return (
+                        <span
+                          className={cn(
+                            "h-2.5 w-4 rounded-[0.16rem]",
+                            breakoutBrickClassNames[row],
+                          )}
+                          key={index}
+                        />
+                      );
+                    })}
+                  </div>
+                }
+                status={statusLabels[game.status]}
+                title="Breakout"
+              />
               <Button
                 className="min-w-32"
                 data-testid="breakout-start-button"
@@ -403,7 +398,7 @@ export function BreakoutGame({
                 Start
               </Button>
               <GameLeaderboardPanel {...leaderboardPanelProps} />
-            </div>
+            </GameStartScreen>
           ) : showLifeLostScreen ? (
             <div
               className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-transparent px-4 py-5 text-center text-[var(--breakout-board-text)]"

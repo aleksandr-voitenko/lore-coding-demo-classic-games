@@ -21,6 +21,8 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStartScreen,
+  GameStartScreenHeader,
   GameStatsBar,
   GameStatCard,
   useGameEscapeToMenu,
@@ -389,22 +391,22 @@ export function PongGame({
         >
           <PongBoard game={game} statusLabel={statusLabel}>
           {showStartScreen ? (
-            <div
-              className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[#081525] px-4 py-5 text-center text-[#e5f2ff]"
-              data-testid="pong-start-screen"
-            >
-              <div className="flex flex-col items-center gap-3">
-                <div className="relative h-24 w-36 rounded-md border border-[#23415e] bg-[#06101f]" aria-hidden="true">
-                  <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 border-l border-dashed border-[#e5f2ff]/60" />
-                  <span className="absolute left-4 top-7 h-10 w-1.5 rounded-full bg-[#38bdf8]" />
-                  <span className="absolute right-4 top-7 h-10 w-1.5 rounded-full bg-[#f472b6]" />
-                  <span className="absolute left-1/2 top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#f8fafc]" />
-                </div>
-                <div className="flex flex-col items-center gap-1">
-                  <p className="text-3xl font-semibold tracking-normal text-balance">Pong</p>
-                  <p className="text-sm font-medium text-[#9fb6c9]">First to {game.targetScore}</p>
-                </div>
-              </div>
+            <GameStartScreen testId="pong-start-screen">
+              <GameStartScreenHeader
+                preview={
+                  <div
+                    className="relative h-24 w-36 rounded-md border border-[#23415e] bg-[#06101f]"
+                    aria-hidden="true"
+                  >
+                    <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 border-l border-dashed border-[#e5f2ff]/60" />
+                    <span className="absolute left-4 top-7 h-10 w-1.5 rounded-full bg-[#38bdf8]" />
+                    <span className="absolute right-4 top-7 h-10 w-1.5 rounded-full bg-[#f472b6]" />
+                    <span className="absolute left-1/2 top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#f8fafc]" />
+                  </div>
+                }
+                status={`First to ${game.targetScore}`}
+                title="Pong"
+              />
               <Button
                 className="min-w-32"
                 data-testid="pong-start-button"
@@ -417,7 +419,7 @@ export function PongGame({
                 Start
               </Button>
               <GameLeaderboardPanel {...leaderboardPanelProps} />
-            </div>
+            </GameStartScreen>
           ) : showRoundReadyScreen ? (
             <div
               className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[rgba(8,21,37,0.62)] px-4 py-5 text-center text-[#e5f2ff] backdrop-blur-[1px]"

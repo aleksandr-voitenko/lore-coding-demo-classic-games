@@ -22,6 +22,8 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStartScreen,
+  GameStartScreenHeader,
   GameStatsBar,
   GameStatCard,
   useGameEscapeToMenu,
@@ -278,21 +280,12 @@ export function TwentyFortyEightGame({
         >
           <TwentyFortyEightBoard game={game} statusLabel={statusLabel}>
           {showStartScreen ? (
-            <div
-              className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[var(--twenty-board)] px-4 py-5 text-center text-[var(--twenty-board-text)]"
-              data-testid="twenty-forty-eight-start-screen"
-            >
-              <div className="flex flex-col items-center gap-3">
-                <StartPreview />
-                <div className="flex flex-col items-center gap-1">
-                  <p className="text-3xl font-semibold tracking-normal text-balance">
-                    2048
-                  </p>
-                  <p className="text-sm font-medium text-[color-mix(in_oklch,var(--twenty-board-text)_74%,transparent)]">
-                    {statusLabel}
-                  </p>
-                </div>
-              </div>
+            <GameStartScreen testId="twenty-forty-eight-start-screen">
+              <GameStartScreenHeader
+                preview={<StartPreview />}
+                status={statusLabel}
+                title="2048"
+              />
               <Button
                 className="min-w-32"
                 data-testid="twenty-forty-eight-overlay-start-button"
@@ -305,7 +298,7 @@ export function TwentyFortyEightGame({
                 Start
               </Button>
               <GameLeaderboardPanel {...leaderboardPanelProps} />
-            </div>
+            </GameStartScreen>
           ) : showEndScreen ? (
             <GameEndScreen testId="twenty-forty-eight-end-screen">
               <GameEndLeaderboardContent

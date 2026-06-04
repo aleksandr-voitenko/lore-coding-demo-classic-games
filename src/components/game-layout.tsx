@@ -8,6 +8,10 @@ export {
   GameEndSummary,
 } from "@/components/game-end-screen";
 export {
+  GameStartScreen,
+  GameStartScreenHeader,
+} from "@/components/game-start-screen";
+export {
   GameBoardColumn,
   GameBoardStage,
   GameHeader,

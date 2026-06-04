@@ -21,6 +21,8 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStartScreen,
+  GameStartScreenHeader,
   GameStatsBar,
   GameStatCard,
   useGameEscapeToMenu,
@@ -497,42 +499,32 @@ export function TetrisGame({
         >
           <TetrisBoard game={game} statusLabel={statusLabels[game.status]}>
             {showStartScreen ? (
-              <div
-                className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[var(--tetris-board)] px-4 py-5 text-center text-[var(--tetris-board-text)]"
-                data-testid="tetris-start-screen"
-              >
-                <div className="flex flex-col items-center gap-3">
-                  <div
-                    className="grid grid-cols-6 gap-1"
-                    aria-hidden="true"
-                  >
-                    {Array.from({ length: 30 }, (_, index) => {
-                      const x = index % 6;
-                      const y = Math.floor(index / 6);
-                      const block = START_SCREEN_BLOCKS.find(
-                        (candidate) => candidate.x === x && candidate.y === y,
-                      );
+              <GameStartScreen testId="tetris-start-screen">
+                <GameStartScreenHeader
+                  preview={
+                    <div className="grid grid-cols-6 gap-1" aria-hidden="true">
+                      {Array.from({ length: 30 }, (_, index) => {
+                        const x = index % 6;
+                        const y = Math.floor(index / 6);
+                        const block = START_SCREEN_BLOCKS.find(
+                          (candidate) => candidate.x === x && candidate.y === y,
+                        );
 
-                      return (
-                        <span
-                          className={cn(
-                            "size-3 rounded-[0.16rem] bg-[var(--tetris-grid)]",
-                            block && tetrominoCellClassNames[block.kind],
-                          )}
-                          key={`${x}:${y}`}
-                        />
-                      );
-                    })}
-                  </div>
-                  <div className="flex flex-col items-center gap-1">
-                    <p className="text-3xl font-semibold tracking-normal text-balance">
-                      Tetris
-                    </p>
-                    <p className="text-sm font-medium text-[color-mix(in_oklch,var(--tetris-board-text)_74%,transparent)]">
-                      {statusLabels[game.status]}
-                    </p>
-                  </div>
-                </div>
+                        return (
+                          <span
+                            className={cn(
+                              "size-3 rounded-[0.16rem] bg-[var(--tetris-grid)]",
+                              block && tetrominoCellClassNames[block.kind],
+                            )}
+                            key={`${x}:${y}`}
+                          />
+                        );
+                      })}
+                    </div>
+                  }
+                  status={statusLabels[game.status]}
+                  title="Tetris"
+                />
                 <Button
                   className="min-w-32"
                   data-testid="tetris-start-button"
@@ -545,7 +537,7 @@ export function TetrisGame({
                   Start
                 </Button>
                 <GameLeaderboardPanel {...leaderboardPanelProps} />
-              </div>
+              </GameStartScreen>
             ) : showGameOverScreen ? (
               <GameEndScreen testId="tetris-game-over-screen">
                 <GameEndLeaderboardContent

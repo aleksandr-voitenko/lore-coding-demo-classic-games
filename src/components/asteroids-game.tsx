@@ -35,6 +35,8 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStartScreen,
+  GameStartScreenHeader,
   GameStatsBar,
   GameStatCard,
   useGameEscapeToMenu,
@@ -383,34 +385,27 @@ export function AsteroidsGame({
         >
           <AsteroidsBoard game={game} statusLabel={statusLabels[game.status]}>
             {showStartScreen ? (
-              <div
-                className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[color-mix(in_oklch,var(--asteroids-board)_92%,black)] px-4 py-5 text-center text-[var(--asteroids-board-text)]"
-                data-testid="asteroids-start-screen"
-              >
-                <div className="flex flex-col items-center gap-3">
-                  <div
-                    className="grid h-16 w-28 place-items-center rounded-md border border-[color-mix(in_oklch,var(--asteroids-ship)_48%,transparent)] bg-[color-mix(in_oklch,var(--asteroids-ship)_8%,transparent)] text-[var(--asteroids-ship)] shadow-[0_0_22px_color-mix(in_oklch,var(--asteroids-ship)_22%,transparent)]"
-                    aria-hidden="true"
-                  >
-                    <svg className="h-11 w-16" viewBox="0 0 64 44">
-                      <polygon
-                        fill="none"
-                        points="32,3 12,40 32,29 52,40"
-                        stroke="currentColor"
-                        strokeLinejoin="round"
-                        strokeWidth="3"
-                      />
-                    </svg>
-                  </div>
-                  <div className="flex flex-col items-center gap-1">
-                    <p className="text-3xl font-semibold tracking-normal text-balance">
-                      Asteroids
-                    </p>
-                    <p className="text-sm font-medium text-[color-mix(in_oklch,var(--asteroids-board-text)_74%,transparent)]">
-                      {game.startingAsteroidCount} rocks. Endless waves.
-                    </p>
-                  </div>
-                </div>
+              <GameStartScreen testId="asteroids-start-screen">
+                <GameStartScreenHeader
+                  preview={
+                    <div
+                      className="grid h-16 w-28 place-items-center rounded-md border border-[color-mix(in_oklch,var(--asteroids-ship)_48%,transparent)] bg-[color-mix(in_oklch,var(--asteroids-ship)_8%,transparent)] text-[var(--asteroids-ship)] shadow-[0_0_22px_color-mix(in_oklch,var(--asteroids-ship)_22%,transparent)]"
+                      aria-hidden="true"
+                    >
+                      <svg className="h-11 w-16" viewBox="0 0 64 44">
+                        <polygon
+                          fill="none"
+                          points="32,3 12,40 32,29 52,40"
+                          stroke="currentColor"
+                          strokeLinejoin="round"
+                          strokeWidth="3"
+                        />
+                      </svg>
+                    </div>
+                  }
+                  status={`${game.startingAsteroidCount} rocks. Endless waves.`}
+                  title="Asteroids"
+                />
                 <Button
                   className="min-w-32"
                   data-testid="asteroids-start-button"
@@ -423,7 +418,7 @@ export function AsteroidsGame({
                   Start
                 </Button>
                 <GameLeaderboardPanel {...leaderboardPanelProps} />
-              </div>
+              </GameStartScreen>
             ) : showEndScreen ? (
               <GameEndScreen testId="asteroids-end-screen">
                 <GameEndLeaderboardContent

@@ -28,6 +28,8 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStartScreen,
+  GameStartScreenHeader,
   GameStatsBar,
   GameStatCard,
   useGameEscapeToMenu,
@@ -492,45 +494,36 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
             statusLabel={statusLabels[game.status]}
           >
             {showStartScreen ? (
-              <div
-                className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[var(--snake-board)] px-4 py-5 text-center text-[var(--snake-board-text)]"
-                data-testid="snake-start-screen"
-              >
-                <div className="flex flex-col items-center gap-3">
-                  <div className="grid grid-cols-5 gap-1" aria-hidden="true">
-                    {START_SCREEN_CELLS.map(({ className, rotationDeg = 0, spriteSrc }, index) => (
-                      <span
-                        className="relative size-9 overflow-visible rounded-[0.18rem] bg-[var(--snake-board-cell)] bg-cover bg-center bg-no-repeat shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--snake-grid)_60%,transparent)] sm:size-10"
-                        key={`${spriteSrc}-${index}`}
-                        style={{ backgroundImage: `url("${snakeSpriteSources.floorCell}")` }}
-                      >
+              <GameStartScreen testId="snake-start-screen">
+                <GameStartScreenHeader
+                  preview={
+                    <div className="grid grid-cols-5 gap-1" aria-hidden="true">
+                      {START_SCREEN_CELLS.map(({ className, rotationDeg = 0, spriteSrc }, index) => (
                         <span
-                          className={[
-                            "absolute inset-0 bg-contain bg-center bg-no-repeat drop-shadow-[0_3px_5px_color-mix(in_oklch,black_28%,transparent)]",
-                            className,
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
-                          style={{
-                            backgroundImage: `url("${spriteSrc}")`,
-                            transform: rotationDeg === 0 ? undefined : `rotate(${rotationDeg}deg)`,
-                          }}
-                        />
-                      </span>
-                    ))}
-                  </div>
-                  <div className="flex flex-col items-center gap-1">
-                    <p className="text-3xl font-semibold tracking-normal text-balance">
-                      Snake
-                    </p>
-                    <p
-                      className="text-sm font-medium text-[color-mix(in_oklch,var(--snake-board-text)_74%,transparent)]"
-                      aria-live="polite"
-                    >
-                      {statusLabels[game.status]}
-                    </p>
-                  </div>
-                </div>
+                          className="relative size-9 overflow-visible rounded-[0.18rem] bg-[var(--snake-board-cell)] bg-cover bg-center bg-no-repeat shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--snake-grid)_60%,transparent)] sm:size-10"
+                          key={`${spriteSrc}-${index}`}
+                          style={{ backgroundImage: `url("${snakeSpriteSources.floorCell}")` }}
+                        >
+                          <span
+                            className={[
+                              "absolute inset-0 bg-contain bg-center bg-no-repeat drop-shadow-[0_3px_5px_color-mix(in_oklch,black_28%,transparent)]",
+                              className,
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            style={{
+                              backgroundImage: `url("${spriteSrc}")`,
+                              transform: rotationDeg === 0 ? undefined : `rotate(${rotationDeg}deg)`,
+                            }}
+                          />
+                        </span>
+                      ))}
+                    </div>
+                  }
+                  status={statusLabels[game.status]}
+                  statusAriaLive="polite"
+                  title="Snake"
+                />
                 <GameLeaderboardPanel {...leaderboardPanelProps} />
                 <Button
                   className="min-w-32"
@@ -543,7 +536,7 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
                   <PlayIcon data-icon="inline-start" />
                   Start
                 </Button>
-              </div>
+              </GameStartScreen>
             ) : showGameOverScreen ? (
               <GameEndScreen testId="snake-game-over-screen">
                 <GameEndLeaderboardContent

@@ -15,6 +15,8 @@ import {
   GameHelpScreen,
   GameShell,
   GameSidebar,
+  GameStartScreen,
+  GameStartScreenHeader,
   GameStatsBar,
   GameStatCard,
   useGameEscapeToMenu,
@@ -298,21 +300,12 @@ export function MinesweeperGame({
             statusLabel={statusLabels[game.status]}
           >
             {showStartScreen ? (
-              <div
-                className="absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-[0.375rem] bg-[var(--minesweeper-board)] px-4 py-5 text-center text-[var(--minesweeper-board-text)]"
-                data-testid="minesweeper-start-screen"
-              >
-                <div className="flex flex-col items-center gap-3">
-                  <MinesweeperStartPreview />
-                  <div className="flex flex-col items-center gap-1">
-                    <p className="text-3xl font-semibold tracking-normal text-balance">
-                      Minesweeper
-                    </p>
-                    <p className="text-sm font-medium text-[color-mix(in_oklch,var(--minesweeper-board-text)_74%,transparent)]">
-                      {statusLabels[game.status]}
-                    </p>
-                  </div>
-                </div>
+              <GameStartScreen testId="minesweeper-start-screen">
+                <GameStartScreenHeader
+                  preview={<MinesweeperStartPreview />}
+                  status={statusLabels[game.status]}
+                  title="Minesweeper"
+                />
                 <Button
                   className="min-w-32"
                   data-testid="minesweeper-start-button"
@@ -325,7 +318,7 @@ export function MinesweeperGame({
                   Start
                 </Button>
                 <GameLeaderboardPanel {...leaderboardPanelProps} />
-              </div>
+              </GameStartScreen>
             ) : showEndScreen ? (
               <GameEndScreen testId="minesweeper-end-screen">
                 <GameEndLeaderboardContent

@@ -16,12 +16,14 @@ const centeredBoardTolerancePx = 48;
 const alignedEdgeTolerancePx = 1;
 const stackedGapPx = 16;
 const viewportFitTolerancePx = 1;
+const minimumStartScreenContrastRatio = 7;
 
 const layoutCases = [
   {
     boardTestId: "snake-board",
     gameId: "snake",
     name: "Snake",
+    startScreenTestId: "snake-start-screen",
     statsMode: "top-bar",
     statusTestId: "snake-status",
   },
@@ -29,6 +31,7 @@ const layoutCases = [
     boardTestId: "tetris-board",
     gameId: "tetris",
     name: "Tetris",
+    startScreenTestId: "tetris-start-screen",
     statsMode: "top-bar",
     statusTestId: "tetris-status",
   },
@@ -36,6 +39,7 @@ const layoutCases = [
     boardTestId: "breakout-board",
     gameId: "breakout",
     name: "Breakout",
+    startScreenTestId: "breakout-start-screen",
     statsMode: "top-bar",
     statusTestId: "breakout-status",
   },
@@ -43,6 +47,7 @@ const layoutCases = [
     boardTestId: "minesweeper-board",
     gameId: "minesweeper",
     name: "Minesweeper",
+    startScreenTestId: "minesweeper-start-screen",
     statsMode: "top-bar",
     statusTestId: "minesweeper-status",
   },
@@ -50,6 +55,7 @@ const layoutCases = [
     boardTestId: "space-invaders-board",
     gameId: "space-invaders",
     name: "Space Invaders",
+    startScreenTestId: "space-invaders-start-screen",
     statsMode: "board-hud",
     statusTestId: "space-invaders-status",
   },
@@ -57,6 +63,7 @@ const layoutCases = [
     boardTestId: "pong-board",
     gameId: "pong",
     name: "Pong",
+    startScreenTestId: "pong-start-screen",
     statsMode: "top-bar",
     statusTestId: "pong-status",
   },
@@ -64,6 +71,7 @@ const layoutCases = [
     boardTestId: "twenty-forty-eight-board",
     gameId: "twenty-forty-eight",
     name: "2048",
+    startScreenTestId: "twenty-forty-eight-start-screen",
     statsMode: "top-bar",
     statusTestId: "twenty-forty-eight-status",
   },
@@ -71,6 +79,7 @@ const layoutCases = [
     boardTestId: "simon-board",
     gameId: "simon",
     name: "Simon",
+    startScreenTestId: "simon-start-screen",
     statsMode: "top-bar",
     statusTestId: "simon-status",
   },
@@ -78,12 +87,106 @@ const layoutCases = [
     boardTestId: "asteroids-board",
     gameId: "asteroids",
     name: "Asteroids",
+    startScreenTestId: "asteroids-start-screen",
     statsMode: "top-bar",
     statusTestId: "asteroids-status",
   },
 ] as const;
 
 test.use({ viewport: desktopViewport });
+
+type RgbColor = {
+  alpha: number;
+  blue: number;
+  green: number;
+  red: number;
+};
+
+function parseCssColor(value: string) {
+  const rgbMatch = value.match(
+    /^rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)$/,
+  );
+
+  if (rgbMatch) {
+    return {
+      alpha: rgbMatch[4] ? Number(rgbMatch[4]) : 1,
+      blue: Number(rgbMatch[3]),
+      green: Number(rgbMatch[2]),
+      red: Number(rgbMatch[1]),
+    };
+  }
+
+  const srgbMatch = value.match(
+    /^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)$/,
+  );
+
+  if (srgbMatch) {
+    return {
+      alpha: srgbMatch[4] ? Number(srgbMatch[4]) : 1,
+      blue: Number(srgbMatch[3]) * 255,
+      green: Number(srgbMatch[2]) * 255,
+      red: Number(srgbMatch[1]) * 255,
+    };
+  }
+
+  throw new Error(`Unsupported CSS color format: ${value}`);
+}
+
+function compositeOverWhite(color: RgbColor) {
+  return {
+    alpha: 1,
+    blue: color.blue * color.alpha + 255 * (1 - color.alpha),
+    green: color.green * color.alpha + 255 * (1 - color.alpha),
+    red: color.red * color.alpha + 255 * (1 - color.alpha),
+  };
+}
+
+function getRelativeLuminance(color: RgbColor) {
+  const channels = [color.red, color.green, color.blue].map((channel) => {
+    const normalized = channel / 255;
+
+    return normalized <= 0.03928
+      ? normalized / 12.92
+      : ((normalized + 0.055) / 1.055) ** 2.4;
+  });
+
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+}
+
+function getContrastRatio(foreground: RgbColor, background: RgbColor) {
+  const foregroundLuminance = getRelativeLuminance(foreground);
+  const backgroundLuminance = getRelativeLuminance(background);
+  const lighter = Math.max(foregroundLuminance, backgroundLuminance);
+  const darker = Math.min(foregroundLuminance, backgroundLuminance);
+
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+async function expectSharedStartScreenTheme(page: Page, startScreenTestId: string) {
+  const startScreen = page.getByTestId(startScreenTestId);
+
+  await expect(startScreen).toBeVisible();
+  await expect(startScreen).toHaveAttribute("data-game-start-screen", "true");
+
+  const styles = await startScreen.evaluate((element) => {
+    const screenStyle = window.getComputedStyle(element);
+    const title = element.querySelector("p");
+    const titleStyle = title ? window.getComputedStyle(title) : null;
+
+    return {
+      backgroundColor: screenStyle.backgroundColor,
+      color: screenStyle.color,
+      titleColor: titleStyle?.color ?? "",
+    };
+  });
+  const foreground = parseCssColor(styles.color);
+  const background = compositeOverWhite(parseCssColor(styles.backgroundColor));
+
+  expect(styles.titleColor).toBe(styles.color);
+  expect(getContrastRatio(foreground, background)).toBeGreaterThanOrEqual(
+    minimumStartScreenContrastRatio,
+  );
+}
 
 async function expectCenteredBoardAndViewportFit(page: Page, boardTestId: string) {
   const board = page.getByTestId(boardTestId);
@@ -221,6 +324,7 @@ for (const layoutCase of layoutCases) {
     await openGame(page, layoutCase.gameId);
 
     await expect(page.getByTestId(layoutCase.statusTestId)).toHaveText("Ready");
+    await expectSharedStartScreenTheme(page, layoutCase.startScreenTestId);
     await expectGameLayout(page, layoutCase);
   });
 }
