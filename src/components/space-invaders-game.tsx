@@ -448,7 +448,6 @@ export function SpaceInvadersGame({
           ) : null}
           {isHelpVisible ? (
             <GameHelpScreen
-              className="border-[color-mix(in_oklch,var(--invaders-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--invaders-board)_94%,black)] text-[var(--invaders-board-text)]"
               onClose={closeHelp}
               sections={SPACE_INVADERS_HELP_SECTIONS}
               testId="space-invaders-help-screen"

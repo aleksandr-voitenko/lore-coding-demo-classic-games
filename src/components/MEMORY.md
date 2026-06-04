@@ -80,8 +80,11 @@ This file covers React component ownership and shared game UI conventions under
 - Use `GameHelpScreen` and `useGameHelpScreen` for Help overlays. Realtime games
   pause when Help opens from an active run and resume only when Help caused the
   pause; turn-based games should block keyboard input while Help is visible.
-  Controls sections use compact keyboard/mouse rows, arrow icons only for arrow
-  keys, and short rules lists.
+  The shared Help screen owns the light modal theme for every game, so game
+  components should pass content only rather than board-specific color classes.
+  Long Controls or Rules content scrolls inside its own Help section while the
+  Help header stays fixed. Controls sections use compact keyboard/mouse rows,
+  arrow icons only for arrow keys, and short rules lists.
 - Use `useGameEscapeToMenu` and `GameAbandonDialog` for Escape/back-to-menu
   behavior. Ready and terminal games return directly to the launcher; active
   unfinished games show the abandon confirmation. Keep this hook disabled while

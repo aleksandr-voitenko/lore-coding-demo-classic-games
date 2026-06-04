@@ -510,7 +510,6 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
           ) : null}
           {isHelpVisible ? (
             <GameHelpScreen
-              className="border-[#172033]/20 bg-[#f8fbff] text-[#172033]"
               onClose={closeHelp}
               sections={SIMON_HELP_SECTIONS}
               testId="simon-help-screen"

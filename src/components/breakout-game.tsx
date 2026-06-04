@@ -481,7 +481,6 @@ export function BreakoutGame({
           ) : null}
           {isHelpVisible ? (
             <GameHelpScreen
-              className="border-[color-mix(in_oklch,var(--breakout-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--breakout-board)_94%,black)] text-[var(--breakout-board-text)]"
               onClose={closeHelp}
               sections={BREAKOUT_HELP_SECTIONS}
               testId="breakout-help-screen"

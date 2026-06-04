@@ -473,7 +473,6 @@ export function AsteroidsGame({
             ) : null}
             {isHelpVisible ? (
               <GameHelpScreen
-                className="border-[color-mix(in_oklch,var(--asteroids-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--asteroids-board)_94%,black)] text-[var(--asteroids-board-text)]"
                 onClose={closeHelp}
                 sections={ASTEROIDS_HELP_SECTIONS}
                 testId="asteroids-help-screen"

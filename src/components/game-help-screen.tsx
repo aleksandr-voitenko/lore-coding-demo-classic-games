@@ -4,7 +4,6 @@ import { XIcon, type LucideIcon } from "lucide-react";
 import { useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 export type GameHelpSection = {
   controls?: GameHelpControlRow[];
@@ -24,7 +23,6 @@ export type GameHelpControlButtonSpec = {
 };
 
 type GameHelpScreenProps = {
-  className?: string;
   onClose: () => void;
   sections: GameHelpSection[];
   testId: string;
@@ -32,7 +30,6 @@ type GameHelpScreenProps = {
 };
 
 export function GameHelpScreen({
-  className,
   onClose,
   sections,
   testId,
@@ -60,13 +57,8 @@ export function GameHelpScreen({
       role="dialog"
       aria-label={`${title} help`}
     >
-      <div
-        className={cn(
-          "flex max-h-[min(36rem,calc(100svh-2rem))] w-full max-w-2xl flex-col gap-4 overflow-y-auto rounded-md border border-white/25 p-4 text-left shadow-[0_24px_80px_rgba(0,0,0,0.42)]",
-          className,
-        )}
-      >
-        <div className="flex items-start justify-between gap-3">
+      <div className="flex max-h-[min(36rem,calc(100svh-2rem))] w-full max-w-2xl flex-col gap-4 overflow-hidden rounded-md border border-slate-200 bg-slate-50 p-4 text-left text-slate-900 shadow-[0_24px_80px_rgba(0,0,0,0.42)]">
+        <div className="flex shrink-0 items-start justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1">
             <p className="text-xs font-semibold uppercase tracking-normal opacity-70">Help</p>
             <h2 className="text-2xl font-semibold tracking-normal text-balance">{title}</h2>
@@ -74,7 +66,7 @@ export function GameHelpScreen({
           <Button
             aria-label="Close help"
             autoFocus
-            className="border-white/35 bg-white/10 text-current hover:bg-white/20 hover:text-current focus-visible:border-white/70 focus-visible:ring-white/40"
+            className="border-slate-300 bg-white text-slate-900 hover:bg-slate-100 hover:text-slate-900 focus-visible:border-slate-500 focus-visible:ring-slate-300"
             data-testid={`${testId}-close`}
             onClick={onClose}
             size="icon"
@@ -85,9 +77,9 @@ export function GameHelpScreen({
           </Button>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-[minmax(0,1.18fr)_minmax(0,0.82fr)]">
+        <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-4 overflow-hidden sm:grid-cols-[minmax(0,max-content)_minmax(0,1fr)] sm:grid-rows-[minmax(0,1fr)]">
           {sections.map((section) => (
-            <section className="flex min-w-0 flex-col gap-2" key={section.title}>
+            <section className="flex min-h-0 min-w-0 flex-col gap-2 overflow-hidden" key={section.title}>
               <h3 className="text-sm font-semibold tracking-normal">{section.title}</h3>
               {section.controls ? <GameHelpControls controls={section.controls} /> : null}
               {section.items ? <GameHelpItems items={section.items} /> : null}
@@ -101,20 +93,22 @@ export function GameHelpScreen({
 
 function GameHelpControls({ controls }: { controls: GameHelpControlRow[] }) {
   return (
-    <div className="inline-grid min-w-[100px] max-w-full self-start grid-cols-[minmax(100px,max-content)] gap-2">
-      {controls.map((control) => (
-        <div
-          className="flex w-full max-w-full items-center gap-3 rounded-md border border-[color-mix(in_oklch,currentColor_16%,transparent)] bg-[color-mix(in_oklch,currentColor_7%,transparent)] p-2 pr-3"
-          key={control.label}
-        >
-          <div className="flex flex-wrap gap-1.5" aria-hidden="true">
-            {control.buttons.map((button) => (
-              <GameHelpControlButton button={button} key={button.label} />
-            ))}
+    <div className="min-h-0 max-w-full flex-1 self-start overflow-y-auto pr-2">
+      <div className="inline-grid min-w-[100px] max-w-full grid-cols-[minmax(100px,max-content)] gap-2">
+        {controls.map((control) => (
+          <div
+            className="flex w-full max-w-full items-center gap-3 rounded-md border border-[color-mix(in_oklch,currentColor_16%,transparent)] bg-[color-mix(in_oklch,currentColor_7%,transparent)] p-2 pr-3"
+            key={control.label}
+          >
+            <div className="flex flex-wrap gap-1.5" aria-hidden="true">
+              {control.buttons.map((button) => (
+                <GameHelpControlButton button={button} key={button.label} />
+              ))}
+            </div>
+            <p className="min-w-0 text-sm font-medium leading-5">{control.label}</p>
           </div>
-          <p className="min-w-0 text-sm font-medium leading-5">{control.label}</p>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -134,7 +128,7 @@ function GameHelpControlButton({ button }: { button: GameHelpControlButtonSpec }
 
 function GameHelpItems({ items }: { items: string[] }) {
   return (
-    <ul className="flex flex-col gap-2.5 text-[0.9375rem] leading-7 opacity-90 sm:text-base">
+    <ul className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto pr-2 text-[0.9375rem] leading-7 opacity-90 sm:text-base">
       {items.map((item) => (
         <li className="flex gap-2" key={item}>
           <span

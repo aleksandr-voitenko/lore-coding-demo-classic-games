@@ -494,7 +494,6 @@ export function PongGame({
           ) : null}
           {isHelpVisible ? (
             <GameHelpScreen
-              className="border-[#e5f2ff]/25 bg-[#081525] text-[#e5f2ff]"
               onClose={closeHelp}
               sections={helpSections}
               testId="pong-help-screen"

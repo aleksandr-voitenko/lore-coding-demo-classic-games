@@ -336,7 +336,6 @@ export function TwentyFortyEightGame({
           ) : null}
           {isHelpVisible ? (
             <GameHelpScreen
-              className="border-[color-mix(in_oklch,var(--twenty-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--twenty-board)_94%,black)] text-[var(--twenty-board-text)]"
               onClose={closeHelp}
               sections={helpSections}
               testId="twenty-forty-eight-help-screen"

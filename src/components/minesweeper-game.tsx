@@ -355,7 +355,6 @@ export function MinesweeperGame({
             ) : null}
             {isHelpVisible ? (
               <GameHelpScreen
-                className="border-[color-mix(in_oklch,var(--minesweeper-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--minesweeper-mine)_92%,black)] text-[var(--minesweeper-board-text)]"
                 onClose={closeHelp}
                 sections={MINESWEEPER_HELP_SECTIONS}
                 testId="minesweeper-help-screen"

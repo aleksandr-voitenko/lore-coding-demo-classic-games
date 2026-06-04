@@ -583,7 +583,6 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
             ) : null}
             {isHelpVisible ? (
               <GameHelpScreen
-                className="border-[color-mix(in_oklch,var(--snake-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--snake-board)_94%,black)] text-[var(--snake-board-text)]"
                 onClose={closeHelp}
                 sections={SNAKE_HELP_SECTIONS}
                 testId="snake-help-screen"

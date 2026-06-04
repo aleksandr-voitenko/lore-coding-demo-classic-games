@@ -597,7 +597,6 @@ export function TetrisGame({
             ) : null}
             {isHelpVisible ? (
               <GameHelpScreen
-                className="border-[color-mix(in_oklch,var(--tetris-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--tetris-board)_94%,black)] text-[var(--tetris-board-text)]"
                 onClose={closeHelp}
                 sections={TETRIS_HELP_SECTIONS}
                 testId="tetris-help-screen"
