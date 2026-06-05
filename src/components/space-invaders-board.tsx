@@ -92,6 +92,12 @@ const spaceInvadersScorePopupBaseStyle: CSSProperties = {
   willChange: "opacity",
 };
 
+type SpaceInvadersShieldTether = {
+  path: string;
+  source: SpaceInvader;
+  target: SpaceInvader;
+};
+
 function getScorePopupNumberStyle(scoreScale: number | undefined): CSSProperties {
   const fontSize = Number((0.72 * (scoreScale ?? 1)).toFixed(4));
 
@@ -281,6 +287,85 @@ function getInvaderModifier(kind: SpaceInvaderKind) {
   return null;
 }
 
+function getEntityCenter(entity: Pick<SpaceInvader, "height" | "width" | "x" | "y">) {
+  return {
+    x: entity.x + entity.width / 2,
+    y: entity.y + entity.height / 2,
+  };
+}
+
+function formatBoardCoordinate(value: number) {
+  return String(Number(value.toFixed(2)));
+}
+
+function getShieldTetherPath(source: SpaceInvader, target: SpaceInvader) {
+  const sourceCenter = getEntityCenter(source);
+  const targetCenter = getEntityCenter(target);
+  const distance = Math.hypot(
+    targetCenter.x - sourceCenter.x,
+    targetCenter.y - sourceCenter.y,
+  );
+  const arcLift = Math.min(80, Math.max(18, distance * 0.18));
+  const controlX = (sourceCenter.x + targetCenter.x) / 2;
+  const controlY = Math.min(sourceCenter.y, targetCenter.y) - arcLift;
+
+  return [
+    "M",
+    formatBoardCoordinate(sourceCenter.x),
+    formatBoardCoordinate(sourceCenter.y),
+    "Q",
+    formatBoardCoordinate(controlX),
+    formatBoardCoordinate(controlY),
+    formatBoardCoordinate(targetCenter.x),
+    formatBoardCoordinate(targetCenter.y),
+  ].join(" ");
+}
+
+function getShieldSource(
+  target: SpaceInvader,
+  invaders: SpaceInvader[],
+): SpaceInvader | null {
+  if (!isSpaceInvaderShielded(target, invaders)) {
+    return null;
+  }
+
+  const targetCenter = getEntityCenter(target);
+
+  return invaders
+    .filter(
+      (invader) =>
+        invader.isActive &&
+        invader.kind === "shield-bearer" &&
+        invader.row === target.row,
+    )
+    .sort((first, second) => {
+      const firstDistance = Math.abs(getEntityCenter(first).x - targetCenter.x);
+      const secondDistance = Math.abs(getEntityCenter(second).x - targetCenter.x);
+
+      return firstDistance - secondDistance;
+    })[0] ?? null;
+}
+
+function getShieldTethers(invaders: SpaceInvader[]): SpaceInvadersShieldTether[] {
+  return invaders.flatMap((target) => {
+    if (!target.isActive || target.kind !== "diver" || !target.isDiving) {
+      return [];
+    }
+
+    const source = getShieldSource(target, invaders);
+
+    return source === null
+      ? []
+      : [
+          {
+            path: getShieldTetherPath(source, target),
+            source,
+            target,
+          },
+        ];
+  });
+}
+
 function getPlayerShotSpriteSrc(kind: SpaceInvadersPlayerShotKind) {
   if (kind === "piercing") {
     return playerPiercingShotSpriteSrc;
@@ -347,6 +432,7 @@ export function SpaceInvadersBoard({
   const isPlayerShieldFlashing =
     isPlayerShieldVisible &&
     game.playerShieldTicks <= SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS;
+  const shieldTethers = getShieldTethers(game.invaders);
 
   return (
     <div
@@ -389,6 +475,44 @@ export function SpaceInvadersBoard({
             top: `${(game.baseY / game.boardHeight) * 100}%`,
           }}
         />
+
+        {shieldTethers.length > 0 ? (
+          <svg
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0"
+            data-testid="space-invaders-shield-tethers"
+            preserveAspectRatio="none"
+            viewBox={`0 0 ${game.boardWidth} ${game.boardHeight}`}
+          >
+            {shieldTethers.map(({ path, source, target }) => (
+              <g
+                data-shield-source-id={source.id}
+                data-shield-target-id={target.id}
+                data-testid="space-invaders-shield-tether"
+                key={`${source.id}:${target.id}`}
+              >
+                <path
+                  className="space-invaders-shield-tether__glow"
+                  d={path}
+                  fill="none"
+                  stroke="var(--invaders-cyan)"
+                  strokeLinecap="round"
+                  strokeOpacity="0.22"
+                  strokeWidth="8"
+                />
+                <path
+                  className="space-invaders-shield-tether__core"
+                  d={path}
+                  fill="none"
+                  stroke="white"
+                  strokeLinecap="round"
+                  strokeOpacity="0.72"
+                  strokeWidth="1.4"
+                />
+              </g>
+            ))}
+          </svg>
+        ) : null}
 
         {game.invaders.map((invader) => {
           const sprite = getSpaceInvaderRenderSprite(invader);

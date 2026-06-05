@@ -434,6 +434,58 @@ describe("game board renderers", () => {
     ]);
   });
 
+  it("renders Space Invaders shield tethers from bearers to shielded divers", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const shieldBearer = game.invaders.find(
+      (invader) => invader.kind === "shield-bearer" && invader.column < 10,
+    )!;
+    const targetDiver = {
+      ...game.invaders.find(
+        (invader) =>
+          invader.row === shieldBearer.row &&
+          invader.column === shieldBearer.column + 1,
+      )!,
+      isDiving: true,
+      kind: "diver" as const,
+      y: shieldBearer.y + 220,
+    };
+    const markup = renderToStaticMarkup(
+      <SpaceInvadersBoard
+        game={{
+          ...game,
+          invaders: game.invaders.map((invader) => {
+            if (invader.id === shieldBearer.id) {
+              return shieldBearer;
+            }
+
+            if (invader.id === targetDiver.id) {
+              return targetDiver;
+            }
+
+            return {
+              ...invader,
+              isActive: false,
+            };
+          }),
+          status: "running",
+        }}
+        statusLabel="Running"
+      />,
+    );
+
+    expectMarkup(markup, [
+      'data-testid="space-invaders-shield-tethers"',
+      'data-testid="space-invaders-shield-tether"',
+      `data-shield-source-id="${shieldBearer.id}"`,
+      `data-shield-target-id="${targetDiver.id}"`,
+      "space-invaders-shield-tether__glow",
+      "space-invaders-shield-tether__core",
+      'data-invader-kind="diver"',
+      'data-invader-shielded="true"',
+      'data-testid="space-invaders-invader-shield"',
+    ]);
+  });
+
   it("renders Space Invaders respawn shields and hides respawning players", () => {
     const game = createInitialSpaceInvadersGame();
     const steadyShieldMarkup = renderToStaticMarkup(
