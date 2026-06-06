@@ -12,6 +12,29 @@ export async function openGame(page: Page, gameId: string) {
   await page.getByTestId(`game-card-${gameId}`).click();
 }
 
+export async function expectSignedInProfileMenu(page: Page, displayName: string) {
+  const profileMenuTrigger = page.getByTestId("profile-menu-trigger");
+
+  await expect(profileMenuTrigger).toBeVisible();
+  await expect(profileMenuTrigger).toHaveAccessibleName(`${displayName} account menu`);
+}
+
+export async function openProfileMenu(page: Page) {
+  await page.getByTestId("profile-menu-trigger").click();
+  await expect(page.getByTestId("profile-menu")).toBeVisible();
+}
+
+export async function openProfileFromLauncher(page: Page) {
+  await openProfileMenu(page);
+  await page.getByTestId("profile-link").click();
+}
+
+export async function signOutFromLauncher(page: Page) {
+  await openProfileMenu(page);
+  await page.getByTestId("sign-out-button").click();
+  await expect(page.getByTestId("sign-up-open-button")).toBeVisible();
+}
+
 export async function logInFromLauncher(
   page: Page,
   displayName: string,
@@ -22,7 +45,7 @@ export async function logInFromLauncher(
   await page.getByTestId("auth-displayName-input").fill(displayName);
   await page.getByTestId("auth-password-input").fill(password);
   await page.getByTestId("auth-submit-button").click();
-  await expect(page.getByTestId("profile-link")).toContainText(displayName);
+  await expectSignedInProfileMenu(page, displayName);
 }
 
 export async function signUpFromLauncher(
@@ -36,7 +59,7 @@ export async function signUpFromLauncher(
   await page.getByTestId("auth-password-input").fill(password);
   await page.getByTestId("auth-passwordConfirmation-input").fill(password);
   await page.getByTestId("auth-submit-button").click();
-  await expect(page.getByTestId("profile-link")).toContainText(displayName);
+  await expectSignedInProfileMenu(page, displayName);
 }
 
 export async function selectGameParameter(page: Page, testId: string, value: string) {

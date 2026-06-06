@@ -2,10 +2,14 @@ import type { Page } from "@playwright/test";
 
 import { expect, test } from "./support/fixtures";
 import {
+  expectSignedInProfileMenu,
   logInFromLauncher,
   openGame,
   openLauncher,
+  openProfileFromLauncher,
+  openProfileMenu,
   selectGameParameter,
+  signOutFromLauncher,
   signUpFromLauncher,
 } from "./support/app";
 
@@ -227,7 +231,7 @@ test("launcher hydrates the signed-in user before client account refreshes", asy
 
   await signUpFromLauncher(page, "E2E Hero");
 
-  await page.getByTestId("profile-link").click();
+  await openProfileFromLauncher(page);
   await expect(page.getByRole("heading", { name: "E2E Hero" })).toBeVisible();
 
   await page.route("**/api/me", async (route) => {
@@ -240,40 +244,120 @@ test("launcher hydrates the signed-in user before client account refreshes", asy
 
   await page.getByRole("link", { name: "Back to games" }).click();
   await expect(page.getByTestId("game-menu")).toBeVisible();
-  await expect(page.getByTestId("profile-link")).toContainText("E2E Hero");
+  await expectSignedInProfileMenu(page, "E2E Hero");
   await expect(page.getByTestId("auth-displayName-input")).toHaveCount(0);
 });
 
-test("launcher renders signed-in account controls as separate buttons", async ({ page }) => {
+test("launcher renders signed-in account controls as one circular profile menu", async ({
+  page,
+}) => {
   await openLauncher(page);
 
-  await signUpFromLauncher(page, "Separate Button Hero");
+  await signUpFromLauncher(page, "Menu Hero");
 
   const accountActionMetrics = await page.getByTestId("user-account-controls").evaluate((element) => {
-    const profileLink = element.querySelector('[data-testid="profile-link"]');
-    const signOutButton = element.querySelector('[data-testid="sign-out-button"]');
+    const profileMenuTrigger = element.querySelector('[data-testid="profile-menu-trigger"]');
 
-    if (!(profileLink instanceof HTMLElement) || !(signOutButton instanceof HTMLElement)) {
-      throw new Error("Signed-in account controls did not render both actions.");
+    if (!(profileMenuTrigger instanceof HTMLElement)) {
+      throw new Error("Signed-in account controls did not render a profile menu trigger.");
     }
 
-    const profileLinkRect = profileLink.getBoundingClientRect();
-    const signOutButtonRect = signOutButton.getBoundingClientRect();
-    const profileLinkStyle = getComputedStyle(profileLink);
-    const signOutButtonStyle = getComputedStyle(signOutButton);
+    const triggerRect = profileMenuTrigger.getBoundingClientRect();
+    const triggerStyle = getComputedStyle(profileMenuTrigger);
 
     return {
+      borderRadius: Number.parseFloat(triggerStyle.borderTopLeftRadius),
+      buttonCount: element.querySelectorAll("button").length,
       containerBackground: getComputedStyle(element).backgroundColor,
-      gap: signOutButtonRect.left - profileLinkRect.right,
-      profileLinkBorderWidth: profileLinkStyle.borderLeftWidth,
-      signOutButtonBorderWidth: signOutButtonStyle.borderLeftWidth,
+      height: triggerRect.height,
+      hasClosedProfileLink: element.querySelector('[data-testid="profile-link"]') !== null,
+      hasClosedSignOutButton: element.querySelector('[data-testid="sign-out-button"]') !== null,
+      width: triggerRect.width,
     };
   });
 
   expect(accountActionMetrics.containerBackground).toBe("rgba(0, 0, 0, 0)");
-  expect(accountActionMetrics.gap).toBeGreaterThanOrEqual(7);
-  expect(accountActionMetrics.profileLinkBorderWidth).toBe("1px");
-  expect(accountActionMetrics.signOutButtonBorderWidth).toBe("1px");
+  expect(accountActionMetrics.buttonCount).toBe(1);
+  expect(accountActionMetrics.width).toBeGreaterThanOrEqual(39);
+  expect(accountActionMetrics.width).toBeLessThanOrEqual(41);
+  expect(accountActionMetrics.height).toBeGreaterThanOrEqual(39);
+  expect(accountActionMetrics.height).toBeLessThanOrEqual(41);
+  expect(accountActionMetrics.borderRadius).toBeGreaterThanOrEqual(20);
+  expect(accountActionMetrics.hasClosedProfileLink).toBe(false);
+  expect(accountActionMetrics.hasClosedSignOutButton).toBe(false);
+
+  const profileMenuTrigger = page.getByTestId("profile-menu-trigger");
+  const profileMenuTooltip = page.getByTestId("profile-menu-tooltip");
+
+  await expect(profileMenuTrigger).toHaveAttribute("aria-describedby", "profile-menu-tooltip");
+  await expect(profileMenuTooltip).toHaveText("Open user navigation menu");
+  await expect(profileMenuTooltip).toHaveCSS("opacity", "0");
+  await profileMenuTrigger.hover();
+  await expect(profileMenuTooltip).toHaveCSS("opacity", "1");
+  const tooltipTheme = await profileMenuTooltip.evaluate((element) => {
+    const rootStyles = getComputedStyle(document.documentElement);
+    const probe = document.createElement("span");
+
+    probe.style.backgroundColor = rootStyles.getPropertyValue("--snake-panel").trim();
+    probe.style.borderColor = rootStyles.getPropertyValue("--snake-border").trim();
+    probe.style.color = rootStyles.getPropertyValue("--snake-ink").trim();
+    document.body.append(probe);
+
+    const tooltipStyles = getComputedStyle(element);
+    const probeStyles = getComputedStyle(probe);
+    const colors = {
+      borderColor: tooltipStyles.borderTopColor,
+      expectedBorderColor: probeStyles.borderTopColor,
+      expectedBackground: probeStyles.backgroundColor,
+      expectedColor: probeStyles.color,
+      background: tooltipStyles.backgroundColor,
+      color: tooltipStyles.color,
+    };
+
+    probe.remove();
+    return colors;
+  });
+
+  expect(tooltipTheme.background).toBe(tooltipTheme.expectedBackground);
+  expect(tooltipTheme.borderColor).toBe(tooltipTheme.expectedBorderColor);
+  expect(tooltipTheme.color).toBe(tooltipTheme.expectedColor);
+  expect(await profileMenuTooltip.evaluate((element) => {
+    const style = getComputedStyle(element);
+
+    return {
+      duration: style.transitionDuration,
+      property: style.transitionProperty,
+    };
+  })).toEqual({
+    duration: "0.15s",
+    property: "opacity, transform",
+  });
+
+  await openProfileMenu(page);
+
+  await expect(page.getByTestId("profile-menu-tooltip")).toHaveCount(0);
+  expect(await page.getByTestId("profile-menu").evaluate((element) => {
+    const style = getComputedStyle(element);
+
+    return {
+      duration: style.transitionDuration,
+      origin: style.transformOrigin,
+      property: style.transitionProperty,
+    };
+  })).toMatchObject({
+    duration: "0.15s",
+    property: "opacity, transform",
+  });
+  await expect(page.getByTestId("profile-link")).toHaveText("Profile");
+  await expect(page.getByTestId("sign-out-button")).toHaveText("Log out");
+
+  await page.mouse.move(16, 16);
+  await page.mouse.click(16, 16);
+
+  await expect(page.getByTestId("profile-menu")).toHaveCount(0);
+  await expect(page.getByTestId("profile-menu-tooltip")).toHaveCSS("opacity", "0");
+  await profileMenuTrigger.focus();
+  await expect(page.getByTestId("profile-menu-tooltip")).toHaveCSS("opacity", "0");
 });
 
 test("auth modal validates signup passwords before submitting", async ({ page }) => {
@@ -357,8 +441,7 @@ test("auth modal reports duplicate signup names next to the name field", async (
   await openLauncher(page);
 
   await signUpFromLauncher(page, "Duplicate Hero");
-  await page.getByTestId("sign-out-button").click();
-  await expect(page.getByTestId("sign-up-open-button")).toBeVisible();
+  await signOutFromLauncher(page);
 
   await page.getByTestId("sign-up-open-button").click();
   await page.getByTestId("auth-displayName-input").fill(" duplicate   hero ");
@@ -388,14 +471,14 @@ test("auth modal reports duplicate signup names next to the name field", async (
   await page.getByTestId("auth-displayName-input").fill("Duplicate Hero");
   await page.getByTestId("auth-password-input").fill("password123");
   await page.getByTestId("auth-submit-button").click();
-  await expect(page.getByTestId("profile-link")).toContainText("Duplicate Hero");
+  await expectSignedInProfileMenu(page, "Duplicate Hero");
 });
 
 test("auth modal logs registered users back in with a password", async ({ page }) => {
   await openLauncher(page);
 
   await signUpFromLauncher(page, "Returning Hero");
-  await page.getByTestId("sign-out-button").click();
+  await signOutFromLauncher(page);
   await expect(page.getByTestId("log-in-open-button")).toBeVisible();
 
   await logInFromLauncher(page, "Returning Hero");
@@ -413,15 +496,14 @@ test("profile access redirects unsigned users into the login modal", async ({ pa
 test("profile page shows only the current signed-in user", async ({ page }) => {
   await openLauncher(page);
   await signUpFromLauncher(page, "Private Alice");
-  await page.getByTestId("profile-link").click();
+  await openProfileFromLauncher(page);
   await expect(page.getByRole("heading", { name: "Private Alice" })).toBeVisible();
 
   await page.getByRole("link", { name: "Back to games" }).click();
-  await page.getByTestId("sign-out-button").click();
-  await expect(page.getByTestId("sign-up-open-button")).toBeVisible();
+  await signOutFromLauncher(page);
 
   await signUpFromLauncher(page, "Private Bob");
-  await page.getByTestId("profile-link").click();
+  await openProfileFromLauncher(page);
 
   await expect(page.getByRole("heading", { name: "Private Bob" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Private Alice" })).toHaveCount(0);
@@ -430,14 +512,14 @@ test("profile page shows only the current signed-in user", async ({ page }) => {
 test("profile page Escape returns to the game launcher", async ({ page }) => {
   await openLauncher(page);
   await signUpFromLauncher(page, "Profile Escape Hero");
-  await page.getByTestId("profile-link").click();
+  await openProfileFromLauncher(page);
   await expect(page.getByRole("heading", { name: "Profile Escape Hero" })).toBeVisible();
 
   await page.keyboard.press("Escape");
 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByTestId("game-menu")).toBeVisible();
-  await expect(page.getByTestId("profile-link")).toContainText("Profile Escape Hero");
+  await expectSignedInProfileMenu(page, "Profile Escape Hero");
 });
 
 for (const handoffCase of launcherParameterHandoffCases) {
