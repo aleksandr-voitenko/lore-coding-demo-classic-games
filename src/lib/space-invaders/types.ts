@@ -14,6 +14,7 @@ export type SpaceInvaderKind =
 export type SpaceInvadersRandomSource = () => number;
 
 export type SpaceInvadersInvaderShotKind =
+  | "armor-wave"
   | "commander"
   | "burst"
   | "counterfire"

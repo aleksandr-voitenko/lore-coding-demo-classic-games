@@ -50,6 +50,15 @@ const SPLITTER_FORK_SPLIT_AGE_TICKS = 8;
 const SPLITTER_FRAGMENT_SHOT_VELOCITIES_X = [-1.35, 1.35] as const;
 
 const INVADER_SHOT_SPECS: Record<SpaceInvadersInvaderShotKind, InvaderShotSpec> = {
+  "armor-wave": {
+    cooldownTicks: 118,
+    height: 14,
+    kind: "armor-wave",
+    ttlTicks: null,
+    velocityX: 0,
+    velocityY: 2.15,
+    width: 56,
+  },
   commander: {
     cooldownTicks: 132,
     height: 24,
@@ -227,6 +236,7 @@ export function maybeFireInvaderShot(game: SpaceInvadersGameState): SpaceInvader
 
   const createdShots = createInvaderShots(shooter, game.nextInvaderShotId, {
     player: game.player,
+    useArmoredArmorWave: true,
     useRevengeCounterfire: true,
     useSplitterFork: true,
   });
@@ -236,6 +246,7 @@ export function maybeFireInvaderShot(game: SpaceInvadersGameState): SpaceInvader
   }
 
   const spec = getInvaderShotSpec(shooter, {
+    useArmoredArmorWave: true,
     useRevengeCounterfire: true,
     useSplitterFork: true,
   });
@@ -277,6 +288,7 @@ function continueInvaderBurst(game: SpaceInvadersGameState): SpaceInvadersGameSt
 
   const createdShots = createInvaderShots(shooter, game.nextInvaderShotId, {
     player: game.player,
+    useArmoredArmorWave: true,
     useRevengeCounterfire: true,
     useSplitterFork: true,
   });
@@ -300,6 +312,7 @@ function continueInvaderBurst(game: SpaceInvadersGameState): SpaceInvadersGameSt
       remainingShots > 0
         ? BURST_SHOT_DELAY_TICKS
         : getInvaderShotSpec(shooter, {
+            useArmoredArmorWave: true,
             useRevengeCounterfire: true,
             useSplitterFork: true,
           }).cooldownTicks,
@@ -497,6 +510,7 @@ export function isInvaderShotDangerous(shot: SpaceInvadersInvaderShot) {
 
 type CreateInvaderShotOptions = {
   player?: SpaceInvadersPlayer;
+  useArmoredArmorWave?: boolean;
   useRevengeCounterfire?: boolean;
   useSplitterFork?: boolean;
 };
@@ -638,7 +652,7 @@ function getInvaderShotSpec(
   invader: Pick<SpaceInvader, "kind" | "row">,
   options: Pick<
     CreateInvaderShotOptions,
-    "useRevengeCounterfire" | "useSplitterFork"
+    "useArmoredArmorWave" | "useRevengeCounterfire" | "useSplitterFork"
   > = {},
 ) {
   return INVADER_SHOT_SPECS[getInvaderShotKind(invader, options)];
@@ -648,9 +662,13 @@ function getInvaderShotKind(
   invader: Pick<SpaceInvader, "kind" | "row">,
   options: Pick<
     CreateInvaderShotOptions,
-    "useRevengeCounterfire" | "useSplitterFork"
+    "useArmoredArmorWave" | "useRevengeCounterfire" | "useSplitterFork"
   >,
 ) {
+  if (invader.kind === "armored" && options.useArmoredArmorWave === true) {
+    return "armor-wave";
+  }
+
   if (invader.kind === "revenge" && options.useRevengeCounterfire === true) {
     return "counterfire";
   }

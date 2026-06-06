@@ -278,11 +278,10 @@ describe("space invaders projectile engine", () => {
   });
 
 
-  it("keeps Diver, Shield Bearer, and Armored Alien normal shots on bottom-row lasers", () => {
+  it("keeps Diver and Shield Bearer normal shots on bottom-row lasers", () => {
     const specialKinds = [
       "diver",
       "shield-bearer",
-      "armored",
     ] as const;
     const bottomRowCooldown = fireFromOnlyInvader(SPACE_INVADERS_ROWS - 1).advanced
       .invaderShotCooldownTicks;
@@ -316,6 +315,73 @@ describe("space invaders projectile engine", () => {
       expect(advanced.nextInvaderShotId).toBe(1);
       expect(advanced.invaderShotCooldownTicks).toBe(bottomRowCooldown);
     }
+  });
+
+
+  it("fires a health-independent armor wave from Armored Alien normal shots", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const shooter = {
+      ...getInvader(game, 1, 5),
+      hitPoints: 1,
+      kind: "armored" as const,
+    };
+    const restoredArmorShooter = {
+      ...shooter,
+      hitPoints: 3,
+    };
+    const fired = advanceSpaceInvadersGame(
+      withOnlyActiveInvader(
+        createRunningGame({
+          invaderShotCooldownTicks: 0,
+          player: centerPlayerUnderInvader(game, shooter),
+        }),
+        shooter,
+      ),
+      () => 0,
+    );
+    const fullHealthFired = advanceSpaceInvadersGame(
+      withOnlyActiveInvader(
+        createRunningGame({
+          invaderShotCooldownTicks: 0,
+          player: centerPlayerUnderInvader(game, restoredArmorShooter),
+        }),
+        restoredArmorShooter,
+      ),
+      () => 0,
+    );
+    const shot = fired.invaderShots[0]!;
+    const moved = advanceSpaceInvadersGame(fired, () => 0);
+    const standardShot = fireFromOnlyInvader(SPACE_INVADERS_ROWS - 1).advanced
+      .invaderShots[0]!;
+
+    expect(fired.invaderShots).toHaveLength(1);
+    expect(shot).toMatchObject({
+      ageTicks: 0,
+      height: 14,
+      id: "invader-shot-0",
+      kind: "armor-wave",
+      sourceInvaderId: shooter.id,
+      sourceRow: shooter.row,
+      ttlTicks: null,
+      velocityX: 0,
+      velocityY: 2.15,
+      width: 56,
+    });
+    expect(shot.width).toBeGreaterThan(standardShot.width);
+    expect(shot.velocityY).toBeLessThan(standardShot.velocityY);
+    expect(shot.x).toBeCloseTo(shooter.x + shooter.width / 2 - shot.width / 2);
+    expect(shot.y).toBeCloseTo(shooter.y + shooter.height + 1);
+    expect(moved.invaderShots[0]?.x).toBeCloseTo(shot.x);
+    expect(moved.invaderShots[0]?.y).toBeCloseTo(shot.y + shot.velocityY);
+    expect(fired.invaderBurst).toBeNull();
+    expect(fired.nextInvaderShotId).toBe(1);
+    expect(fullHealthFired.invaderShots[0]).toMatchObject({
+      height: shot.height,
+      kind: "armor-wave",
+      velocityX: shot.velocityX,
+      velocityY: shot.velocityY,
+      width: shot.width,
+    });
   });
 
 
