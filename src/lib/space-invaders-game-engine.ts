@@ -97,6 +97,7 @@ import {
   createNextPlayerBurstShot,
   createPlayerShots,
   isInvaderShotActive,
+  isInvaderShotDangerous,
   isPlayerShotActive,
   maybeCreateSpaceInvadersRevengeShots,
   maybeFireInvaderShot,
@@ -810,7 +811,9 @@ function advanceInvaderShots(
   const movedShots = game.invaderShots
     .map((shot) => advanceInvaderShot(shot, game))
     .filter((shot) => isInvaderShotActive(shot, game));
-  const hittingShots = movedShots.filter((shot) => rectanglesIntersect(shot, game.player));
+  const hittingShots = movedShots.filter(
+    (shot) => isInvaderShotDangerous(shot) && rectanglesIntersect(shot, game.player),
+  );
   const didHitPlayer = hittingShots.length > 0;
 
   if (!didHitPlayer) {

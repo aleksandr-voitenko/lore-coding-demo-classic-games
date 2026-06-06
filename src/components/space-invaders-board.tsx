@@ -243,6 +243,8 @@ function getSpaceInvaderRenderSprite(invader: Pick<SpaceInvader, "hitPoints" | "
 const invaderShotClassNames: Record<SpaceInvadersInvaderShotKind, string> = {
   commander:
     "rounded-[0.2rem] bg-[var(--invaders-yellow)] shadow-[0_0_14px_color-mix(in_oklch,var(--invaders-yellow)_72%,transparent)]",
+  counterfire:
+    "rounded-full bg-[var(--invaders-red)] shadow-[0_0_16px_color-mix(in_oklch,var(--invaders-red)_82%,transparent)]",
   needle:
     "rounded-full bg-[var(--invaders-cyan)] shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-cyan)_78%,transparent)]",
   scatter:

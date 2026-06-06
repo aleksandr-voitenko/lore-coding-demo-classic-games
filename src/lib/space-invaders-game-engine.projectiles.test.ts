@@ -278,13 +278,13 @@ describe("space invaders projectile engine", () => {
   });
 
 
-  it("fires bottom-row standard shots from every special invader kind", () => {
+  it("fires bottom-row standard shots from non-revenge special invader kinds", () => {
     const specialKinds = [
       "diver",
       "shield-bearer",
-      "revenge",
       "splitter",
       "splitter-fragment",
+      "armored",
     ] as const;
     const bottomRowCooldown = fireFromOnlyInvader(SPACE_INVADERS_ROWS - 1).advanced
       .invaderShotCooldownTicks;
@@ -318,6 +318,103 @@ describe("space invaders projectile engine", () => {
       expect(advanced.nextInvaderShotId).toBe(1);
       expect(advanced.invaderShotCooldownTicks).toBe(bottomRowCooldown);
     }
+  });
+
+
+  it("fires revenge counterfire toward the player's current horizontal position after a windup", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const shooter = {
+      ...getInvader(game, 1, 5),
+      kind: "revenge" as const,
+    };
+    const player = {
+      ...game.player,
+      x: shooter.x + shooter.width / 2 + 90 - game.player.width / 2,
+    };
+    const fired = advanceSpaceInvadersGame(
+      withOnlyActiveInvader(
+        createRunningGame({
+          invaderShotCooldownTicks: 0,
+          player,
+        }),
+        shooter,
+      ),
+      () => 0,
+    );
+    const shot = fired.invaderShots[0]!;
+    const firstWindupTick = advanceSpaceInvadersGame(fired, () => 0);
+    const secondWindupTick = advanceSpaceInvadersGame(firstWindupTick, () => 0);
+    const armedTick = advanceSpaceInvadersGame(secondWindupTick, () => 0);
+
+    expect(fired.invaderShots).toHaveLength(1);
+    expect(shot).toMatchObject({
+      ageTicks: 0,
+      height: 7,
+      kind: "counterfire",
+      sourceInvaderId: shooter.id,
+      sourceRow: shooter.row,
+      ttlTicks: null,
+      velocityY: 5.3,
+      width: 16,
+    });
+    expect(shot.velocityX).toBeGreaterThan(0);
+    expect(shot.x).toBeCloseTo(shooter.x + shooter.width / 2 - shot.width / 2);
+    expect(shot.y).toBeCloseTo(shooter.y + shooter.height + 1);
+    expect(fired.invaderBurst).toBeNull();
+    expect(fired.invaderShotCooldownTicks).toBeLessThan(
+      fireFromOnlyInvader(SPACE_INVADERS_ROWS - 1).advanced.invaderShotCooldownTicks,
+    );
+    expect(firstWindupTick.invaderShots[0]).toMatchObject({
+      ageTicks: 1,
+      x: shot.x,
+      y: shot.y,
+    });
+    expect(secondWindupTick.invaderShots[0]).toMatchObject({
+      ageTicks: 2,
+      x: shot.x,
+      y: shot.y,
+    });
+    expect(armedTick.invaderShots[0]?.ageTicks).toBe(3);
+    expect(armedTick.invaderShots[0]?.x).toBeCloseTo(shot.x + shot.velocityX);
+    expect(armedTick.invaderShots[0]?.y).toBeCloseTo(shot.y + shot.velocityY);
+  });
+
+
+  it("keeps revenge counterfire harmless during its windup", () => {
+    const game = createInitialSpaceInvadersGame();
+    const telegraphShot = createInvaderShotFixture({
+      ageTicks: 0,
+      height: 6,
+      kind: "counterfire",
+      velocityX: 0,
+      velocityY: 0,
+      width: 6,
+      x: game.player.x + 4,
+      y: game.player.y + 4,
+    });
+    const windupGame = createRunningGame({
+      invaderShotCooldownTicks: 1_000,
+      invaderShots: [telegraphShot],
+      player: game.player,
+    });
+    const firstWindupTick = advanceSpaceInvadersGame(windupGame, () => 0);
+    const secondWindupTick = advanceSpaceInvadersGame(firstWindupTick, () => 0);
+    const armedTick = advanceSpaceInvadersGame(secondWindupTick, () => 0);
+
+    expect(firstWindupTick.lives).toBe(windupGame.lives);
+    expect(firstWindupTick.invaderShots[0]).toMatchObject({
+      ageTicks: 1,
+      x: telegraphShot.x,
+      y: telegraphShot.y,
+    });
+    expect(secondWindupTick.lives).toBe(windupGame.lives);
+    expect(secondWindupTick.invaderShots[0]).toMatchObject({
+      ageTicks: 2,
+      x: telegraphShot.x,
+      y: telegraphShot.y,
+    });
+    expect(armedTick.lives).toBe(windupGame.lives - 1);
+    expect(armedTick.invaderShots).toEqual([]);
   });
 
 
