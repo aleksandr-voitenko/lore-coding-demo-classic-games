@@ -19,7 +19,9 @@ export type SpaceInvadersInvaderShotKind =
   | "counterfire"
   | "standard"
   | "needle"
-  | "scatter";
+  | "scatter"
+  | "splitter-fork"
+  | "splitter-fragment";
 
 export type SpaceInvadersPowerUpKind =
   | "bonus-score"

@@ -278,12 +278,10 @@ describe("space invaders projectile engine", () => {
   });
 
 
-  it("fires bottom-row standard shots from non-revenge special invader kinds", () => {
+  it("keeps Diver, Shield Bearer, and Armored Alien normal shots on bottom-row lasers", () => {
     const specialKinds = [
       "diver",
       "shield-bearer",
-      "splitter",
-      "splitter-fragment",
       "armored",
     ] as const;
     const bottomRowCooldown = fireFromOnlyInvader(SPACE_INVADERS_ROWS - 1).advanced
@@ -318,6 +316,115 @@ describe("space invaders projectile engine", () => {
       expect(advanced.nextInvaderShotId).toBe(1);
       expect(advanced.invaderShotCooldownTicks).toBe(bottomRowCooldown);
     }
+  });
+
+
+  it("fires a splitter fork that splits into two diagonal fragment shots", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const shooter = {
+      ...getInvader(game, 1, 5),
+      kind: "splitter" as const,
+    };
+    const fired = advanceSpaceInvadersGame(
+      withOnlyActiveInvader(
+        createRunningGame({
+          invaderShotCooldownTicks: 0,
+          player: centerPlayerUnderInvader(game, shooter),
+        }),
+        shooter,
+      ),
+      () => 0,
+    );
+    const fork = fired.invaderShots[0]!;
+    const beforeSplit = advanceSpaceInvadersTicks(fired, 7);
+    const splitTick = advanceSpaceInvadersGame(beforeSplit, () => 0);
+    const fragmentMoveTick = advanceSpaceInvadersGame(splitTick, () => 0);
+
+    expect(fired.invaderShots).toHaveLength(1);
+    expect(fork).toMatchObject({
+      ageTicks: 0,
+      height: 14,
+      id: "invader-shot-0",
+      kind: "splitter-fork",
+      sourceInvaderId: shooter.id,
+      sourceRow: shooter.row,
+      ttlTicks: null,
+      velocityX: 0,
+      velocityY: 2.7,
+      width: 9,
+    });
+    expect(fork.x).toBeCloseTo(shooter.x + shooter.width / 2 - fork.width / 2);
+    expect(fork.y).toBeCloseTo(shooter.y + shooter.height + 1);
+    expect(fired.invaderBurst).toBeNull();
+    expect(fired.nextInvaderShotId).toBe(1);
+    expect(beforeSplit.invaderShots).toHaveLength(1);
+    expect(beforeSplit.invaderShots[0]).toMatchObject({
+      ageTicks: 7,
+      id: "invader-shot-0",
+      kind: "splitter-fork",
+    });
+    expect(beforeSplit.invaderShots[0]?.y).toBeCloseTo(
+      fork.y + fork.velocityY * 7,
+    );
+    expect(splitTick.invaderShots).toHaveLength(2);
+    expect(splitTick.invaderShots.map((shot) => shot.id)).toEqual([
+      "invader-shot-1",
+      "invader-shot-2",
+    ]);
+    expect(splitTick.invaderShots.map((shot) => shot.kind)).toEqual([
+      "splitter-fragment",
+      "splitter-fragment",
+    ]);
+    expect(splitTick.invaderShots.map((shot) => shot.velocityX)).toEqual([
+      -1.35,
+      1.35,
+    ]);
+    expect(splitTick.invaderShots).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ageTicks: 0,
+          height: 12,
+          sourceInvaderId: shooter.id,
+          sourceRow: shooter.row,
+          ttlTicks: null,
+          velocityY: 3.4,
+          width: 5,
+        }),
+      ]),
+    );
+    expect(splitTick.nextInvaderShotId).toBe(3);
+    expect(fragmentMoveTick.invaderShots[0]?.x).toBeCloseTo(
+      splitTick.invaderShots[0]!.x + splitTick.invaderShots[0]!.velocityX,
+    );
+    expect(fragmentMoveTick.invaderShots[1]?.x).toBeCloseTo(
+      splitTick.invaderShots[1]!.x + splitTick.invaderShots[1]!.velocityX,
+    );
+    expect(fragmentMoveTick.invaderShots[0]?.y).toBeCloseTo(
+      splitTick.invaderShots[0]!.y + splitTick.invaderShots[0]!.velocityY,
+    );
+  });
+
+
+  it("does not fire normal invader shots from splitter fragments", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const fragment = {
+      ...getInvader(game, 1, 5),
+      isDiving: true,
+      kind: "splitter-fragment" as const,
+    };
+    const runningGame = withOnlyActiveInvader(
+      createRunningGame({
+        invaderShotCooldownTicks: 0,
+        nextInvaderShotId: 7,
+        player: centerPlayerUnderInvader(game, fragment),
+      }),
+      fragment,
+    );
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
+
+    expect(advanced.invaderShots).toEqual([]);
+    expect(advanced.nextInvaderShotId).toBe(7);
+    expect(advanced.invaderShotCooldownTicks).toBeGreaterThan(0);
   });
 
 

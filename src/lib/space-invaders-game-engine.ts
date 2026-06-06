@@ -91,12 +91,11 @@ import {
 } from "./space-invaders/geometry";
 import { getInvaderCollisionBounds } from "./space-invaders/hitboxes";
 import {
-  advanceInvaderShot,
+  advanceInvaderShotPositions,
   advancePlayerShotPosition,
   createInitialPlayerBurstState,
   createNextPlayerBurstShot,
   createPlayerShots,
-  isInvaderShotActive,
   isInvaderShotDangerous,
   isPlayerShotActive,
   maybeCreateSpaceInvadersRevengeShots,
@@ -808,9 +807,10 @@ function advanceInvaderShots(
     return game;
   }
 
-  const movedShots = game.invaderShots
-    .map((shot) => advanceInvaderShot(shot, game))
-    .filter((shot) => isInvaderShotActive(shot, game));
+  const {
+    invaderShots: movedShots,
+    nextInvaderShotId,
+  } = advanceInvaderShotPositions(game);
   const hittingShots = movedShots.filter(
     (shot) => isInvaderShotDangerous(shot) && rectanglesIntersect(shot, game.player),
   );
@@ -820,6 +820,7 @@ function advanceInvaderShots(
     return {
       ...game,
       invaderShots: movedShots,
+      nextInvaderShotId,
     };
   }
 
@@ -827,6 +828,7 @@ function advanceInvaderShots(
     return {
       ...game,
       invaderShots: movedShots,
+      nextInvaderShotId,
     };
   }
 
@@ -834,6 +836,7 @@ function advanceInvaderShots(
     return {
       ...game,
       invaderShots: movedShots.filter((shot) => !hittingShots.includes(shot)),
+      nextInvaderShotId,
     };
   }
 
@@ -850,6 +853,7 @@ function advanceInvaderShots(
     invaderBurst: null,
     invaderShotCooldownTicks: INVADER_HIT_RECOVERY_TICKS,
     invaderShots: [],
+    nextInvaderShotId,
     hitStreak: 0,
     lives,
     player: createCenteredPlayer(game.boardWidth, game.boardHeight),

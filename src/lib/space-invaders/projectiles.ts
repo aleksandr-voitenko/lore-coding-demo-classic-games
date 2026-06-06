@@ -46,6 +46,8 @@ const SPACE_INVADERS_SPECIAL_INVADER_SHOT_KIND =
   SPACE_INVADERS_ROW_SHOT_KINDS[SPACE_INVADERS_ROW_SHOT_KINDS.length - 1] ?? "standard";
 const REVENGE_COUNTERFIRE_MAX_SPEED_X = 3.1;
 const REVENGE_COUNTERFIRE_WINDUP_TICKS = 2;
+const SPLITTER_FORK_SPLIT_AGE_TICKS = 8;
+const SPLITTER_FRAGMENT_SHOT_VELOCITIES_X = [-1.35, 1.35] as const;
 
 const INVADER_SHOT_SPECS: Record<SpaceInvadersInvaderShotKind, InvaderShotSpec> = {
   commander: {
@@ -100,6 +102,24 @@ const INVADER_SHOT_SPECS: Record<SpaceInvadersInvaderShotKind, InvaderShotSpec> 
     ttlTicks: 96,
     velocityX: 0,
     velocityY: 2.8,
+    width: 5,
+  },
+  "splitter-fork": {
+    cooldownTicks: 96,
+    height: 14,
+    kind: "splitter-fork",
+    ttlTicks: null,
+    velocityX: 0,
+    velocityY: 2.7,
+    width: 9,
+  },
+  "splitter-fragment": {
+    cooldownTicks: 96,
+    height: 12,
+    kind: "splitter-fragment",
+    ttlTicks: null,
+    velocityX: 0,
+    velocityY: 3.4,
     width: 5,
   },
 };
@@ -208,13 +228,17 @@ export function maybeFireInvaderShot(game: SpaceInvadersGameState): SpaceInvader
   const createdShots = createInvaderShots(shooter, game.nextInvaderShotId, {
     player: game.player,
     useRevengeCounterfire: true,
+    useSplitterFork: true,
   });
 
   if (game.invaderShots.length + createdShots.length > MAX_INVADER_SHOTS) {
     return game;
   }
 
-  const spec = getInvaderShotSpec(shooter, { useRevengeCounterfire: true });
+  const spec = getInvaderShotSpec(shooter, {
+    useRevengeCounterfire: true,
+    useSplitterFork: true,
+  });
 
   return {
     ...game,
@@ -254,6 +278,7 @@ function continueInvaderBurst(game: SpaceInvadersGameState): SpaceInvadersGameSt
   const createdShots = createInvaderShots(shooter, game.nextInvaderShotId, {
     player: game.player,
     useRevengeCounterfire: true,
+    useSplitterFork: true,
   });
 
   if (game.invaderShots.length + createdShots.length > MAX_INVADER_SHOTS) {
@@ -274,7 +299,10 @@ function continueInvaderBurst(game: SpaceInvadersGameState): SpaceInvadersGameSt
     invaderShotCooldownTicks:
       remainingShots > 0
         ? BURST_SHOT_DELAY_TICKS
-        : getInvaderShotSpec(shooter, { useRevengeCounterfire: true }).cooldownTicks,
+        : getInvaderShotSpec(shooter, {
+            useRevengeCounterfire: true,
+            useSplitterFork: true,
+          }).cooldownTicks,
     invaderShots: [...game.invaderShots, ...createdShots],
     nextInvaderShotId: game.nextInvaderShotId + createdShots.length,
   };
@@ -286,7 +314,11 @@ function selectInvaderShotSource(game: SpaceInvadersGameState) {
   const unblockedInvaders = lowestInvaders.filter(
     (invader) => !blockedColumns.has(invader.column),
   );
-  const candidates = unblockedInvaders.length > 0 ? unblockedInvaders : lowestInvaders;
+  const unblockedShooters = unblockedInvaders.filter(canFireNormalInvaderShot);
+  const candidates =
+    unblockedShooters.length > 0
+      ? unblockedShooters
+      : lowestInvaders.filter(canFireNormalInvaderShot);
 
   if (candidates.length === 0) {
     return undefined;
@@ -304,6 +336,10 @@ function selectInvaderShotSource(game: SpaceInvadersGameState) {
 
     return first.column - second.column;
   })[0];
+}
+
+function canFireNormalInvaderShot(invader: SpaceInvader) {
+  return invader.kind !== "splitter-fragment";
 }
 
 function getLowestActiveInvadersByColumn(invaders: SpaceInvader[]) {
@@ -344,6 +380,79 @@ export function advanceInvaderShot(
     x: isWindingUp ? shot.x : shot.x + velocityX,
     y: isWindingUp ? shot.y : shot.y + shot.velocityY,
   };
+}
+
+export function advanceInvaderShotPositions(
+  game: Pick<
+    SpaceInvadersGameState,
+    | "boardHeight"
+    | "boardWidth"
+    | "invaderShots"
+    | "nextInvaderShotId"
+    | "player"
+  >,
+) {
+  const movedShots: SpaceInvadersInvaderShot[] = [];
+  let nextInvaderShotId = game.nextInvaderShotId;
+
+  for (const shot of game.invaderShots) {
+    const movedShot = advanceInvaderShot(shot, game);
+
+    if (!isInvaderShotActive(movedShot, game)) {
+      continue;
+    }
+
+    if (shouldSplitSplitterFork(movedShot)) {
+      const fragmentShots = createSplitterFragmentShots(movedShot, nextInvaderShotId);
+
+      movedShots.push(
+        ...fragmentShots.filter((fragmentShot) =>
+          isInvaderShotActive(fragmentShot, game),
+        ),
+      );
+      nextInvaderShotId += fragmentShots.length;
+      continue;
+    }
+
+    movedShots.push(movedShot);
+  }
+
+  return {
+    invaderShots: movedShots,
+    nextInvaderShotId,
+  };
+}
+
+function shouldSplitSplitterFork(shot: SpaceInvadersInvaderShot) {
+  return (
+    shot.kind === "splitter-fork" &&
+    shot.ageTicks >= SPLITTER_FORK_SPLIT_AGE_TICKS
+  );
+}
+
+function createSplitterFragmentShots(
+  forkShot: SpaceInvadersInvaderShot,
+  nextInvaderShotId: number,
+) {
+  const spec = INVADER_SHOT_SPECS["splitter-fragment"];
+  const forkCenterX = getEntityCenterX(forkShot);
+  const forkCenterY = forkShot.y + forkShot.height / 2;
+
+  return SPLITTER_FRAGMENT_SHOT_VELOCITIES_X.map((velocityX, index) => ({
+    ageTicks: 0,
+    height: spec.height,
+    id: `invader-shot-${nextInvaderShotId + index}`,
+    kind: spec.kind,
+    sourceColumn: forkShot.sourceColumn,
+    sourceInvaderId: forkShot.sourceInvaderId,
+    sourceRow: forkShot.sourceRow,
+    ttlTicks: spec.ttlTicks,
+    velocityX,
+    velocityY: spec.velocityY,
+    width: spec.width,
+    x: forkCenterX - spec.width / 2,
+    y: forkCenterY - spec.height / 2,
+  }));
 }
 
 function getNextInvaderShotVelocityX(
@@ -389,6 +498,7 @@ export function isInvaderShotDangerous(shot: SpaceInvadersInvaderShot) {
 type CreateInvaderShotOptions = {
   player?: SpaceInvadersPlayer;
   useRevengeCounterfire?: boolean;
+  useSplitterFork?: boolean;
 };
 
 function createInvaderShots(
@@ -526,17 +636,27 @@ function getInitialInvaderShotVelocityX(
 
 function getInvaderShotSpec(
   invader: Pick<SpaceInvader, "kind" | "row">,
-  options: Pick<CreateInvaderShotOptions, "useRevengeCounterfire"> = {},
+  options: Pick<
+    CreateInvaderShotOptions,
+    "useRevengeCounterfire" | "useSplitterFork"
+  > = {},
 ) {
   return INVADER_SHOT_SPECS[getInvaderShotKind(invader, options)];
 }
 
 function getInvaderShotKind(
   invader: Pick<SpaceInvader, "kind" | "row">,
-  options: Pick<CreateInvaderShotOptions, "useRevengeCounterfire">,
+  options: Pick<
+    CreateInvaderShotOptions,
+    "useRevengeCounterfire" | "useSplitterFork"
+  >,
 ) {
   if (invader.kind === "revenge" && options.useRevengeCounterfire === true) {
     return "counterfire";
+  }
+
+  if (invader.kind === "splitter" && options.useSplitterFork === true) {
+    return "splitter-fork";
   }
 
   if (invader.kind !== "standard") {
