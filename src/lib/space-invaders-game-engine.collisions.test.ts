@@ -13,6 +13,8 @@ import {
   SPACE_INVADERS_BOARD_WIDTH,
   SPACE_INVADERS_HIT_STREAK_BONUS_STEP,
   SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
+  SPACE_INVADERS_PROJECTILE_EXPLOSION_HEIGHT,
+  SPACE_INVADERS_PROJECTILE_EXPLOSION_WIDTH,
   SPACE_INVADERS_ROWS,
   SPACE_INVADERS_SCORE_POPUP_TICKS,
   SPACE_INVADERS_STARTING_LIVES,
@@ -104,6 +106,169 @@ describe("space invaders collision engine", () => {
       x: game.player.x - 5,
       y: game.player.y,
     });
+  });
+
+
+  it("destroys colliding player and invader shots without resetting the streak", () => {
+    const playerShot = fireSpaceInvadersShot(createRunningGame()).playerShots[0]!;
+    const invaderShot = createInvaderShotFixture({ x: 180 });
+    const collisionY = 300;
+    const collisionCenterX = invaderShot.x + invaderShot.width / 2;
+    const collisionCenterY = collisionY + invaderShot.height / 2;
+    const runningGame = createRunningGame({
+      hitStreak: 4,
+      invaderShotCooldownTicks: 1_000,
+      invaderShots: [
+        {
+          ...invaderShot,
+          y: collisionY - invaderShot.velocityY,
+        },
+      ],
+      playerShots: [
+        {
+          ...playerShot,
+          x: invaderShot.x,
+          y: collisionY - playerShot.velocityY,
+        },
+      ],
+      playerVolleyHasArmoredHit: true,
+      playerVolleyHasScored: true,
+      playerVolleyHasUnscoredExit: true,
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
+
+    expect(advanced.lives).toBe(SPACE_INVADERS_STARTING_LIVES);
+    expect(advanced.explosions).toEqual([
+      {
+        ageTicks: 0,
+        height: SPACE_INVADERS_PROJECTILE_EXPLOSION_HEIGHT,
+        id: "explosion-0",
+        kind: "projectile",
+        ttlTicks: 12,
+        variant: 1,
+        width: SPACE_INVADERS_PROJECTILE_EXPLOSION_WIDTH,
+        x: collisionCenterX - SPACE_INVADERS_PROJECTILE_EXPLOSION_WIDTH / 2,
+        y: collisionCenterY - SPACE_INVADERS_PROJECTILE_EXPLOSION_HEIGHT / 2,
+      },
+    ]);
+    expect(advanced.playerShots).toEqual([]);
+    expect(advanced.invaderShots).toEqual([]);
+    expect(advanced.hitStreak).toBe(4);
+    expect(advanced.playerVolleyHasArmoredHit).toBe(false);
+    expect(advanced.playerVolleyHasScored).toBe(false);
+    expect(advanced.playerVolleyHasUnscoredExit).toBe(false);
+  });
+
+
+  it("keeps noncolliding shots active when one projectile pair collides", () => {
+    const playerShot = fireSpaceInvadersShot(createRunningGame()).playerShots[0]!;
+    const collisionY = 300;
+    const collidingInvaderShot = createInvaderShotFixture({
+      id: "invader-shot-colliding",
+      x: 180,
+    });
+    const remainingInvaderShot = createInvaderShotFixture({
+      id: "invader-shot-remaining",
+      x: 320,
+      y: 340,
+    });
+    const remainingPlayerShot = {
+      ...playerShot,
+      id: "player-shot-remaining",
+      x: 240,
+      y: 360,
+    };
+    const runningGame = createRunningGame({
+      hitStreak: 2,
+      invaderShotCooldownTicks: 1_000,
+      invaderShots: [
+        {
+          ...collidingInvaderShot,
+          y: collisionY - collidingInvaderShot.velocityY,
+        },
+        remainingInvaderShot,
+      ],
+      playerShots: [
+        {
+          ...playerShot,
+          id: "player-shot-colliding",
+          x: collidingInvaderShot.x,
+          y: collisionY - playerShot.velocityY,
+        },
+        remainingPlayerShot,
+      ],
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
+
+    expect(advanced.playerShots).toHaveLength(1);
+    expect(advanced.playerShots[0]).toMatchObject({
+      id: remainingPlayerShot.id,
+      x: remainingPlayerShot.x,
+      y: remainingPlayerShot.y + remainingPlayerShot.velocityY,
+    });
+    expect(advanced.invaderShots).toHaveLength(1);
+    expect(advanced.invaderShots[0]).toMatchObject({
+      id: remainingInvaderShot.id,
+      x: remainingInvaderShot.x,
+      y: remainingInvaderShot.y + remainingInvaderShot.velocityY,
+    });
+    expect(advanced.explosions).toEqual([
+      expect.objectContaining({
+        height: SPACE_INVADERS_PROJECTILE_EXPLOSION_HEIGHT,
+        kind: "projectile",
+        width: SPACE_INVADERS_PROJECTILE_EXPLOSION_WIDTH,
+      }),
+    ]);
+    expect(advanced.hitStreak).toBe(2);
+  });
+
+
+  it("keeps armor-wave shots active when they collide with player shots", () => {
+    const playerShot = fireSpaceInvadersShot(createRunningGame()).playerShots[0]!;
+    const armorWave = createInvaderShotFixture({
+      height: 14,
+      id: "armor-wave-test",
+      kind: "armor-wave",
+      velocityY: 2,
+      width: 56,
+      x: 160,
+    });
+    const collisionY = 260;
+    const runningGame = createRunningGame({
+      hitStreak: 5,
+      invaderShotCooldownTicks: 1_000,
+      invaderShots: [
+        {
+          ...armorWave,
+          y: collisionY - armorWave.velocityY,
+        },
+      ],
+      playerShots: [
+        {
+          ...playerShot,
+          x: armorWave.x + armorWave.width / 2 - playerShot.width / 2,
+          y: collisionY - playerShot.velocityY,
+        },
+      ],
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
+
+    expect(advanced.playerShots).toEqual([]);
+    expect(advanced.invaderShots).toEqual([
+      {
+        ...armorWave,
+        ageTicks: armorWave.ageTicks + 1,
+        y: collisionY,
+      },
+    ]);
+    expect(advanced.explosions).toEqual([
+      expect.objectContaining({
+        kind: "projectile",
+        height: SPACE_INVADERS_PROJECTILE_EXPLOSION_HEIGHT,
+        width: SPACE_INVADERS_PROJECTILE_EXPLOSION_WIDTH,
+      }),
+    ]);
+    expect(advanced.hitStreak).toBe(5);
   });
 
 

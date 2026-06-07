@@ -21,6 +21,8 @@ import {
   SPACE_INVADERS_EXTRA_LIFE_DROP_CHANCE,
   SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
   SPACE_INVADERS_PLAYER_SHIELD_TICKS,
+  SPACE_INVADERS_PROJECTILE_EXPLOSION_HEIGHT,
+  SPACE_INVADERS_PROJECTILE_EXPLOSION_WIDTH,
   SPACE_INVADERS_POWER_UP_SHIELD_TICKS,
   SPACE_INVADERS_POWER_UP_SIZE,
   SPACE_INVADERS_POWER_UP_SPEED,
@@ -59,6 +61,8 @@ export {
   SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
   SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS,
   SPACE_INVADERS_PLAYER_SHIELD_TICKS,
+  SPACE_INVADERS_PROJECTILE_EXPLOSION_HEIGHT,
+  SPACE_INVADERS_PROJECTILE_EXPLOSION_WIDTH,
   SPACE_INVADERS_POWER_UP_KINDS,
   SPACE_INVADERS_POWER_UP_SHIELD_TICKS,
   SPACE_INVADERS_POWER_UP_SIZE,
@@ -118,6 +122,7 @@ import type {
   SpaceInvadersExplosion,
   SpaceInvadersExplosionKind,
   SpaceInvadersGameState,
+  SpaceInvadersInvaderShot,
   SpaceInvadersPlayer,
   SpaceInvadersPlayerShot,
   SpaceInvadersPowerUp,
@@ -811,40 +816,43 @@ function advanceInvaderShots(
     invaderShots: movedShots,
     nextInvaderShotId,
   } = advanceInvaderShotPositions(game);
-  const hittingShots = movedShots.filter(
-    (shot) => isInvaderShotDangerous(shot) && rectanglesIntersect(shot, game.player),
+  const gameAfterShotCollisions = resolveOpposingShotCollisions(
+    {
+      ...game,
+      invaderShots: movedShots,
+      nextInvaderShotId,
+    },
+    random,
+  );
+  const hittingShots = gameAfterShotCollisions.invaderShots.filter(
+    (shot) =>
+      isInvaderShotDangerous(shot) &&
+      rectanglesIntersect(shot, gameAfterShotCollisions.player),
   );
   const didHitPlayer = hittingShots.length > 0;
 
   if (!didHitPlayer) {
+    return gameAfterShotCollisions;
+  }
+
+  if (gameAfterShotCollisions.playerRespawnTicks > 0) {
+    return gameAfterShotCollisions;
+  }
+
+  if (gameAfterShotCollisions.playerShieldTicks > 0) {
     return {
-      ...game,
-      invaderShots: movedShots,
-      nextInvaderShotId,
+      ...gameAfterShotCollisions,
+      invaderShots: gameAfterShotCollisions.invaderShots.filter(
+        (shot) => !hittingShots.includes(shot),
+      ),
     };
   }
 
-  if (game.playerRespawnTicks > 0) {
-    return {
-      ...game,
-      invaderShots: movedShots,
-      nextInvaderShotId,
-    };
-  }
-
-  if (game.playerShieldTicks > 0) {
-    return {
-      ...game,
-      invaderShots: movedShots.filter((shot) => !hittingShots.includes(shot)),
-      nextInvaderShotId,
-    };
-  }
-
-  const lives = game.lives - 1;
+  const lives = gameAfterShotCollisions.lives - 1;
   const gameWithExplosion = createSpaceInvadersExplosion(
-    game,
+    gameAfterShotCollisions,
     "player",
-    game.player,
+    gameAfterShotCollisions.player,
     random,
   );
 
@@ -853,10 +861,13 @@ function advanceInvaderShots(
     invaderBurst: null,
     invaderShotCooldownTicks: INVADER_HIT_RECOVERY_TICKS,
     invaderShots: [],
-    nextInvaderShotId,
+    nextInvaderShotId: gameAfterShotCollisions.nextInvaderShotId,
     hitStreak: 0,
     lives,
-    player: createCenteredPlayer(game.boardWidth, game.boardHeight),
+    player: createCenteredPlayer(
+      gameAfterShotCollisions.boardWidth,
+      gameAfterShotCollisions.boardHeight,
+    ),
     playerBurst: null,
     playerRespawnTicks: lives <= 0 ? 0 : SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
     playerShieldTicks: 0,
@@ -864,7 +875,97 @@ function advanceInvaderShots(
     playerVolleyHasArmoredHit: false,
     playerVolleyHasScored: false,
     playerVolleyHasUnscoredExit: false,
-    status: lives <= 0 ? "lost" : game.status,
+    status: lives <= 0 ? "lost" : gameAfterShotCollisions.status,
+  };
+}
+
+function resolveOpposingShotCollisions(
+  game: SpaceInvadersGameState,
+  random: SpaceInvadersRandomSource,
+): SpaceInvadersGameState {
+  if (game.playerShots.length === 0 || game.invaderShots.length === 0) {
+    return game;
+  }
+
+  const collidedPlayerShotIds = new Set<string>();
+  const collidedInvaderShotIds = new Set<string>();
+  let nextGame = game;
+
+  for (const playerShot of game.playerShots) {
+    for (const invaderShot of game.invaderShots) {
+      if (rectanglesIntersect(playerShot, invaderShot)) {
+        collidedPlayerShotIds.add(playerShot.id);
+        if (!isInvaderShotInvulnerable(invaderShot)) {
+          collidedInvaderShotIds.add(invaderShot.id);
+        }
+        nextGame = createSpaceInvadersExplosion(
+          nextGame,
+          "projectile",
+          getOpposingShotCollisionExplosionTarget(playerShot, invaderShot),
+          random,
+        );
+      }
+    }
+  }
+
+  if (collidedPlayerShotIds.size === 0) {
+    return game;
+  }
+
+  const playerShots = game.playerShots.filter(
+    (shot) => !collidedPlayerShotIds.has(shot.id),
+  );
+  const isPlayerVolleyFinished = playerShots.length === 0 && game.playerBurst === null;
+
+  return {
+    ...nextGame,
+    invaderShots: game.invaderShots.filter(
+      (shot) => !collidedInvaderShotIds.has(shot.id),
+    ),
+    playerShots,
+    playerVolleyHasArmoredHit: isPlayerVolleyFinished
+      ? false
+      : game.playerVolleyHasArmoredHit,
+    playerVolleyHasScored: isPlayerVolleyFinished ? false : game.playerVolleyHasScored,
+    playerVolleyHasUnscoredExit: isPlayerVolleyFinished
+      ? false
+      : game.playerVolleyHasUnscoredExit,
+  };
+}
+
+function isInvaderShotInvulnerable(
+  shot: Pick<SpaceInvadersInvaderShot, "kind">,
+) {
+  return shot.kind === "armor-wave";
+}
+
+function getOpposingShotCollisionExplosionTarget(
+  playerShot: SpaceInvadersPlayerShot,
+  invaderShot: SpaceInvadersInvaderShot,
+): SpaceInvadersScoreTarget {
+  const left = Math.max(playerShot.x, invaderShot.x);
+  const right = Math.min(playerShot.x + playerShot.width, invaderShot.x + invaderShot.width);
+  const top = Math.max(playerShot.y, invaderShot.y);
+  const bottom = Math.min(
+    playerShot.y + playerShot.height,
+    invaderShot.y + invaderShot.height,
+  );
+  const centerX =
+    left < right
+      ? (left + right) / 2
+      : (playerShot.x + playerShot.width / 2 + invaderShot.x + invaderShot.width / 2) /
+        2;
+  const centerY =
+    top < bottom
+      ? (top + bottom) / 2
+      : (playerShot.y + playerShot.height / 2 + invaderShot.y + invaderShot.height / 2) /
+        2;
+
+  return {
+    height: SPACE_INVADERS_PROJECTILE_EXPLOSION_HEIGHT,
+    width: SPACE_INVADERS_PROJECTILE_EXPLOSION_WIDTH,
+    x: centerX - SPACE_INVADERS_PROJECTILE_EXPLOSION_WIDTH / 2,
+    y: centerY - SPACE_INVADERS_PROJECTILE_EXPLOSION_HEIGHT / 2,
   };
 }
 

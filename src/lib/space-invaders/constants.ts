@@ -54,6 +54,7 @@ export const SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS = 3;
 export const EXPLOSION_PADDING_BY_KIND: Record<SpaceInvadersExplosionKind, number> = {
   invader: 16,
   player: 12,
+  projectile: 0,
   ufo: 18,
 };
 export const EXPLOSION_TTL_TICKS = 12;
@@ -100,6 +101,10 @@ export const INVADER_HEIGHT = 23;
 export const INVADER_STEP_X = 0.8;
 export const INVADER_TOP = 64;
 export const INVADER_WIDTH = 28;
+export const SPACE_INVADERS_PROJECTILE_EXPLOSION_HEIGHT =
+  (INVADER_HEIGHT + EXPLOSION_PADDING_BY_KIND.invader * 2) / 3;
+export const SPACE_INVADERS_PROJECTILE_EXPLOSION_WIDTH =
+  (INVADER_WIDTH + EXPLOSION_PADDING_BY_KIND.invader * 2) / 3;
 export const INVADER_SPRITE_SIZE = 112;
 export const SPLITTER_FRAGMENT_GAP_X = 4;
 export const SPLITTER_FRAGMENT_HEIGHT = INVADER_HEIGHT * 0.7;

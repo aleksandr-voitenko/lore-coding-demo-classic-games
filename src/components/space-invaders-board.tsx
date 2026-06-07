@@ -264,6 +264,7 @@ const invaderShotClassNames: Record<SpaceInvadersInvaderShotKind, string> = {
 const explosionClassNames: Record<SpaceInvadersExplosionKind, string> = {
   invader: "space-invaders-explosion--invader",
   player: "space-invaders-explosion--player",
+  projectile: "space-invaders-explosion--projectile",
   ufo: "space-invaders-explosion--ufo",
 };
 

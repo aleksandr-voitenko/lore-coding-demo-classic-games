@@ -729,6 +729,12 @@
   );
 }
 
+.space-invaders-explosion--projectile {
+  filter: drop-shadow(
+    0 0 8px color-mix(in oklch, var(--invaders-shot) 66%, transparent)
+  );
+}
+
 .space-invaders-explosion--ufo {
   filter: drop-shadow(
     0 0 13px color-mix(in oklch, var(--invaders-red) 62%, transparent)

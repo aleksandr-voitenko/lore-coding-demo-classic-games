@@ -44,7 +44,7 @@ export type SpaceInvadersPlayerShotKind =
   | "piercing"
   | "shotgun";
 
-export type SpaceInvadersExplosionKind = "invader" | "player" | "ufo";
+export type SpaceInvadersExplosionKind = "invader" | "player" | "projectile" | "ufo";
 export type SpaceInvadersExplosionVariant = 1 | 2 | 3 | 4;
 
 export type SpaceInvadersPlayer = {
