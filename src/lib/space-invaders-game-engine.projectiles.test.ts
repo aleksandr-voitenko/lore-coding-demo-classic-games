@@ -29,10 +29,12 @@ describe("space invaders projectile engine", () => {
 
     expect(firedGame.playerShots).toHaveLength(1);
     expect(firedShot).toMatchObject({
+      height: 22,
       id: "player-shot-0",
       kind: "standard",
       velocityX: 0,
-      velocityY: expect.any(Number),
+      velocityY: -6.4,
+      width: 6,
     });
     expect(firedShot.x).toBe(
       firedGame.player.x + firedGame.player.width / 2 - firedShot.width / 2,
@@ -118,14 +120,21 @@ describe("space invaders projectile engine", () => {
         pendingShotPowerUp: "piercing-laser",
       }),
     );
+    const shot = fired.playerShots[0]!;
+    const moved = advanceSpaceInvadersGame(fired);
 
     expect(fired.pendingShotPowerUp).toBeNull();
     expect(fired.playerShots).toHaveLength(1);
-    expect(fired.playerShots[0]).toMatchObject({
+    expect(shot).toMatchObject({
+      height: 44,
       id: "player-shot-0",
       kind: "piercing",
       velocityX: 0,
+      velocityY: -12.8,
+      width: 6,
     });
+    expect(shot.y + shot.height).toBe(fired.player.y - 2);
+    expect(moved.playerShots[0]?.y).toBeCloseTo(shot.y + shot.velocityY);
   });
 
 

@@ -5,6 +5,8 @@ import {
   COMMANDER_SHOT_STEER_X,
   INVADER_FIRE_COOLDOWN_TICKS,
   MAX_INVADER_SHOTS,
+  PIERCING_SHOT_HEIGHT,
+  PIERCING_SHOT_SPEED,
   SCATTER_SHOT_VELOCITIES_X,
   SHOTGUN_SHOT_VELOCITIES_X,
   SHOT_HEIGHT,
@@ -34,6 +36,29 @@ type InvaderShotSpec = {
   velocityY: number;
   width: number;
 };
+
+type PlayerShotSpec = {
+  height: number;
+  velocityY: number;
+  width: number;
+};
+
+const STANDARD_PLAYER_SHOT_SPEC = {
+  height: SHOT_HEIGHT,
+  velocityY: SHOT_SPEED,
+  width: SHOT_WIDTH,
+} satisfies PlayerShotSpec;
+
+const PLAYER_SHOT_SPECS = {
+  burst: STANDARD_PLAYER_SHOT_SPEC,
+  piercing: {
+    height: PIERCING_SHOT_HEIGHT,
+    velocityY: PIERCING_SHOT_SPEED,
+    width: SHOT_WIDTH,
+  },
+  shotgun: STANDARD_PLAYER_SHOT_SPEC,
+  standard: STANDARD_PLAYER_SHOT_SPEC,
+} satisfies Record<SpaceInvadersPlayerShotKind, PlayerShotSpec>;
 
 const SPACE_INVADERS_ROW_SHOT_KINDS: SpaceInvadersInvaderShotKind[] = [
   "commander",
@@ -176,16 +201,18 @@ export function createPlayerShot(
   kind: SpaceInvadersPlayerShotKind,
   velocityX: number,
 ): SpaceInvadersPlayerShot {
+  const spec = PLAYER_SHOT_SPECS[kind];
+
   return {
-    height: SHOT_HEIGHT,
+    height: spec.height,
     hasScored: false,
     id: `player-shot-${nextPlayerShotId}`,
     kind,
     velocityX,
-    velocityY: SHOT_SPEED,
-    width: SHOT_WIDTH,
-    x: player.x + player.width / 2 - SHOT_WIDTH / 2,
-    y: player.y - SHOT_HEIGHT - 2,
+    velocityY: spec.velocityY,
+    width: spec.width,
+    x: player.x + player.width / 2 - spec.width / 2,
+    y: player.y - spec.height - 2,
   };
 }
 
