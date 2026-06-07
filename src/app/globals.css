@@ -735,6 +735,12 @@
   );
 }
 
+.space-invaders-explosion--shield {
+  filter: drop-shadow(
+    0 0 9px color-mix(in oklch, var(--invaders-cyan) 72%, transparent)
+  );
+}
+
 .space-invaders-explosion--ufo {
   filter: drop-shadow(
     0 0 13px color-mix(in oklch, var(--invaders-red) 62%, transparent)

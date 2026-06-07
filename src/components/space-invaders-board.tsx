@@ -37,6 +37,7 @@ const explosionSpriteSrcByVariant: Record<SpaceInvadersExplosionVariant, string>
   3: getSpaceInvadersAssetSrc("explosion-3"),
   4: getSpaceInvadersAssetSrc("explosion-4"),
 };
+const shieldExplosionSpriteSrc = getSpaceInvadersAssetSrc("explosion-shield");
 const playerShipSpriteSrc = getSpaceInvadersAssetSrc("player-ship");
 const playerShotSpriteSrc = getSpaceInvadersAssetSrc("player-shot");
 const playerPiercingShotSpriteSrc = getSpaceInvadersAssetSrc("player-piercing-shot");
@@ -265,6 +266,7 @@ const explosionClassNames: Record<SpaceInvadersExplosionKind, string> = {
   invader: "space-invaders-explosion--invader",
   player: "space-invaders-explosion--player",
   projectile: "space-invaders-explosion--projectile",
+  shield: "space-invaders-explosion--shield",
   ufo: "space-invaders-explosion--ufo",
 };
 
@@ -381,6 +383,17 @@ function getPlayerShotSpriteSrc(kind: SpaceInvadersPlayerShotKind) {
   }
 
   return playerShotSpriteSrc;
+}
+
+function getExplosionSpriteSrc(
+  kind: SpaceInvadersExplosionKind,
+  variant: SpaceInvadersExplosionVariant,
+) {
+  if (kind === "shield") {
+    return shieldExplosionSpriteSrc;
+  }
+
+  return explosionSpriteSrcByVariant[variant];
 }
 
 function getBoardEntityStyle({
@@ -712,7 +725,10 @@ export function SpaceInvadersBoard({
                 explosionSpriteClassNames[explosion.variant],
               )}
               style={{
-                backgroundImage: `url("${explosionSpriteSrcByVariant[explosion.variant]}")`,
+                backgroundImage: `url("${getExplosionSpriteSrc(
+                  explosion.kind,
+                  explosion.variant,
+                )}")`,
               }}
             />
           </span>

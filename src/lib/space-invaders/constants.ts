@@ -55,6 +55,7 @@ export const EXPLOSION_PADDING_BY_KIND: Record<SpaceInvadersExplosionKind, numbe
   invader: 16,
   player: 12,
   projectile: 0,
+  shield: 0,
   ufo: 18,
 };
 export const EXPLOSION_TTL_TICKS = 12;

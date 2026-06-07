@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { getInvaderCollisionBounds } from "./space-invaders/hitboxes";
 import {
   advanceSpaceInvadersGame,
   createInitialSpaceInvadersGame,
@@ -984,6 +985,7 @@ describe("space invaders collision engine", () => {
       ...getInvader(game, 1, 4),
       kind: "standard" as const,
     };
+    const shieldedShot = createPlayerShotAlignedWith(protectedInvader);
     const runningGame = createRunningGame({
       hitStreak: 3,
       invaderShotCooldownTicks: 1_000,
@@ -997,8 +999,28 @@ describe("space invaders collision engine", () => {
           isActive: invader.id === shieldBearer.id,
         };
       }),
-      playerShots: [createPlayerShotAlignedWith(protectedInvader)],
+      playerShots: [shieldedShot],
     });
+    const movedShieldedShot = {
+      ...shieldedShot,
+      x: shieldedShot.x + shieldedShot.velocityX,
+      y: shieldedShot.y + shieldedShot.velocityY,
+    };
+    const protectedInvaderHitbox = getInvaderCollisionBounds(protectedInvader);
+    const expectedCollisionCenterX =
+      (Math.max(movedShieldedShot.x, protectedInvaderHitbox.x) +
+        Math.min(
+          movedShieldedShot.x + movedShieldedShot.width,
+          protectedInvaderHitbox.x + protectedInvaderHitbox.width,
+        )) /
+      2;
+    const expectedCollisionCenterY =
+      (Math.max(movedShieldedShot.y, protectedInvaderHitbox.y) +
+        Math.min(
+          movedShieldedShot.y + movedShieldedShot.height,
+          protectedInvaderHitbox.y + protectedInvaderHitbox.height,
+        )) /
+      2;
     const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
 
     expect(shieldBearer.kind).toBe("shield-bearer");
@@ -1013,7 +1035,23 @@ describe("space invaders collision engine", () => {
     expect(advanced.playerShots).toEqual([]);
     expect(advanced.score).toBe(0);
     expect(advanced.hitStreak).toBe(0);
-    expect(advanced.explosions).toEqual([]);
+    expect(advanced.explosions).toHaveLength(1);
+    expect(advanced.explosions[0]).toMatchObject({
+      ageTicks: 0,
+      height: SPACE_INVADERS_PROJECTILE_EXPLOSION_HEIGHT,
+      id: "explosion-0",
+      kind: "shield",
+      ttlTicks: 12,
+      variant: 1,
+      width: SPACE_INVADERS_PROJECTILE_EXPLOSION_WIDTH,
+    });
+    expect(advanced.explosions[0]!.x + advanced.explosions[0]!.width / 2).toBeCloseTo(
+      expectedCollisionCenterX,
+    );
+    expect(advanced.explosions[0]!.y + advanced.explosions[0]!.height / 2).toBeCloseTo(
+      expectedCollisionCenterY,
+    );
+    expect(advanced.nextExplosionId).toBe(1);
     expect(advanced.scorePopups).toEqual([]);
     expect(advanced.playerVolleyHasScored).toBe(false);
     expect(advanced.playerVolleyHasUnscoredExit).toBe(false);

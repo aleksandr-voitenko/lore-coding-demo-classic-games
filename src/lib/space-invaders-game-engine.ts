@@ -511,6 +511,16 @@ function advancePlayerShots(
     }
 
     if (vulnerableHitInvaders.length === 0) {
+      nextGame = createSpaceInvadersExplosion(
+        nextGame,
+        "shield",
+        getProjectileCollisionExplosionTarget(
+          movedShot,
+          getInvaderCollisionBounds(hitInvaders[0]!),
+        ),
+        random,
+      );
+
       if (!didScoreWithShot) {
         playerVolleyHasUnscoredExit = true;
       }
@@ -905,7 +915,7 @@ function resolveOpposingShotCollisions(
         nextGame = createSpaceInvadersExplosion(
           nextGame,
           "projectile",
-          getOpposingShotCollisionExplosionTarget(playerShot, invaderShot),
+          getProjectileCollisionExplosionTarget(playerShot, invaderShot),
           random,
         );
       }
@@ -949,26 +959,35 @@ function isInvaderShotInvulnerable(
   return shot.kind === "armor-wave";
 }
 
-function getOpposingShotCollisionExplosionTarget(
-  playerShot: SpaceInvadersPlayerShot,
-  invaderShot: SpaceInvadersInvaderShot,
+function getProjectileCollisionExplosionTarget(
+  firstTarget: { height: number; width: number; x: number; y: number },
+  secondTarget: { height: number; width: number; x: number; y: number },
 ): SpaceInvadersScoreTarget {
-  const left = Math.max(playerShot.x, invaderShot.x);
-  const right = Math.min(playerShot.x + playerShot.width, invaderShot.x + invaderShot.width);
-  const top = Math.max(playerShot.y, invaderShot.y);
+  const left = Math.max(firstTarget.x, secondTarget.x);
+  const right = Math.min(
+    firstTarget.x + firstTarget.width,
+    secondTarget.x + secondTarget.width,
+  );
+  const top = Math.max(firstTarget.y, secondTarget.y);
   const bottom = Math.min(
-    playerShot.y + playerShot.height,
-    invaderShot.y + invaderShot.height,
+    firstTarget.y + firstTarget.height,
+    secondTarget.y + secondTarget.height,
   );
   const centerX =
     left < right
       ? (left + right) / 2
-      : (playerShot.x + playerShot.width / 2 + invaderShot.x + invaderShot.width / 2) /
+      : (firstTarget.x +
+          firstTarget.width / 2 +
+          secondTarget.x +
+          secondTarget.width / 2) /
         2;
   const centerY =
     top < bottom
       ? (top + bottom) / 2
-      : (playerShot.y + playerShot.height / 2 + invaderShot.y + invaderShot.height / 2) /
+      : (firstTarget.y +
+          firstTarget.height / 2 +
+          secondTarget.y +
+          secondTarget.height / 2) /
         2;
 
   return {
