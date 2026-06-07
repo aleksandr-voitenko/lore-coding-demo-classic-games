@@ -889,12 +889,16 @@ function resolveOpposingShotCollisions(
 
   const collidedPlayerShotIds = new Set<string>();
   const collidedInvaderShotIds = new Set<string>();
+  let didCollide = false;
   let nextGame = game;
 
   for (const playerShot of game.playerShots) {
     for (const invaderShot of game.invaderShots) {
       if (rectanglesIntersect(playerShot, invaderShot)) {
-        collidedPlayerShotIds.add(playerShot.id);
+        didCollide = true;
+        if (!isPlayerShotInvulnerable(playerShot)) {
+          collidedPlayerShotIds.add(playerShot.id);
+        }
         if (!isInvaderShotInvulnerable(invaderShot)) {
           collidedInvaderShotIds.add(invaderShot.id);
         }
@@ -908,7 +912,7 @@ function resolveOpposingShotCollisions(
     }
   }
 
-  if (collidedPlayerShotIds.size === 0) {
+  if (!didCollide) {
     return game;
   }
 
@@ -931,6 +935,12 @@ function resolveOpposingShotCollisions(
       ? false
       : game.playerVolleyHasUnscoredExit,
   };
+}
+
+function isPlayerShotInvulnerable(
+  shot: Pick<SpaceInvadersPlayerShot, "kind">,
+) {
+  return shot.kind === "piercing";
 }
 
 function isInvaderShotInvulnerable(

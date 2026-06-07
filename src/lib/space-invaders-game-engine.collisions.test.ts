@@ -160,6 +160,52 @@ describe("space invaders collision engine", () => {
   });
 
 
+  it("keeps piercing shots active when they collide with invader shots", () => {
+    const piercingShot = fireSpaceInvadersShot(
+      createRunningGame({
+        pendingShotPowerUp: "piercing-laser",
+      }),
+    ).playerShots[0]!;
+    const invaderShot = createInvaderShotFixture({ x: 180 });
+    const collisionY = 300;
+    const runningGame = createRunningGame({
+      hitStreak: 4,
+      invaderShotCooldownTicks: 1_000,
+      invaderShots: [
+        {
+          ...invaderShot,
+          y: collisionY - invaderShot.velocityY,
+        },
+      ],
+      playerShots: [
+        {
+          ...piercingShot,
+          x: invaderShot.x,
+          y: collisionY - piercingShot.velocityY,
+        },
+      ],
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
+
+    expect(advanced.playerShots).toHaveLength(1);
+    expect(advanced.playerShots[0]).toMatchObject({
+      id: piercingShot.id,
+      kind: "piercing",
+      x: invaderShot.x,
+      y: collisionY,
+    });
+    expect(advanced.invaderShots).toEqual([]);
+    expect(advanced.explosions).toEqual([
+      expect.objectContaining({
+        kind: "projectile",
+        height: SPACE_INVADERS_PROJECTILE_EXPLOSION_HEIGHT,
+        width: SPACE_INVADERS_PROJECTILE_EXPLOSION_WIDTH,
+      }),
+    ]);
+    expect(advanced.hitStreak).toBe(4);
+  });
+
+
   it("keeps noncolliding shots active when one projectile pair collides", () => {
     const playerShot = fireSpaceInvadersShot(createRunningGame()).playerShots[0]!;
     const collisionY = 300;
@@ -254,6 +300,66 @@ describe("space invaders collision engine", () => {
     const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
 
     expect(advanced.playerShots).toEqual([]);
+    expect(advanced.invaderShots).toEqual([
+      {
+        ...armorWave,
+        ageTicks: armorWave.ageTicks + 1,
+        y: collisionY,
+      },
+    ]);
+    expect(advanced.explosions).toEqual([
+      expect.objectContaining({
+        kind: "projectile",
+        height: SPACE_INVADERS_PROJECTILE_EXPLOSION_HEIGHT,
+        width: SPACE_INVADERS_PROJECTILE_EXPLOSION_WIDTH,
+      }),
+    ]);
+    expect(advanced.hitStreak).toBe(5);
+  });
+
+
+  it("keeps piercing shots and armor waves active when they collide", () => {
+    const piercingShot = fireSpaceInvadersShot(
+      createRunningGame({
+        pendingShotPowerUp: "piercing-laser",
+      }),
+    ).playerShots[0]!;
+    const armorWave = createInvaderShotFixture({
+      height: 14,
+      id: "armor-wave-test",
+      kind: "armor-wave",
+      velocityY: 2,
+      width: 56,
+      x: 160,
+    });
+    const collisionY = 260;
+    const playerShotX = armorWave.x + armorWave.width / 2 - piercingShot.width / 2;
+    const runningGame = createRunningGame({
+      hitStreak: 5,
+      invaderShotCooldownTicks: 1_000,
+      invaderShots: [
+        {
+          ...armorWave,
+          y: collisionY - armorWave.velocityY,
+        },
+      ],
+      playerShots: [
+        {
+          ...piercingShot,
+          x: playerShotX,
+          y: collisionY - piercingShot.velocityY,
+        },
+      ],
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
+
+    expect(advanced.playerShots).toHaveLength(1);
+    expect(advanced.playerShots[0]).toMatchObject({
+      id: piercingShot.id,
+      kind: "piercing",
+      x: playerShotX,
+      y: collisionY,
+    });
     expect(advanced.invaderShots).toEqual([
       {
         ...armorWave,
