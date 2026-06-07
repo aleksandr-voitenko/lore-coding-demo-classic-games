@@ -364,10 +364,10 @@ describe("space invaders projectile engine", () => {
       sourceRow: shooter.row,
       ttlTicks: null,
       velocityX: 0,
-      velocityY: 2.15,
       width: 56,
     });
     expect(shot.width).toBeGreaterThan(standardShot.width);
+    expect(shot.velocityY).toBeCloseTo(2.15 * 0.85);
     expect(shot.velocityY).toBeLessThan(standardShot.velocityY);
     expect(shot.x).toBeCloseTo(shooter.x + shooter.width / 2 - shot.width / 2);
     expect(shot.y).toBeCloseTo(shooter.y + shooter.height + 1);
@@ -385,7 +385,7 @@ describe("space invaders projectile engine", () => {
   });
 
 
-  it("fires a splitter fork that splits into two diagonal fragment shots", () => {
+  it("fires a splitter fork that splits halfway to the base line", () => {
     const game = createInitialSpaceInvadersGame({ random: () => 0 });
     const shooter = {
       ...getInvader(game, 1, 5),
@@ -402,7 +402,9 @@ describe("space invaders projectile engine", () => {
       () => 0,
     );
     const fork = fired.invaderShots[0]!;
-    const beforeSplit = advanceSpaceInvadersTicks(fired, 7);
+    const splitY = fork.y + (fired.baseY - fork.y) * 0.5;
+    const splitTickCount = Math.ceil((splitY - fork.y) / fork.velocityY);
+    const beforeSplit = advanceSpaceInvadersTicks(fired, splitTickCount - 1);
     const splitTick = advanceSpaceInvadersGame(beforeSplit, () => 0);
     const fragmentMoveTick = advanceSpaceInvadersGame(splitTick, () => 0);
 
@@ -425,12 +427,13 @@ describe("space invaders projectile engine", () => {
     expect(fired.nextInvaderShotId).toBe(1);
     expect(beforeSplit.invaderShots).toHaveLength(1);
     expect(beforeSplit.invaderShots[0]).toMatchObject({
-      ageTicks: 7,
+      ageTicks: splitTickCount - 1,
       id: "invader-shot-0",
       kind: "splitter-fork",
     });
-    expect(beforeSplit.invaderShots[0]?.y).toBeCloseTo(
-      fork.y + fork.velocityY * 7,
+    expect(beforeSplit.invaderShots[0]?.y).toBeLessThan(splitY);
+    expect((beforeSplit.invaderShots[0]?.y ?? 0) + fork.velocityY).toBeGreaterThanOrEqual(
+      splitY,
     );
     expect(splitTick.invaderShots).toHaveLength(2);
     expect(splitTick.invaderShots.map((shot) => shot.id)).toEqual([
@@ -527,9 +530,9 @@ describe("space invaders projectile engine", () => {
       sourceInvaderId: shooter.id,
       sourceRow: shooter.row,
       ttlTicks: null,
-      velocityY: 5.3,
       width: 16,
     });
+    expect(shot.velocityY).toBeCloseTo(5.3 * 1.15);
     expect(shot.velocityX).toBeGreaterThan(0);
     expect(shot.x).toBeCloseTo(shooter.x + shooter.width / 2 - shot.width / 2);
     expect(shot.y).toBeCloseTo(shooter.y + shooter.height + 1);

@@ -329,7 +329,7 @@ describe("game board renderers", () => {
               sourceRow: 1,
               ttlTicks: null,
               velocityX: 0,
-              velocityY: 2.15,
+              velocityY: 2.15 * 0.85,
               width: 56,
               x: 188,
               y: 260,

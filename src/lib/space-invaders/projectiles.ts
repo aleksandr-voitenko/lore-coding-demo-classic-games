@@ -45,8 +45,10 @@ const SPACE_INVADERS_ROW_SHOT_KINDS: SpaceInvadersInvaderShotKind[] = [
 const SPACE_INVADERS_SPECIAL_INVADER_SHOT_KIND =
   SPACE_INVADERS_ROW_SHOT_KINDS[SPACE_INVADERS_ROW_SHOT_KINDS.length - 1] ?? "standard";
 const REVENGE_COUNTERFIRE_MAX_SPEED_X = 3.1;
+const REVENGE_COUNTERFIRE_VELOCITY_Y = 5.3 * 1.15;
 const REVENGE_COUNTERFIRE_WINDUP_TICKS = 2;
-const SPLITTER_FORK_SPLIT_AGE_TICKS = 8;
+const SPLITTER_FORK_SPLIT_DISTANCE_RATIO = 0.5;
+const ARMOR_WAVE_VELOCITY_Y = 2.15 * 0.85;
 const SPLITTER_FRAGMENT_SHOT_VELOCITIES_X = [-1.35, 1.35] as const;
 
 const INVADER_SHOT_SPECS: Record<SpaceInvadersInvaderShotKind, InvaderShotSpec> = {
@@ -56,7 +58,7 @@ const INVADER_SHOT_SPECS: Record<SpaceInvadersInvaderShotKind, InvaderShotSpec> 
     kind: "armor-wave",
     ttlTicks: null,
     velocityX: 0,
-    velocityY: 2.15,
+    velocityY: ARMOR_WAVE_VELOCITY_Y,
     width: 56,
   },
   commander: {
@@ -83,7 +85,7 @@ const INVADER_SHOT_SPECS: Record<SpaceInvadersInvaderShotKind, InvaderShotSpec> 
     kind: "counterfire",
     ttlTicks: null,
     velocityX: 0,
-    velocityY: 5.3,
+    velocityY: REVENGE_COUNTERFIRE_VELOCITY_Y,
     width: 16,
   },
   standard: {
@@ -400,6 +402,7 @@ export function advanceInvaderShotPositions(
     SpaceInvadersGameState,
     | "boardHeight"
     | "boardWidth"
+    | "baseY"
     | "invaderShots"
     | "nextInvaderShotId"
     | "player"
@@ -415,7 +418,7 @@ export function advanceInvaderShotPositions(
       continue;
     }
 
-    if (shouldSplitSplitterFork(movedShot)) {
+    if (shouldSplitSplitterFork(movedShot, game.baseY)) {
       const fragmentShots = createSplitterFragmentShots(movedShot, nextInvaderShotId);
 
       movedShots.push(
@@ -436,11 +439,16 @@ export function advanceInvaderShotPositions(
   };
 }
 
-function shouldSplitSplitterFork(shot: SpaceInvadersInvaderShot) {
-  return (
-    shot.kind === "splitter-fork" &&
-    shot.ageTicks >= SPLITTER_FORK_SPLIT_AGE_TICKS
-  );
+function shouldSplitSplitterFork(shot: SpaceInvadersInvaderShot, baseY: number) {
+  if (shot.kind !== "splitter-fork") {
+    return false;
+  }
+
+  const originY = shot.y - shot.velocityY * shot.ageTicks;
+  const splitY =
+    originY + (baseY - originY) * SPLITTER_FORK_SPLIT_DISTANCE_RATIO;
+
+  return shot.y >= splitY;
 }
 
 function createSplitterFragmentShots(
