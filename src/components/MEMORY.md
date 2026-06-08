@@ -25,10 +25,12 @@ This file covers React component ownership and shared game UI conventions under
 - `game-leaderboard.tsx` renders the shared top-three panel and save-score form.
   `use-game-leaderboard.ts` in `src/hooks/` owns the client state feeding those
   components and pre-fills the signed-in display name when available.
-- `user-account-controls.tsx` renders the launcher Log in/Sign up modal plus the
-  signed-in circular profile menu against `useCurrentUser`. Keep durable account
-  state in the provider; local component state should stay limited to the active
-  auth tab, form values, pending state, and field-level errors.
+- `user-account-controls.tsx` is the stable launcher account-control entry point
+  against `useCurrentUser`. Keep the signed-out modal implementation in
+  `user-account-auth-dialog.tsx` and the signed-in circular menu implementation
+  in `user-account-profile-menu.tsx`. Durable account state belongs in the
+  provider; local component state should stay limited to auth mode, form values,
+  menu/tooltip intent, pending state, and field-level errors.
 
 ## Shared Layout
 
