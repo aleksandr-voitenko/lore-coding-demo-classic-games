@@ -26,16 +26,6 @@ type StartLeaderboardIsolationCase = {
 
 const startLeaderboardIsolationCases: StartLeaderboardIsolationCase[] = [
   {
-    alternateKey: "snake|board=19",
-    alternateParameters: [{ testId: "snake-board-size", value: "19" }],
-    gameId: "snake",
-    leaderboardTestId: "snake-start-leaderboard",
-    name: "Snake",
-    playerSuffix: "SN",
-    selectedKey: "snake|board=25",
-    selectedParameters: [{ testId: "snake-board-size", value: "25" }],
-  },
-  {
     alternateKey: "breakout|board=420x560|lives=3",
     alternateParameters: [
       { testId: "breakout-board-size", value: "420x560" },

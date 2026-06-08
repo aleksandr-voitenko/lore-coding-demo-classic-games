@@ -41,9 +41,9 @@ This file covers public image assets under `public/images/`.
   ratios alongside the asset swap so visually smaller aliens remain harder to
   hit.
 - `snake/` is a sprite-backed exception. It contains 128x128 floor, food,
-  obstacle, head, tail, straight-body, and corner-body assets. `SnakeBoard`
-  references these with versioned public URLs and derives segment orientation
-  with CSS rotation from neighboring snake coordinates.
+  obstacle, door/key, head, tail, straight-body, and corner-body assets.
+  `SnakeBoard` references these with versioned public URLs and derives segment
+  orientation with CSS rotation from neighboring snake coordinates.
 - Keep deeper Snake and Space Invaders asset details here because the immediate
   child folders are asset-only folders, and their public URL/versioning
   conventions are part of the `public/images` contract rather than independent

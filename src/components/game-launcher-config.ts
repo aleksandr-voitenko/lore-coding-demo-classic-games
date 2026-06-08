@@ -31,13 +31,6 @@ import {
   SIMON_WIN_TARGET_OPTIONS,
 } from "@/lib/simon-game-engine";
 import {
-  BOARD_SIZE_OPTIONS,
-  DEFAULT_BOARD_SIZE,
-  MAX_BOARD_SIZE,
-  MIN_BOARD_SIZE,
-  normalizeBoardSize,
-} from "@/lib/snake-game-engine";
-import {
   SPACE_INVADERS_ALIEN_COUNT_OPTIONS,
   SPACE_INVADERS_BOARD_HEIGHT,
   SPACE_INVADERS_BOARD_SIZE_OPTIONS,
@@ -106,19 +99,6 @@ export type GameParameterConfig = {
 };
 
 export const GAME_PARAMETER_CONFIG = defineGameParameterConfig({
-  "snake-board-size": {
-    ariaLabel: `Field size. Selectable from ${MIN_BOARD_SIZE} by ${MIN_BOARD_SIZE} to ${MAX_BOARD_SIZE} by ${MAX_BOARD_SIZE}.`,
-    defaultValue: String(DEFAULT_BOARD_SIZE),
-    label: "Field size",
-    normalizeValue: (value) => String(normalizeBoardSize(Number(value))),
-    options: BOARD_SIZE_OPTIONS.map((boardSize) => ({
-      label: `${boardSize} x ${boardSize}`,
-      value: String(boardSize),
-    })),
-    toInitialProps: (value) => ({
-      initialBoardSize: normalizeBoardSize(Number(value)),
-    }),
-  },
   "tetris-board-size": createBoardSizeParameter({
     defaultSize: {
       height: TETRIS_BOARD_HEIGHT,
@@ -277,10 +257,10 @@ export const GAME_CARDS: readonly GameCard[] = [
       ...getGameCatalogArtwork("snake"),
       priority: true,
     },
-    description: "A classic score chase with obstacles, timed food, and saved best runs.",
+    description: "A score chase through growing rooms with keys, doors, obstacles, and timed food.",
     id: snakeCatalogEntry.id,
     label: snakeCatalogEntry.label,
-    parameters: ["snake-board-size"],
+    parameters: [],
   },
   {
     accentClassName:

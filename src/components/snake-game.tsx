@@ -72,7 +72,6 @@ type TimedFoodLifecycleOptions = {
 };
 
 type SnakeGameProps = {
-  initialBoardSize?: number;
   onBackToMenu?: () => void;
 };
 
@@ -164,9 +163,10 @@ const SNAKE_HELP_SECTIONS: GameHelpSection[] = [
     title: "Rules",
     items: [
       "Eat red apples to grow and score.",
-      "Special foods appear briefly and can change score, speed, or length.",
+      "Collect the key when it appears, then enter the open door for the next level.",
+      "Special foods unlock by level and can change score, speed, or length.",
       "Avoid walls, obstacles, and your own body.",
-      "Fill the board without crashing to win.",
+      "Each new level grows the board and resets speed, length, and pickup count.",
     ],
   },
 ];
@@ -208,15 +208,13 @@ function useTimedFoodLifecycle({
   }, [expiresAt, gameStatus, kind, setGame]);
 }
 
-export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {}) {
-  const [game, setGame] = useState<GameState>(() =>
-    createInitialGame({ boardSize: initialBoardSize }),
-  );
+export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
+  const [game, setGame] = useState<GameState>(() => createInitialGame());
   const [foodFeedbacks, setFoodFeedbacks] = useState<FoodFeedback[]>([]);
   const foodFeedbackIdRef = useRef(0);
   const previousGameRef = useRef(game);
   const leaderboardKey = createGameLeaderboardKey("snake", [
-    { name: "board", value: game.boardSize },
+    { name: "mode", value: "levels" },
   ]);
   const pendingLeaderboardScore =
     game.status === "lost" || game.status === "won" ? game.score : null;
@@ -274,7 +272,6 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
       return {
         ...createInitialGame({
           bestScore: Math.max(current.bestScore, leaderboardBestScore),
-          boardSize: current.boardSize,
           random: Math.random,
         }),
         status: "running",
@@ -288,7 +285,6 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
     setGame((current) => ({
       ...createInitialGame({
         bestScore: Math.max(current.bestScore, leaderboardBestScore),
-        boardSize: current.boardSize,
         random: Math.random,
       }),
       status: "running",
@@ -326,6 +322,11 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
     const previousGame = previousGameRef.current;
     previousGameRef.current = game;
 
+    if (previousGame.level !== game.level) {
+      setFoodFeedbacks([]);
+      return;
+    }
+
     const feedback = createFoodFeedback(previousGame, game, foodFeedbackIdRef.current);
 
     if (feedback === null) {
@@ -338,28 +339,28 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
 
   useTimedFoodLifecycle({
     gameStatus: game.status,
-    isIntroduced: isPickupIntroduced("bonusFood", game.pickedUpObjects),
+    isIntroduced: isPickupIntroduced("bonusFood", game.pickedUpObjects, game.level),
     kind: "bonusFood",
     setGame,
     timedFood: game.bonusFood,
   });
   useTimedFoodLifecycle({
     gameStatus: game.status,
-    isIntroduced: isPickupIntroduced("speedFood", game.pickedUpObjects),
+    isIntroduced: isPickupIntroduced("speedFood", game.pickedUpObjects, game.level),
     kind: "speedFood",
     setGame,
     timedFood: game.speedFood,
   });
   useTimedFoodLifecycle({
     gameStatus: game.status,
-    isIntroduced: isPickupIntroduced("slowFood", game.pickedUpObjects),
+    isIntroduced: isPickupIntroduced("slowFood", game.pickedUpObjects, game.level),
     kind: "slowFood",
     setGame,
     timedFood: game.slowFood,
   });
   useTimedFoodLifecycle({
     gameStatus: game.status,
-    isIntroduced: isPickupIntroduced("shrinkFood", game.pickedUpObjects),
+    isIntroduced: isPickupIntroduced("shrinkFood", game.pickedUpObjects, game.level),
     kind: "shrinkFood",
     setGame,
     timedFood: game.shrinkFood,
@@ -450,6 +451,13 @@ export function SnakeGame({ initialBoardSize, onBackToMenu }: SnakeGameProps = {
               labelClassName="text-[var(--snake-muted)]"
               value={bestScore}
               valueTestId="snake-best"
+            />
+            <GameStatCard
+              className="border-[var(--snake-border)]"
+              label="Level"
+              labelClassName="text-[var(--snake-muted)]"
+              value={game.level}
+              valueTestId="snake-level"
             />
             <GameStatCard
               className="border-[var(--snake-border)]"

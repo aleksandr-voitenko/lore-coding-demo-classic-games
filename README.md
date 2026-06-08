@@ -12,8 +12,8 @@ All the code in this repository was created using AI agents and the Lore Coding 
   controls.
 - Asteroids includes vector-style ship thrust, wraparound movement,
   asteroid splitting, waves, lives, scoring, and parameter-scoped records.
-- Snake includes timed special foods, obstacle islands, and a full-board
-  win state.
+- Snake includes level progression through key-and-door exits, timed special
+  foods, obstacle islands, and a full-board win state.
 - SQLite-backed, parameter-scoped top-three leaderboards for every game.
   Minesweeper ranks fastest clears; the other games rank higher scores.
 - Name-and-password player accounts with private profile stats for signed-in
@@ -65,7 +65,7 @@ menu.
 
 Leaderboards, player accounts, signed-in sessions, and profile stats use SQLite.
 Leaderboard records are stored under game-and-parameter keys such as
-`snake|board=19` or `tetris|board=10x20|level=3`. Signed-in play sessions also
+`snake|mode=levels` or `tetris|board=10x20|level=3`. Signed-in play sessions also
 store the selected leaderboard key so profile stats can report both per-game
 totals and parameter-aware history.
 

@@ -15,7 +15,7 @@ import {
 import type { FoodFeedback } from "@/lib/snake-food-feedback";
 import { cn } from "@/lib/utils";
 
-type BoardCellType = "food" | "obstacle" | TimedFoodKind;
+type BoardCellType = "door" | "food" | "key" | "obstacle" | TimedFoodKind;
 
 type BoardCellRender = {
   className: string;
@@ -42,6 +42,9 @@ function getSnakeAssetSrc(fileName: string) {
 export const snakeSpriteSources = {
   bodyCorner: getSnakeAssetSrc("snake-body-corner"),
   bodyStraight: getSnakeAssetSrc("snake-body-straight"),
+  doorClosed: getSnakeAssetSrc("door-closed"),
+  doorKey: getSnakeAssetSrc("door-key"),
+  doorOpen: getSnakeAssetSrc("door-open"),
   floorCell: getSnakeAssetSrc("floor-cell"),
   foodBlueTriangle: getSnakeAssetSrc("food-blue-triangle"),
   foodCyanHexagon: getSnakeAssetSrc("food-cyan-hexagon"),
@@ -81,7 +84,9 @@ const tailRotationDeg: Record<Direction, number> = {
 
 const foodSpriteSources: Record<BoardCellType, string> = {
   bonusFood: snakeSpriteSources.foodYellowApple,
+  door: snakeSpriteSources.doorClosed,
   food: snakeSpriteSources.foodRedApple,
+  key: snakeSpriteSources.doorKey,
   obstacle: snakeSpriteSources.obstacleStoneA,
   shrinkFood: snakeSpriteSources.foodCyanHexagon,
   slowFood: snakeSpriteSources.foodBlueTriangle,
@@ -91,7 +96,9 @@ const foodSpriteSources: Record<BoardCellType, string> = {
 const cellSpriteClassNames: Record<BoardCellType, string> = {
   bonusFood:
     "drop-shadow-[0_0_14px_color-mix(in_oklch,var(--snake-bonus-food)_62%,transparent)]",
+  door: "drop-shadow-[0_8px_12px_color-mix(in_oklch,black_30%,transparent)]",
   food: "drop-shadow-[0_0_14px_color-mix(in_oklch,var(--snake-food)_54%,transparent)]",
+  key: "drop-shadow-[0_0_16px_color-mix(in_oklch,var(--snake-bonus-food)_72%,transparent)]",
   obstacle: "drop-shadow-[0_7px_10px_color-mix(in_oklch,black_30%,transparent)]",
   shrinkFood:
     "drop-shadow-[0_0_14px_color-mix(in_oklch,var(--snake-shrink-food)_62%,transparent)]",
@@ -206,16 +213,31 @@ function createSnakeSegmentRender({
   };
 }
 
-function createCellRender(cellType: BoardCellType, cell: Point): BoardCellRender {
+function createCellRender(cellType: BoardCellType, cell: Point, doorIsOpen = false): BoardCellRender {
   const isObstacle = cellType === "obstacle";
 
   return {
     className: cellSpriteClassNames[cellType],
     src:
-      isObstacle && (cell.x + cell.y) % 2 === 1
-        ? snakeSpriteSources.obstacleStoneB
-        : foodSpriteSources[cellType],
-    testId: isObstacle ? "snake-obstacle" : "snake-food",
+      cellType === "door"
+        ? doorIsOpen
+          ? snakeSpriteSources.doorOpen
+          : snakeSpriteSources.doorClosed
+        : cellType === "key"
+          ? snakeSpriteSources.doorKey
+          : isObstacle && (cell.x + cell.y) % 2 === 1
+            ? snakeSpriteSources.obstacleStoneB
+            : foodSpriteSources[cellType],
+    testId:
+      cellType === "door"
+        ? doorIsOpen
+          ? "snake-door-open"
+          : "snake-door-closed"
+        : cellType === "key"
+          ? "snake-door-key"
+          : isObstacle
+            ? "snake-obstacle"
+            : "snake-food",
   };
 }
 
@@ -247,6 +269,8 @@ export function SnakeBoard({
   const activeTimedFoodLabel = activeTimedFoodEntries
     .map(({ rule }) => ` ${rule.label} active.`)
     .join("");
+  const doorStatusLabel = game.door.isOpen ? " Exit door open." : " Exit door closed.";
+  const keyStatusLabel = game.key === null ? "" : " Door key available.";
 
   const occupiedCells = useMemo(() => {
     const cells = new Map<string, BoardCellRender>();
@@ -254,6 +278,13 @@ export function SnakeBoard({
     game.obstacles.forEach((obstacle) => {
       cells.set(getPointKey(obstacle), createCellRender("obstacle", obstacle));
     });
+    cells.set(
+      getPointKey(game.door.position),
+      createCellRender("door", game.door.position, game.door.isOpen),
+    );
+    if (game.key !== null) {
+      cells.set(getPointKey(game.key), createCellRender("key", game.key));
+    }
     if (game.food !== null) {
       cells.set(getPointKey(game.food), createCellRender("food", game.food));
     }
@@ -272,14 +303,23 @@ export function SnakeBoard({
     });
 
     return cells;
-  }, [activeTimedFoodEntries, game.direction, game.food, game.obstacles, game.snake]);
+  }, [
+    activeTimedFoodEntries,
+    game.direction,
+    game.door.isOpen,
+    game.door.position,
+    game.food,
+    game.key,
+    game.obstacles,
+    game.snake,
+  ]);
 
   return (
     <div className="relative aspect-square overflow-hidden rounded-md border border-[var(--snake-board-border)] bg-[var(--snake-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--snake-board)_24%,transparent)]">
       <div
-        aria-label={`Snake board. Field ${game.boardSize} by ${game.boardSize}. Score ${game.score}. ${statusLabel}.${
+        aria-label={`Snake board. Level ${game.level}. Field ${game.boardSize} by ${game.boardSize}. Score ${game.score}. ${statusLabel}.${
           game.obstacles.length === 0 ? "" : ` ${game.obstacles.length} obstacle blocks.`
-        }${activeTimedFoodLabel}`}
+        }${doorStatusLabel}${keyStatusLabel}${activeTimedFoodLabel}`}
         className="grid size-full gap-px rounded-[0.375rem] bg-[var(--snake-grid)] p-px"
         data-testid="snake-board"
         role="img"

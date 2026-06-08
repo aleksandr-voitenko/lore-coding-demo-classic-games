@@ -11,12 +11,20 @@ export type TimedFood = {
   position: Point;
 };
 
+export type Door = {
+  isOpen: boolean;
+  position: Point;
+};
+
 export type GameState = {
   bestScore: number;
   bonusFood: TimedFood | null;
   boardSize: number;
   direction: Direction;
+  door: Door;
   food: Point | null;
+  key: Point | null;
+  level: number;
   obstacles: Point[];
   pickedUpObjects: number;
   queuedDirection: Direction;
@@ -32,6 +40,7 @@ export type GameState = {
 export type CreateInitialGameOptions = {
   bestScore?: number;
   boardSize?: number;
+  level?: number;
   random?: RandomSource;
 };
 
@@ -91,11 +100,28 @@ type TimedFoodOptions = {
   timeoutMinMs?: number;
 };
 
+export type GenerateObstaclesOptions = {
+  level?: number;
+  random?: RandomSource;
+};
+
 type AdvanceSnakeOptions = {
   random?: RandomSource;
 };
 
-export const DEFAULT_BOARD_SIZE = 19;
+type CreateSnakeLevelStateOptions = {
+  bestScore: number;
+  boardSize?: number;
+  level: number;
+  random?: RandomSource;
+  score: number;
+  status: GameStatus;
+};
+
+export const FIRST_SNAKE_LEVEL = 1;
+export const FIRST_SNAKE_LEVEL_BOARD_SIZE = 12;
+export const SNAKE_LEVEL_BOARD_SIZE_STEP = 1;
+export const DEFAULT_BOARD_SIZE = FIRST_SNAKE_LEVEL_BOARD_SIZE;
 export const MIN_BOARD_SIZE = 11;
 export const MAX_BOARD_SIZE = 25;
 export const BOARD_SIZE_STEP = 2;
@@ -112,6 +138,7 @@ export const MAX_GAME_SPEED = Math.round(1000 / MIN_GAME_TICK_DELAY_MS);
 export const OBSTACLE_CLUSTER_MAX_SIZE = 6;
 export const OBSTACLE_CLUSTER_MIN_SIZE = 2;
 export const OBSTACLE_FIELD_COVERAGE_RATIO = 0.06;
+export const OBSTACLE_FIELD_COVERAGE_RATIO_LEVEL_STEP = 0.01;
 export const SHRINK_FOOD_SCORE = 1;
 export const SHRINK_FOOD_TAIL_TRIM = 1;
 export const SLOW_FOOD_SCORE = 1;
@@ -218,6 +245,36 @@ export function getRandomDuration(
   return Math.floor(random() * (maxMs - minMs + 1)) + minMs;
 }
 
+export function normalizeSnakeLevel(value: number) {
+  if (!Number.isFinite(value)) {
+    return FIRST_SNAKE_LEVEL;
+  }
+
+  return Math.max(FIRST_SNAKE_LEVEL, Math.floor(value));
+}
+
+export function getSnakeLevelBoardSize(level: number) {
+  return (
+    FIRST_SNAKE_LEVEL_BOARD_SIZE +
+    (normalizeSnakeLevel(level) - FIRST_SNAKE_LEVEL) * SNAKE_LEVEL_BOARD_SIZE_STEP
+  );
+}
+
+export function getSnakeLevelKeyPickupThreshold(level: number) {
+  return PICKUPS_PER_BASE_SPEED_INCREASE * normalizeSnakeLevel(level);
+}
+
+export function getSnakeLevelObstacleFieldCoverageRatio(level: number) {
+  return (
+    OBSTACLE_FIELD_COVERAGE_RATIO +
+    (normalizeSnakeLevel(level) - FIRST_SNAKE_LEVEL) * OBSTACLE_FIELD_COVERAGE_RATIO_LEVEL_STEP
+  );
+}
+
+export function getSnakeLevelPickupTypeLimit(level: number) {
+  return Math.min(SNAKE_PICKUP_INTRODUCTION_ORDER.length, normalizeSnakeLevel(level));
+}
+
 export function isTimedFoodKind(value: unknown): value is TimedFoodKind {
   return typeof value === "string" && (TIMED_FOOD_KINDS as readonly string[]).includes(value);
 }
@@ -229,12 +286,29 @@ export function getPickupIntroductionThreshold(kind: SnakePickupKind) {
   );
 }
 
-export function isPickupIntroduced(kind: SnakePickupKind, pickedUpObjects: number) {
-  return pickedUpObjects >= getPickupIntroductionThreshold(kind);
+export function isPickupAvailableInLevel(kind: SnakePickupKind, level: number) {
+  const pickupIndex = SNAKE_PICKUP_INTRODUCTION_ORDER.findIndex(
+    (candidateKind) => candidateKind === kind,
+  );
+
+  return pickupIndex >= 0 && pickupIndex < getSnakeLevelPickupTypeLimit(level);
 }
 
-export function getIntroducedTimedFoodKinds(pickedUpObjects: number) {
-  return TIMED_FOOD_KINDS.filter((kind) => isPickupIntroduced(kind, pickedUpObjects));
+export function isPickupIntroduced(
+  kind: SnakePickupKind,
+  pickedUpObjects: number,
+  level?: number,
+) {
+  return (
+    (level === undefined || isPickupAvailableInLevel(kind, level)) &&
+    pickedUpObjects >= getPickupIntroductionThreshold(kind)
+  );
+}
+
+export function getIntroducedTimedFoodKinds(pickedUpObjects: number, level?: number) {
+  return TIMED_FOOD_KINDS.filter((kind) =>
+    isPickupIntroduced(kind, pickedUpObjects, level),
+  );
 }
 
 export function getTimedFoodSpawnDelay(
@@ -383,8 +457,8 @@ export function createInitialObstacleSafeCells(boardSize: number, food = createI
   return Array.from(safeCells.values());
 }
 
-function getObstacleCellBudget(boardSize: number) {
-  return Math.floor(boardSize * boardSize * OBSTACLE_FIELD_COVERAGE_RATIO);
+function getObstacleCellBudget(boardSize: number, level: number) {
+  return Math.floor(boardSize * boardSize * getSnakeLevelObstacleFieldCoverageRatio(level));
 }
 
 function getObstacleClusterSize(random: RandomSource, maxSize = OBSTACLE_CLUSTER_MAX_SIZE) {
@@ -475,12 +549,22 @@ function generateObstacleCluster(
 export function generateObstacles(
   boardSize: number,
   occupiedCells: Point[],
-  random: RandomSource = Math.random,
+  options: GenerateObstaclesOptions | RandomSource = {},
 ) {
+  const obstacleOptions =
+    typeof options === "function"
+      ? {
+          level: FIRST_SNAKE_LEVEL,
+          random: options,
+        }
+      : {
+          level: options.level ?? FIRST_SNAKE_LEVEL,
+          random: options.random ?? Math.random,
+        };
   const occupiedKeys = new Set(occupiedCells.map(getPointKey));
   const obstacleKeys = new Set<string>();
   const obstacles: Point[] = [];
-  const obstacleCellBudget = getObstacleCellBudget(boardSize);
+  const obstacleCellBudget = getObstacleCellBudget(boardSize, obstacleOptions.level);
 
   while (obstacles.length + OBSTACLE_CLUSTER_MIN_SIZE <= obstacleCellBudget) {
     const remainingBudget = obstacleCellBudget - obstacles.length;
@@ -488,7 +572,7 @@ export function generateObstacles(
       boardSize,
       occupiedKeys,
       obstacleKeys,
-      random,
+      obstacleOptions.random,
       remainingBudget,
     );
 
@@ -508,6 +592,22 @@ export function generateObstacles(
   return obstacles;
 }
 
+function generateOpenCell(
+  boardSize: number,
+  occupiedCells: Point[] = [],
+  random: RandomSource = Math.random,
+) {
+  const occupiedCellKeys = new Set(occupiedCells.map(getPointKey));
+  const boardCells = createBoardCells(boardSize);
+  const openCells = boardCells.filter((cell) => !occupiedCellKeys.has(getPointKey(cell)));
+
+  if (openCells.length === 0) {
+    return null;
+  }
+
+  return openCells[Math.floor(random() * openCells.length)] ?? null;
+}
+
 export function isOppositeDirection(first: Direction, second: Direction) {
   const firstOffset = directionOffsets[first];
   const secondOffset = directionOffsets[second];
@@ -521,15 +621,24 @@ export function generateFood(
   additionalOccupiedCells: Point[] = [],
   random: RandomSource = Math.random,
 ) {
-  const occupiedCells = new Set([...snake, ...additionalOccupiedCells].map(getPointKey));
-  const boardCells = createBoardCells(boardSize);
-  const openCells = boardCells.filter((cell) => !occupiedCells.has(getPointKey(cell)));
+  return generateOpenCell(boardSize, [...snake, ...additionalOccupiedCells], random);
+}
 
-  if (openCells.length === 0) {
-    return null;
-  }
+export function generateDoorPosition(
+  boardSize: number,
+  additionalOccupiedCells: Point[] = [],
+  random: RandomSource = Math.random,
+) {
+  return generateOpenCell(boardSize, additionalOccupiedCells, random);
+}
 
-  return openCells[Math.floor(random() * openCells.length)] ?? null;
+export function generateKeyPosition(
+  boardSize: number,
+  snake: Point[],
+  additionalOccupiedCells: Point[] = [],
+  random: RandomSource = Math.random,
+) {
+  return generateOpenCell(boardSize, [...snake, ...additionalOccupiedCells], random);
 }
 
 export function generateTimedFoodPosition(
@@ -618,34 +727,70 @@ export function createTimedFood(
 
 export function createInitialGame({
   bestScore = 0,
-  boardSize = DEFAULT_BOARD_SIZE,
+  boardSize,
+  level = FIRST_SNAKE_LEVEL,
   random,
 }: CreateInitialGameOptions = {}): GameState {
-  const normalizedBoardSize = normalizeBoardSize(boardSize);
-  const randomSource = random ?? createSeededRandom(normalizedBoardSize);
+  return createSnakeLevelState({
+    bestScore,
+    boardSize,
+    level,
+    random,
+    score: 0,
+    status: "ready",
+  });
+}
+
+function createSnakeLevelState({
+  bestScore,
+  boardSize,
+  level,
+  random,
+  score,
+  status,
+}: CreateSnakeLevelStateOptions): GameState {
+  const normalizedLevel = normalizeSnakeLevel(level);
+  const normalizedBoardSize =
+    boardSize === undefined ? getSnakeLevelBoardSize(normalizedLevel) : normalizeBoardSize(boardSize);
+  const randomSource = random ?? createSeededRandom(normalizedBoardSize + normalizedLevel * 1_009);
   const snake = createInitialSnake(normalizedBoardSize);
   const food = createInitialFood(normalizedBoardSize, random);
+  const initialSafeCells = createInitialObstacleSafeCells(normalizedBoardSize, food);
+  const doorPosition =
+    generateDoorPosition(normalizedBoardSize, initialSafeCells, randomSource) ?? {
+      x: normalizedBoardSize - 1,
+      y: normalizedBoardSize - 1,
+    };
 
   return {
     bestScore,
     bonusFood: null,
     boardSize: normalizedBoardSize,
     direction: "right",
+    door: {
+      isOpen: false,
+      position: doorPosition,
+    },
     food,
+    key: null,
+    level: normalizedLevel,
     obstacles: generateObstacles(
       normalizedBoardSize,
-      createInitialObstacleSafeCells(normalizedBoardSize, food),
-      randomSource,
+      [...initialSafeCells, doorPosition],
+      {
+        level: normalizedLevel,
+        random: randomSource,
+      },
     ),
     pickedUpObjects: 0,
     queuedDirection: "right",
-    score: 0,
+    score,
     shrinkFood: null,
     snake,
     slowFood: null,
     speedBoosts: 0,
     speedFood: null,
-    status: "ready",
+    status,
   };
 }
 
@@ -738,6 +883,16 @@ function getActiveTimedFoodPositions(
   );
 }
 
+function getActiveLevelItemPositions(
+  current: Pick<GameState, "door" | "key">,
+  { excludeKey = false }: { excludeKey?: boolean } = {},
+) {
+  return [
+    current.door.position,
+    ...(current.key === null || excludeKey ? [] : [current.key]),
+  ];
+}
+
 function getClearedTimedFoodState() {
   return {
     bonusFood: null,
@@ -814,7 +969,7 @@ export function spawnTimedFood(
   if (
     current.status !== "running" ||
     current[kind] !== null ||
-    !isPickupIntroduced(kind, current.pickedUpObjects)
+    !isPickupIntroduced(kind, current.pickedUpObjects, current.level)
   ) {
     return current;
   }
@@ -824,7 +979,11 @@ export function spawnTimedFood(
     current.boardSize,
     current.snake,
     current.food,
-    [...current.obstacles, ...getActiveTimedFoodPositions(current, kind)],
+    [
+      ...current.obstacles,
+      ...getActiveLevelItemPositions(current),
+      ...getActiveTimedFoodPositions(current, kind),
+    ],
     {
       ...options,
       preferredDistanceTargets:
@@ -860,6 +1019,16 @@ export function expireTimedFood(
   };
 }
 
+function createNextLevelGame(current: GameState, random: RandomSource) {
+  return createSnakeLevelState({
+    bestScore: Math.max(current.bestScore, current.score),
+    level: current.level + 1,
+    random,
+    score: current.score,
+    status: "running",
+  });
+}
+
 export function advanceSnakeGame(
   current: GameState,
   { random = Math.random }: AdvanceSnakeOptions = {},
@@ -876,6 +1045,7 @@ export function advanceSnakeGame(
     y: head.y + offset.y,
   };
   const ateFood = current.food !== null && isSamePoint(nextHead, current.food);
+  const ateKey = current.key !== null && isSamePoint(nextHead, current.key);
   const eatenTimedFoodKinds = getEatenTimedFoodKinds(current, nextHead);
   const pickedUpObjectCount = (ateFood ? 1 : 0) + eatenTimedFoodKinds.length;
   const lengthDelta = (ateFood ? 1 : 0) + getTimedFoodLengthDelta(eatenTimedFoodKinds);
@@ -887,18 +1057,26 @@ export function advanceSnakeGame(
     nextHead.y >= current.boardSize;
   const hitBody = collisionBody.some((segment) => isSamePoint(segment, nextHead));
   const hitObstacle = current.obstacles.some((obstacle) => isSamePoint(obstacle, nextHead));
+  const hitDoor = isSamePoint(current.door.position, nextHead);
 
-  if (hitWall || hitBody || hitObstacle) {
+  if (hitDoor && current.door.isOpen) {
+    return createNextLevelGame(current, random);
+  }
+
+  if (hitWall || hitBody || hitObstacle || hitDoor) {
     return {
       ...current,
       direction,
       queuedDirection: direction,
       ...getClearedTimedFoodState(),
+      key: null,
       status: "lost",
     };
   }
 
   const nextSnake = advanceSnakeSegments(current.snake, nextHead, lengthDelta);
+  const nextDoor = ateKey ? { ...current.door, isOpen: true } : current.door;
+  const nextKeyBeforeSpawn = nextDoor.isOpen ? null : current.key;
   const nextScore =
     current.score + (ateFood ? 1 : 0) + getTimedFoodScore(eatenTimedFoodKinds);
   const nextPickedUpObjects = current.pickedUpObjects + pickedUpObjectCount;
@@ -910,6 +1088,10 @@ export function advanceSnakeGame(
   );
   const occupiedSpecialFood = [
     ...current.obstacles,
+    ...getActiveLevelItemPositions({
+      door: nextDoor,
+      key: nextKeyBeforeSpawn,
+    }),
     ...getActiveTimedFoodPositions(nextTimedFoodState),
   ];
   const nextFood = ateFood
@@ -922,7 +1104,10 @@ export function advanceSnakeGame(
       ...getClearedTimedFoodState(),
       boardSize: current.boardSize,
       direction,
+      door: nextDoor,
       food: null,
+      key: null,
+      level: current.level,
       obstacles: current.obstacles,
       pickedUpObjects: nextPickedUpObjects,
       queuedDirection: direction,
@@ -933,12 +1118,33 @@ export function advanceSnakeGame(
     };
   }
 
+  const shouldSpawnKey =
+    !nextDoor.isOpen &&
+    nextKeyBeforeSpawn === null &&
+    nextPickedUpObjects >= getSnakeLevelKeyPickupThreshold(current.level);
+  const nextKey = shouldSpawnKey
+    ? generateKeyPosition(
+        current.boardSize,
+        nextSnake,
+        [
+          ...current.obstacles,
+          nextDoor.position,
+          ...(nextFood === null ? [] : [nextFood]),
+          ...getActiveTimedFoodPositions(nextTimedFoodState),
+        ],
+        random,
+      )
+    : nextKeyBeforeSpawn;
+
   return {
     bestScore: Math.max(current.bestScore, nextScore),
     ...nextTimedFoodState,
     boardSize: current.boardSize,
     direction,
+    door: nextDoor,
     food: nextFood,
+    key: nextKey,
+    level: current.level,
     obstacles: current.obstacles,
     pickedUpObjects: nextPickedUpObjects,
     queuedDirection: direction,

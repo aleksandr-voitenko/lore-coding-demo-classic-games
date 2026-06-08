@@ -10,6 +10,8 @@ import {
   createInitialObstacleSafeCells,
   createInitialGame,
   expireTimedFood,
+  FIRST_SNAKE_LEVEL,
+  FIRST_SNAKE_LEVEL_BOARD_SIZE,
   generateFood,
   generateObstacles,
   generateTimedFoodPosition,
@@ -19,13 +21,19 @@ import {
   getManhattanDistance,
   getPickupIntroductionThreshold,
   getPointKey,
+  getSnakeLevelBoardSize,
+  getSnakeLevelKeyPickupThreshold,
+  getSnakeLevelObstacleFieldCoverageRatio,
+  getSnakeLevelPickupTypeLimit,
   getTimedFoodSpawnDelay,
+  isPickupAvailableInLevel,
   isPickupIntroduced,
   isSamePoint,
   MIN_SNAKE_LENGTH,
   OBSTACLE_CLUSTER_MAX_SIZE,
   OBSTACLE_CLUSTER_MIN_SIZE,
   OBSTACLE_FIELD_COVERAGE_RATIO,
+  OBSTACLE_FIELD_COVERAGE_RATIO_LEVEL_STEP,
   PICKUPS_PER_ITEM_INTRODUCTION,
   PICKUPS_PER_BASE_SPEED_INCREASE,
   SHRINK_FOOD_SCORE,
@@ -60,7 +68,12 @@ function createRunningGameWithIntroducedTimedFood(
   kind: TimedFoodKind,
   overrides: Partial<GameState> = {},
 ): GameState {
+  const level = SNAKE_PICKUP_INTRODUCTION_ORDER.findIndex(
+    (candidateKind) => candidateKind === kind,
+  ) + 1;
+
   return createRunningGame({
+    level,
     pickedUpObjects: getPickupIntroductionThreshold(kind),
     ...overrides,
   });
@@ -124,8 +137,8 @@ function getConnectedClusters(points: Point[]) {
   return clusters;
 }
 
-function getObstacleCellBudget(boardSize: number) {
-  return Math.floor(boardSize * boardSize * OBSTACLE_FIELD_COVERAGE_RATIO);
+function getObstacleCellBudget(boardSize: number, level = FIRST_SNAKE_LEVEL) {
+  return Math.floor(boardSize * boardSize * getSnakeLevelObstacleFieldCoverageRatio(level));
 }
 
 describe("snake game engine", () => {
@@ -191,6 +204,9 @@ describe("snake game engine", () => {
       "shrinkFood",
     ]);
     expect(getPickupIntroductionThreshold("food")).toBe(0);
+    expect(getSnakeLevelPickupTypeLimit(1)).toBe(1);
+    expect(getSnakeLevelPickupTypeLimit(3)).toBe(3);
+    expect(getSnakeLevelPickupTypeLimit(99)).toBe(SNAKE_PICKUP_INTRODUCTION_ORDER.length);
     TIMED_FOOD_KINDS.forEach((kind, index) => {
       const introductionThreshold = (index + 1) * PICKUPS_PER_ITEM_INTRODUCTION;
 
@@ -209,6 +225,50 @@ describe("snake game engine", () => {
       "slowFood",
       "shrinkFood",
     ]);
+    expect(isPickupAvailableInLevel("food", 1)).toBe(true);
+    expect(isPickupAvailableInLevel("bonusFood", 1)).toBe(false);
+    expect(isPickupIntroduced("bonusFood", 999, 1)).toBe(false);
+    expect(isPickupIntroduced("bonusFood", 3, 2)).toBe(true);
+    expect(isPickupIntroduced("speedFood", 999, 2)).toBe(false);
+    expect(isPickupIntroduced("speedFood", 6, 3)).toBe(true);
+    expect(getIntroducedTimedFoodKinds(999, 1)).toEqual([]);
+    expect(getIntroducedTimedFoodKinds(999, 2)).toEqual(["bonusFood"]);
+    expect(getIntroducedTimedFoodKinds(999, 3)).toEqual(["bonusFood", "speedFood"]);
+  });
+
+  it("starts level one on a twelve-by-twelve board and derives larger level boards", () => {
+    const game = createInitialGame();
+    const occupiedStartKeys = new Set(
+      [
+        ...game.snake,
+        game.food!,
+        ...createInitialObstacleSafeCells(game.boardSize, game.food!),
+        ...game.obstacles,
+      ].map(getPointKey),
+    );
+
+    expect(FIRST_SNAKE_LEVEL_BOARD_SIZE).toBe(12);
+    expect(getSnakeLevelBoardSize(1)).toBe(12);
+    expect(getSnakeLevelBoardSize(2)).toBe(13);
+    expect(getSnakeLevelBoardSize(4)).toBe(15);
+    expect(getSnakeLevelKeyPickupThreshold(1)).toBe(PICKUPS_PER_BASE_SPEED_INCREASE);
+    expect(getSnakeLevelKeyPickupThreshold(3)).toBe(PICKUPS_PER_BASE_SPEED_INCREASE * 3);
+    expect(game.level).toBe(1);
+    expect(game.boardSize).toBe(12);
+    expect(game.door.isOpen).toBe(false);
+    expect(game.key).toBeNull();
+    expect(occupiedStartKeys.has(getPointKey(game.door.position))).toBe(false);
+    expect(createInitialGame({ level: 3 }).boardSize).toBe(14);
+  });
+
+  it("increases the obstacle field coverage target for each next level", () => {
+    expect(getSnakeLevelObstacleFieldCoverageRatio(1)).toBe(OBSTACLE_FIELD_COVERAGE_RATIO);
+    expect(getSnakeLevelObstacleFieldCoverageRatio(2)).toBeCloseTo(
+      OBSTACLE_FIELD_COVERAGE_RATIO + OBSTACLE_FIELD_COVERAGE_RATIO_LEVEL_STEP,
+    );
+    expect(getSnakeLevelObstacleFieldCoverageRatio(5)).toBeCloseTo(
+      OBSTACLE_FIELD_COVERAGE_RATIO + OBSTACLE_FIELD_COVERAGE_RATIO_LEVEL_STEP * 4,
+    );
   });
 
   it("randomizes the first red food with the initial-game random source", () => {
@@ -300,6 +360,139 @@ describe("snake game engine", () => {
     expect(getGameSpeed(nextGame)).toBe(STARTING_GAME_SPEED);
   });
 
+  it("spawns the door key after the current level pickup threshold is reached", () => {
+    const game = createRunningGame({
+      door: {
+        isOpen: false,
+        position: { x: 10, y: 10 },
+      },
+      food: { x: 6, y: 5 },
+      level: 1,
+      pickedUpObjects: PICKUPS_PER_BASE_SPEED_INCREASE - 1,
+      score: PICKUPS_PER_BASE_SPEED_INCREASE - 1,
+      snake: [
+        { x: 5, y: 5 },
+        { x: 4, y: 5 },
+        { x: 3, y: 5 },
+      ],
+    });
+
+    const nextGame = advanceSnakeGame(game, { random: () => 0 });
+    const key = nextGame.key;
+
+    expect(nextGame.score).toBe(PICKUPS_PER_BASE_SPEED_INCREASE);
+    expect(nextGame.pickedUpObjects).toBe(PICKUPS_PER_BASE_SPEED_INCREASE);
+    expect(nextGame.door.isOpen).toBe(false);
+    expect(key).not.toBeNull();
+    expect(isSamePoint(key!, nextGame.door.position)).toBe(false);
+    expectDifferentPoint(key, nextGame.food);
+    expect(nextGame.snake.every((segment) => !isSamePoint(key!, segment))).toBe(true);
+    expect(nextGame.obstacles.every((obstacle) => !isSamePoint(key!, obstacle))).toBe(true);
+  });
+
+  it("opens the door when the snake picks up the key without changing score or pickup count", () => {
+    const game = createRunningGame({
+      door: {
+        isOpen: false,
+        position: { x: 10, y: 10 },
+      },
+      food: { x: 9, y: 9 },
+      key: { x: 6, y: 5 },
+      pickedUpObjects: PICKUPS_PER_BASE_SPEED_INCREASE,
+      score: 8,
+      snake: [
+        { x: 5, y: 5 },
+        { x: 4, y: 5 },
+        { x: 3, y: 5 },
+      ],
+    });
+
+    const nextGame = advanceSnakeGame(game);
+
+    expect(nextGame.door.isOpen).toBe(true);
+    expect(nextGame.key).toBeNull();
+    expect(nextGame.score).toBe(8);
+    expect(nextGame.pickedUpObjects).toBe(PICKUPS_PER_BASE_SPEED_INCREASE);
+    expect(nextGame.snake).toHaveLength(game.snake.length);
+    expect(nextGame.snake[0]).toEqual({ x: 6, y: 5 });
+  });
+
+  it("ends the game when the snake hits a closed door", () => {
+    const game = createRunningGame({
+      bonusFood: {
+        expiresAt: 8_000,
+        position: { x: 1, y: 1 },
+      },
+      door: {
+        isOpen: false,
+        position: { x: 6, y: 5 },
+      },
+      food: { x: 9, y: 9 },
+      key: { x: 2, y: 1 },
+      score: 4,
+      snake: [
+        { x: 5, y: 5 },
+        { x: 4, y: 5 },
+        { x: 3, y: 5 },
+      ],
+    });
+
+    const nextGame = advanceSnakeGame(game);
+
+    expect(nextGame.status).toBe("lost");
+    expect(nextGame.score).toBe(4);
+    expect(nextGame.snake).toEqual(game.snake);
+    expect(nextGame.key).toBeNull();
+    expect(nextGame.door).toEqual(game.door);
+    expect(nextGame.bonusFood).toBeNull();
+  });
+
+  it("advances through an open door to the next level while preserving only score", () => {
+    const game = createRunningGame({
+      bestScore: 6,
+      boardSize: 12,
+      bonusFood: {
+        expiresAt: 8_000,
+        position: { x: 1, y: 1 },
+      },
+      door: {
+        isOpen: true,
+        position: { x: 6, y: 5 },
+      },
+      food: { x: 9, y: 9 },
+      level: 1,
+      pickedUpObjects: 12,
+      score: 9,
+      snake: [
+        { x: 5, y: 5 },
+        { x: 4, y: 5 },
+        { x: 3, y: 5 },
+      ],
+      speedBoosts: 3,
+    });
+
+    const nextGame = advanceSnakeGame(game, {
+      random: createRandomSequence([0, 0, 0, 0, 0, 0]),
+    });
+
+    expect(nextGame.status).toBe("running");
+    expect(nextGame.level).toBe(2);
+    expect(nextGame.boardSize).toBe(13);
+    expect(nextGame.score).toBe(9);
+    expect(nextGame.bestScore).toBe(9);
+    expect(nextGame.pickedUpObjects).toBe(0);
+    expect(nextGame.speedBoosts).toBe(0);
+    expect(getGameSpeed(nextGame)).toBe(STARTING_GAME_SPEED);
+    expect(nextGame.door.isOpen).toBe(false);
+    expect(nextGame.key).toBeNull();
+    expect(nextGame.bonusFood).toBeNull();
+    expect(nextGame.snake).toEqual([
+      { x: 6, y: 6 },
+      { x: 5, y: 6 },
+      { x: 4, y: 6 },
+    ]);
+  });
+
   it("generates persistent obstacle islands away from the starting path", () => {
     const game = createInitialGame({
       boardSize: 11,
@@ -353,6 +546,38 @@ describe("snake game engine", () => {
     expect(Math.abs(smallCoverage - largeCoverage)).toBeLessThan(0.01);
   });
 
+  it("uses level progression when budgeting generated obstacle cells", () => {
+    const boardSize = 20;
+    const safeCells = createInitialObstacleSafeCells(boardSize);
+    const levelOneObstacles = generateObstacles(boardSize, safeCells, {
+      level: 1,
+      random: createRandomSequence([0]),
+    });
+    const levelFourObstacles = generateObstacles(boardSize, safeCells, {
+      level: 4,
+      random: createRandomSequence([0]),
+    });
+    const levelOneBudget = getObstacleCellBudget(boardSize, 1);
+    const levelFourBudget = getObstacleCellBudget(boardSize, 4);
+    const levelFourGame = createInitialGame({
+      level: 4,
+      random: createRandomSequence([0]),
+    });
+
+    expect(levelFourBudget).toBeGreaterThan(levelOneBudget);
+    expect(levelOneObstacles.length).toBeLessThanOrEqual(levelOneBudget);
+    expect(levelFourObstacles.length).toBeLessThanOrEqual(levelFourBudget);
+    expect(levelOneBudget - levelOneObstacles.length).toBeLessThan(OBSTACLE_CLUSTER_MIN_SIZE);
+    expect(levelFourBudget - levelFourObstacles.length).toBeLessThan(OBSTACLE_CLUSTER_MIN_SIZE);
+    expect(levelFourObstacles.length).toBeGreaterThan(levelOneObstacles.length);
+    expect(levelFourGame.obstacles.length).toBeLessThanOrEqual(
+      getObstacleCellBudget(levelFourGame.boardSize, levelFourGame.level),
+    );
+    expect(levelFourGame.obstacles.length).toBeGreaterThan(
+      getObstacleCellBudget(levelFourGame.boardSize),
+    );
+  });
+
   it("caps each generated obstacle cluster at six cells", () => {
     const obstacles = generateObstacles(
       19,
@@ -390,7 +615,11 @@ describe("snake game engine", () => {
 
   it("spawns timed foods only after their introduction threshold", () => {
     TIMED_FOOD_KINDS.forEach((kind) => {
+      const level = SNAKE_PICKUP_INTRODUCTION_ORDER.findIndex(
+        (candidateKind) => candidateKind === kind,
+      ) + 1;
       const blockedGame = createRunningGame({
+        level,
         pickedUpObjects: getPickupIntroductionThreshold(kind) - 1,
       });
       const introducedGame = createRunningGameWithIntroducedTimedFood(kind);
@@ -466,7 +695,11 @@ describe("snake game engine", () => {
     });
 
     expect(nextGame.bonusFood).not.toBeNull();
-    expect(nextGame.bonusFood?.position).toEqual({ x: 0, y: 0 });
+    expectDifferentPoint(nextGame.bonusFood!.position, nextGame.door.position);
+    expectDifferentPoint(nextGame.bonusFood!.position, nextGame.food);
+    expect(nextGame.snake.every((segment) => !isSamePoint(nextGame.bonusFood!.position, segment))).toBe(
+      true,
+    );
     expect(getManhattanDistance(nextGame.bonusFood!.position, obstacle)).toBeGreaterThan(
       BONUS_FOOD_OBSTACLE_DISTANCE_MAX,
     );
@@ -484,7 +717,8 @@ describe("snake game engine", () => {
     });
 
     expect(nextGame.speedFood).not.toBeNull();
-    expect(nextGame.speedFood?.position).toEqual({ x: 0, y: 0 });
+    expectDifferentPoint(nextGame.speedFood!.position, nextGame.door.position);
+    expectDifferentPoint(nextGame.speedFood!.position, nextGame.food);
     expect(getManhattanDistance(nextGame.speedFood!.position, obstacle)).not.toBe(1);
   });
 

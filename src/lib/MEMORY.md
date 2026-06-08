@@ -29,7 +29,7 @@ This file covers deterministic game engines and shared source logic under
 
 - `leaderboard.ts` owns leaderboard key creation, normalization, sorting,
   top-three ranking, pending-entry calculation, and client fetch/submit helpers.
-  Keys use stable game-and-parameter segments such as `snake|board=19` or
+  Keys use stable game-and-parameter segments such as `snake|mode=levels` or
   `tetris|board=10x20|level=3`.
 - `user-profile.ts` owns shared auth, user, game-session, and profile-stat
   types; display-name/password/game-id/session-id validation; and client helpers
@@ -47,7 +47,14 @@ This file covers deterministic game engines and shared source logic under
   engine and React rendering code.
 - Snake pickup progression order lives in
   `SNAKE_PICKUP_INTRODUCTION_ORDER` in `snake-game-engine.ts`; timed-food kinds
-  and introduction thresholds are derived from that single order.
+  and introduction thresholds are derived from that single order. Level
+  progression applies an additional level-number cap so level 1 only has red
+  apples, level 2 can unlock yellow apples, level 3 can unlock purple diamonds,
+  and later levels continue through the same order.
+- Snake level generation in `snake-game-engine.ts` owns the board-size formula,
+  level-scaled obstacle coverage, door placement, key spawning threshold,
+  closed-door collision loss, and open-door transition. Entering an open door
+  creates the next level and preserves only the score from the previous level.
 - `utils.ts` provides shared utility glue such as class-name merging for shadcn
   and Tailwind components.
 

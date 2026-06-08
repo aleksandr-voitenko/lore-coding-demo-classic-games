@@ -54,8 +54,10 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   receive selected values as `initial*` props and keep those values in game state
   so restart, terminal replay, board rendering, accessibility labels, and
   leaderboard keys remain scoped to the chosen parameters.
-- Leaderboard keys are game-and-parameter scoped. Most games rank higher scores
-  first; Minesweeper submits only won boards and ranks lower elapsed times first.
+- Leaderboard keys are game-and-parameter scoped. Snake uses the stable
+  `snake|mode=levels` key for its level-progression run because board size
+  changes during play. Most games rank higher scores first; Minesweeper submits
+  only won boards and ranks lower elapsed times first.
 - The default leaderboard database path remains `.data/snake-leaderboard.sqlite`
   for existing Snake deployments. `GAME_LEADERBOARD_SQLITE_PATH` is the preferred
   durable override, with `SNAKE_LEADERBOARD_SQLITE_PATH` still honored as a

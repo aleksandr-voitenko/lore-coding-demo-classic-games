@@ -9,12 +9,6 @@ import { PLAYABLE_GAME_COMPONENTS } from "./game-launcher-playables";
 
 const EXPECTED_PARAMETER_SELECTS = [
   {
-    defaultLabel: "19 x 19",
-    defaultValue: "19",
-    label: "Field size",
-    testId: "snake-board-size",
-  },
-  {
     defaultLabel: "10 x 20",
     defaultValue: "10x20",
     label: "Board",
@@ -57,8 +51,8 @@ const EXPECTED_PARAMETER_SELECTS = [
     testId: "space-invaders-board-size",
   },
   {
-    defaultLabel: "55",
-    defaultValue: "55",
+    defaultLabel: "50",
+    defaultValue: "50",
     label: "Aliens",
     testId: "space-invaders-aliens",
   },
@@ -126,6 +120,7 @@ describe("game launcher", () => {
       expect(markup).toContain('data-testid="' + parameter.testId + '"');
     }
 
+    expect(markup).not.toContain('data-testid="snake-board-size"');
     expect(markup).not.toContain(">Mode<");
     expect(markup).not.toContain(">Records<");
     expect(markup).not.toContain(">Top 3<");

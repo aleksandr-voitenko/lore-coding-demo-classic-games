@@ -59,7 +59,7 @@ test("mobile viewport keeps launcher card, actions, Help, and leaderboard usable
   const playerName = createMobilePlayerName(testInfo);
 
   await seedLeaderboardRecord(request, {
-    leaderboardKey: "snake|board=19",
+    leaderboardKey: "snake|mode=levels",
     name: playerName,
     score: 42,
   });
