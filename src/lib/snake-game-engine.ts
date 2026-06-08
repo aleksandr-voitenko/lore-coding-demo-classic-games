@@ -443,6 +443,11 @@ export function createInitialObstacleSafeCells(boardSize: number, food = createI
     [...snake, food, ...createInitialFoodPath(head, food)].map((cell) => [getPointKey(cell), cell]),
   );
 
+  for (let x = head.x + 1; x < boardSize; x += 1) {
+    const laneCell = { x, y: head.y };
+    safeCells.set(getPointKey(laneCell), laneCell);
+  }
+
   ORTHOGONAL_OFFSETS.forEach((offset) => {
     const neighbor = {
       x: head.x + offset.x,

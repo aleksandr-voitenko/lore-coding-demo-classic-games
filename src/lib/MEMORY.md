@@ -55,6 +55,10 @@ This file covers deterministic game engines and shared source logic under
   level-scaled obstacle coverage, door placement, key spawning threshold,
   closed-door collision loss, and open-door transition. Entering an open door
   creates the next level and preserves only the score from the previous level.
+- Snake initial hazard safety reserves the starting snake, first red food,
+  first-food route, immediate head neighbors, and the full row to the right of
+  the initial head before door and obstacle generation. This keeps the default
+  rightward start lane free of generated collision hazards.
 - `utils.ts` provides shared utility glue such as class-name merging for shadcn
   and Tailwind components.
 

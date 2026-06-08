@@ -141,6 +141,15 @@ function getObstacleCellBudget(boardSize: number, level = FIRST_SNAKE_LEVEL) {
   return Math.floor(boardSize * boardSize * getSnakeLevelObstacleFieldCoverageRatio(level));
 }
 
+function getInitialRightLane(boardSize: number) {
+  const center = Math.floor(boardSize / 2);
+
+  return Array.from({ length: boardSize - center - 1 }, (_, index) => ({
+    x: center + index + 1,
+    y: center,
+  }));
+}
+
 describe("snake game engine", () => {
   it("keeps timed food rules aligned with timed food kinds", () => {
     expect(Object.keys(TIMED_FOOD_RULES)).toEqual([...TIMED_FOOD_KINDS]);
@@ -294,6 +303,17 @@ describe("snake game engine", () => {
       expect(game.snake.every((segment) => !isSamePoint(food, segment))).toBe(true);
       expect(game.obstacles.every((obstacle) => !isSamePoint(food, obstacle))).toBe(true);
     });
+  });
+
+  it("reserves the initial rightward lane even when first food starts elsewhere", () => {
+    const boardSize = 11;
+    const safeCellKeys = new Set(
+      createInitialObstacleSafeCells(boardSize, { x: 0, y: 0 }).map(getPointKey),
+    );
+
+    expect(getInitialRightLane(boardSize).every((cell) => safeCellKeys.has(getPointKey(cell)))).toBe(
+      true,
+    );
   });
 
   it("returns no red-food position when every board cell is occupied", () => {
@@ -518,6 +538,19 @@ describe("snake game engine", () => {
     );
     expect(game.obstacles.every((obstacle) => !safeCellKeys.has(getPointKey(obstacle)))).toBe(true);
     expect(clusters.every((cluster) => cluster.length <= OBSTACLE_CLUSTER_MAX_SIZE)).toBe(true);
+  });
+
+  it("keeps generated level hazards off the initial rightward lane", () => {
+    const game = createInitialGame({
+      boardSize: 11,
+      random: createRandomSequence([0, 0.46, 0.46, 0.99, 0, 0, 0, 0]),
+    });
+    const laneCellKeys = new Set(getInitialRightLane(game.boardSize).map(getPointKey));
+
+    expect(laneCellKeys.has(getPointKey(game.door.position))).toBe(false);
+    expect(game.obstacles.every((obstacle) => !laneCellKeys.has(getPointKey(obstacle)))).toBe(
+      true,
+    );
   });
 
   it("scales generated obstacle cells to the configured field coverage", () => {
