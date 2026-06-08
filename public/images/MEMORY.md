@@ -25,8 +25,10 @@ This file covers public image assets under `public/images/`.
   dedicated `alien-splitter.png` sprite, Armored Aliens use
   `alien-armored-1.png`, `alien-armored-2.png`, and `alien-armored-3.png` for
   one, two, and three remaining HP, while ordinary formation rows use the
-  row-colored `alien-<color>.png` sprites. Shield-absorbed player shots use
-  `explosion-shield.png` while keeping the existing explosion animation timing.
+  row-colored `alien-<color>.png` sprites. Sprite-backed invader shots use
+  `invader-shot-<kind>.png` filenames matching the engine's invader shot kind
+  strings. Shield-absorbed player shots use `explosion-shield.png` while keeping
+  the existing explosion animation timing.
   The in-board HUD uses
   `hud-health.png` and `hud-score.png` for the top-corner health and score
   readouts. Power-up pickup icons use `power-up-<kind>.png` filenames matching

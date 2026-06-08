@@ -9,6 +9,7 @@ import {
   type SpaceInvadersExplosionKind,
   type SpaceInvadersExplosionVariant,
   type SpaceInvadersGameState,
+  type SpaceInvadersInvaderShot,
   type SpaceInvadersInvaderShotKind,
   type SpaceInvadersPlayerShotKind,
   type SpaceInvader,
@@ -44,6 +45,17 @@ const playerPiercingShotSpriteSrc = getSpaceInvadersAssetSrc("player-piercing-sh
 const ufoSpriteSrc = getSpaceInvadersAssetSrc("ufo");
 const hudHealthIconSrc = getSpaceInvadersAssetSrc("hud-health");
 const hudScoreIconSrc = getSpaceInvadersAssetSrc("hud-score");
+const invaderShotSpriteSrcByKind: Partial<Record<SpaceInvadersInvaderShotKind, string>> = {
+  "armor-wave": getSpaceInvadersAssetSrc("invader-shot-armor-wave"),
+  burst: getSpaceInvadersAssetSrc("invader-shot-burst"),
+  commander: getSpaceInvadersAssetSrc("invader-shot-commander"),
+  counterfire: getSpaceInvadersAssetSrc("invader-shot-counterfire"),
+  needle: getSpaceInvadersAssetSrc("invader-shot-needle"),
+  scatter: getSpaceInvadersAssetSrc("invader-shot-scatter"),
+  standard: getSpaceInvadersAssetSrc("invader-shot-standard"),
+  "splitter-fork": getSpaceInvadersAssetSrc("invader-shot-splitter-fork"),
+  "splitter-fragment": getSpaceInvadersAssetSrc("invader-shot-splitter-fragment"),
+};
 const powerUpSpriteSrcByKind: Record<SpaceInvadersPowerUpKind, string> = {
   "bonus-score": getSpaceInvadersAssetSrc("power-up-bonus-score"),
   "burst-shot": getSpaceInvadersAssetSrc("power-up-burst-shot"),
@@ -243,23 +255,23 @@ function getSpaceInvaderRenderSprite(invader: Pick<SpaceInvader, "hitPoints" | "
 
 const invaderShotClassNames: Record<SpaceInvadersInvaderShotKind, string> = {
   "armor-wave":
-    "rounded-[0.45rem] border border-[color-mix(in_oklch,white_34%,var(--invaders-yellow))] bg-[var(--invaders-yellow)] shadow-[0_0_20px_color-mix(in_oklch,var(--invaders-yellow)_84%,transparent)]",
+    "drop-shadow-[0_0_20px_color-mix(in_oklch,var(--invaders-yellow)_84%,transparent)]",
   commander:
-    "rounded-[0.2rem] bg-[var(--invaders-yellow)] shadow-[0_0_14px_color-mix(in_oklch,var(--invaders-yellow)_72%,transparent)]",
+    "drop-shadow-[0_0_14px_color-mix(in_oklch,var(--invaders-yellow)_72%,transparent)]",
   counterfire:
-    "rounded-full bg-[var(--invaders-red)] shadow-[0_0_16px_color-mix(in_oklch,var(--invaders-red)_82%,transparent)]",
+    "drop-shadow-[0_0_16px_color-mix(in_oklch,var(--invaders-red)_82%,transparent)]",
   needle:
-    "rounded-full bg-[var(--invaders-cyan)] shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-cyan)_78%,transparent)]",
+    "drop-shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-cyan)_78%,transparent)]",
   scatter:
-    "rounded-full bg-[var(--invaders-lime)] shadow-[0_0_10px_color-mix(in_oklch,var(--invaders-lime)_72%,transparent)]",
+    "drop-shadow-[0_0_10px_color-mix(in_oklch,var(--invaders-lime)_72%,transparent)]",
   standard:
-    "rounded-full bg-[var(--invaders-magenta)] shadow-[0_0_10px_color-mix(in_oklch,var(--invaders-magenta)_70%,transparent)]",
+    "drop-shadow-[0_0_10px_color-mix(in_oklch,var(--invaders-magenta)_70%,transparent)]",
   "splitter-fork":
-    "rounded-[0.45rem] bg-[var(--invaders-magenta)] shadow-[0_0_16px_color-mix(in_oklch,var(--invaders-magenta)_82%,transparent)]",
+    "drop-shadow-[0_0_16px_color-mix(in_oklch,var(--invaders-magenta)_82%,transparent)]",
   "splitter-fragment":
-    "rounded-full bg-[var(--invaders-magenta)] shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-magenta)_74%,transparent)]",
+    "drop-shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-magenta)_74%,transparent)]",
   burst:
-    "rounded-[0.35rem] bg-[var(--invaders-red)] shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-red)_70%,transparent)]",
+    "drop-shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-red)_70%,transparent)]",
 };
 
 const explosionClassNames: Record<SpaceInvadersExplosionKind, string> = {
@@ -383,6 +395,45 @@ function getPlayerShotSpriteSrc(kind: SpaceInvadersPlayerShotKind) {
   }
 
   return playerShotSpriteSrc;
+}
+
+function getInvaderShotSpriteStyle(kind: SpaceInvadersInvaderShotKind): CSSProperties {
+  const spriteSrc = invaderShotSpriteSrcByKind[kind];
+
+  return spriteSrc === undefined ? {} : { backgroundImage: `url("${spriteSrc}")` };
+}
+
+function shouldFlipInvaderShotSprite(
+  shot: Pick<SpaceInvadersInvaderShot, "kind" | "velocityX">,
+) {
+  return shot.kind === "splitter-fragment" && shot.velocityX > 0;
+}
+
+function getInvaderShotRenderStyle(
+  shot: SpaceInvadersInvaderShot,
+  game: Pick<SpaceInvadersGameState, "boardHeight" | "boardWidth">,
+): CSSProperties {
+  const entityStyle = getBoardEntityStyle({
+    boardHeight: game.boardHeight,
+    boardWidth: game.boardWidth,
+    height: shot.height,
+    width: shot.width,
+    x: shot.x,
+    y: shot.y,
+  });
+  const style = {
+    ...getInvaderShotSpriteStyle(shot.kind),
+    ...entityStyle,
+  };
+
+  if (!shouldFlipInvaderShotSprite(shot) || entityStyle.transform === undefined) {
+    return style;
+  }
+
+  return {
+    ...style,
+    transform: `${entityStyle.transform} scaleX(-1)`,
+  };
 }
 
 function getExplosionSpriteSrc(
@@ -627,20 +678,13 @@ export function SpaceInvadersBoard({
           <span
             aria-hidden="true"
             className={cn(
-              "absolute left-0 top-0 will-change-transform",
+              "absolute left-0 top-0 bg-contain bg-center bg-no-repeat will-change-transform [image-rendering:pixelated]",
               invaderShotClassNames[shot.kind],
             )}
             data-shot-kind={shot.kind}
             data-testid="space-invaders-invader-shot"
             key={shot.id}
-            style={getBoardEntityStyle({
-              boardHeight: game.boardHeight,
-              boardWidth: game.boardWidth,
-              height: shot.height,
-              width: shot.width,
-              x: shot.x,
-              y: shot.y,
-            })}
+            style={getInvaderShotRenderStyle(shot, game)}
           />
         ))}
 

@@ -225,47 +225,53 @@ describe("space invaders projectile engine", () => {
       width: 8,
     });
     expect(burst.invaderShots[0]).toMatchObject({
-      height: 18,
+      height: 21.6,
       kind: "burst",
       sourceRow: 1,
       velocityX: 0,
       velocityY: 3.45,
-      width: 7,
+      width: 8.4,
     });
     expect(burst.invaderBurst).toMatchObject({
       remainingShots: 2,
     });
     expect(needle.invaderShots[0]).toMatchObject({
-      height: 24,
+      height: 34,
       kind: "needle",
       sourceRow: 3,
       velocityX: 0,
       velocityY: 4.9,
-      width: 3,
+      width: 4.8,
     });
     expect(scatter.invaderShots).toHaveLength(3);
     expect(scatter.invaderShots).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          height: 12,
           kind: "scatter",
           sourceRow: 2,
           ttlTicks: 96,
           velocityX: -1.25,
           velocityY: 2.8,
+          width: 12,
         }),
         expect.objectContaining({
+          height: 12,
           kind: "scatter",
           sourceRow: 2,
           ttlTicks: 96,
           velocityX: 0,
           velocityY: 2.8,
+          width: 12,
         }),
         expect.objectContaining({
+          height: 12,
           kind: "scatter",
           sourceRow: 2,
           ttlTicks: 96,
           velocityX: 1.25,
           velocityY: 2.8,
+          width: 12,
         }),
       ]),
     );
@@ -275,7 +281,7 @@ describe("space invaders projectile engine", () => {
       sourceRow: 4,
       velocityX: 0,
       velocityY: 3.2,
-      width: 5,
+      width: 10,
     });
     expect(commander.invaderShotCooldownTicks).toBeGreaterThan(
       standard.invaderShotCooldownTicks,
@@ -318,7 +324,7 @@ describe("space invaders projectile engine", () => {
         sourceRow: shooter.row,
         velocityX: 0,
         velocityY: 3.2,
-        width: 5,
+        width: 10,
       });
       expect(advanced.invaderBurst).toBeNull();
       expect(advanced.nextInvaderShotId).toBe(1);
@@ -420,15 +426,15 @@ describe("space invaders projectile engine", () => {
     expect(fired.invaderShots).toHaveLength(1);
     expect(fork).toMatchObject({
       ageTicks: 0,
-      height: 14,
+      height: 16.8,
       id: "invader-shot-0",
       kind: "splitter-fork",
       sourceInvaderId: shooter.id,
       sourceRow: shooter.row,
       ttlTicks: null,
       velocityX: 0,
-      velocityY: 2.7,
-      width: 9,
+      velocityY: 5.4,
+      width: 10.8,
     });
     expect(fork.x).toBeCloseTo(shooter.x + shooter.width / 2 - fork.width / 2);
     expect(fork.y).toBeCloseTo(shooter.y + shooter.height + 1);
@@ -461,12 +467,12 @@ describe("space invaders projectile engine", () => {
       expect.arrayContaining([
         expect.objectContaining({
           ageTicks: 0,
-          height: 12,
+          height: 12.9,
           sourceInvaderId: shooter.id,
           sourceRow: shooter.row,
           ttlTicks: null,
           velocityY: 3.4,
-          width: 5,
+          width: 9,
         }),
       ]),
     );
@@ -534,12 +540,12 @@ describe("space invaders projectile engine", () => {
     expect(fired.invaderShots).toHaveLength(1);
     expect(shot).toMatchObject({
       ageTicks: 0,
-      height: 7,
+      height: 9.1,
       kind: "counterfire",
       sourceInvaderId: shooter.id,
       sourceRow: shooter.row,
       ttlTicks: null,
-      width: 16,
+      width: 20.8,
     });
     expect(shot.velocityY).toBeCloseTo(5.3 * 1.15);
     expect(shot.velocityX).toBeGreaterThan(0);
