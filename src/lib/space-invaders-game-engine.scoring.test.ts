@@ -7,6 +7,7 @@ import {
   createRunningGame,
   fireSpaceInvadersShot,
   getInvader,
+  SPACE_INVADERS_COLUMNS,
   SPACE_INVADERS_HIT_STREAK_BONUS_CAP,
   SPACE_INVADERS_HIT_STREAK_BONUS_STEP,
   SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_CAP,
@@ -377,7 +378,9 @@ describe("space invaders scoring engine", () => {
 
         return {
           ...invader,
-          isActive: invader.id === getInvader(game, SPACE_INVADERS_ROWS - 1, 10).id,
+          isActive:
+            invader.id ===
+            getInvader(game, SPACE_INVADERS_ROWS - 1, SPACE_INVADERS_COLUMNS - 1).id,
         };
       }),
       playerShots: [

@@ -90,6 +90,9 @@ describe("space invaders formation engine", () => {
     expect(game.ufo.cooldownTicks).toBeGreaterThan(0);
     expect(game.invaders).toHaveLength(SPACE_INVADERS_COLUMNS * SPACE_INVADERS_ROWS);
     expect(game.invaders.every((invader) => invader.isActive)).toBe(true);
+    expect(getInvader(game, 0, 1).x - (game.invaders[0]!.x + game.invaders[0]!.width)).toBeCloseTo(
+      9,
+    );
     expect(diverInvaders).toHaveLength(10);
     expect(diverInvaders.every((invader) => invader.row < SPACE_INVADERS_ROWS - 1)).toBe(true);
     expect(shieldBearerInvaders).toHaveLength(SPACE_INVADERS_SHIELD_BEARER_COUNT);
@@ -185,10 +188,6 @@ describe("space invaders formation engine", () => {
       kind: "diver",
       points: 30,
     });
-    expect(getInvader(game, 0, 10)).toMatchObject({
-      kind: "standard",
-      points: 30,
-    });
     expect(getInvader(game, 1, 0)).toMatchObject({
       kind: "shield-bearer",
       points: 20,
@@ -202,7 +201,7 @@ describe("space invaders formation engine", () => {
       kind: "revenge",
       points: 20,
     });
-    expect(getInvader(game, 1, 10)).toMatchObject({
+    expect(getInvader(game, 2, 0)).toMatchObject({
       hitPoints: SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS,
       kind: "armored",
       points: 20,

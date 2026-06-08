@@ -12,6 +12,7 @@ import {
   isSpaceInvaderShielded,
   SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS,
   SPACE_INVADERS_BOARD_WIDTH,
+  SPACE_INVADERS_COLUMNS,
   SPACE_INVADERS_HIT_STREAK_BONUS_STEP,
   SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
   SPACE_INVADERS_PROJECTILE_EXPLOSION_HEIGHT,
@@ -664,7 +665,11 @@ describe("space invaders collision engine", () => {
   it("splits destroyed Splitter Aliens into two smaller active fragments", () => {
     const game = createInitialSpaceInvadersGame({ random: () => 0 });
     const splitterAlien = game.invaders.find((invader) => invader.kind === "splitter")!;
-    const remainingInvader = getInvader(game, SPACE_INVADERS_ROWS - 1, 10);
+    const remainingInvader = getInvader(
+      game,
+      SPACE_INVADERS_ROWS - 1,
+      SPACE_INVADERS_COLUMNS - 1,
+    );
     const activeInvaderIds = new Set([splitterAlien.id, remainingInvader.id]);
     const runningGame = createRunningGame({
       invaderShotCooldownTicks: 1_000,
@@ -951,7 +956,11 @@ describe("space invaders collision engine", () => {
       x: 180,
       y: 180,
     };
-    const remainingInvader = getInvader(game, SPACE_INVADERS_ROWS - 1, 10);
+    const remainingInvader = getInvader(
+      game,
+      SPACE_INVADERS_ROWS - 1,
+      SPACE_INVADERS_COLUMNS - 1,
+    );
     const advanced = advanceSpaceInvadersGame(
       createRunningGame({
         invaderShotCooldownTicks: 1_000,
@@ -1125,7 +1134,11 @@ describe("space invaders collision engine", () => {
       ...getInvader(game, 1, 4),
       kind: "standard" as const,
     };
-    const remainingInvader = getInvader(game, SPACE_INVADERS_ROWS - 1, 10);
+    const remainingInvader = getInvader(
+      game,
+      SPACE_INVADERS_ROWS - 1,
+      SPACE_INVADERS_COLUMNS - 1,
+    );
     const advanced = advanceSpaceInvadersGame(
       createRunningGame({
         invaderShotCooldownTicks: 1_000,

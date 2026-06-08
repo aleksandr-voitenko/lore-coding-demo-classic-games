@@ -71,10 +71,10 @@ const startLeaderboardIsolationCases: StartLeaderboardIsolationCase[] = [
     sortDirection: "asc",
   },
   {
-    alternateKey: "space-invaders|board=420x560|aliens=55",
+    alternateKey: "space-invaders|board=420x560|aliens=50",
     alternateParameters: [
       { testId: "space-invaders-board-size", value: "420x560" },
-      { testId: "space-invaders-aliens", value: "55" },
+      { testId: "space-invaders-aliens", value: "50" },
     ],
     gameId: "space-invaders",
     leaderboardTestId: "space-invaders-start-leaderboard",

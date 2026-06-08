@@ -519,7 +519,7 @@ describe("game board renderers", () => {
     expectMarkup(markup, [
       'data-testid="space-invaders-board-frame"',
       'data-testid="space-invaders-board"',
-      "Space Invaders board. Field 420 by 560. Score 0. Lives 3. 55 invaders remaining. 7 power ups falling. Running.",
+      "Space Invaders board. Field 420 by 560. Score 0. Lives 3. 50 invaders remaining. 7 power ups falling. Running.",
       'data-testid="space-invaders-score-hud"',
       'data-testid="space-invaders-score"',
       'data-testid="space-invaders-health-hud"',

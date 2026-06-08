@@ -5,7 +5,7 @@ import type {
 
 export const SPACE_INVADERS_BOARD_WIDTH = 420;
 export const SPACE_INVADERS_BOARD_HEIGHT = 560;
-export const SPACE_INVADERS_COLUMNS = 11;
+export const SPACE_INVADERS_COLUMNS = 10;
 export const SPACE_INVADERS_ROWS = 5;
 export const SPACE_INVADERS_STARTING_LIVES = 3;
 export const SPACE_INVADERS_BASE_Y = 492;
@@ -18,7 +18,7 @@ export const SPACE_INVADERS_BOARD_SIZE_OPTIONS = [
 export const SPACE_INVADERS_ALIEN_COUNT_OPTIONS = [
   { alienCount: 24, columns: 8, label: "24", rows: 3 },
   { alienCount: 40, columns: 10, label: "40", rows: 4 },
-  { alienCount: 55, columns: 11, label: "55", rows: 5 },
+  { alienCount: 50, columns: 10, label: "50", rows: 5 },
 ] as const;
 export const SPACE_INVADERS_EXPLOSION_VARIANTS = [1, 2, 3, 4] as const;
 export const SPACE_INVADERS_POWER_UP_KINDS: SpaceInvadersPowerUpKind[] = [
@@ -96,7 +96,7 @@ export const SPACE_INVADERS_PLAYER_BURST_SHOT_DELAY_TICKS = Math.max(
   0,
   Math.round(300 / SPACE_INVADERS_TICK_DELAY_MS) - 1,
 );
-export const INVADER_GAP_X = 5;
+export const INVADER_GAP_X = 9;
 export const INVADER_GAP_Y = 14;
 export const INVADER_HEIGHT = 23;
 export const INVADER_STEP_X = 0.8;
