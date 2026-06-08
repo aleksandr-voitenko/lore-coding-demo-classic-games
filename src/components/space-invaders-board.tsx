@@ -371,7 +371,7 @@ function getShieldSource(
 
 function getShieldTethers(invaders: SpaceInvader[]): SpaceInvadersShieldTether[] {
   return invaders.flatMap((target) => {
-    if (!target.isActive || target.kind !== "diver" || !target.isDiving) {
+    if (!isShieldTetherTarget(target)) {
       return [];
     }
 
@@ -387,6 +387,14 @@ function getShieldTethers(invaders: SpaceInvader[]): SpaceInvadersShieldTether[]
           },
         ];
   });
+}
+
+function isShieldTetherTarget(invader: SpaceInvader) {
+  return (
+    invader.isActive &&
+    invader.isDiving &&
+    (invader.kind === "diver" || invader.kind === "splitter-fragment")
+  );
 }
 
 function getPlayerShotSpriteSrc(kind: SpaceInvadersPlayerShotKind) {

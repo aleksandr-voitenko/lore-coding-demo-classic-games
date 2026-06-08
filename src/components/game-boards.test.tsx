@@ -671,6 +671,58 @@ describe("game board renderers", () => {
     ]);
   });
 
+  it("renders Space Invaders shield tethers from bearers to shielded Splitter fragments", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const shieldBearer = game.invaders.find(
+      (invader) => invader.kind === "shield-bearer" && invader.column < 10,
+    )!;
+    const targetFragment = {
+      ...game.invaders.find(
+        (invader) =>
+          invader.row === shieldBearer.row &&
+          invader.column === shieldBearer.column + 1,
+      )!,
+      height: shieldBearer.height * 0.7,
+      isDiving: true,
+      kind: "splitter-fragment" as const,
+      width: shieldBearer.width * 0.7,
+      y: shieldBearer.y + 220,
+    };
+    const markup = renderToStaticMarkup(
+      <SpaceInvadersBoard
+        game={{
+          ...game,
+          invaders: game.invaders.map((invader) => {
+            if (invader.id === shieldBearer.id) {
+              return shieldBearer;
+            }
+
+            if (invader.id === targetFragment.id) {
+              return targetFragment;
+            }
+
+            return {
+              ...invader,
+              isActive: false,
+            };
+          }),
+          status: "running",
+        }}
+        statusLabel="Running"
+      />,
+    );
+
+    expectMarkup(markup, [
+      'data-testid="space-invaders-shield-tethers"',
+      'data-testid="space-invaders-shield-tether"',
+      `data-shield-source-id="${shieldBearer.id}"`,
+      `data-shield-target-id="${targetFragment.id}"`,
+      'data-invader-kind="splitter-fragment"',
+      'data-invader-shielded="true"',
+      'data-testid="space-invaders-invader-shield"',
+    ]);
+  });
+
   it("renders Space Invaders respawn shields and hides respawning players", () => {
     const game = createInitialSpaceInvadersGame();
     const steadyShieldMarkup = renderToStaticMarkup(
