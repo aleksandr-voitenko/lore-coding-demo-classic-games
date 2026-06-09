@@ -29,7 +29,11 @@ function getInitialAuthMode(value: string | string[] | undefined): UserAuthMode 
 export function getInitialReplayGameId(value: string | string[] | undefined) {
   const replayGameId = Array.isArray(value) ? value[0] : value;
 
-  return replayGameId === "snake" || replayGameId === "tetris" ? replayGameId : null;
+  return replayGameId === "snake" ||
+    replayGameId === "tetris" ||
+    replayGameId === "twenty-forty-eight"
+    ? replayGameId
+    : null;
 }
 
 export default async function Home({ searchParams }: HomeProps) {

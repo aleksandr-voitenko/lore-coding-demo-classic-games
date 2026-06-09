@@ -70,14 +70,15 @@ This file covers React component ownership and shared game UI conventions under
   intentionally ignored.
 - Snake replay playback is launched through the root launcher query
   `/?replay=snake`, passed into `SnakeGame` as replay mode, and rendered by the
-  focused `snake-replay-player.tsx` component. Tetris follows the same launcher
-  query pattern at `/?replay=tetris` through `tetris-replay-player.tsx`, with the
-  replayed board size and start level coming from the saved payload. Replay mode
-  should not record profile sessions or expose live-game controls; use a
-  Back-only board action rail wired through the shared Escape-to-menu hook to
-  return to the profile during playback. Snake replay playback should mirror
-  live Snake pickup feedback popups by deriving them from replayed game-state
-  transitions.
+  focused `snake-replay-player.tsx` component. Tetris and 2048 follow the same
+  launcher query pattern at `/?replay=tetris` and
+  `/?replay=twenty-forty-eight` through their focused replay-player components,
+  with replayed board/start-level or board/goal parameters coming from the saved
+  payload. Replay mode should not record profile sessions or expose live-game
+  controls; use a Back-only board action rail wired through the shared
+  Escape-to-menu hook to return to the profile during playback. Snake replay
+  playback should mirror live Snake pickup feedback popups by deriving them from
+  replayed game-state transitions.
 - Live replay recordings are one-shot per run. Terminal replay payload capture
   should consume the active recording, and starting a new run should abandon any
   unsaved replay state so stale events cannot be saved later.

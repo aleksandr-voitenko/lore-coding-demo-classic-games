@@ -7,8 +7,9 @@ import {
   ArrowUpIcon,
   PlayIcon,
   RotateCcwIcon,
+  SaveIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { registerGameKeyDown, shouldIgnoreGameKeyDown } from "@/components/game-input";
 import {
@@ -33,18 +34,29 @@ import {
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { TwentyFortyEightBoard } from "@/components/twenty-forty-eight-board";
+import { TwentyFortyEightReplayPlayer } from "@/components/twenty-forty-eight-replay-player";
 import { Button } from "@/components/ui/button";
 import {
   createInitialTwentyFortyEightGame,
   getTwentyFortyEightTopTile,
   moveTwentyFortyEightGame,
   restartTwentyFortyEightGame,
-  startTwentyFortyEightGame,
   type TwentyFortyEightDirection,
   type TwentyFortyEightGameState,
   type TwentyFortyEightStatus,
 } from "@/lib/twenty-forty-eight-game-engine";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
+import {
+  createTwentyFortyEightReplayRandom,
+  createTwentyFortyEightReplayRun,
+  saveTwentyFortyEightReplay,
+  TWENTY_FORTY_EIGHT_REPLAY_GAME_ID,
+  TWENTY_FORTY_EIGHT_REPLAY_SCHEMA_VERSION,
+  type TwentyFortyEightReplayEvent,
+  type TwentyFortyEightReplayEventInput,
+  type TwentyFortyEightReplayPayload,
+  type TwentyFortyEightReplayRun,
+} from "@/lib/twenty-forty-eight-replay";
 import { cn } from "@/lib/utils";
 import { useGameSession } from "@/hooks/use-game-session";
 
@@ -52,6 +64,19 @@ type TwentyFortyEightGameProps = {
   initialBoardSize?: number;
   initialWinTile?: number;
   onBackToMenu?: () => void;
+  onReplayBackToProfile?: () => void;
+  replayMode?: "latest";
+};
+
+type ReplaySaveStatus = "failed" | "idle" | "saved" | "saving";
+
+type TwentyFortyEightReplayRecording = {
+  events: TwentyFortyEightReplayEvent[];
+  nextSeq: number;
+  random: () => number;
+  run: TwentyFortyEightReplayRun;
+  startedAt: string;
+  tick: number;
 };
 
 const statusLabels: Record<Exclude<TwentyFortyEightStatus, "won">, string> = {
@@ -107,30 +132,101 @@ function getTwentyFortyEightStatusLabel(game: TwentyFortyEightGameState) {
 }
 
 function createNewTwentyFortyEightGame({
+  bestScore = 0,
   boardSize,
+  random = Math.random,
   winTile,
 }: {
+  bestScore?: number;
   boardSize?: number;
+  random?: () => number;
   winTile?: number;
 } = {}) {
   return createInitialTwentyFortyEightGame({
+    bestScore,
     boardSize,
-    random: Math.random,
+    random,
     winTile,
   });
+}
+
+function createRunningTwentyFortyEightGame(
+  game: Pick<TwentyFortyEightGameState, "bestScore" | "boardSize" | "winTile">,
+  random: () => number,
+) {
+  return {
+    ...createNewTwentyFortyEightGame({
+      bestScore: game.bestScore,
+      boardSize: game.boardSize,
+      random,
+      winTile: game.winTile,
+    }),
+    status: "running" as const,
+  };
+}
+
+function appendTwentyFortyEightReplayEvent(
+  recording: TwentyFortyEightReplayRecording,
+  event: TwentyFortyEightReplayEventInput,
+) {
+  recording.events.push({
+    ...event,
+    seq: recording.nextSeq,
+    tick: recording.tick,
+  } as TwentyFortyEightReplayEvent);
+  recording.nextSeq += 1;
+
+  if (event.type === "move") {
+    recording.tick += 1;
+  }
 }
 
 export function TwentyFortyEightGame({
   initialBoardSize,
   initialWinTile,
   onBackToMenu,
+  onReplayBackToProfile,
+  replayMode,
 }: TwentyFortyEightGameProps = {}) {
+  if (replayMode === "latest") {
+    return (
+      <TwentyFortyEightReplayPlayer
+        onBackToProfile={onReplayBackToProfile ?? onBackToMenu ?? (() => undefined)}
+      />
+    );
+  }
+
+  return (
+    <TwentyFortyEightLiveGame
+      initialBoardSize={initialBoardSize}
+      initialWinTile={initialWinTile}
+      onBackToMenu={onBackToMenu}
+    />
+  );
+}
+
+function TwentyFortyEightLiveGame({
+  initialBoardSize,
+  initialWinTile,
+  onBackToMenu,
+}: Pick<
+  TwentyFortyEightGameProps,
+  "initialBoardSize" | "initialWinTile" | "onBackToMenu"
+> = {}) {
   const [game, setGame] = useState<TwentyFortyEightGameState>(() =>
     createNewTwentyFortyEightGame({
       boardSize: initialBoardSize,
       winTile: initialWinTile,
     }),
   );
+  const [finishedReplay, setFinishedReplay] =
+    useState<TwentyFortyEightReplayPayload | null>(null);
+  const [isReplayRunPending, setIsReplayRunPending] = useState(false);
+  const [replaySaveStatus, setReplaySaveStatus] = useState<ReplaySaveStatus>("idle");
+  const gameRef = useRef(game);
+  const isReplayRunPendingRef = useRef(false);
+  const pendingInitialDirectionRef = useRef<TwentyFortyEightDirection | null>(null);
+  const replayRecordingRef = useRef<TwentyFortyEightReplayRecording | null>(null);
   const statusLabel = getTwentyFortyEightStatusLabel(game);
   const helpSections = useMemo(
     () => createTwentyFortyEightHelpSections(game.winTile),
@@ -173,19 +269,182 @@ export function TwentyFortyEightGame({
     onBackToMenu,
   });
 
-  const startGame = useCallback(() => {
+  const commitGame = useCallback((nextGame: TwentyFortyEightGameState) => {
+    gameRef.current = nextGame;
+    setGame(nextGame);
+  }, []);
+
+  const updateCommittedGame = useCallback(
+    (updateGame: (current: TwentyFortyEightGameState) => TwentyFortyEightGameState) => {
+      const current = gameRef.current;
+      const nextGame = updateGame(current);
+
+      if (nextGame !== current) {
+        commitGame(nextGame);
+      }
+
+      return nextGame;
+    },
+    [commitGame],
+  );
+
+  const startNewGame = useCallback(async (initialDirection?: TwentyFortyEightDirection) => {
+    if (isReplayRunPendingRef.current) {
+      if (initialDirection !== undefined) {
+        pendingInitialDirectionRef.current = initialDirection;
+      }
+
+      return;
+    }
+
+    isReplayRunPendingRef.current = true;
+    pendingInitialDirectionRef.current = initialDirection ?? null;
+    replayRecordingRef.current = null;
+    setIsReplayRunPending(true);
     resetLeaderboardForm();
-    setGame((current) => startTwentyFortyEightGame(current));
-  }, [resetLeaderboardForm]);
+    setFinishedReplay(null);
+    setReplaySaveStatus("idle");
+
+    try {
+      const run = await createTwentyFortyEightReplayRun();
+      const random = createTwentyFortyEightReplayRandom(run.seed);
+      const recording: TwentyFortyEightReplayRecording = {
+        events: [],
+        nextSeq: 0,
+        random,
+        run,
+        startedAt: new Date().toISOString(),
+        tick: 0,
+      };
+      let nextGame: TwentyFortyEightGameState = createRunningTwentyFortyEightGame(
+        gameRef.current,
+        random,
+      );
+
+      appendTwentyFortyEightReplayEvent(recording, { type: "start" });
+
+      const pendingInitialDirection = pendingInitialDirectionRef.current;
+
+      if (pendingInitialDirection !== null) {
+        appendTwentyFortyEightReplayEvent(recording, {
+          direction: pendingInitialDirection,
+          type: "move",
+        });
+        nextGame = moveTwentyFortyEightGame(nextGame, pendingInitialDirection, {
+          random,
+        });
+      }
+
+      replayRecordingRef.current = recording;
+      commitGame(nextGame);
+    } catch {
+      setReplaySaveStatus("failed");
+    } finally {
+      pendingInitialDirectionRef.current = null;
+      isReplayRunPendingRef.current = false;
+      setIsReplayRunPending(false);
+    }
+  }, [commitGame, resetLeaderboardForm]);
+
+  const startGame = useCallback(() => {
+    void startNewGame();
+  }, [startNewGame]);
 
   const restartGame = useCallback(() => {
+    if (isReplayRunPendingRef.current) {
+      return;
+    }
+
+    replayRecordingRef.current = null;
+    pendingInitialDirectionRef.current = null;
     resetLeaderboardForm();
-    setGame((current) => restartTwentyFortyEightGame(current, { random: Math.random }));
-  }, [resetLeaderboardForm]);
+    setFinishedReplay(null);
+    setReplaySaveStatus("idle");
+    updateCommittedGame((current) =>
+      restartTwentyFortyEightGame(current, { random: Math.random }),
+    );
+  }, [resetLeaderboardForm, updateCommittedGame]);
 
   const moveTiles = useCallback((direction: TwentyFortyEightDirection) => {
-    setGame((current) => moveTwentyFortyEightGame(current, direction, { random: Math.random }));
-  }, []);
+    updateCommittedGame((current) => {
+      if (current.status === "ready") {
+        void startNewGame(direction);
+
+        return current;
+      }
+
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null && current.status === "running") {
+        appendTwentyFortyEightReplayEvent(recording, {
+          direction,
+          type: "move",
+        });
+
+        return moveTwentyFortyEightGame(current, direction, {
+          random: recording.random,
+        });
+      }
+
+      return moveTwentyFortyEightGame(current, direction, { random: Math.random });
+    });
+  }, [startNewGame, updateCommittedGame]);
+
+  const saveFinishedReplay = useCallback(async () => {
+    if (finishedReplay === null || replaySaveStatus === "saving") {
+      return;
+    }
+
+    setReplaySaveStatus("saving");
+
+    try {
+      await saveTwentyFortyEightReplay(finishedReplay);
+      setReplaySaveStatus("saved");
+    } catch {
+      setReplaySaveStatus("failed");
+    }
+  }, [finishedReplay, replaySaveStatus]);
+
+  useEffect(() => {
+    if (game.status !== "lost" && game.status !== "won") {
+      return;
+    }
+
+    const recording = replayRecordingRef.current;
+
+    if (recording === null || finishedReplay !== null) {
+      return;
+    }
+
+    const replay: TwentyFortyEightReplayPayload = {
+      boardSize: game.boardSize,
+      events: [...recording.events],
+      finalMoveCount: game.moveCount,
+      finalScore: game.score,
+      finalStatus: game.status,
+      finalTick: recording.tick,
+      finalTopTile: topTile,
+      gameId: TWENTY_FORTY_EIGHT_REPLAY_GAME_ID,
+      leaderboardKey,
+      runId: recording.run.id,
+      schemaVersion: TWENTY_FORTY_EIGHT_REPLAY_SCHEMA_VERSION,
+      seed: recording.run.seed,
+      startedAt: recording.startedAt,
+      winTile: game.winTile,
+    };
+
+    replayRecordingRef.current = null;
+    setFinishedReplay(replay);
+  }, [
+    finishedReplay,
+    game.boardSize,
+    game.moveCount,
+    game.score,
+    game.status,
+    game.winTile,
+    leaderboardKey,
+    topTile,
+  ]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -273,7 +532,7 @@ export function TwentyFortyEightGame({
               onBackToMenu={requestBackToMenu}
               onHelp={openHelp}
               onRestart={restartGame}
-              restartDisabled={pendingLeaderboardEntry !== null}
+              restartDisabled={isReplayRunPending || pendingLeaderboardEntry !== null}
               testIdPrefix="twenty-forty-eight"
             />
           }
@@ -289,13 +548,14 @@ export function TwentyFortyEightGame({
               <Button
                 className="min-w-32"
                 data-testid="twenty-forty-eight-overlay-start-button"
+                disabled={isReplayRunPending}
                 onClick={startGame}
                 size="lg"
                 type="button"
                 variant="secondary"
               >
                 <PlayIcon data-icon="inline-start" />
-                Start
+                {isReplayRunPending ? "Starting" : "Start"}
               </Button>
               <GameLeaderboardPanel {...leaderboardPanelProps} />
             </GameStartScreen>
@@ -306,6 +566,7 @@ export function TwentyFortyEightGame({
                   <Button
                     className="min-w-36"
                     data-testid="twenty-forty-eight-overlay-new-game-button"
+                    disabled={isReplayRunPending}
                     onClick={restartGame}
                     size="lg"
                     type="button"
@@ -325,6 +586,36 @@ export function TwentyFortyEightGame({
                   title: game.status === "won" ? `${game.winTile} reached` : "No moves left",
                 }}
               />
+              <div className="flex w-full max-w-xs flex-col items-center gap-2">
+                <Button
+                  className="w-full"
+                  data-testid="twenty-forty-eight-save-replay-button"
+                  disabled={
+                    finishedReplay === null ||
+                    replaySaveStatus === "saving" ||
+                    replaySaveStatus === "saved"
+                  }
+                  onClick={saveFinishedReplay}
+                  size="lg"
+                  type="button"
+                  variant="secondary"
+                >
+                  <SaveIcon data-icon="inline-start" />
+                  {replaySaveStatus === "saving"
+                    ? "Saving replay"
+                    : replaySaveStatus === "saved"
+                      ? "Replay saved"
+                      : "Save replay"}
+                </Button>
+                {replaySaveStatus === "failed" ? (
+                  <p
+                    className="text-xs font-medium text-[#cbd5e1]"
+                    data-testid="twenty-forty-eight-save-replay-error"
+                  >
+                    Could not save replay. Sign in and try again.
+                  </p>
+                ) : null}
+              </div>
             </GameEndScreen>
           ) : null}
           {isHelpVisible ? (

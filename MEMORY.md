@@ -44,12 +44,13 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   routes, and `/profile` renders aggregate stats for the current session.
 - Replays cross the same client/server boundary: `src/lib/game-replay.ts` owns
   shared run ids, seed normalization, deterministic replay random creation, API
-  paths, client helpers, and base payload validation; `src/lib/snake-replay.ts`
-  and `src/lib/tetris-replay.ts` own game-specific events and replay
-  application helpers. `/api/replays/<game>/run` issues replay run ids and
-  seeds for supported replay games; `/api/replays/<game>` saves/downloads the
-  current signed-in user's latest replay; `/profile` links saved replays back to
-  `/?replay=snake` or `/?replay=tetris`.
+  paths, client helpers, and base payload validation; `src/lib/snake-replay.ts`,
+  `src/lib/tetris-replay.ts`, and `src/lib/twenty-forty-eight-replay.ts` own
+  game-specific events and replay application helpers. `/api/replays/<game>/run`
+  issues replay run ids and seeds for supported replay games;
+  `/api/replays/<game>` saves/downloads the current signed-in user's latest
+  replay; `/profile` links saved replays back to `/?replay=snake`,
+  `/?replay=tetris`, or `/?replay=twenty-forty-eight`.
 
 ## Cross-Cutting Constraints
 
