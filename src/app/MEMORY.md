@@ -49,6 +49,7 @@ This file covers routes and App Router conventions under `src/app/`.
   sessions. It rejects unsigned requests with `401`; guest play should remain a
   client-side no-op for profile stats.
 - `api/replays/route-handlers.ts` owns reusable replay run and latest replay
-  route factories. `api/replays/snake/run/route.ts` issues Snake replay run ids
-  and seeds for live recording. `api/replays/snake/route.ts` requires a signed-in
-  session to save or download the current user's latest Snake replay.
+  route factories. Supported replay games such as Snake and Tetris expose
+  `api/replays/<game>/run/route.ts` to issue replay run ids and seeds for live
+  recording and `api/replays/<game>/route.ts` to require a signed-in session
+  before saving or downloading the current user's latest replay.

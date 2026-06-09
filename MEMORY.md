@@ -45,10 +45,11 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
 - Replays cross the same client/server boundary: `src/lib/game-replay.ts` owns
   shared run ids, seed normalization, deterministic replay random creation, API
   paths, client helpers, and base payload validation; `src/lib/snake-replay.ts`
-  owns Snake-specific events and replay application helpers. `/api/replays/snake/run`
-  issues Snake run ids and seeds; `/api/replays/snake` saves/downloads the
-  current signed-in user's latest Snake replay; `/profile` links saved replays
-  back to `/?replay=snake`.
+  and `src/lib/tetris-replay.ts` own game-specific events and replay
+  application helpers. `/api/replays/<game>/run` issues replay run ids and
+  seeds for supported replay games; `/api/replays/<game>` saves/downloads the
+  current signed-in user's latest replay; `/profile` links saved replays back to
+  `/?replay=snake` or `/?replay=tetris`.
 
 ## Cross-Cutting Constraints
 
@@ -73,9 +74,9 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   saves remain allowed but do not create `game_sessions` rows. First-party auth
   uses normalized unique display names plus salted password hashes; private
   profile access is derived from the HTTP-only session cookie, never client ids.
-- Snake replay recording may run during guest play, but persisted profile
-  replays are signed-in and scoped by user and game. The MVP keeps one latest
-  replay per user/game in SQLite.
+- Replay recording may run during guest play for supported replay games, but
+  persisted profile replays are signed-in and scoped by user and game. The MVP
+  keeps one latest replay per user/game in SQLite.
 - shadcn/ui is initialized with Tailwind CSS v4, the `base-nova` preset, and the
   `@/*` import alias. The shared button is `src/components/ui/button.tsx`.
 

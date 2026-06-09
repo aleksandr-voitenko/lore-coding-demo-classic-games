@@ -26,10 +26,10 @@ function getInitialAuthMode(value: string | string[] | undefined): UserAuthMode 
   return authMode === "login" || authMode === "signup" ? authMode : null;
 }
 
-function getInitialReplayGameId(value: string | string[] | undefined) {
+export function getInitialReplayGameId(value: string | string[] | undefined) {
   const replayGameId = Array.isArray(value) ? value[0] : value;
 
-  return replayGameId === "snake" ? replayGameId : null;
+  return replayGameId === "snake" || replayGameId === "tetris" ? replayGameId : null;
 }
 
 export default async function Home({ searchParams }: HomeProps) {

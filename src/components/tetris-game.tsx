@@ -7,8 +7,9 @@ import {
   ArrowUpIcon,
   PlayIcon,
   RotateCcwIcon,
+  SaveIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   GameAbandonDialog,
@@ -37,11 +38,12 @@ import {
 } from "@/components/game-input";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { TetrisBoard, tetrominoCellClassNames } from "@/components/tetris-board";
+import { TetrisNextPiecePreview } from "@/components/tetris-next-piece-preview";
+import { TetrisReplayPlayer } from "@/components/tetris-replay-player";
 import { Button } from "@/components/ui/button";
 import {
   advanceTetrisGame,
   createInitialTetrisGame,
-  getTetrominoPreviewCells,
   getTetrisTickDelay,
   hardDropTetrisPiece,
   moveTetrisPiece,
@@ -54,6 +56,17 @@ import {
   type TetrisStatus,
 } from "@/lib/tetris-game-engine";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
+import {
+  createTetrisReplayRandom,
+  createTetrisReplayRun,
+  saveTetrisReplay,
+  TETRIS_REPLAY_GAME_ID,
+  TETRIS_REPLAY_SCHEMA_VERSION,
+  type TetrisReplayEvent,
+  type TetrisReplayEventInput,
+  type TetrisReplayPayload,
+  type TetrisReplayRun,
+} from "@/lib/tetris-replay";
 import { cn } from "@/lib/utils";
 import { useGameSession } from "@/hooks/use-game-session";
 
@@ -62,6 +75,19 @@ type TetrisGameProps = {
   initialBoardWidth?: number;
   initialStartLevel?: number;
   onBackToMenu?: () => void;
+  onReplayBackToProfile?: () => void;
+  replayMode?: "latest";
+};
+
+type ReplaySaveStatus = "failed" | "idle" | "saved" | "saving";
+
+type TetrisReplayRecording = {
+  events: TetrisReplayEvent[];
+  nextSeq: number;
+  random: () => number;
+  run: TetrisReplayRun;
+  startedAt: string;
+  tick: number;
 };
 
 const statusLabels: Record<TetrisStatus, string> = {
@@ -138,60 +164,39 @@ const START_SCREEN_BLOCKS = [
   { kind: "I", x: 3, y: 4 },
 ] satisfies Array<{ kind: TetrominoKind; x: number; y: number }>;
 
-const TETRIS_PREVIEW_CANVAS_CELLS = 4;
-const TETRIS_PREVIEW_GAP_PERCENT = 3;
-const TETRIS_PREVIEW_CELL_SIZE_PERCENT =
-  (100 - TETRIS_PREVIEW_GAP_PERCENT * (TETRIS_PREVIEW_CANVAS_CELLS - 1)) /
-  TETRIS_PREVIEW_CANVAS_CELLS;
-
-type TetrisPreviewBlock = {
-  key: string;
-  leftPercent: number;
-  topPercent: number;
-};
-
-function createRunningTetrisGame({
-  boardHeight,
-  boardWidth,
-  startLevel,
-}: Pick<TetrisGameState, "boardHeight" | "boardWidth" | "startLevel">) {
+function createRunningTetrisGame(
+  {
+    boardHeight,
+    boardWidth,
+    startLevel,
+  }: Pick<TetrisGameState, "boardHeight" | "boardWidth" | "startLevel">,
+  random = Math.random,
+) {
   return {
     ...createInitialTetrisGame({
       boardHeight,
       boardWidth,
-      random: Math.random,
+      random,
       startLevel,
     }),
     status: "running" as const,
   };
 }
 
-function createCenteredPreviewBlocks(kind: TetrominoKind): TetrisPreviewBlock[] {
-  const cells = getTetrominoPreviewCells(kind);
-  const minX = Math.min(...cells.map((cell) => cell.x));
-  const maxX = Math.max(...cells.map((cell) => cell.x));
-  const minY = Math.min(...cells.map((cell) => cell.y));
-  const maxY = Math.max(...cells.map((cell) => cell.y));
-  const width = maxX - minX + 1;
-  const height = maxY - minY + 1;
-  const widthPercent =
-    width * TETRIS_PREVIEW_CELL_SIZE_PERCENT + (width - 1) * TETRIS_PREVIEW_GAP_PERCENT;
-  const heightPercent =
-    height * TETRIS_PREVIEW_CELL_SIZE_PERCENT + (height - 1) * TETRIS_PREVIEW_GAP_PERCENT;
-  const offsetXPercent = (100 - widthPercent) / 2;
-  const offsetYPercent = (100 - heightPercent) / 2;
-  const stepPercent = TETRIS_PREVIEW_CELL_SIZE_PERCENT + TETRIS_PREVIEW_GAP_PERCENT;
+function appendTetrisReplayEvent(
+  recording: TetrisReplayRecording,
+  event: TetrisReplayEventInput,
+) {
+  recording.events.push({
+    ...event,
+    seq: recording.nextSeq,
+    tick: recording.tick,
+  } as TetrisReplayEvent);
+  recording.nextSeq += 1;
 
-  return cells.map((cell) => {
-    const x = cell.x - minX;
-    const y = cell.y - minY;
-
-    return {
-      key: `${x}:${y}`,
-      leftPercent: offsetXPercent + x * stepPercent,
-      topPercent: offsetYPercent + y * stepPercent,
-    };
-  });
+  if (event.type === "advance") {
+    recording.tick += 1;
+  }
 }
 
 export function TetrisGame({
@@ -199,7 +204,36 @@ export function TetrisGame({
   initialBoardWidth,
   initialStartLevel,
   onBackToMenu,
+  onReplayBackToProfile,
+  replayMode,
 }: TetrisGameProps = {}) {
+  if (replayMode === "latest") {
+    return (
+      <TetrisReplayPlayer
+        onBackToProfile={onReplayBackToProfile ?? onBackToMenu ?? (() => undefined)}
+      />
+    );
+  }
+
+  return (
+    <TetrisLiveGame
+      initialBoardHeight={initialBoardHeight}
+      initialBoardWidth={initialBoardWidth}
+      initialStartLevel={initialStartLevel}
+      onBackToMenu={onBackToMenu}
+    />
+  );
+}
+
+function TetrisLiveGame({
+  initialBoardHeight,
+  initialBoardWidth,
+  initialStartLevel,
+  onBackToMenu,
+}: Pick<
+  TetrisGameProps,
+  "initialBoardHeight" | "initialBoardWidth" | "initialStartLevel" | "onBackToMenu"
+> = {}) {
   const [game, setGame] = useState<TetrisGameState>(() =>
     createInitialTetrisGame({
       boardHeight: initialBoardHeight,
@@ -207,10 +241,12 @@ export function TetrisGame({
       startLevel: initialStartLevel,
     }),
   );
-  const nextPreviewBlocks = useMemo(
-    () => createCenteredPreviewBlocks(game.nextPieceKind),
-    [game.nextPieceKind],
-  );
+  const [finishedReplay, setFinishedReplay] = useState<TetrisReplayPayload | null>(null);
+  const [isReplayRunPending, setIsReplayRunPending] = useState(false);
+  const [replaySaveStatus, setReplaySaveStatus] = useState<ReplaySaveStatus>("idle");
+  const gameRef = useRef(game);
+  const isReplayRunPendingRef = useRef(false);
+  const replayRecordingRef = useRef<TetrisReplayRecording | null>(null);
   const tickDelay = game.status === "running" ? getTetrisTickDelay(game.level) : null;
   const canPauseGame = game.status === "running" || game.status === "paused";
   const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
@@ -242,62 +278,244 @@ export function TetrisGame({
     testIdPrefix: "tetris",
   });
 
-  const startGame = useCallback(() => {
+  const commitGame = useCallback((nextGame: TetrisGameState) => {
+    gameRef.current = nextGame;
+    setGame(nextGame);
+  }, []);
+
+  const updateCommittedGame = useCallback(
+    (updateGame: (current: TetrisGameState) => TetrisGameState) => {
+      const current = gameRef.current;
+      const nextGame = updateGame(current);
+
+      if (nextGame !== current) {
+        commitGame(nextGame);
+      }
+
+      return nextGame;
+    },
+    [commitGame],
+  );
+
+  const startNewGame = useCallback(async () => {
+    if (isReplayRunPendingRef.current) {
+      return;
+    }
+
+    isReplayRunPendingRef.current = true;
+    replayRecordingRef.current = null;
+    setIsReplayRunPending(true);
     resetLeaderboardForm();
-    setGame((current) => startTetrisGame(current, { random: Math.random }));
-  }, [resetLeaderboardForm]);
+    setFinishedReplay(null);
+    setReplaySaveStatus("idle");
+
+    try {
+      const run = await createTetrisReplayRun();
+      const random = createTetrisReplayRandom(run.seed);
+      const recording: TetrisReplayRecording = {
+        events: [],
+        nextSeq: 0,
+        random,
+        run,
+        startedAt: new Date().toISOString(),
+        tick: 0,
+      };
+      const nextGame = createRunningTetrisGame(gameRef.current, random);
+
+      appendTetrisReplayEvent(recording, { type: "start" });
+      replayRecordingRef.current = recording;
+      commitGame(nextGame);
+    } catch {
+      setReplaySaveStatus("failed");
+    } finally {
+      isReplayRunPendingRef.current = false;
+      setIsReplayRunPending(false);
+    }
+  }, [commitGame, resetLeaderboardForm]);
+
+  const startGame = useCallback(() => {
+    void startNewGame();
+  }, [startNewGame]);
 
   const toggleRunState = useCallback(() => {
-    resetLeaderboardForm();
-    setGame((current) => {
+    updateCommittedGame((current) => {
       if (current.status === "running") {
         return pauseTetrisGame(current);
       }
 
-      return startTetrisGame(current, { random: Math.random });
+      if (current.status === "paused") {
+        return startTetrisGame(current);
+      }
+
+      void startNewGame();
+
+      return current;
     });
-  }, [resetLeaderboardForm]);
+  }, [startNewGame, updateCommittedGame]);
 
   const restartGame = useCallback(() => {
-    resetLeaderboardForm();
-    setGame((current) => createRunningTetrisGame(current));
-  }, [resetLeaderboardForm]);
+    void startNewGame();
+  }, [startNewGame]);
 
   const moveLeft = useCallback(() => {
-    setGame((current) => moveTetrisPiece(current, -1, 0));
-  }, []);
+    updateCommittedGame((current) => {
+      const nextGame = moveTetrisPiece(current, -1, 0);
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null && current.status === "running" && nextGame !== current) {
+        appendTetrisReplayEvent(recording, { type: "moveLeft" });
+      }
+
+      return nextGame;
+    });
+  }, [updateCommittedGame]);
 
   const moveRight = useCallback(() => {
-    setGame((current) => moveTetrisPiece(current, 1, 0));
-  }, []);
+    updateCommittedGame((current) => {
+      const nextGame = moveTetrisPiece(current, 1, 0);
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null && current.status === "running" && nextGame !== current) {
+        appendTetrisReplayEvent(recording, { type: "moveRight" });
+      }
+
+      return nextGame;
+    });
+  }, [updateCommittedGame]);
 
   const softDrop = useCallback(() => {
-    setGame((current) => softDropTetrisPiece(current, { random: Math.random }));
-  }, []);
+    updateCommittedGame((current) => {
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null && current.status === "running") {
+        appendTetrisReplayEvent(recording, { type: "softDrop" });
+
+        return softDropTetrisPiece(current, { random: recording.random });
+      }
+
+      return softDropTetrisPiece(current);
+    });
+  }, [updateCommittedGame]);
 
   const hardDrop = useCallback(() => {
-    setGame((current) => hardDropTetrisPiece(current, { random: Math.random }));
-  }, []);
+    updateCommittedGame((current) => {
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null && current.status === "running") {
+        appendTetrisReplayEvent(recording, { type: "hardDrop" });
+
+        return hardDropTetrisPiece(current, { random: recording.random });
+      }
+
+      return hardDropTetrisPiece(current);
+    });
+  }, [updateCommittedGame]);
 
   const rotateClockwise = useCallback(() => {
-    setGame((current) => rotateTetrisPiece(current));
-  }, []);
+    updateCommittedGame((current) => {
+      const nextGame = rotateTetrisPiece(current);
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null && current.status === "running" && nextGame !== current) {
+        appendTetrisReplayEvent(recording, { type: "rotateClockwise" });
+      }
+
+      return nextGame;
+    });
+  }, [updateCommittedGame]);
 
   const rotateCounterclockwise = useCallback(() => {
-    setGame((current) => rotateTetrisPiece(current, "counterclockwise"));
-  }, []);
+    updateCommittedGame((current) => {
+      const nextGame = rotateTetrisPiece(current, "counterclockwise");
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null && current.status === "running" && nextGame !== current) {
+        appendTetrisReplayEvent(recording, { type: "rotateCounterclockwise" });
+      }
+
+      return nextGame;
+    });
+  }, [updateCommittedGame]);
 
   const advanceTetris = useCallback(() => {
-    setGame((current) => advanceTetrisGame(current, { random: Math.random }));
-  }, []);
+    updateCommittedGame((current) => {
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null && current.status === "running") {
+        appendTetrisReplayEvent(recording, { type: "advance" });
+
+        return advanceTetrisGame(current, { random: recording.random });
+      }
+
+      return advanceTetrisGame(current);
+    });
+  }, [updateCommittedGame]);
 
   const pauseGameForHelp = useCallback(() => {
-    setGame((current) => pauseTetrisGame(current));
-  }, []);
+    updateCommittedGame((current) => pauseTetrisGame(current));
+  }, [updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
-    setGame((current) => startTetrisGame(current, { random: Math.random }));
-  }, []);
+    updateCommittedGame((current) => startTetrisGame(current));
+  }, [updateCommittedGame]);
+
+  const saveFinishedReplay = useCallback(async () => {
+    if (finishedReplay === null || replaySaveStatus === "saving") {
+      return;
+    }
+
+    setReplaySaveStatus("saving");
+
+    try {
+      await saveTetrisReplay(finishedReplay);
+      setReplaySaveStatus("saved");
+    } catch {
+      setReplaySaveStatus("failed");
+    }
+  }, [finishedReplay, replaySaveStatus]);
+
+  useEffect(() => {
+    if (game.status !== "lost") {
+      return;
+    }
+
+    const recording = replayRecordingRef.current;
+
+    if (recording === null || finishedReplay !== null) {
+      return;
+    }
+
+    const replay: TetrisReplayPayload = {
+      boardHeight: game.boardHeight,
+      boardWidth: game.boardWidth,
+      events: [...recording.events],
+      finalLevel: game.level,
+      finalLines: game.lines,
+      finalScore: game.score,
+      finalStatus: game.status,
+      finalTick: recording.tick,
+      gameId: TETRIS_REPLAY_GAME_ID,
+      leaderboardKey,
+      runId: recording.run.id,
+      schemaVersion: TETRIS_REPLAY_SCHEMA_VERSION,
+      seed: recording.run.seed,
+      startLevel: game.startLevel,
+      startedAt: recording.startedAt,
+    };
+
+    replayRecordingRef.current = null;
+    setFinishedReplay(replay);
+  }, [
+    finishedReplay,
+    game.boardHeight,
+    game.boardWidth,
+    game.level,
+    game.lines,
+    game.score,
+    game.startLevel,
+    game.status,
+    leaderboardKey,
+  ]);
 
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({
     isGameActive: game.status === "running",
@@ -449,30 +667,7 @@ export function TetrisGame({
             <div className="flex min-w-0 flex-col gap-2 rounded-md border border-[var(--tetris-border)] p-2 sm:p-3">
               <dt className="text-xs font-medium text-[var(--tetris-muted)]">Next</dt>
               <dd>
-                <div
-                  aria-label={`Next piece ${game.nextPieceKind}`}
-                  className="relative aspect-square overflow-hidden rounded-[0.375rem] bg-[var(--tetris-board)] p-1"
-                  data-testid="tetris-next-piece"
-                  role="img"
-                >
-                  <div aria-hidden="true" className="relative size-full">
-                    {nextPreviewBlocks.map((block) => (
-                      <span
-                        className={cn(
-                          "absolute rounded-[0.16rem]",
-                          tetrominoCellClassNames[game.nextPieceKind],
-                        )}
-                        key={block.key}
-                        style={{
-                          height: `${TETRIS_PREVIEW_CELL_SIZE_PERCENT}%`,
-                          left: `${block.leftPercent}%`,
-                          top: `${block.topPercent}%`,
-                          width: `${TETRIS_PREVIEW_CELL_SIZE_PERCENT}%`,
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
+                <TetrisNextPiecePreview kind={game.nextPieceKind} />
               </dd>
             </div>
           </GameStatsBar>
@@ -487,12 +682,16 @@ export function TetrisGame({
               onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{
-                disabled: isHelpVisible || !canPauseGame,
+                disabled: isHelpVisible || isReplayRunPending || !canPauseGame,
                 isResume: game.status === "paused",
                 label: pauseActionLabel,
                 onClick: toggleRunState,
               }}
-              restartDisabled={game.status === "ready" || pendingLeaderboardEntry !== null}
+              restartDisabled={
+                isReplayRunPending ||
+                game.status === "ready" ||
+                pendingLeaderboardEntry !== null
+              }
               testIdPrefix="tetris"
             />
           }
@@ -528,13 +727,14 @@ export function TetrisGame({
                 <Button
                   className="min-w-32"
                   data-testid="tetris-start-button"
+                  disabled={isReplayRunPending}
                   onClick={startGame}
                   size="lg"
                   type="button"
                   variant="secondary"
                 >
                   <PlayIcon data-icon="inline-start" />
-                  Start
+                  {isReplayRunPending ? "Starting" : "Start"}
                 </Button>
                 <GameLeaderboardPanel {...leaderboardPanelProps} />
               </GameStartScreen>
@@ -545,6 +745,7 @@ export function TetrisGame({
                     <Button
                       className="min-w-36"
                       data-testid="tetris-new-game-button"
+                      disabled={isReplayRunPending}
                       onClick={restartGame}
                       size="lg"
                       type="button"
@@ -564,6 +765,36 @@ export function TetrisGame({
                     title: "Game over",
                   }}
                 />
+                <div className="flex w-full max-w-xs flex-col items-center gap-2">
+                  <Button
+                    className="w-full"
+                    data-testid="tetris-save-replay-button"
+                    disabled={
+                      finishedReplay === null ||
+                      replaySaveStatus === "saving" ||
+                      replaySaveStatus === "saved"
+                    }
+                    onClick={saveFinishedReplay}
+                    size="lg"
+                    type="button"
+                    variant="secondary"
+                  >
+                    <SaveIcon data-icon="inline-start" />
+                    {replaySaveStatus === "saving"
+                      ? "Saving replay"
+                      : replaySaveStatus === "saved"
+                        ? "Replay saved"
+                        : "Save replay"}
+                  </Button>
+                  {replaySaveStatus === "failed" ? (
+                    <p
+                      className="text-xs font-medium text-[#cbd5e1]"
+                      data-testid="tetris-save-replay-error"
+                    >
+                      Could not save replay. Sign in and try again.
+                    </p>
+                  ) : null}
+                </div>
               </GameEndScreen>
             ) : showPauseScreen ? (
               <div

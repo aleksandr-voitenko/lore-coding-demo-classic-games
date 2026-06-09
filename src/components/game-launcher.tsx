@@ -40,7 +40,7 @@ export function GameLauncher({
 }: GameLauncherProps) {
   const [selectedGameId, setSelectedGameId] = useState<GameId | null>(initialReplayGameId);
   const [selectedReplayMode, setSelectedReplayMode] = useState<"latest" | null>(
-    initialReplayGameId === "snake" ? "latest" : null,
+    initialReplayGameId === null ? null : "latest",
   );
   const [parameterValues, setParameterValues] = useState<GameParameterValues>(() =>
     createDefaultParameterValues(),

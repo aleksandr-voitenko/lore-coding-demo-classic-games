@@ -18,8 +18,8 @@ All the code in this repository was created using AI agents and the Lore Coding 
   Minesweeper ranks fastest clears; the other games rank higher scores.
 - Name-and-password player accounts with private profile stats for signed-in
   play sessions, including total play time and per-game best metrics.
-- Snake replay recording with server-issued runs, signed-in replay saves, and
-  profile playback for the latest saved run.
+- Snake and Tetris replay recording with server-issued runs, signed-in replay
+  saves, and profile playback for the latest saved run.
 - Closable in-game Help screens and Escape-to-menu abandon confirmations.
 - Local game-card artwork for every game in the launcher.
 
@@ -80,10 +80,10 @@ The default database path is `.data/snake-leaderboard.sqlite`, kept for
 compatibility with existing Snake deployments. On a VPS, set
 `GAME_LEADERBOARD_SQLITE_PATH` to durable storage.
 
-Snake records replay events during play after the server issues a run id and
-seed. Signed-in players can save the completed run from the final screen; the
-profile page stores one latest replay per user and game and links back into the
-launcher at `/?replay=snake` for client playback.
+Snake and Tetris record replay events during play after the server issues a run
+id and seed. Signed-in players can save the completed run from the final screen;
+the profile page stores one latest replay per user and game and links back into
+the launcher at `/?replay=snake` or `/?replay=tetris` for client playback.
 
 ## Docker
 
