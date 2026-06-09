@@ -22,6 +22,7 @@ import {
   normalizeGameReplayRunId,
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
+  parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
   type GameReplayRun,
@@ -135,35 +136,26 @@ export function createSimonReplayLeaderboardKey({
 }
 
 function parseSimonReplayEvent(value: unknown): SimonReplayEvent | null {
-  if (!isRecord(value) || !isNonNegativeInteger(value.seq) || !isNonNegativeInteger(value.tick)) {
+  const envelope = parseGameReplayEventEnvelope(value, SIMON_EVENT_TYPES);
+
+  if (envelope === null) {
     return null;
   }
 
-  if (
-    typeof value.type !== "string" ||
-    !SIMON_EVENT_TYPES.has(value.type as SimonReplayEvent["type"])
-  ) {
-    return null;
-  }
+  if (envelope.type === "pad") {
+    const event = value as Record<string, unknown>;
 
-  if (value.type === "pad") {
-    if (!isSimonPadId(value.pad)) {
+    if (!isSimonPadId(event.pad)) {
       return null;
     }
 
     return {
-      pad: value.pad,
-      seq: value.seq,
-      tick: value.tick,
-      type: "pad",
+      ...envelope,
+      pad: event.pad,
     };
   }
 
-  return {
-    seq: value.seq,
-    tick: value.tick,
-    type: value.type as Exclude<SimonReplayEvent["type"], "pad">,
-  } as SimonReplayEvent;
+  return envelope;
 }
 
 export function parseSimonReplayPayload(value: unknown): ParseSimonReplayPayloadResult {

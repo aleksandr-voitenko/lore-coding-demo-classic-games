@@ -22,6 +22,7 @@ import {
   normalizeGameReplayRunId,
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
+  parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
   type GameReplayRun,
@@ -166,37 +167,27 @@ export function createAsteroidsReplayLeaderboardKey({
 }
 
 function parseAsteroidsReplayEvent(value: unknown): AsteroidsReplayEvent | null {
-  if (!isRecord(value) || !isNonNegativeInteger(value.seq) || !isNonNegativeInteger(value.tick)) {
+  const envelope = parseGameReplayEventEnvelope(value, ASTEROIDS_EVENT_TYPES);
+
+  if (envelope === null) {
     return null;
   }
 
-  if (
-    typeof value.type !== "string" ||
-    !ASTEROIDS_EVENT_TYPES.has(value.type as AsteroidsReplayEvent["type"])
-  ) {
-    return null;
-  }
-
-  if (value.type === "control") {
-    const controls = parseAsteroidsReplayControls(value.controls);
+  if (envelope.type === "control") {
+    const event = value as Record<string, unknown>;
+    const controls = parseAsteroidsReplayControls(event.controls);
 
     if (controls === null) {
       return null;
     }
 
     return {
+      ...envelope,
       controls,
-      seq: value.seq,
-      tick: value.tick,
-      type: "control",
     };
   }
 
-  return {
-    seq: value.seq,
-    tick: value.tick,
-    type: value.type as Exclude<AsteroidsReplayEvent["type"], "control">,
-  } as AsteroidsReplayEvent;
+  return envelope;
 }
 
 export function parseAsteroidsReplayPayload(

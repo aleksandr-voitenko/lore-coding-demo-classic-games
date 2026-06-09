@@ -34,6 +34,15 @@ export type GameReplayPayloadParser<Payload> = (
   value: unknown,
 ) => ParseGameReplayPayloadResult<Payload>;
 
+export type GameReplayEventEnvelope<EventType extends string = string> =
+  EventType extends string
+    ? {
+        seq: number;
+        tick: number;
+        type: EventType;
+      }
+    : never;
+
 export const MAX_GAME_REPLAY_SEED = 2_147_483_646;
 
 const GAME_REPLAY_RUN_ID_PATTERN = /^[a-zA-Z0-9-]{1,80}$/;
@@ -89,6 +98,31 @@ export function getGameReplayApiPath(gameId: string) {
 
 export function getGameReplayRunApiPath(gameId: string) {
   return `${getGameReplayApiPath(gameId)}/run`;
+}
+
+export function parseGameReplayEventEnvelope<const EventType extends string>(
+  value: unknown,
+  allowedTypes: ReadonlySet<EventType>,
+): GameReplayEventEnvelope<EventType> | null {
+  if (!isRecord(value) || !isNonNegativeInteger(value.seq) || !isNonNegativeInteger(value.tick)) {
+    return null;
+  }
+
+  if (typeof value.type !== "string") {
+    return null;
+  }
+
+  const eventType = value.type as EventType;
+
+  if (!allowedTypes.has(eventType)) {
+    return null;
+  }
+
+  return {
+    seq: value.seq,
+    tick: value.tick,
+    type: eventType,
+  } as GameReplayEventEnvelope<EventType>;
 }
 
 export function parseBaseGameReplayPayload<

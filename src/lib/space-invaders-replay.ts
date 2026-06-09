@@ -23,6 +23,7 @@ import {
   normalizeGameReplayRunId,
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
+  parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
   type GameReplayRun,
@@ -139,35 +140,26 @@ export function createSpaceInvadersReplayLeaderboardKey({
 function parseSpaceInvadersReplayEvent(
   value: unknown,
 ): SpaceInvadersReplayEvent | null {
-  if (!isRecord(value) || !isNonNegativeInteger(value.seq) || !isNonNegativeInteger(value.tick)) {
+  const envelope = parseGameReplayEventEnvelope(value, SPACE_INVADERS_EVENT_TYPES);
+
+  if (envelope === null) {
     return null;
   }
 
-  if (
-    typeof value.type !== "string" ||
-    !SPACE_INVADERS_EVENT_TYPES.has(value.type as SpaceInvadersReplayEvent["type"])
-  ) {
-    return null;
-  }
+  if (envelope.type === "move") {
+    const event = value as Record<string, unknown>;
 
-  if (value.type === "move") {
-    if (value.direction !== "left" && value.direction !== "right") {
+    if (event.direction !== "left" && event.direction !== "right") {
       return null;
     }
 
     return {
-      direction: value.direction,
-      seq: value.seq,
-      tick: value.tick,
-      type: "move",
+      ...envelope,
+      direction: event.direction,
     };
   }
 
-  return {
-    seq: value.seq,
-    tick: value.tick,
-    type: value.type as Exclude<SpaceInvadersReplayEvent["type"], "move">,
-  } as SpaceInvadersReplayEvent;
+  return envelope;
 }
 
 export function parseSpaceInvadersReplayPayload(

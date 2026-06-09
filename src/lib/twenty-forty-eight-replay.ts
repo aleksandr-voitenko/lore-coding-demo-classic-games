@@ -9,6 +9,7 @@ import {
   normalizeGameReplayRunId,
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
+  parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
   type GameReplayRun,
@@ -72,6 +73,10 @@ export const MAX_TWENTY_FORTY_EIGHT_REPLAY_EVENTS = 50_000;
 const TWENTY_FORTY_EIGHT_MIN_BOARD_SIZE = 2;
 const TWENTY_FORTY_EIGHT_MIN_WIN_TILE = 4;
 const TWENTY_FORTY_EIGHT_DIRECTIONS = ["up", "down", "left", "right"] as const;
+const TWENTY_FORTY_EIGHT_EVENT_TYPES = new Set<TwentyFortyEightReplayEvent["type"]>([
+  "move",
+  "start",
+]);
 
 export const normalizeTwentyFortyEightReplayRunId = normalizeGameReplayRunId;
 export const normalizeTwentyFortyEightReplaySeed = normalizeGameReplaySeed;
@@ -101,28 +106,26 @@ export function createTwentyFortyEightReplayLeaderboardKey({
 function parseTwentyFortyEightReplayEvent(
   value: unknown,
 ): TwentyFortyEightReplayEvent | null {
-  if (!isRecord(value) || !isNonNegativeInteger(value.seq) || !isNonNegativeInteger(value.tick)) {
+  const envelope = parseGameReplayEventEnvelope(value, TWENTY_FORTY_EIGHT_EVENT_TYPES);
+
+  if (envelope === null) {
     return null;
   }
 
-  if (value.type === "start") {
-    return {
-      seq: value.seq,
-      tick: value.tick,
-      type: "start",
-    };
+  if (envelope.type === "start") {
+    return envelope;
   }
 
-  if (value.type === "move" && isTwentyFortyEightDirection(value.direction)) {
-    return {
-      direction: value.direction,
-      seq: value.seq,
-      tick: value.tick,
-      type: "move",
-    };
+  const event = value as Record<string, unknown>;
+
+  if (!isTwentyFortyEightDirection(event.direction)) {
+    return null;
   }
 
-  return null;
+  return {
+    ...envelope,
+    direction: event.direction,
+  };
 }
 
 export function parseTwentyFortyEightReplayPayload(

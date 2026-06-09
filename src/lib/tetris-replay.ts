@@ -19,6 +19,7 @@ import {
   normalizeGameReplayRunId,
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
+  parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
   type GameReplayRun,
@@ -142,22 +143,7 @@ export function createTetrisReplayLeaderboardKey({
 }
 
 function parseTetrisReplayEvent(value: unknown): TetrisReplayEvent | null {
-  if (!isRecord(value) || !isNonNegativeInteger(value.seq) || !isNonNegativeInteger(value.tick)) {
-    return null;
-  }
-
-  if (
-    typeof value.type !== "string" ||
-    !TETRIS_EVENT_TYPES.has(value.type as TetrisReplayEvent["type"])
-  ) {
-    return null;
-  }
-
-  return {
-    seq: value.seq,
-    tick: value.tick,
-    type: value.type as TetrisReplayEvent["type"],
-  } as TetrisReplayEvent;
+  return parseGameReplayEventEnvelope(value, TETRIS_EVENT_TYPES);
 }
 
 export function parseTetrisReplayPayload(value: unknown): ParseTetrisReplayPayloadResult {

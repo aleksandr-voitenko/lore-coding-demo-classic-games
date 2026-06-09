@@ -9,6 +9,7 @@ import {
   normalizeGameReplayRunId,
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
+  parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
   type GameReplayRun,
@@ -80,6 +81,12 @@ export const MINESWEEPER_REPLAY_RUN_API_PATH = getGameReplayRunApiPath(
 );
 export const MAX_MINESWEEPER_REPLAY_EVENTS = 80_000;
 
+const MINESWEEPER_EVENT_TYPES = new Set<MinesweeperReplayEvent["type"]>([
+  "reveal",
+  "start",
+  "toggleFlag",
+]);
+
 export const normalizeMinesweeperReplayRunId = normalizeGameReplayRunId;
 export const normalizeMinesweeperReplaySeed = normalizeGameReplaySeed;
 export const createMinesweeperReplayRandom = createGameReplayRandom;
@@ -140,37 +147,30 @@ function parseMinesweeperReplayEvent(
     boardWidth,
   }: Pick<MinesweeperReplayPayload, "boardHeight" | "boardWidth">,
 ): MinesweeperReplayEvent | null {
-  if (!isRecord(value) || !isNonNegativeInteger(value.seq) || !isNonNegativeInteger(value.tick)) {
+  const envelope = parseGameReplayEventEnvelope(value, MINESWEEPER_EVENT_TYPES);
+
+  if (envelope === null) {
     return null;
   }
 
-  if (value.type === "start") {
-    return {
-      seq: value.seq,
-      tick: value.tick,
-      type: "start",
-    };
+  if (envelope.type === "start") {
+    return envelope;
   }
 
-  if (value.type === "reveal" || value.type === "toggleFlag") {
-    const cellId = parseReplayCellId(value.cellId, {
-      boardHeight,
-      boardWidth,
-    });
+  const event = value as Record<string, unknown>;
+  const cellId = parseReplayCellId(event.cellId, {
+    boardHeight,
+    boardWidth,
+  });
 
-    if (cellId === null) {
-      return null;
-    }
-
-    return {
-      cellId,
-      seq: value.seq,
-      tick: value.tick,
-      type: value.type,
-    };
+  if (cellId === null) {
+    return null;
   }
 
-  return null;
+  return {
+    ...envelope,
+    cellId,
+  };
 }
 
 export function parseMinesweeperReplayPayload(

@@ -22,6 +22,7 @@ import {
   normalizeGameReplayRunId,
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
+  parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
   type GameReplayRun,
@@ -117,22 +118,7 @@ export function createBreakoutReplayLeaderboardKey({
 }
 
 function parseBreakoutReplayEvent(value: unknown): BreakoutReplayEvent | null {
-  if (!isRecord(value) || !isNonNegativeInteger(value.seq) || !isNonNegativeInteger(value.tick)) {
-    return null;
-  }
-
-  if (
-    typeof value.type !== "string" ||
-    !BREAKOUT_EVENT_TYPES.has(value.type as BreakoutReplayEvent["type"])
-  ) {
-    return null;
-  }
-
-  return {
-    seq: value.seq,
-    tick: value.tick,
-    type: value.type as BreakoutReplayEvent["type"],
-  } as BreakoutReplayEvent;
+  return parseGameReplayEventEnvelope(value, BREAKOUT_EVENT_TYPES);
 }
 
 export function parseBreakoutReplayPayload(

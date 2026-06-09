@@ -20,6 +20,7 @@ import {
   normalizeGameReplayRunId,
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
+  parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
   type GameReplayRun,
@@ -95,6 +96,13 @@ export const SNAKE_REPLAY_RUN_API_PATH = getGameReplayRunApiPath(SNAKE_REPLAY_GA
 export const MAX_SNAKE_REPLAY_EVENTS = 50_000;
 
 const DIRECTIONS = ["up", "right", "down", "left"] as const;
+const SNAKE_EVENT_TYPES = new Set<SnakeReplayEvent["type"]>([
+  "advance",
+  "direction",
+  "expireTimedFood",
+  "spawnTimedFood",
+  "start",
+]);
 
 function isDirection(value: unknown): value is Direction {
   return typeof value === "string" && (DIRECTIONS as readonly string[]).includes(value);
@@ -105,64 +113,51 @@ export const normalizeSnakeReplaySeed = normalizeGameReplaySeed;
 export const createSnakeReplayRandom = createGameReplayRandom;
 
 function parseSnakeReplayEvent(value: unknown): SnakeReplayEvent | null {
-  if (!isRecord(value) || !isNonNegativeInteger(value.seq) || !isNonNegativeInteger(value.tick)) {
+  const envelope = parseGameReplayEventEnvelope(value, SNAKE_EVENT_TYPES);
+
+  if (envelope === null) {
     return null;
   }
 
-  if (value.type === "start") {
-    return {
-      seq: value.seq,
-      tick: value.tick,
-      type: "start",
-    };
-  }
+  const event = value as Record<string, unknown>;
 
-  if (value.type === "advance") {
-    return {
-      seq: value.seq,
-      tick: value.tick,
-      type: "advance",
-    };
-  }
+  switch (envelope.type) {
+    case "advance":
+    case "start":
+      return envelope;
 
-  if (value.type === "direction" && isDirection(value.direction)) {
-    return {
-      direction: value.direction,
-      seq: value.seq,
-      tick: value.tick,
-      type: "direction",
-    };
-  }
+    case "direction":
+      if (!isDirection(event.direction)) {
+        return null;
+      }
 
-  if (
-    value.type === "spawnTimedFood" &&
-    isTimedFoodKind(value.kind) &&
-    isNonNegativeInteger(value.nowMs)
-  ) {
-    return {
-      kind: value.kind,
-      nowMs: value.nowMs,
-      seq: value.seq,
-      tick: value.tick,
-      type: "spawnTimedFood",
-    };
-  }
+      return {
+        ...envelope,
+        direction: event.direction,
+      };
 
-  if (
-    value.type === "expireTimedFood" &&
-    isTimedFoodKind(value.kind) &&
-    isNonNegativeInteger(value.expiresAt)
-  ) {
-    return {
-      expiresAt: value.expiresAt,
-      kind: value.kind,
-      seq: value.seq,
-      tick: value.tick,
-      type: "expireTimedFood",
-    };
-  }
+    case "expireTimedFood":
+      if (!isTimedFoodKind(event.kind) || !isNonNegativeInteger(event.expiresAt)) {
+        return null;
+      }
 
-  return null;
+      return {
+        ...envelope,
+        expiresAt: event.expiresAt,
+        kind: event.kind,
+      };
+
+    case "spawnTimedFood":
+      if (!isTimedFoodKind(event.kind) || !isNonNegativeInteger(event.nowMs)) {
+        return null;
+      }
+
+      return {
+        ...envelope,
+        kind: event.kind,
+        nowMs: event.nowMs,
+      };
+  }
 }
 
 export function parseSnakeReplayPayload(value: unknown): ParseSnakeReplayPayloadResult {

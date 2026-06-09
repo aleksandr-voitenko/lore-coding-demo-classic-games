@@ -21,6 +21,7 @@ import {
   normalizeGameReplayRunId,
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
+  parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
   type GameReplayRun,
@@ -119,22 +120,7 @@ export function createPongReplayLeaderboardKey({
 }
 
 function parsePongReplayEvent(value: unknown): PongReplayEvent | null {
-  if (!isRecord(value) || !isNonNegativeInteger(value.seq) || !isNonNegativeInteger(value.tick)) {
-    return null;
-  }
-
-  if (
-    typeof value.type !== "string" ||
-    !PONG_EVENT_TYPES.has(value.type as PongReplayEvent["type"])
-  ) {
-    return null;
-  }
-
-  return {
-    seq: value.seq,
-    tick: value.tick,
-    type: value.type as PongReplayEvent["type"],
-  } as PongReplayEvent;
+  return parseGameReplayEventEnvelope(value, PONG_EVENT_TYPES);
 }
 
 export function parsePongReplayPayload(value: unknown): ParsePongReplayPayloadResult {

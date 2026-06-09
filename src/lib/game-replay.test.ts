@@ -9,6 +9,7 @@ import {
   normalizeGameReplayRunId,
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
+  parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
 } from "./game-replay";
@@ -96,6 +97,62 @@ describe("game replay", () => {
       error: "Tetris replay final state is not supported.",
       success: false,
     });
+  });
+
+  it("parses replay event envelopes with allowed event types", () => {
+    const allowedTypes = new Set(["advance", "start"] as const);
+
+    expect(
+      parseGameReplayEventEnvelope(
+        {
+          ignored: "game-specific",
+          seq: 2,
+          tick: 8,
+          type: "advance",
+        },
+        allowedTypes,
+      ),
+    ).toEqual({
+      seq: 2,
+      tick: 8,
+      type: "advance",
+    });
+  });
+
+  it("rejects unsupported replay event envelopes", () => {
+    const allowedTypes = new Set(["advance", "start"] as const);
+
+    expect(parseGameReplayEventEnvelope([], allowedTypes)).toBeNull();
+    expect(
+      parseGameReplayEventEnvelope(
+        {
+          seq: -1,
+          tick: 8,
+          type: "advance",
+        },
+        allowedTypes,
+      ),
+    ).toBeNull();
+    expect(
+      parseGameReplayEventEnvelope(
+        {
+          seq: 2,
+          tick: 1.5,
+          type: "advance",
+        },
+        allowedTypes,
+      ),
+    ).toBeNull();
+    expect(
+      parseGameReplayEventEnvelope(
+        {
+          seq: 2,
+          tick: 8,
+          type: "unsupported",
+        },
+        allowedTypes,
+      ),
+    ).toBeNull();
   });
 
   it("shares run creation, save, and fetch API clients by game id", async () => {
