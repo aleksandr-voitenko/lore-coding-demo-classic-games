@@ -619,18 +619,20 @@ function MinesweeperLiveGame({
               <GameEndScreen testId="minesweeper-end-screen">
                 <GameEndLeaderboardContent
                   action={
-                    <Button
-                      className="min-w-36"
-                      data-testid="minesweeper-new-game-button"
-                      disabled={isReplayRunPending}
-                      onClick={startNewGame}
-                      size="lg"
-                      type="button"
-                      variant="secondary"
-                    >
-                      <RotateCcwIcon data-icon="inline-start" />
-                      New game
-                    </Button>
+                    <div className="flex w-full max-w-xs flex-col items-center gap-2">
+                      <Button
+                        className="w-full"
+                        data-testid="minesweeper-new-game-button"
+                        disabled={isReplayRunPending}
+                        onClick={startNewGame}
+                        size="lg"
+                        type="button"
+                        variant="secondary"
+                      >
+                        <RotateCcwIcon data-icon="inline-start" />
+                        New game
+                      </Button>
+                    </div>
                   }
                   leaderboard={finalLeaderboardProps}
                   pendingLeaderboardEntry={pendingLeaderboardEntry}

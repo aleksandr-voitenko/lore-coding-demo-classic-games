@@ -743,18 +743,20 @@ function AsteroidsLiveGame({
               <GameEndScreen testId="asteroids-end-screen">
                 <GameEndLeaderboardContent
                   action={
-                    <Button
-                      className="min-w-36"
-                      data-testid="asteroids-new-game-button"
-                      disabled={isReplayRunPending}
-                      onClick={restartGame}
-                      size="lg"
-                      type="button"
-                      variant="secondary"
-                    >
-                      <RotateCcwIcon data-icon="inline-start" />
-                      New game
-                    </Button>
+                    <div className="flex w-full max-w-xs flex-col items-center gap-2">
+                      <Button
+                        className="w-full"
+                        data-testid="asteroids-new-game-button"
+                        disabled={isReplayRunPending}
+                        onClick={restartGame}
+                        size="lg"
+                        type="button"
+                        variant="secondary"
+                      >
+                        <RotateCcwIcon data-icon="inline-start" />
+                        New game
+                      </Button>
+                    </div>
                   }
                   leaderboard={finalLeaderboardProps}
                   pendingLeaderboardEntry={pendingLeaderboardEntry}
