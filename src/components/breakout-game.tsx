@@ -5,8 +5,9 @@ import {
   ArrowRightIcon,
   PlayIcon,
   RotateCcwIcon,
+  SaveIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { BreakoutBoard, breakoutBrickClassNames } from "@/components/breakout-board";
 import {
@@ -42,6 +43,7 @@ import {
 } from "@/components/game-layout";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
+import { BreakoutReplayPlayer } from "@/components/breakout-replay-player";
 import { Button } from "@/components/ui/button";
 import {
   advanceBreakoutGame,
@@ -56,6 +58,17 @@ import {
   type BreakoutGameState,
   type BreakoutStatus,
 } from "@/lib/breakout-game-engine";
+import {
+  createBreakoutReplayRandom,
+  createBreakoutReplayRun,
+  saveBreakoutReplay,
+  BREAKOUT_REPLAY_GAME_ID,
+  BREAKOUT_REPLAY_SCHEMA_VERSION,
+  type BreakoutReplayEvent,
+  type BreakoutReplayEventInput,
+  type BreakoutReplayPayload,
+  type BreakoutReplayRun,
+} from "@/lib/breakout-replay";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
 import { useGameSession } from "@/hooks/use-game-session";
@@ -65,6 +78,19 @@ type BreakoutGameProps = {
   initialBoardWidth?: number;
   initialLives?: number;
   onBackToMenu?: () => void;
+  onReplayBackToProfile?: () => void;
+  replayMode?: "latest";
+};
+
+type ReplaySaveStatus = "failed" | "idle" | "saved" | "saving";
+
+type BreakoutReplayRecording = {
+  events: BreakoutReplayEvent[];
+  nextSeq: number;
+  random: () => number;
+  run: BreakoutReplayRun;
+  startedAt: string;
+  tick: number;
 };
 
 const statusLabels: Record<BreakoutStatus, string> = {
@@ -109,12 +135,57 @@ const BREAKOUT_HELP_SECTIONS: GameHelpSection[] = [
 
 const BREAKOUT_PADDLE_MOVE_INTERVAL_MS = getBreakoutTickDelay();
 
+function appendBreakoutReplayEvent(
+  recording: BreakoutReplayRecording,
+  event: BreakoutReplayEventInput,
+) {
+  recording.events.push({
+    ...event,
+    seq: recording.nextSeq,
+    tick: recording.tick,
+  } as BreakoutReplayEvent);
+  recording.nextSeq += 1;
+
+  if (event.type === "advance") {
+    recording.tick += 1;
+  }
+}
+
 export function BreakoutGame({
   initialBoardHeight,
   initialBoardWidth,
   initialLives,
   onBackToMenu,
+  onReplayBackToProfile,
+  replayMode,
 }: BreakoutGameProps = {}) {
+  if (replayMode === "latest") {
+    return (
+      <BreakoutReplayPlayer
+        onBackToProfile={onReplayBackToProfile ?? onBackToMenu ?? (() => undefined)}
+      />
+    );
+  }
+
+  return (
+    <BreakoutLiveGame
+      initialBoardHeight={initialBoardHeight}
+      initialBoardWidth={initialBoardWidth}
+      initialLives={initialLives}
+      onBackToMenu={onBackToMenu}
+    />
+  );
+}
+
+function BreakoutLiveGame({
+  initialBoardHeight,
+  initialBoardWidth,
+  initialLives,
+  onBackToMenu,
+}: Pick<
+  BreakoutGameProps,
+  "initialBoardHeight" | "initialBoardWidth" | "initialLives" | "onBackToMenu"
+> = {}) {
   const [game, setGame] = useState<BreakoutGameState>(() =>
     createInitialBreakoutGame({
       boardHeight: initialBoardHeight,
@@ -122,6 +193,13 @@ export function BreakoutGame({
       lives: initialLives,
     }),
   );
+  const [finishedReplay, setFinishedReplay] = useState<BreakoutReplayPayload | null>(null);
+  const [isReplayRunPending, setIsReplayRunPending] = useState(false);
+  const [replaySaveStatus, setReplaySaveStatus] = useState<ReplaySaveStatus>("idle");
+  const gameRef = useRef(game);
+  const isReplayRunPendingRef = useRef(false);
+  const preStartReplayEventsRef = useRef<BreakoutReplayEventInput[]>([]);
+  const replayRecordingRef = useRef<BreakoutReplayRecording | null>(null);
   const tickDelay = game.status === "running" ? getBreakoutTickDelay() : null;
   const ballSpeed = game.status === "running" ? getBreakoutBallSpeed(game.ball.velocity) : null;
   const activeBrickCount = game.bricks.filter((brick) => brick.isActive).length;
@@ -160,44 +238,221 @@ export function BreakoutGame({
     testIdPrefix: "breakout",
   });
 
-  const startGame = useCallback(() => {
-    resetLeaderboardForm();
-    setGame((current) => startBreakoutGame(current));
-  }, [resetLeaderboardForm]);
+  const commitGame = useCallback((nextGame: BreakoutGameState) => {
+    gameRef.current = nextGame;
+    setGame(nextGame);
+  }, []);
 
-  const toggleRunState = useCallback(() => {
-    resetLeaderboardForm();
-    setGame((current) => {
-      if (current.status === "running") {
-        return pauseBreakoutGame(current);
+  const updateCommittedGame = useCallback(
+    (updateGame: (current: BreakoutGameState) => BreakoutGameState) => {
+      const current = gameRef.current;
+      const nextGame = updateGame(current);
+
+      if (nextGame !== current) {
+        commitGame(nextGame);
       }
 
-      return startBreakoutGame(current);
-    });
-  }, [resetLeaderboardForm]);
+      return nextGame;
+    },
+    [commitGame],
+  );
+
+  const startReplayRun = useCallback(async ({ restart = false }: { restart?: boolean } = {}) => {
+    if (isReplayRunPendingRef.current) {
+      return;
+    }
+
+    isReplayRunPendingRef.current = true;
+    replayRecordingRef.current = null;
+    setIsReplayRunPending(true);
+    resetLeaderboardForm();
+    setFinishedReplay(null);
+    setReplaySaveStatus("idle");
+
+    try {
+      const run = await createBreakoutReplayRun();
+      const random = createBreakoutReplayRandom(run.seed);
+      const recording: BreakoutReplayRecording = {
+        events: [],
+        nextSeq: 0,
+        random,
+        run,
+        startedAt: new Date().toISOString(),
+        tick: 0,
+      };
+
+      preStartReplayEventsRef.current.forEach((event) => {
+        appendBreakoutReplayEvent(recording, event);
+      });
+      appendBreakoutReplayEvent(recording, { type: "start" });
+      preStartReplayEventsRef.current = [];
+      replayRecordingRef.current = recording;
+      commitGame(
+        restart
+          ? restartBreakoutGame(gameRef.current)
+          : startBreakoutGame(gameRef.current),
+      );
+    } catch {
+      setReplaySaveStatus("failed");
+    } finally {
+      isReplayRunPendingRef.current = false;
+      setIsReplayRunPending(false);
+    }
+  }, [commitGame, resetLeaderboardForm]);
+
+  const startGame = useCallback(() => {
+    resetLeaderboardForm();
+    setFinishedReplay(null);
+    setReplaySaveStatus("idle");
+
+    const recording = replayRecordingRef.current;
+
+    if (recording !== null) {
+      appendBreakoutReplayEvent(recording, { type: "start" });
+      updateCommittedGame((current) => startBreakoutGame(current));
+
+      return;
+    }
+
+    void startReplayRun();
+  }, [resetLeaderboardForm, startReplayRun, updateCommittedGame]);
+
+  const toggleRunState = useCallback(() => {
+    const current = gameRef.current;
+
+    if (current.status === "running") {
+      resetLeaderboardForm();
+      updateCommittedGame((gameState) => pauseBreakoutGame(gameState));
+      return;
+    }
+
+    if (current.status === "paused") {
+      resetLeaderboardForm();
+      updateCommittedGame((gameState) => startBreakoutGame(gameState));
+      return;
+    }
+
+    startGame();
+  }, [resetLeaderboardForm, startGame, updateCommittedGame]);
 
   const restartGame = useCallback(() => {
-    resetLeaderboardForm();
-    setGame((current) => restartBreakoutGame(current));
-  }, [resetLeaderboardForm]);
+    if (isReplayRunPendingRef.current) {
+      return;
+    }
 
-  const movePaddle = useCallback((direction: BreakoutPaddleMovementDirection) => {
-    setGame((current) =>
-      direction === "left" ? moveBreakoutPaddleLeft(current) : moveBreakoutPaddleRight(current),
-    );
-  }, []);
+    preStartReplayEventsRef.current = [];
+    replayRecordingRef.current = null;
+    void startReplayRun({ restart: true });
+  }, [startReplayRun]);
+
+  const movePaddle = useCallback(
+    (direction: BreakoutPaddleMovementDirection) => {
+      updateCommittedGame((current) => {
+        const nextGame =
+          direction === "left"
+            ? moveBreakoutPaddleLeft(current)
+            : moveBreakoutPaddleRight(current);
+        const event: BreakoutReplayEventInput =
+          direction === "left" ? { type: "moveLeft" } : { type: "moveRight" };
+        const movedPaddle = nextGame.paddle.x !== current.paddle.x;
+        const recording = replayRecordingRef.current;
+
+        if (movedPaddle && recording !== null) {
+          appendBreakoutReplayEvent(recording, event);
+        } else if (
+          movedPaddle &&
+          current.status === "ready" &&
+          !isReplayRunPendingRef.current
+        ) {
+          preStartReplayEventsRef.current.push(event);
+        }
+
+        return nextGame;
+      });
+    },
+    [updateCommittedGame],
+  );
 
   const advanceBreakout = useCallback(() => {
-    setGame((current) => advanceBreakoutGame(current, { random: Math.random }));
-  }, []);
+    updateCommittedGame((current) => {
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null && current.status === "running") {
+        appendBreakoutReplayEvent(recording, { type: "advance" });
+
+        return advanceBreakoutGame(current, { random: recording.random });
+      }
+
+      return advanceBreakoutGame(current, { random: Math.random });
+    });
+  }, [updateCommittedGame]);
 
   const pauseGameForHelp = useCallback(() => {
-    setGame((current) => pauseBreakoutGame(current));
-  }, []);
+    updateCommittedGame((current) => pauseBreakoutGame(current));
+  }, [updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
-    setGame((current) => startBreakoutGame(current));
-  }, []);
+    updateCommittedGame((current) => startBreakoutGame(current));
+  }, [updateCommittedGame]);
+
+  const saveFinishedReplay = useCallback(async () => {
+    if (finishedReplay === null || replaySaveStatus === "saving") {
+      return;
+    }
+
+    setReplaySaveStatus("saving");
+
+    try {
+      await saveBreakoutReplay(finishedReplay);
+      setReplaySaveStatus("saved");
+    } catch {
+      setReplaySaveStatus("failed");
+    }
+  }, [finishedReplay, replaySaveStatus]);
+
+  useEffect(() => {
+    if (game.status !== "lost" && game.status !== "won") {
+      return;
+    }
+
+    const recording = replayRecordingRef.current;
+
+    if (recording === null || finishedReplay !== null) {
+      return;
+    }
+
+    const replay: BreakoutReplayPayload = {
+      boardHeight: game.boardHeight,
+      boardWidth: game.boardWidth,
+      events: [...recording.events],
+      finalActiveBrickCount: activeBrickCount,
+      finalLives: game.lives,
+      finalScore: game.score,
+      finalStatus: game.status,
+      finalTick: recording.tick,
+      gameId: BREAKOUT_REPLAY_GAME_ID,
+      leaderboardKey,
+      runId: recording.run.id,
+      schemaVersion: BREAKOUT_REPLAY_SCHEMA_VERSION,
+      seed: recording.run.seed,
+      startedAt: recording.startedAt,
+      startingLives: game.startingLives,
+    };
+
+    replayRecordingRef.current = null;
+    preStartReplayEventsRef.current = [];
+    setFinishedReplay(replay);
+  }, [
+    activeBrickCount,
+    finishedReplay,
+    game.boardHeight,
+    game.boardWidth,
+    game.lives,
+    game.score,
+    game.startingLives,
+    game.status,
+    leaderboardKey,
+  ]);
 
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({
     isGameActive: game.status === "running",
@@ -221,6 +476,7 @@ export function BreakoutGame({
     intervalMs: BREAKOUT_PADDLE_MOVE_INTERVAL_MS,
     isMovementDisabled:
       isHelpVisible ||
+      isReplayRunPending ||
       pendingLeaderboardEntry !== null ||
       game.status === "lost" ||
       game.status === "won",
@@ -352,12 +608,16 @@ export function BreakoutGame({
               onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{
-                disabled: isHelpVisible || !canPauseGame,
+                disabled: isHelpVisible || isReplayRunPending || !canPauseGame,
                 isResume: game.status === "paused",
                 label: pauseActionLabel,
                 onClick: toggleRunState,
               }}
-              restartDisabled={game.status === "ready" || pendingLeaderboardEntry !== null}
+              restartDisabled={
+                isReplayRunPending ||
+                game.status === "ready" ||
+                pendingLeaderboardEntry !== null
+              }
               testIdPrefix="breakout"
             />
           }
@@ -389,13 +649,14 @@ export function BreakoutGame({
               <Button
                 className="min-w-32"
                 data-testid="breakout-start-button"
+                disabled={isReplayRunPending}
                 onClick={startGame}
                 size="lg"
                 type="button"
                 variant="secondary"
               >
                 <PlayIcon data-icon="inline-start" />
-                Start
+                {isReplayRunPending ? "Starting" : "Start"}
               </Button>
               <GameLeaderboardPanel {...leaderboardPanelProps} />
             </GameStartScreen>
@@ -417,13 +678,14 @@ export function BreakoutGame({
                 <Button
                   className="min-w-36"
                   data-testid="breakout-continue-button"
+                  disabled={isReplayRunPending}
                   onClick={startGame}
                   size="lg"
                   type="button"
                   variant="secondary"
                 >
                   <PlayIcon data-icon="inline-start" />
-                  Serve next ball
+                  {isReplayRunPending ? "Starting" : "Serve next ball"}
                 </Button>
               </div>
             </div>
@@ -434,6 +696,7 @@ export function BreakoutGame({
                   <Button
                     className="min-w-36"
                     data-testid="breakout-new-game-button"
+                    disabled={isReplayRunPending}
                     onClick={restartGame}
                     size="lg"
                     type="button"
@@ -453,6 +716,36 @@ export function BreakoutGame({
                   title: game.status === "won" ? "Wall cleared" : "Game over",
                 }}
               />
+              <div className="flex w-full max-w-xs flex-col items-center gap-2">
+                <Button
+                  className="w-full"
+                  data-testid="breakout-save-replay-button"
+                  disabled={
+                    finishedReplay === null ||
+                    replaySaveStatus === "saving" ||
+                    replaySaveStatus === "saved"
+                  }
+                  onClick={saveFinishedReplay}
+                  size="lg"
+                  type="button"
+                  variant="secondary"
+                >
+                  <SaveIcon data-icon="inline-start" />
+                  {replaySaveStatus === "saving"
+                    ? "Saving replay"
+                    : replaySaveStatus === "saved"
+                      ? "Replay saved"
+                      : "Save replay"}
+                </Button>
+                {replaySaveStatus === "failed" ? (
+                  <p
+                    className="text-xs font-medium text-[#cbd5e1]"
+                    data-testid="breakout-save-replay-error"
+                  >
+                    Could not save replay. Sign in and try again.
+                  </p>
+                ) : null}
+              </div>
             </GameEndScreen>
           ) : showPauseScreen ? (
             <div
