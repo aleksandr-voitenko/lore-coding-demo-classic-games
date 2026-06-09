@@ -10,10 +10,11 @@ describe("home replay query parsing", () => {
     expect(getInitialReplayGameId("minesweeper")).toBe("minesweeper");
     expect(getInitialReplayGameId("pong")).toBe("pong");
     expect(getInitialReplayGameId("simon")).toBe("simon");
+    expect(getInitialReplayGameId("space-invaders")).toBe("space-invaders");
     expect(getInitialReplayGameId("asteroids")).toBe("asteroids");
     expect(getInitialReplayGameId("twenty-forty-eight")).toBe("twenty-forty-eight");
     expect(getInitialReplayGameId(["tetris", "snake"])).toBe("tetris");
-    expect(getInitialReplayGameId("space-invaders")).toBeNull();
+    expect(getInitialReplayGameId("pac-man")).toBeNull();
     expect(getInitialReplayGameId(undefined)).toBeNull();
   });
 });

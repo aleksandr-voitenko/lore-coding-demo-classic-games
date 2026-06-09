@@ -34,6 +34,18 @@ describe("SpaceInvadersGame", () => {
     expect(markup).not.toContain('data-testid="space-invaders-speed"');
   });
 
+  it("launches latest replay mode without live game controls", () => {
+    const markup = renderToStaticMarkup(
+      <SpaceInvadersGame onBackToMenu={() => undefined} replayMode="latest" />,
+    );
+
+    expect(markup).toContain('data-testid="space-invaders-replay-status"');
+    expect(markup).toContain("Loading Space Invaders replay");
+    expect(markup).not.toContain('data-testid="space-invaders-status"');
+    expect(markup).not.toContain('data-testid="space-invaders-start-button"');
+    expect(markup).not.toContain('data-testid="space-invaders-save-replay-button"');
+  });
+
   it("explains skill scoring bonuses in Help copy", () => {
     const helpItems = SPACE_INVADERS_HELP_SECTIONS.flatMap((section) => section.items ?? []);
 

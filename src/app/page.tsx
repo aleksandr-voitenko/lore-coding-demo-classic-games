@@ -35,6 +35,7 @@ export function getInitialReplayGameId(value: string | string[] | undefined) {
     replayGameId === "minesweeper" ||
     replayGameId === "pong" ||
     replayGameId === "simon" ||
+    replayGameId === "space-invaders" ||
     replayGameId === "asteroids" ||
     replayGameId === "twenty-forty-eight"
     ? replayGameId

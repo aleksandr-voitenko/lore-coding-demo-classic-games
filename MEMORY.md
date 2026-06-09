@@ -46,9 +46,9 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   shared run ids, seed normalization, deterministic replay random creation, API
   paths, client helpers, and base payload validation; `src/lib/snake-replay.ts`,
   `src/lib/tetris-replay.ts`, `src/lib/breakout-replay.ts`,
-  `src/lib/minesweeper-replay.ts`, `src/lib/pong-replay.ts`,
-  `src/lib/simon-replay.ts`, `src/lib/twenty-forty-eight-replay.ts`, and
-  `src/lib/asteroids-replay.ts` own
+  `src/lib/minesweeper-replay.ts`, `src/lib/space-invaders-replay.ts`,
+  `src/lib/pong-replay.ts`, `src/lib/simon-replay.ts`,
+  `src/lib/twenty-forty-eight-replay.ts`, and `src/lib/asteroids-replay.ts` own
   game-specific events and replay
   application helpers.
   `/api/replays/<game>/run` issues replay run ids and seeds for supported replay
@@ -56,8 +56,8 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   `/api/replays/<game>` saves/downloads the current signed-in user's latest
   replay; `/profile` links saved replays back to `/?replay=snake`,
   `/?replay=tetris`, `/?replay=breakout`, `/?replay=minesweeper`,
-  `/?replay=pong`, `/?replay=simon`, `/?replay=twenty-forty-eight`, or
-  `/?replay=asteroids`.
+  `/?replay=space-invaders`, `/?replay=pong`, `/?replay=simon`,
+  `/?replay=twenty-forty-eight`, or `/?replay=asteroids`.
 
 ## Cross-Cutting Constraints
 

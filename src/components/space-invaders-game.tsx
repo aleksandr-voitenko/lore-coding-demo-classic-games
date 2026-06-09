@@ -5,8 +5,9 @@ import {
   ArrowRightIcon,
   PlayIcon,
   RotateCcwIcon,
+  SaveIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   GameAbandonDialog,
@@ -37,6 +38,7 @@ import {
   getSpaceInvaderSprite,
   SpaceInvadersBoard,
 } from "@/components/space-invaders-board";
+import { SpaceInvadersReplayPlayer } from "@/components/space-invaders-replay-player";
 import {
   createSpaceInvadersPlayerMovementState,
   getSpaceInvadersPlayerMovementKey,
@@ -51,7 +53,6 @@ import {
   moveSpaceInvadersPlayerLeft,
   moveSpaceInvadersPlayerRight,
   pauseSpaceInvadersGame,
-  restartSpaceInvadersGame,
   SPACE_INVADERS_BONUS_SCORE_POINTS,
   SPACE_INVADERS_HIT_STREAK_BONUS_CAP,
   SPACE_INVADERS_HIT_STREAK_BONUS_STEP,
@@ -62,6 +63,17 @@ import {
   type SpaceInvadersGameState,
   type SpaceInvadersStatus,
 } from "@/lib/space-invaders-game-engine";
+import {
+  createSpaceInvadersReplayRandom,
+  createSpaceInvadersReplayRun,
+  saveSpaceInvadersReplay,
+  SPACE_INVADERS_REPLAY_GAME_ID,
+  SPACE_INVADERS_REPLAY_SCHEMA_VERSION,
+  type SpaceInvadersReplayEvent,
+  type SpaceInvadersReplayEventInput,
+  type SpaceInvadersReplayPayload,
+  type SpaceInvadersReplayRun,
+} from "@/lib/space-invaders-replay";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { cn } from "@/lib/utils";
 import { useGameSession } from "@/hooks/use-game-session";
@@ -71,6 +83,19 @@ type SpaceInvadersGameProps = {
   initialBoardHeight?: number;
   initialBoardWidth?: number;
   onBackToMenu?: () => void;
+  onReplayBackToProfile?: () => void;
+  replayMode?: "latest";
+};
+
+type ReplaySaveStatus = "failed" | "idle" | "saved" | "saving";
+
+type SpaceInvadersReplayRecording = {
+  events: SpaceInvadersReplayEvent[];
+  nextSeq: number;
+  random: () => number;
+  run: SpaceInvadersReplayRun;
+  startedAt: string;
+  tick: number;
 };
 
 const statusLabels: Record<SpaceInvadersStatus, string> = {
@@ -137,7 +162,52 @@ export function SpaceInvadersGame({
   initialBoardHeight,
   initialBoardWidth,
   onBackToMenu,
+  onReplayBackToProfile,
+  replayMode,
 }: SpaceInvadersGameProps = {}) {
+  if (replayMode === "latest") {
+    return (
+      <SpaceInvadersReplayPlayer
+        onBackToProfile={onReplayBackToProfile ?? onBackToMenu ?? (() => undefined)}
+      />
+    );
+  }
+
+  return (
+    <SpaceInvadersLiveGame
+      initialAlienCount={initialAlienCount}
+      initialBoardHeight={initialBoardHeight}
+      initialBoardWidth={initialBoardWidth}
+      onBackToMenu={onBackToMenu}
+    />
+  );
+}
+
+function appendSpaceInvadersReplayEvent(
+  recording: SpaceInvadersReplayRecording,
+  event: SpaceInvadersReplayEventInput,
+) {
+  recording.events.push({
+    ...event,
+    seq: recording.nextSeq,
+    tick: recording.tick,
+  } as SpaceInvadersReplayEvent);
+  recording.nextSeq += 1;
+
+  if (event.type === "advance") {
+    recording.tick += 1;
+  }
+}
+
+function SpaceInvadersLiveGame({
+  initialAlienCount,
+  initialBoardHeight,
+  initialBoardWidth,
+  onBackToMenu,
+}: Pick<
+  SpaceInvadersGameProps,
+  "initialAlienCount" | "initialBoardHeight" | "initialBoardWidth" | "onBackToMenu"
+> = {}) {
   const [game, setGame] = useState<SpaceInvadersGameState>(() =>
     createInitialSpaceInvadersGame({
       alienCount: initialAlienCount,
@@ -145,6 +215,13 @@ export function SpaceInvadersGame({
       boardWidth: initialBoardWidth,
     }),
   );
+  const [finishedReplay, setFinishedReplay] =
+    useState<SpaceInvadersReplayPayload | null>(null);
+  const [isReplayRunPending, setIsReplayRunPending] = useState(false);
+  const [replaySaveStatus, setReplaySaveStatus] = useState<ReplaySaveStatus>("idle");
+  const gameRef = useRef(game);
+  const isReplayRunPendingRef = useRef(false);
+  const replayRecordingRef = useRef<SpaceInvadersReplayRecording | null>(null);
   const tickDelay = game.status === "running" ? getSpaceInvadersTickDelay() : null;
   const canPauseGame = game.status === "running" || game.status === "paused";
   const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
@@ -177,50 +254,212 @@ export function SpaceInvadersGame({
     testIdPrefix: "space-invaders",
   });
 
-  const startGame = useCallback(() => {
-    resetLeaderboardForm();
-    setGame((current) => startSpaceInvadersGame(current));
-  }, [resetLeaderboardForm]);
+  const commitGame = useCallback((nextGame: SpaceInvadersGameState) => {
+    gameRef.current = nextGame;
+    setGame(nextGame);
+  }, []);
 
-  const toggleRunState = useCallback(() => {
-    resetLeaderboardForm();
-    setGame((current) => {
-      if (current.status === "running") {
-        return pauseSpaceInvadersGame(current);
+  const updateCommittedGame = useCallback(
+    (updateGame: (current: SpaceInvadersGameState) => SpaceInvadersGameState) => {
+      const current = gameRef.current;
+      const nextGame = updateGame(current);
+
+      if (nextGame !== current) {
+        commitGame(nextGame);
       }
 
-      return startSpaceInvadersGame(current);
-    });
-  }, [resetLeaderboardForm]);
+      return nextGame;
+    },
+    [commitGame],
+  );
+
+  const startReplayRun = useCallback(async () => {
+    if (isReplayRunPendingRef.current) {
+      return;
+    }
+
+    isReplayRunPendingRef.current = true;
+    replayRecordingRef.current = null;
+    setIsReplayRunPending(true);
+    resetLeaderboardForm();
+    setFinishedReplay(null);
+    setReplaySaveStatus("idle");
+
+    try {
+      const run = await createSpaceInvadersReplayRun();
+      const random = createSpaceInvadersReplayRandom(run.seed);
+      const current = gameRef.current;
+      const recording: SpaceInvadersReplayRecording = {
+        events: [],
+        nextSeq: 0,
+        random,
+        run,
+        startedAt: new Date().toISOString(),
+        tick: 0,
+      };
+      const readyGame = createInitialSpaceInvadersGame({
+        alienCount: current.alienCount,
+        boardHeight: current.boardHeight,
+        boardWidth: current.boardWidth,
+        random,
+      });
+
+      appendSpaceInvadersReplayEvent(recording, { type: "start" });
+      replayRecordingRef.current = recording;
+      commitGame(startSpaceInvadersGame(readyGame));
+    } catch {
+      setReplaySaveStatus("failed");
+    } finally {
+      isReplayRunPendingRef.current = false;
+      setIsReplayRunPending(false);
+    }
+  }, [commitGame, resetLeaderboardForm]);
+
+  const startGame = useCallback(() => {
+    void startReplayRun();
+  }, [startReplayRun]);
+
+  const toggleRunState = useCallback(() => {
+    const current = gameRef.current;
+
+    resetLeaderboardForm();
+
+    if (current.status === "running") {
+      updateCommittedGame((gameState) => pauseSpaceInvadersGame(gameState));
+      return;
+    }
+
+    if (current.status === "paused") {
+      updateCommittedGame((gameState) => startSpaceInvadersGame(gameState));
+      return;
+    }
+
+    startGame();
+  }, [resetLeaderboardForm, startGame, updateCommittedGame]);
 
   const restartGame = useCallback(() => {
-    resetLeaderboardForm();
-    setGame((current) => restartSpaceInvadersGame(current));
-  }, [resetLeaderboardForm]);
+    if (isReplayRunPendingRef.current) {
+      return;
+    }
+
+    replayRecordingRef.current = null;
+    void startReplayRun();
+  }, [startReplayRun]);
 
   const movePlayer = useCallback((direction: SpaceInvadersPlayerMovementDirection) => {
-    setGame((current) =>
-      direction === "left"
-        ? moveSpaceInvadersPlayerLeft(current)
-        : moveSpaceInvadersPlayerRight(current),
-    );
-  }, []);
+    updateCommittedGame((current) => {
+      const nextGame =
+        direction === "left"
+          ? moveSpaceInvadersPlayerLeft(current)
+          : moveSpaceInvadersPlayerRight(current);
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null && nextGame.player.x !== current.player.x) {
+        appendSpaceInvadersReplayEvent(recording, {
+          direction,
+          type: "move",
+        });
+      }
+
+      return nextGame;
+    });
+  }, [updateCommittedGame]);
 
   const fireShot = useCallback(() => {
-    setGame((current) => fireSpaceInvadersShot(current));
-  }, []);
+    updateCommittedGame((current) => {
+      const nextGame = fireSpaceInvadersShot(current);
+      const recording = replayRecordingRef.current;
+
+      if (
+        recording !== null &&
+        nextGame.nextPlayerShotId > current.nextPlayerShotId
+      ) {
+        appendSpaceInvadersReplayEvent(recording, { type: "fire" });
+      }
+
+      return nextGame;
+    });
+  }, [updateCommittedGame]);
 
   const advanceSpaceInvaders = useCallback(() => {
-    setGame((current) => advanceSpaceInvadersGame(current));
-  }, []);
+    updateCommittedGame((current) => {
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null && current.status === "running") {
+        appendSpaceInvadersReplayEvent(recording, { type: "advance" });
+
+        return advanceSpaceInvadersGame(current, recording.random);
+      }
+
+      return advanceSpaceInvadersGame(current);
+    });
+  }, [updateCommittedGame]);
 
   const pauseGameForHelp = useCallback(() => {
-    setGame((current) => pauseSpaceInvadersGame(current));
-  }, []);
+    updateCommittedGame((current) => pauseSpaceInvadersGame(current));
+  }, [updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
-    setGame((current) => startSpaceInvadersGame(current));
-  }, []);
+    updateCommittedGame((current) => startSpaceInvadersGame(current));
+  }, [updateCommittedGame]);
+
+  const saveFinishedReplay = useCallback(async () => {
+    if (finishedReplay === null || replaySaveStatus === "saving") {
+      return;
+    }
+
+    setReplaySaveStatus("saving");
+
+    try {
+      await saveSpaceInvadersReplay(finishedReplay);
+      setReplaySaveStatus("saved");
+    } catch {
+      setReplaySaveStatus("failed");
+    }
+  }, [finishedReplay, replaySaveStatus]);
+
+  useEffect(() => {
+    if (game.status !== "lost" && game.status !== "won") {
+      return;
+    }
+
+    const recording = replayRecordingRef.current;
+
+    if (recording === null || finishedReplay !== null) {
+      return;
+    }
+
+    const replay: SpaceInvadersReplayPayload = {
+      alienCount: game.alienCount,
+      boardHeight: game.boardHeight,
+      boardWidth: game.boardWidth,
+      events: [...recording.events],
+      finalInvaderCount: game.invaders.filter((invader) => invader.isActive).length,
+      finalLives: game.lives,
+      finalScore: game.score,
+      finalStatus: game.status,
+      finalTick: recording.tick,
+      gameId: SPACE_INVADERS_REPLAY_GAME_ID,
+      leaderboardKey,
+      runId: recording.run.id,
+      schemaVersion: SPACE_INVADERS_REPLAY_SCHEMA_VERSION,
+      seed: recording.run.seed,
+      startedAt: recording.startedAt,
+    };
+
+    replayRecordingRef.current = null;
+    setFinishedReplay(replay);
+  }, [
+    finishedReplay,
+    game.alienCount,
+    game.boardHeight,
+    game.boardWidth,
+    game.invaders,
+    game.lives,
+    game.score,
+    game.status,
+    leaderboardKey,
+  ]);
 
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({
     isGameActive: game.status === "running",
@@ -243,7 +482,10 @@ export function SpaceInvadersGame({
     createState: createSpaceInvadersPlayerMovementState,
     intervalMs: SPACE_INVADERS_PLAYER_MOVE_INTERVAL_MS,
     isMovementDisabled:
-      isHelpVisible || pendingLeaderboardEntry !== null || game.status !== "running",
+      isHelpVisible ||
+      isReplayRunPending ||
+      pendingLeaderboardEntry !== null ||
+      game.status !== "running",
     move: movePlayer,
   });
 
@@ -276,11 +518,15 @@ export function SpaceInvadersGame({
 
       if (isGamePauseKey(event.key)) {
         event.preventDefault();
-        toggleRunState();
+
+        if (!isReplayRunPendingRef.current) {
+          toggleRunState();
+        }
+
         return;
       }
 
-      if (game.status !== "running") {
+      if (game.status !== "running" || isReplayRunPendingRef.current) {
         return;
       }
 
@@ -346,12 +592,16 @@ export function SpaceInvadersGame({
               onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{
-                disabled: isHelpVisible || !canPauseGame,
+                disabled: isHelpVisible || isReplayRunPending || !canPauseGame,
                 isResume: game.status === "paused",
                 label: pauseActionLabel,
                 onClick: toggleRunState,
               }}
-              restartDisabled={game.status === "ready" || pendingLeaderboardEntry !== null}
+              restartDisabled={
+                isReplayRunPending ||
+                game.status === "ready" ||
+                pendingLeaderboardEntry !== null
+              }
               testIdPrefix="space-invaders"
             />
           }
@@ -384,13 +634,14 @@ export function SpaceInvadersGame({
               <Button
                 className="min-w-32"
                 data-testid="space-invaders-start-button"
+                disabled={isReplayRunPending}
                 onClick={startGame}
                 size="lg"
                 type="button"
                 variant="secondary"
               >
                 <PlayIcon data-icon="inline-start" />
-                Start
+                {isReplayRunPending ? "Starting" : "Start"}
               </Button>
               <GameLeaderboardPanel {...leaderboardPanelProps} />
             </GameStartScreen>
@@ -401,6 +652,7 @@ export function SpaceInvadersGame({
                   <Button
                     className="min-w-36"
                     data-testid="space-invaders-new-game-button"
+                    disabled={isReplayRunPending}
                     onClick={restartGame}
                     size="lg"
                     type="button"
@@ -420,6 +672,36 @@ export function SpaceInvadersGame({
                   title: game.status === "won" ? "Earth defended" : "Game over",
                 }}
               />
+              <div className="flex w-full max-w-xs flex-col items-center gap-2">
+                <Button
+                  className="w-full"
+                  data-testid="space-invaders-save-replay-button"
+                  disabled={
+                    finishedReplay === null ||
+                    replaySaveStatus === "saving" ||
+                    replaySaveStatus === "saved"
+                  }
+                  onClick={saveFinishedReplay}
+                  size="lg"
+                  type="button"
+                  variant="secondary"
+                >
+                  <SaveIcon data-icon="inline-start" />
+                  {replaySaveStatus === "saving"
+                    ? "Saving replay"
+                    : replaySaveStatus === "saved"
+                      ? "Replay saved"
+                      : "Save replay"}
+                </Button>
+                {replaySaveStatus === "failed" ? (
+                  <p
+                    className="text-xs font-medium text-[#cbd5e1]"
+                    data-testid="space-invaders-save-replay-error"
+                  >
+                    Could not save replay. Sign in and try again.
+                  </p>
+                ) : null}
+              </div>
             </GameEndScreen>
           ) : showPauseScreen ? (
             <div
