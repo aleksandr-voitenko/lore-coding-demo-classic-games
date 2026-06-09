@@ -42,6 +42,16 @@ type PlaybackState = {
   random: () => number;
 };
 
+type AdvanceTwentyFortyEightReplayFrameInput = PlaybackState & {
+  game: TwentyFortyEightGameState;
+};
+
+type AdvanceTwentyFortyEightReplayFrameResult = {
+  eventIndex: number;
+  game: TwentyFortyEightGameState;
+  isFinished: boolean;
+};
+
 const TWENTY_FORTY_EIGHT_REPLAY_STEP_MS = 420;
 
 const statusLabels = {
@@ -76,6 +86,37 @@ function TwentyFortyEightReplayMessage({
       </div>
     </GameShell>
   );
+}
+
+export function advanceTwentyFortyEightReplayFrame({
+  eventIndex,
+  events,
+  game,
+  random,
+}: AdvanceTwentyFortyEightReplayFrameInput): AdvanceTwentyFortyEightReplayFrameResult {
+  let nextEventIndex = eventIndex;
+  let nextGame = game;
+  let hasVisibleChange = false;
+
+  while (nextEventIndex < events.length && !hasVisibleChange) {
+    const event = events[nextEventIndex]!;
+    const previousGame = nextGame;
+
+    nextEventIndex += 1;
+    nextGame = applyTwentyFortyEightReplayEvent(nextGame, event, random);
+    hasVisibleChange = nextGame !== previousGame;
+
+    if (nextGame.status === "lost" || nextGame.status === "won") {
+      break;
+    }
+  }
+
+  return {
+    eventIndex: nextEventIndex,
+    game: nextGame,
+    isFinished:
+      nextEventIndex >= events.length || nextGame.status === "lost" || nextGame.status === "won",
+  };
 }
 
 export function TwentyFortyEightReplayPlayer({
@@ -144,25 +185,18 @@ export function TwentyFortyEightReplayPlayer({
       return;
     }
 
-    let nextGame = currentGame;
-    let processedMove = false;
+    const nextFrame = advanceTwentyFortyEightReplayFrame({
+      eventIndex: playback.eventIndex,
+      events: playback.events,
+      game: currentGame,
+      random: playback.random,
+    });
 
-    while (playback.eventIndex < playback.events.length && !processedMove) {
-      const event = playback.events[playback.eventIndex]!;
+    playback.eventIndex = nextFrame.eventIndex;
+    gameRef.current = nextFrame.game;
+    setGame(nextFrame.game);
 
-      playback.eventIndex += 1;
-      nextGame = applyTwentyFortyEightReplayEvent(nextGame, event, playback.random);
-      processedMove = event.type === "move";
-    }
-
-    gameRef.current = nextGame;
-    setGame(nextGame);
-
-    if (
-      playback.eventIndex >= playback.events.length ||
-      nextGame.status === "lost" ||
-      nextGame.status === "won"
-    ) {
+    if (nextFrame.isFinished) {
       setIsFinished(true);
     }
   }, [isFinished]);
