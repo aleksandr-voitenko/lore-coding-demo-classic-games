@@ -5,6 +5,11 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  parseBaseGameReplayPayload,
+  type BaseGameReplayPayload,
+  type GameReplayRun,
+} from "@/lib/game-replay";
+import {
   SNAKE_REPLAY_SCHEMA_VERSION,
   type SnakeReplayPayload,
   type SnakeReplayRun,
@@ -54,6 +59,32 @@ function createReplayPayload(run: SnakeReplayRun, finalScore = 4): SnakeReplayPa
     seed: run.seed,
     startedAt: "2026-06-08T12:00:00.000Z",
   };
+}
+
+function createBaseReplayPayload<const GameId extends string>(
+  run: GameReplayRun,
+  gameId: GameId,
+  finalScore = 4,
+): BaseGameReplayPayload<GameId, 1> {
+  return {
+    finalScore,
+    finalStatus: "lost",
+    finalTick: 1,
+    gameId,
+    leaderboardKey: `${gameId}|mode=test`,
+    runId: run.id,
+    schemaVersion: 1,
+    seed: run.seed,
+    startedAt: "2026-06-08T12:00:00.000Z",
+  };
+}
+
+function parseTetrisReplayPayload(value: unknown) {
+  return parseBaseGameReplayPayload(value, {
+    gameId: "tetris",
+    replayLabel: "Tetris replay",
+    schemaVersion: 1,
+  });
 }
 
 function createStores() {
@@ -140,6 +171,35 @@ describe("sqlite replay store", () => {
     });
   });
 
+  it("stores and reads latest replays through the generic game replay methods", async () => {
+    const { dispose, replayStore, userStore } = createStores();
+    disposables.push(dispose);
+    const session = getSuccessfulSession(await userStore.registerUser("Katherine", "password123"));
+    const user = session.user;
+    const snakeRun = await replayStore.createSnakeReplayRun(user);
+    const tetrisRun = await replayStore.createReplayRun("tetris", user);
+
+    await expect(replayStore.saveSnakeReplay(user, createReplayPayload(snakeRun, 5))).resolves.toEqual({
+      success: true,
+    });
+    await expect(
+      replayStore.saveReplay(user, createBaseReplayPayload(tetrisRun, "tetris", 12)),
+    ).resolves.toEqual({
+      success: true,
+    });
+
+    await expect(replayStore.getSnakeReplay(user)).resolves.toMatchObject({
+      finalScore: 5,
+      gameId: "snake",
+    });
+    await expect(
+      replayStore.getReplay(user, "tetris", parseTetrisReplayPayload),
+    ).resolves.toMatchObject({
+      finalScore: 12,
+      gameId: "tetris",
+    });
+  });
+
   it("rejects replay uploads that do not match an issued run", async () => {
     const { dispose, replayStore, userStore } = createStores();
     disposables.push(dispose);
@@ -163,6 +223,15 @@ describe("sqlite replay store", () => {
       }),
     ).resolves.toEqual({
       reason: "run-not-found",
+      success: false,
+    });
+
+    const tetrisRun = await replayStore.createReplayRun("tetris", user);
+
+    await expect(
+      replayStore.saveReplay(user, createBaseReplayPayload(tetrisRun, "breakout")),
+    ).resolves.toEqual({
+      reason: "unsupported-game",
       success: false,
     });
   });

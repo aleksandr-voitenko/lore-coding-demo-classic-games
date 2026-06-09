@@ -35,8 +35,8 @@ function createReplayPayload(overrides: Partial<SnakeReplayPayload> = {}): Snake
 describe("snake replay route", () => {
   it("requires a signed-in user before saving or downloading replays", async () => {
     const replayStore = {
-      getSnakeReplay: vi.fn(),
-      saveSnakeReplay: vi.fn(),
+      getReplay: vi.fn(),
+      saveReplay: vi.fn(),
     } as unknown as SqliteReplayStore;
     const userStore = {
       getUserBySessionToken: vi.fn(async () => null),
@@ -56,16 +56,16 @@ describe("snake replay route", () => {
 
     expect(getResponse.status).toBe(401);
     expect(postResponse.status).toBe(401);
-    expect(replayStore.getSnakeReplay).not.toHaveBeenCalled();
-    expect(replayStore.saveSnakeReplay).not.toHaveBeenCalled();
+    expect(replayStore.getReplay).not.toHaveBeenCalled();
+    expect(replayStore.saveReplay).not.toHaveBeenCalled();
   });
 
   it("saves valid signed-in Snake replay uploads", async () => {
     const user = { displayName: "Ada", id: "user-1" };
     const replay = createReplayPayload();
     const replayStore = {
-      getSnakeReplay: vi.fn(),
-      saveSnakeReplay: vi.fn(async () => ({ success: true })),
+      getReplay: vi.fn(),
+      saveReplay: vi.fn(async () => ({ success: true })),
     } as unknown as SqliteReplayStore;
     const userStore = {
       getUserBySessionToken: vi.fn(async () => user),
@@ -82,15 +82,15 @@ describe("snake replay route", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(replayStore.saveSnakeReplay).toHaveBeenCalledWith(user, replay);
+    expect(replayStore.saveReplay).toHaveBeenCalledWith(user, replay);
     await expect(response.json()).resolves.toEqual({ saved: true });
   });
 
   it("rejects malformed replays and issued-run mismatches", async () => {
     const user = { displayName: "Ada", id: "user-1" };
     const replayStore = {
-      getSnakeReplay: vi.fn(),
-      saveSnakeReplay: vi.fn(async () => ({
+      getReplay: vi.fn(),
+      saveReplay: vi.fn(async () => ({
         reason: "run-seed-mismatch",
         success: false,
       })),
@@ -129,8 +129,8 @@ describe("snake replay route", () => {
     const user = { displayName: "Ada", id: "user-1" };
     const replay = createReplayPayload();
     const replayStore = {
-      getSnakeReplay: vi.fn(async () => replay),
-      saveSnakeReplay: vi.fn(),
+      getReplay: vi.fn(async () => replay),
+      saveReplay: vi.fn(),
     } as unknown as SqliteReplayStore;
     const userStore = {
       getUserBySessionToken: vi.fn(async () => user),
@@ -146,7 +146,11 @@ describe("snake replay route", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(replayStore.getSnakeReplay).toHaveBeenCalledWith(user);
+    expect(replayStore.getReplay).toHaveBeenCalledWith(
+      user,
+      "snake",
+      expect.any(Function),
+    );
     await expect(response.json()).resolves.toEqual({ replay });
   });
 });

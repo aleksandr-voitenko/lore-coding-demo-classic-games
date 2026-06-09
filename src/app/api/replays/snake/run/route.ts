@@ -1,32 +1,22 @@
-import { NextResponse } from "next/server";
-
+import {
+  createGameReplayRunRouteHandlers,
+  type UserSessionLookup,
+} from "@/app/api/replays/route-handlers";
 import type { SqliteReplayStore } from "@/lib/server/sqlite-replay-store";
 import { getReplayStore } from "@/lib/server/sqlite-replay-store";
 import { getUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
-import { getSessionTokenFromRequest } from "@/lib/server/user-session-cookie";
-import type { AuthenticatedUser } from "@/lib/user-profile";
+import { SNAKE_REPLAY_GAME_ID } from "@/lib/snake-replay";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type UserSessionLookup = {
-  getUserBySessionToken: (sessionToken: string | null) => Promise<AuthenticatedUser | null>;
-};
-
 export function createSnakeReplayRunRouteHandlers(
-  replayStore: Pick<SqliteReplayStore, "createSnakeReplayRun">,
+  replayStore: Pick<SqliteReplayStore, "createReplayRun">,
   userStore?: UserSessionLookup,
 ) {
-  return {
-    async POST(request: Request) {
-      const user = userStore
-        ? await userStore.getUserBySessionToken(getSessionTokenFromRequest(request))
-        : null;
-      const run = await replayStore.createSnakeReplayRun(user);
-
-      return NextResponse.json(run, { status: 201 });
-    },
-  };
+  return createGameReplayRunRouteHandlers(replayStore, userStore, {
+    gameId: SNAKE_REPLAY_GAME_ID,
+  });
 }
 
 export async function POST(request: Request) {

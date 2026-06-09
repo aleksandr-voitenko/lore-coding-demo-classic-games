@@ -2,6 +2,12 @@ import Database from "better-sqlite3";
 import { randomInt, randomUUID } from "node:crypto";
 
 import {
+  MAX_GAME_REPLAY_SEED,
+  type BaseGameReplayPayload,
+  type GameReplayPayloadParser,
+  type GameReplayRun,
+} from "@/lib/game-replay";
+import {
   SNAKE_REPLAY_GAME_ID,
   parseSnakeReplayPayload,
   type SnakeReplayPayload,
@@ -55,7 +61,7 @@ type ReplayPayloadRow = {
   payloadJson: string;
 };
 
-type SaveSnakeReplayResult =
+export type SaveReplayResult =
   | {
       success: true;
     }
@@ -68,10 +74,8 @@ type SaveSnakeReplayResult =
       success: false;
     };
 
-const MAX_REPLAY_SEED = 2_147_483_646;
-
 function createDefaultSeed() {
-  return randomInt(1, MAX_REPLAY_SEED + 1);
+  return randomInt(1, MAX_GAME_REPLAY_SEED + 1);
 }
 
 export class SqliteReplayStore {
@@ -169,22 +173,29 @@ export class SqliteReplayStore {
     this.#database.close();
   }
 
-  async createSnakeReplayRun(user: AuthenticatedUser | null): Promise<SnakeReplayRun> {
+  async createReplayRun(
+    gameId: string,
+    user: AuthenticatedUser | null,
+  ): Promise<GameReplayRun> {
     const run = this.#insertReplayRun.get({
       createdAt: this.#now().toISOString(),
-      gameId: SNAKE_REPLAY_GAME_ID,
+      gameId,
       id: this.#createId(),
       seed: this.#createSeed(),
       userId: user?.id ?? null,
-    }) as SnakeReplayRun;
+    }) as GameReplayRun;
 
     return run;
   }
 
-  async saveSnakeReplay(
+  async createSnakeReplayRun(user: AuthenticatedUser | null): Promise<SnakeReplayRun> {
+    return this.createReplayRun(SNAKE_REPLAY_GAME_ID, user);
+  }
+
+  async saveReplay(
     user: AuthenticatedUser,
-    payload: SnakeReplayPayload,
-  ): Promise<SaveSnakeReplayResult> {
+    payload: BaseGameReplayPayload,
+  ): Promise<SaveReplayResult> {
     const run = this.#selectReplayRunById.get({
       runId: payload.runId,
     }) as ReplayRunRow | undefined;
@@ -196,7 +207,7 @@ export class SqliteReplayStore {
       };
     }
 
-    if (run.gameId !== SNAKE_REPLAY_GAME_ID || payload.gameId !== SNAKE_REPLAY_GAME_ID) {
+    if (run.gameId !== payload.gameId) {
       return {
         reason: "unsupported-game",
         success: false,
@@ -224,7 +235,7 @@ export class SqliteReplayStore {
       finalScore: payload.finalScore,
       finalStatus: payload.finalStatus,
       finalTick: payload.finalTick,
-      gameId: SNAKE_REPLAY_GAME_ID,
+      gameId: payload.gameId,
       leaderboardKey: payload.leaderboardKey,
       payloadJson: JSON.stringify(payload),
       runId: payload.runId,
@@ -237,9 +248,20 @@ export class SqliteReplayStore {
     };
   }
 
-  async getSnakeReplay(user: AuthenticatedUser) {
+  async saveSnakeReplay(
+    user: AuthenticatedUser,
+    payload: SnakeReplayPayload,
+  ): Promise<SaveReplayResult> {
+    return this.saveReplay(user, payload);
+  }
+
+  async getReplay<Payload>(
+    user: AuthenticatedUser,
+    gameId: string,
+    parsePayload: GameReplayPayloadParser<Payload>,
+  ) {
     const row = this.#selectReplayPayload.get({
-      gameId: SNAKE_REPLAY_GAME_ID,
+      gameId,
       userId: user.id,
     }) as ReplayPayloadRow | undefined;
 
@@ -248,12 +270,16 @@ export class SqliteReplayStore {
     }
 
     try {
-      const parsedReplay = parseSnakeReplayPayload(JSON.parse(row.payloadJson));
+      const parsedReplay = parsePayload(JSON.parse(row.payloadJson));
 
       return parsedReplay.success ? parsedReplay.payload : null;
     } catch {
       return null;
     }
+  }
+
+  async getSnakeReplay(user: AuthenticatedUser) {
+    return this.getReplay(user, SNAKE_REPLAY_GAME_ID, parseSnakeReplayPayload);
   }
 }
 

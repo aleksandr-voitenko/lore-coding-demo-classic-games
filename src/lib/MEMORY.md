@@ -34,10 +34,13 @@ This file covers deterministic game engines and shared source logic under
 - `user-profile.ts` owns shared auth, user, game-session, and profile-stat
   types; display-name/password/game-id/session-id validation; and client helpers
   for `/api/auth/*`, `/api/me`, and `/api/game-sessions`.
-- `snake-replay.ts` owns the shared Snake replay payload contract, seeded replay
-  random source, client API helpers, and deterministic replay event application.
-  Replay payloads record engine events such as direction changes, advances, and
-  timed-food lifecycle events rather than video or full board snapshots.
+- `game-replay.ts` owns shared replay run ids, seed normalization, deterministic
+  replay random creation, API path/client helpers, and base replay payload
+  validation for all future game-specific replay modules.
+- `snake-replay.ts` owns the Snake replay payload contract, Snake event parsing,
+  and deterministic replay event application. Replay payloads record engine
+  events such as direction changes, advances, and timed-food lifecycle events
+  rather than video or full board snapshots.
 - `game-catalog.ts` owns the pure playable-game id and label catalog plus
   server-safe card artwork metadata and versioned artwork URLs. Launcher config
   should enrich these entries with descriptions and parameters locally, while

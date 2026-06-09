@@ -19,8 +19,10 @@ This file covers Node-only server helpers and storage adapters under
 - `sqlite-user-profile-store.ts` owns user registration, password login,
   signed-in session persistence, game-session recording, and aggregate profile
   stats.
-- `sqlite-replay-store.ts` owns server-issued Snake replay runs and one latest
-  saved Snake replay per signed-in user/game.
+- `sqlite-replay-store.ts` owns generic server-issued replay runs and one latest
+  saved replay per signed-in user/game. Keep generic `createReplayRun`,
+  `saveReplay`, and `getReplay` behavior available for future games while
+  preserving Snake wrapper methods for the current replay MVP.
 - Keep this adapter boundary small so a future Postgres store can replace SQLite
   without changing the client API or game components.
 

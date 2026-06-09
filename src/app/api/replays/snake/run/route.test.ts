@@ -9,7 +9,7 @@ describe("snake replay run route", () => {
   it("issues server replay runs and links a signed-in user when available", async () => {
     const user = { displayName: "Ada", id: "user-1" };
     const replayStore = {
-      createSnakeReplayRun: vi.fn(async () => ({ id: "run-1", seed: 1234 })),
+      createReplayRun: vi.fn(async () => ({ id: "run-1", seed: 1234 })),
     } as unknown as SqliteReplayStore;
     const userStore = {
       getUserBySessionToken: vi.fn(async () => user),
@@ -26,13 +26,13 @@ describe("snake replay run route", () => {
 
     expect(response.status).toBe(201);
     expect(userStore.getUserBySessionToken).toHaveBeenCalledWith("session-token");
-    expect(replayStore.createSnakeReplayRun).toHaveBeenCalledWith(user);
+    expect(replayStore.createReplayRun).toHaveBeenCalledWith("snake", user);
     await expect(response.json()).resolves.toEqual({ id: "run-1", seed: 1234 });
   });
 
   it("still issues replay runs for guests", async () => {
     const replayStore = {
-      createSnakeReplayRun: vi.fn(async () => ({ id: "run-1", seed: 1234 })),
+      createReplayRun: vi.fn(async () => ({ id: "run-1", seed: 1234 })),
     } as unknown as SqliteReplayStore;
     const handlers = createSnakeReplayRunRouteHandlers(replayStore);
     const response = await handlers.POST(
@@ -42,6 +42,6 @@ describe("snake replay run route", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(replayStore.createSnakeReplayRun).toHaveBeenCalledWith(null);
+    expect(replayStore.createReplayRun).toHaveBeenCalledWith("snake", null);
   });
 });

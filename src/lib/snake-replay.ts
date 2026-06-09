@@ -7,14 +7,26 @@ import {
   spawnTimedFood,
   type Direction,
   type GameState,
-  type GameStatus,
   type TimedFoodKind,
 } from "@/lib/snake-game-engine";
+import {
+  createGameReplayRandom,
+  createGameReplayRun as createGenericGameReplayRun,
+  fetchGameReplay,
+  getGameReplayApiPath,
+  getGameReplayRunApiPath,
+  isNonNegativeInteger,
+  isRecord,
+  normalizeGameReplayRunId,
+  normalizeGameReplaySeed,
+  parseBaseGameReplayPayload,
+  saveGameReplay,
+  type BaseGameReplayPayload,
+  type GameReplayRun,
+  type ParseGameReplayPayloadResult,
+} from "@/lib/game-replay";
 
-export type SnakeReplayRun = {
-  id: string;
-  seed: number;
-};
+export type SnakeReplayRun = GameReplayRun;
 
 export type SnakeReplayStartEvent = {
   seq: number;
@@ -65,88 +77,32 @@ export type SnakeReplayEventInput =
   | Omit<SnakeReplaySpawnTimedFoodEvent, "seq" | "tick">
   | Omit<SnakeReplayStartEvent, "seq" | "tick">;
 
-export type SnakeReplayPayload = {
+export type SnakeReplayPayload = BaseGameReplayPayload<
+  typeof SNAKE_REPLAY_GAME_ID,
+  typeof SNAKE_REPLAY_SCHEMA_VERSION
+> & {
   events: SnakeReplayEvent[];
   finalLevel: number;
-  finalScore: number;
-  finalStatus: Extract<GameStatus, "lost" | "won">;
-  finalTick: number;
-  gameId: "snake";
-  leaderboardKey: string;
-  runId: string;
-  schemaVersion: typeof SNAKE_REPLAY_SCHEMA_VERSION;
-  seed: number;
-  startedAt: string;
 };
 
 export type ParseSnakeReplayPayloadResult =
-  | {
-      payload: SnakeReplayPayload;
-      success: true;
-    }
-  | {
-      error: string;
-      success: false;
-    };
+  ParseGameReplayPayloadResult<SnakeReplayPayload>;
 
-export const SNAKE_REPLAY_API_PATH = "/api/replays/snake";
-export const SNAKE_REPLAY_RUN_API_PATH = "/api/replays/snake/run";
 export const SNAKE_REPLAY_SCHEMA_VERSION = 1;
 export const SNAKE_REPLAY_GAME_ID = "snake";
+export const SNAKE_REPLAY_API_PATH = getGameReplayApiPath(SNAKE_REPLAY_GAME_ID);
+export const SNAKE_REPLAY_RUN_API_PATH = getGameReplayRunApiPath(SNAKE_REPLAY_GAME_ID);
 export const MAX_SNAKE_REPLAY_EVENTS = 50_000;
 
-const MAX_REPLAY_SEED = 2_147_483_646;
-const REPLAY_RUN_ID_PATTERN = /^[a-zA-Z0-9-]{1,80}$/;
 const DIRECTIONS = ["up", "right", "down", "left"] as const;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isNonNegativeInteger(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0;
-}
 
 function isDirection(value: unknown): value is Direction {
   return typeof value === "string" && (DIRECTIONS as readonly string[]).includes(value);
 }
 
-export function normalizeSnakeReplayRunId(value: unknown) {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const runId = value.trim();
-
-  return REPLAY_RUN_ID_PATTERN.test(runId) ? runId : null;
-}
-
-export function normalizeSnakeReplaySeed(value: unknown) {
-  if (
-    typeof value !== "number" ||
-    !Number.isInteger(value) ||
-    value < 1 ||
-    value > MAX_REPLAY_SEED
-  ) {
-    return null;
-  }
-
-  return value;
-}
-
-export function createSnakeReplayRandom(seed: number) {
-  let value = seed % 2_147_483_647;
-
-  if (value <= 0) {
-    value += 2_147_483_646;
-  }
-
-  return () => {
-    value = (value * 16_807) % 2_147_483_647;
-
-    return (value - 1) / 2_147_483_646;
-  };
-}
+export const normalizeSnakeReplayRunId = normalizeGameReplayRunId;
+export const normalizeSnakeReplaySeed = normalizeGameReplaySeed;
+export const createSnakeReplayRandom = createGameReplayRandom;
 
 function parseSnakeReplayEvent(value: unknown): SnakeReplayEvent | null {
   if (!isRecord(value) || !isNonNegativeInteger(value.seq) || !isNonNegativeInteger(value.tick)) {
@@ -210,50 +166,17 @@ function parseSnakeReplayEvent(value: unknown): SnakeReplayEvent | null {
 }
 
 export function parseSnakeReplayPayload(value: unknown): ParseSnakeReplayPayloadResult {
-  if (!isRecord(value)) {
-    return {
-      error: "Snake replay must be a JSON object.",
-      success: false,
-    };
+  const baseReplay = parseBaseGameReplayPayload(value, {
+    gameId: SNAKE_REPLAY_GAME_ID,
+    replayLabel: "Snake replay",
+    schemaVersion: SNAKE_REPLAY_SCHEMA_VERSION,
+  });
+
+  if (!baseReplay.success) {
+    return baseReplay;
   }
 
-  if (value.schemaVersion !== SNAKE_REPLAY_SCHEMA_VERSION || value.gameId !== SNAKE_REPLAY_GAME_ID) {
-    return {
-      error: "Snake replay version is not supported.",
-      success: false,
-    };
-  }
-
-  const runId = normalizeSnakeReplayRunId(value.runId);
-  const seed = normalizeSnakeReplaySeed(value.seed);
-
-  if (runId === null || seed === null) {
-    return {
-      error: "Snake replay run is not supported.",
-      success: false,
-    };
-  }
-
-  if (typeof value.leaderboardKey !== "string" || value.leaderboardKey.length === 0) {
-    return {
-      error: "Snake replay leaderboard key is not supported.",
-      success: false,
-    };
-  }
-
-  if (typeof value.startedAt !== "string" || Number.isNaN(Date.parse(value.startedAt))) {
-    return {
-      error: "Snake replay start time is not supported.",
-      success: false,
-    };
-  }
-
-  if (
-    !isNonNegativeInteger(value.finalScore) ||
-    !isNonNegativeInteger(value.finalLevel) ||
-    !isNonNegativeInteger(value.finalTick) ||
-    (value.finalStatus !== "lost" && value.finalStatus !== "won")
-  ) {
+  if (!isRecord(value) || !isNonNegativeInteger(value.finalLevel)) {
     return {
       error: "Snake replay final state is not supported.",
       success: false,
@@ -278,17 +201,9 @@ export function parseSnakeReplayPayload(value: unknown): ParseSnakeReplayPayload
 
   return {
     payload: {
+      ...baseReplay.payload,
       events: events as SnakeReplayEvent[],
       finalLevel: value.finalLevel,
-      finalScore: value.finalScore,
-      finalStatus: value.finalStatus,
-      finalTick: value.finalTick,
-      gameId: SNAKE_REPLAY_GAME_ID,
-      leaderboardKey: value.leaderboardKey,
-      runId,
-      schemaVersion: SNAKE_REPLAY_SCHEMA_VERSION,
-      seed,
-      startedAt: value.startedAt,
     },
     success: true,
   };
@@ -335,68 +250,20 @@ export function applySnakeReplayEvent(
   }
 }
 
-function getResponseError(response: Response, context: string) {
-  return new Error(`${context} failed with status ${response.status}`);
-}
-
 export async function createSnakeReplayRun() {
-  const response = await fetch(SNAKE_REPLAY_RUN_API_PATH, {
-    method: "POST",
+  return createGenericGameReplayRun(SNAKE_REPLAY_GAME_ID, {
+    replayLabel: "Snake replay",
   });
-
-  if (!response.ok) {
-    throw getResponseError(response, "Snake replay run request");
-  }
-
-  const payload: unknown = await response.json();
-
-  if (!isRecord(payload)) {
-    throw new Error("Snake replay run response was not a JSON object.");
-  }
-
-  const id = normalizeSnakeReplayRunId(payload.id);
-  const seed = normalizeSnakeReplaySeed(payload.seed);
-
-  if (id === null || seed === null) {
-    throw new Error("Snake replay run response did not include a valid run.");
-  }
-
-  return {
-    id,
-    seed,
-  };
 }
 
 export async function saveSnakeReplay(payload: SnakeReplayPayload) {
-  const response = await fetch(SNAKE_REPLAY_API_PATH, {
-    body: JSON.stringify(payload),
-    headers: {
-      "Content-Type": "application/json",
-    },
-    method: "POST",
+  return saveGameReplay(SNAKE_REPLAY_GAME_ID, payload, {
+    replayLabel: "Snake replay",
   });
-
-  if (!response.ok) {
-    throw getResponseError(response, "Snake replay save request");
-  }
 }
 
 export async function fetchSnakeReplay() {
-  const response = await fetch(SNAKE_REPLAY_API_PATH, {
-    cache: "no-store",
+  return fetchGameReplay(SNAKE_REPLAY_GAME_ID, parseSnakeReplayPayload, {
+    replayLabel: "Snake replay",
   });
-
-  if (!response.ok) {
-    throw getResponseError(response, "Snake replay download request");
-  }
-
-  const payload: unknown = await response.json();
-  const replayValue = isRecord(payload) ? payload.replay : null;
-  const parsedReplay = parseSnakeReplayPayload(replayValue);
-
-  if (!parsedReplay.success) {
-    throw new Error(parsedReplay.error);
-  }
-
-  return parsedReplay.payload;
 }

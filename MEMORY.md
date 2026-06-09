@@ -42,11 +42,13 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   owns browser auth state, `src/hooks/use-game-session.ts` records signed-in play
   sessions, `/api/auth/*`, `/api/me`, and `/api/game-sessions` expose server
   routes, and `/profile` renders aggregate stats for the current session.
-- Snake replays cross the same client/server boundary: `src/lib/snake-replay.ts`
-  owns the shared event payload, seeded replay random source, client helpers,
-  and replay application helpers; `/api/replays/snake/run` issues run ids and
-  seeds; `/api/replays/snake` saves/downloads the current signed-in user's
-  latest replay; `/profile` links saved replays back to `/?replay=snake`.
+- Replays cross the same client/server boundary: `src/lib/game-replay.ts` owns
+  shared run ids, seed normalization, deterministic replay random creation, API
+  paths, client helpers, and base payload validation; `src/lib/snake-replay.ts`
+  owns Snake-specific events and replay application helpers. `/api/replays/snake/run`
+  issues Snake run ids and seeds; `/api/replays/snake` saves/downloads the
+  current signed-in user's latest Snake replay; `/profile` links saved replays
+  back to `/?replay=snake`.
 
 ## Cross-Cutting Constraints
 
