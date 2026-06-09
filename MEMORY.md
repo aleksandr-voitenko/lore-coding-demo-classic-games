@@ -46,14 +46,15 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   shared run ids, seed normalization, deterministic replay random creation, API
   paths, client helpers, and base payload validation; `src/lib/snake-replay.ts`,
   `src/lib/tetris-replay.ts`, `src/lib/breakout-replay.ts`,
-  `src/lib/minesweeper-replay.ts`, and `src/lib/twenty-forty-eight-replay.ts`
-  own game-specific events and replay application helpers.
+  `src/lib/minesweeper-replay.ts`, `src/lib/pong-replay.ts`, and
+  `src/lib/twenty-forty-eight-replay.ts` own game-specific events and replay
+  application helpers.
   `/api/replays/<game>/run` issues replay run ids and seeds for supported replay
   games;
   `/api/replays/<game>` saves/downloads the current signed-in user's latest
   replay; `/profile` links saved replays back to `/?replay=snake`,
-  `/?replay=tetris`, `/?replay=breakout`, `/?replay=minesweeper`, or
-  `/?replay=twenty-forty-eight`.
+  `/?replay=tetris`, `/?replay=breakout`, `/?replay=minesweeper`,
+  `/?replay=pong`, or `/?replay=twenty-forty-eight`.
 
 ## Cross-Cutting Constraints
 

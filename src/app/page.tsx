@@ -33,6 +33,7 @@ export function getInitialReplayGameId(value: string | string[] | undefined) {
     replayGameId === "tetris" ||
     replayGameId === "breakout" ||
     replayGameId === "minesweeper" ||
+    replayGameId === "pong" ||
     replayGameId === "twenty-forty-eight"
     ? replayGameId
     : null;

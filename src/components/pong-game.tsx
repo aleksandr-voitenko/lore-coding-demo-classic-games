@@ -1,7 +1,13 @@
 "use client";
 
-import { ArrowDownIcon, ArrowUpIcon, PlayIcon, RotateCcwIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  PlayIcon,
+  RotateCcwIcon,
+  SaveIcon,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   isGamePauseKey,
@@ -37,6 +43,7 @@ import {
   type PongPaddleMovementDirection,
 } from "@/components/pong-paddle-input";
 import { PongBoard } from "@/components/pong-board";
+import { PongReplayPlayer } from "@/components/pong-replay-player";
 import { Button } from "@/components/ui/button";
 import {
   advancePongGame,
@@ -56,6 +63,16 @@ import {
   type PongGameState,
   type PongStatus,
 } from "@/lib/pong-game-engine";
+import {
+  createPongReplayRun,
+  savePongReplay,
+  PONG_REPLAY_GAME_ID,
+  PONG_REPLAY_SCHEMA_VERSION,
+  type PongReplayEvent,
+  type PongReplayEventInput,
+  type PongReplayPayload,
+  type PongReplayRun,
+} from "@/lib/pong-replay";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import { useGameSession } from "@/hooks/use-game-session";
 
@@ -64,6 +81,18 @@ type PongGameProps = {
   initialBoardWidth?: number;
   initialTargetScore?: number;
   onBackToMenu?: () => void;
+  onReplayBackToProfile?: () => void;
+  replayMode?: "latest";
+};
+
+type ReplaySaveStatus = "failed" | "idle" | "saved" | "saving";
+
+type PongReplayRecording = {
+  events: PongReplayEvent[];
+  nextSeq: number;
+  run: PongReplayRun;
+  startedAt: string;
+  tick: number;
 };
 
 const statusLabels: Record<PongStatus, string> = {
@@ -75,6 +104,22 @@ const statusLabels: Record<PongStatus, string> = {
 };
 
 const PONG_PADDLE_MOVE_INTERVAL_MS = getPongTickDelay();
+
+function appendPongReplayEvent(
+  recording: PongReplayRecording,
+  event: PongReplayEventInput,
+) {
+  recording.events.push({
+    ...event,
+    seq: recording.nextSeq,
+    tick: recording.tick,
+  } as PongReplayEvent);
+  recording.nextSeq += 1;
+
+  if (event.type === "advance") {
+    recording.tick += 1;
+  }
+}
 
 function createPongHelpSections(
   maximumScore: number,
@@ -119,7 +164,36 @@ export function PongGame({
   initialBoardWidth,
   initialTargetScore,
   onBackToMenu,
+  onReplayBackToProfile,
+  replayMode,
 }: PongGameProps = {}) {
+  if (replayMode === "latest") {
+    return (
+      <PongReplayPlayer
+        onBackToProfile={onReplayBackToProfile ?? onBackToMenu ?? (() => undefined)}
+      />
+    );
+  }
+
+  return (
+    <PongLiveGame
+      initialBoardHeight={initialBoardHeight}
+      initialBoardWidth={initialBoardWidth}
+      initialTargetScore={initialTargetScore}
+      onBackToMenu={onBackToMenu}
+    />
+  );
+}
+
+function PongLiveGame({
+  initialBoardHeight,
+  initialBoardWidth,
+  initialTargetScore,
+  onBackToMenu,
+}: Pick<
+  PongGameProps,
+  "initialBoardHeight" | "initialBoardWidth" | "initialTargetScore" | "onBackToMenu"
+> = {}) {
   const [game, setGame] = useState<PongGameState>(() =>
     createInitialPongGame({
       boardHeight: initialBoardHeight,
@@ -127,6 +201,13 @@ export function PongGame({
       targetScore: initialTargetScore,
     }),
   );
+  const [finishedReplay, setFinishedReplay] = useState<PongReplayPayload | null>(null);
+  const [isReplayRunPending, setIsReplayRunPending] = useState(false);
+  const [replaySaveStatus, setReplaySaveStatus] = useState<ReplaySaveStatus>("idle");
+  const gameRef = useRef(game);
+  const isReplayRunPendingRef = useRef(false);
+  const preStartReplayEventsRef = useRef<PongReplayEventInput[]>([]);
+  const replayRecordingRef = useRef<PongReplayRecording | null>(null);
   const maximumScore = getPongMaximumScore(game.targetScore);
   const helpSections = useMemo(
     () => createPongHelpSections(maximumScore, game.targetScore),
@@ -169,43 +250,215 @@ export function PongGame({
     testIdPrefix: "pong",
   });
 
-  const movePaddle = useCallback((direction: PongPaddleMovementDirection) => {
-    setGame((current) =>
-      direction === "up" ? movePongPlayerUp(current) : movePongPlayerDown(current),
-    );
+  const commitGame = useCallback((nextGame: PongGameState) => {
+    gameRef.current = nextGame;
+    setGame(nextGame);
   }, []);
+
+  const updateCommittedGame = useCallback(
+    (updateGame: (current: PongGameState) => PongGameState) => {
+      const current = gameRef.current;
+      const nextGame = updateGame(current);
+
+      if (nextGame !== current) {
+        commitGame(nextGame);
+      }
+
+      return nextGame;
+    },
+    [commitGame],
+  );
+
+  const startReplayRun = useCallback(async ({ restart = false }: { restart?: boolean } = {}) => {
+    if (isReplayRunPendingRef.current) {
+      return;
+    }
+
+    isReplayRunPendingRef.current = true;
+    replayRecordingRef.current = null;
+    setIsReplayRunPending(true);
+    resetLeaderboardForm();
+    setFinishedReplay(null);
+    setReplaySaveStatus("idle");
+
+    try {
+      const run = await createPongReplayRun();
+      const recording: PongReplayRecording = {
+        events: [],
+        nextSeq: 0,
+        run,
+        startedAt: new Date().toISOString(),
+        tick: 0,
+      };
+
+      preStartReplayEventsRef.current.forEach((event) => {
+        appendPongReplayEvent(recording, event);
+      });
+      appendPongReplayEvent(recording, { type: "start" });
+      preStartReplayEventsRef.current = [];
+      replayRecordingRef.current = recording;
+      commitGame(
+        restart ? restartPongGame(gameRef.current) : startPongGame(gameRef.current),
+      );
+    } catch {
+      setReplaySaveStatus("failed");
+    } finally {
+      isReplayRunPendingRef.current = false;
+      setIsReplayRunPending(false);
+    }
+  }, [commitGame, resetLeaderboardForm]);
 
   const startGame = useCallback(() => {
     resetLeaderboardForm();
-    setGame((current) => startPongGame(current));
-  }, [resetLeaderboardForm]);
+    setFinishedReplay(null);
+    setReplaySaveStatus("idle");
+
+    const recording = replayRecordingRef.current;
+
+    if (recording !== null) {
+      appendPongReplayEvent(recording, { type: "start" });
+      updateCommittedGame((current) => startPongGame(current));
+
+      return;
+    }
+
+    void startReplayRun();
+  }, [resetLeaderboardForm, startReplayRun, updateCommittedGame]);
 
   const toggleRunState = useCallback(() => {
-    resetLeaderboardForm();
-    setGame((current) => {
-      if (current.status === "running") {
-        return pausePongGame(current);
-      }
+    const current = gameRef.current;
 
-      return startPongGame(current);
-    });
-  }, [resetLeaderboardForm]);
+    if (current.status === "running") {
+      resetLeaderboardForm();
+      updateCommittedGame((gameState) => pausePongGame(gameState));
+      return;
+    }
+
+    if (current.status === "paused") {
+      resetLeaderboardForm();
+      updateCommittedGame((gameState) => startPongGame(gameState));
+      return;
+    }
+
+    startGame();
+  }, [resetLeaderboardForm, startGame, updateCommittedGame]);
+
+  const movePaddle = useCallback(
+    (direction: PongPaddleMovementDirection) => {
+      updateCommittedGame((current) => {
+        const nextGame =
+          direction === "up" ? movePongPlayerUp(current) : movePongPlayerDown(current);
+        const event: PongReplayEventInput =
+          direction === "up" ? { type: "moveUp" } : { type: "moveDown" };
+        const movedPaddle = nextGame.playerPaddle.y !== current.playerPaddle.y;
+        const recording = replayRecordingRef.current;
+
+        if (movedPaddle && recording !== null) {
+          appendPongReplayEvent(recording, event);
+        } else if (
+          movedPaddle &&
+          current.status === "ready" &&
+          !isReplayRunPendingRef.current
+        ) {
+          preStartReplayEventsRef.current.push(event);
+        }
+
+        return nextGame;
+      });
+    },
+    [updateCommittedGame],
+  );
 
   const advancePong = useCallback(() => {
-    setGame((current) => advancePongGame(current));
-  }, []);
+    updateCommittedGame((current) => {
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null && current.status === "running") {
+        appendPongReplayEvent(recording, { type: "advance" });
+      }
+
+      return advancePongGame(current);
+    });
+  }, [updateCommittedGame]);
 
   const decrementRemainingScore = useCallback(() => {
-    setGame((current) => decrementPongRemainingScore(current));
-  }, []);
+    updateCommittedGame((current) => {
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null && current.status === "running") {
+        appendPongReplayEvent(recording, { type: "scoreTick" });
+      }
+
+      return decrementPongRemainingScore(current);
+    });
+  }, [updateCommittedGame]);
 
   const pauseGameForHelp = useCallback(() => {
-    setGame((current) => pausePongGame(current));
-  }, []);
+    updateCommittedGame((current) => pausePongGame(current));
+  }, [updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
-    setGame((current) => startPongGame(current));
-  }, []);
+    updateCommittedGame((current) => startPongGame(current));
+  }, [updateCommittedGame]);
+
+  const saveFinishedReplay = useCallback(async () => {
+    if (finishedReplay === null || replaySaveStatus === "saving") {
+      return;
+    }
+
+    setReplaySaveStatus("saving");
+
+    try {
+      await savePongReplay(finishedReplay);
+      setReplaySaveStatus("saved");
+    } catch {
+      setReplaySaveStatus("failed");
+    }
+  }, [finishedReplay, replaySaveStatus]);
+
+  useEffect(() => {
+    if (game.status !== "lost" && game.status !== "won") {
+      return;
+    }
+
+    const recording = replayRecordingRef.current;
+
+    if (recording === null || finishedReplay !== null) {
+      return;
+    }
+
+    const replay: PongReplayPayload = {
+      boardHeight: game.boardHeight,
+      boardWidth: game.boardWidth,
+      events: [...recording.events],
+      finalCpuScore: game.score.cpu,
+      finalPlayerScore: game.score.player,
+      finalScore: game.remainingScore,
+      finalStatus: game.status,
+      finalTick: recording.tick,
+      gameId: PONG_REPLAY_GAME_ID,
+      leaderboardKey,
+      runId: recording.run.id,
+      schemaVersion: PONG_REPLAY_SCHEMA_VERSION,
+      seed: recording.run.seed,
+      startedAt: recording.startedAt,
+      targetScore: game.targetScore,
+    };
+
+    replayRecordingRef.current = null;
+    preStartReplayEventsRef.current = [];
+    setFinishedReplay(replay);
+  }, [
+    finishedReplay,
+    game.boardHeight,
+    game.boardWidth,
+    game.remainingScore,
+    game.score.cpu,
+    game.score.player,
+    game.status,
+    game.targetScore,
+    leaderboardKey,
+  ]);
 
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({
     isGameActive: game.status === "running",
@@ -232,6 +485,7 @@ export function PongGame({
     isMovementDisabled:
       isHelpVisible ||
       isAbandonDialogVisible ||
+      isReplayRunPending ||
       pendingLeaderboardEntry !== null ||
       game.status === "lost" ||
       game.status === "won",
@@ -239,10 +493,15 @@ export function PongGame({
   });
 
   const restartGame = useCallback(() => {
+    if (isReplayRunPendingRef.current) {
+      return;
+    }
+
     resetPaddleMovement();
-    resetLeaderboardForm();
-    setGame((current) => restartPongGame(current));
-  }, [resetLeaderboardForm, resetPaddleMovement]);
+    preStartReplayEventsRef.current = [];
+    replayRecordingRef.current = null;
+    void startReplayRun({ restart: true });
+  }, [resetPaddleMovement, startReplayRun]);
 
   useEffect(() => {
     if (tickDelay === null) {
@@ -379,12 +638,14 @@ export function PongGame({
               onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{
-                disabled: isHelpVisible || !canPauseGame,
+                disabled: isHelpVisible || isReplayRunPending || !canPauseGame,
                 isResume: game.status === "paused",
                 label: pauseActionLabel,
                 onClick: toggleRunState,
               }}
-              restartDisabled={showStartScreen || pendingLeaderboardEntry !== null}
+              restartDisabled={
+                isReplayRunPending || showStartScreen || pendingLeaderboardEntry !== null
+              }
               testIdPrefix="pong"
             />
           }
@@ -410,13 +671,14 @@ export function PongGame({
               <Button
                 className="min-w-32"
                 data-testid="pong-start-button"
+                disabled={isReplayRunPending}
                 onClick={startGame}
                 size="lg"
                 type="button"
                 variant="secondary"
               >
                 <PlayIcon data-icon="inline-start" />
-                Start
+                {isReplayRunPending ? "Starting" : "Start"}
               </Button>
               <GameLeaderboardPanel {...leaderboardPanelProps} />
             </GameStartScreen>
@@ -437,13 +699,14 @@ export function PongGame({
                 <Button
                   className="min-w-32"
                   data-testid="pong-next-rally-button"
+                  disabled={isReplayRunPending}
                   onClick={startGame}
                   size="lg"
                   type="button"
                   variant="secondary"
                 >
                   <PlayIcon data-icon="inline-start" />
-                  Serve
+                  {isReplayRunPending ? "Starting" : "Serve"}
                 </Button>
               </div>
             </div>
@@ -454,6 +717,7 @@ export function PongGame({
                   <Button
                     className="min-w-36"
                     data-testid="pong-new-game-button"
+                    disabled={isReplayRunPending}
                     onClick={restartGame}
                     size="lg"
                     type="button"
@@ -473,6 +737,36 @@ export function PongGame({
                   title: game.status === "won" ? "Match won" : "Match lost",
                 }}
               />
+              <div className="flex w-full max-w-xs flex-col items-center gap-2">
+                <Button
+                  className="w-full"
+                  data-testid="pong-save-replay-button"
+                  disabled={
+                    finishedReplay === null ||
+                    replaySaveStatus === "saving" ||
+                    replaySaveStatus === "saved"
+                  }
+                  onClick={saveFinishedReplay}
+                  size="lg"
+                  type="button"
+                  variant="secondary"
+                >
+                  <SaveIcon data-icon="inline-start" />
+                  {replaySaveStatus === "saving"
+                    ? "Saving replay"
+                    : replaySaveStatus === "saved"
+                      ? "Replay saved"
+                      : "Save replay"}
+                </Button>
+                {replaySaveStatus === "failed" ? (
+                  <p
+                    className="text-xs font-medium text-[#cbd5e1]"
+                    data-testid="pong-save-replay-error"
+                  >
+                    Could not save replay. Sign in and try again.
+                  </p>
+                ) : null}
+              </div>
             </GameEndScreen>
           ) : showPauseScreen ? (
             <div

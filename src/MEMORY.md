@@ -49,7 +49,7 @@ rules live in child memory files for `src/app`, `src/components`, `src/lib`, and
   submissions for user identity; server routes derive the user from the session
   cookie. Name/password auth still uses normalized display-name keys, so
   duplicate account checks and profile ownership must remain server-enforced.
-- Snake, Tetris, Breakout, Minesweeper, and 2048 replay saves are
+- Snake, Tetris, Breakout, Minesweeper, Pong, and 2048 replay saves are
   profile-scoped. The live game components record replay events unconditionally
   after a server-issued run, but `/api/replays/<game>` requires a signed-in
   session before saving or downloading the latest replay for supported replay
