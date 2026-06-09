@@ -1,7 +1,7 @@
 "use client";
 
-import { PlayIcon, RotateCcwIcon } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { PlayIcon, RotateCcwIcon, SaveIcon } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { registerGameKeyDown, shouldIgnoreGameKeyDown } from "@/components/game-input";
 import {
@@ -25,6 +25,7 @@ import {
 } from "@/components/game-layout";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { MinesweeperBoard, MinesweeperStartPreview } from "@/components/minesweeper-board";
+import { MinesweeperReplayPlayer } from "@/components/minesweeper-replay-player";
 import { Button } from "@/components/ui/button";
 import {
   createInitialMinesweeperGame,
@@ -36,6 +37,17 @@ import {
   type MinesweeperStatus,
 } from "@/lib/minesweeper-game-engine";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
+import {
+  createMinesweeperReplayRandom,
+  createMinesweeperReplayRun,
+  saveMinesweeperReplay,
+  MINESWEEPER_REPLAY_GAME_ID,
+  MINESWEEPER_REPLAY_SCHEMA_VERSION,
+  type MinesweeperReplayEvent,
+  type MinesweeperReplayEventInput,
+  type MinesweeperReplayPayload,
+  type MinesweeperReplayRun,
+} from "@/lib/minesweeper-replay";
 import { cn } from "@/lib/utils";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { useGameSession } from "@/hooks/use-game-session";
@@ -45,7 +57,29 @@ type MinesweeperGameProps = {
   initialBoardWidth?: number;
   initialMineCount?: number;
   onBackToMenu?: () => void;
+  onReplayBackToProfile?: () => void;
+  replayMode?: "latest";
 };
+
+type ReplaySaveStatus = "failed" | "idle" | "saved" | "saving";
+
+type MinesweeperReplayRecording = {
+  events: MinesweeperReplayEvent[];
+  nextSeq: number;
+  random: () => number;
+  run: MinesweeperReplayRun;
+  startedAt: string;
+};
+
+type MinesweeperReplayPendingAction =
+  | {
+      cellId: string;
+      type: "reveal";
+    }
+  | {
+      cellId: string;
+      type: "toggleFlag";
+    };
 
 const statusLabels: Record<MinesweeperStatus, string> = {
   lost: "Game over",
@@ -107,7 +141,61 @@ export function MinesweeperGame({
   initialBoardWidth,
   initialMineCount,
   onBackToMenu,
+  onReplayBackToProfile,
+  replayMode,
 }: MinesweeperGameProps = {}) {
+  if (replayMode === "latest") {
+    return (
+      <MinesweeperReplayPlayer
+        onBackToProfile={onReplayBackToProfile ?? onBackToMenu ?? (() => undefined)}
+      />
+    );
+  }
+
+  return (
+    <MinesweeperLiveGame
+      initialBoardHeight={initialBoardHeight}
+      initialBoardWidth={initialBoardWidth}
+      initialMineCount={initialMineCount}
+      onBackToMenu={onBackToMenu}
+    />
+  );
+}
+
+function appendMinesweeperReplayEvent(
+  recording: MinesweeperReplayRecording,
+  event: MinesweeperReplayEventInput,
+  tick: number,
+) {
+  recording.events.push({
+    ...event,
+    seq: recording.nextSeq,
+    tick,
+  } as MinesweeperReplayEvent);
+  recording.nextSeq += 1;
+}
+
+function applyMinesweeperReplayPendingAction(
+  game: MinesweeperGameState,
+  action: MinesweeperReplayPendingAction,
+  random: () => number,
+) {
+  if (action.type === "reveal") {
+    return revealMinesweeperCell(game, action.cellId, { random });
+  }
+
+  return toggleMinesweeperFlag(game, action.cellId);
+}
+
+function MinesweeperLiveGame({
+  initialBoardHeight,
+  initialBoardWidth,
+  initialMineCount,
+  onBackToMenu,
+}: Pick<
+  MinesweeperGameProps,
+  "initialBoardHeight" | "initialBoardWidth" | "initialMineCount" | "onBackToMenu"
+> = {}) {
   const [game, setGame] = useState<MinesweeperGameState>(() =>
     createNewMinesweeperGame({
       boardHeight: initialBoardHeight,
@@ -116,8 +204,17 @@ export function MinesweeperGame({
     }),
   );
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [finishedReplay, setFinishedReplay] =
+    useState<MinesweeperReplayPayload | null>(null);
   const [isFlagMode, setIsFlagMode] = useState(false);
+  const [isReplayRunPending, setIsReplayRunPending] = useState(false);
   const [isStartScreenVisible, setIsStartScreenVisible] = useState(true);
+  const [replaySaveStatus, setReplaySaveStatus] = useState<ReplaySaveStatus>("idle");
+  const elapsedSecondsRef = useRef(0);
+  const gameRef = useRef(game);
+  const isReplayRunPendingRef = useRef(false);
+  const pendingInitialActionRef = useRef<MinesweeperReplayPendingAction | null>(null);
+  const replayRecordingRef = useRef<MinesweeperReplayRecording | null>(null);
   const safeCellCount = game.width * game.height - game.mineCount;
   const remainingMineCount = getMinesweeperRemainingMineCount(game);
   const showStartScreen = isStartScreenVisible && game.status === "ready";
@@ -158,26 +255,176 @@ export function MinesweeperGame({
     onBackToMenu,
   });
 
+  const commitGame = useCallback((nextGame: MinesweeperGameState) => {
+    gameRef.current = nextGame;
+    setGame(nextGame);
+  }, []);
+
+  const updateCommittedGame = useCallback(
+    (updateGame: (current: MinesweeperGameState) => MinesweeperGameState) => {
+      const current = gameRef.current;
+      const nextGame = updateGame(current);
+
+      if (nextGame !== current) {
+        commitGame(nextGame);
+      }
+
+      return nextGame;
+    },
+    [commitGame],
+  );
+
+  const startReplayRecording = useCallback(async (initialAction: MinesweeperReplayPendingAction) => {
+    if (isReplayRunPendingRef.current) {
+      pendingInitialActionRef.current ??= initialAction;
+
+      return;
+    }
+
+    isReplayRunPendingRef.current = true;
+    pendingInitialActionRef.current = initialAction;
+    replayRecordingRef.current = null;
+    setIsReplayRunPending(true);
+    resetLeaderboardForm();
+    setFinishedReplay(null);
+    setReplaySaveStatus("idle");
+
+    try {
+      const run = await createMinesweeperReplayRun();
+      const random = createMinesweeperReplayRandom(run.seed);
+      const recording: MinesweeperReplayRecording = {
+        events: [],
+        nextSeq: 0,
+        random,
+        run,
+        startedAt: new Date().toISOString(),
+      };
+      let nextGame = gameRef.current;
+
+      appendMinesweeperReplayEvent(recording, { type: "start" }, 0);
+
+      const pendingInitialAction = pendingInitialActionRef.current;
+
+      if (pendingInitialAction !== null) {
+        appendMinesweeperReplayEvent(
+          recording,
+          pendingInitialAction,
+          elapsedSecondsRef.current,
+        );
+        nextGame = applyMinesweeperReplayPendingAction(
+          nextGame,
+          pendingInitialAction,
+          random,
+        );
+      }
+
+      replayRecordingRef.current = recording;
+      commitGame(nextGame);
+    } catch {
+      setReplaySaveStatus("failed");
+    } finally {
+      pendingInitialActionRef.current = null;
+      isReplayRunPendingRef.current = false;
+      setIsReplayRunPending(false);
+    }
+  }, [commitGame, resetLeaderboardForm]);
+
   const startGame = useCallback(() => {
     resetLeaderboardForm();
+    setFinishedReplay(null);
     setIsStartScreenVisible(false);
+    setReplaySaveStatus("idle");
   }, [resetLeaderboardForm]);
 
   const revealCell = useCallback((cellId: string) => {
-    setGame((current) => revealMinesweeperCell(current, cellId, { random: Math.random }));
-  }, []);
+    updateCommittedGame((current) => {
+      if (current.status === "ready" && replayRecordingRef.current === null) {
+        void startReplayRecording({
+          cellId,
+          type: "reveal",
+        });
+
+        return current;
+      }
+
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null) {
+        appendMinesweeperReplayEvent(
+          recording,
+          {
+            cellId,
+            type: "reveal",
+          },
+          elapsedSecondsRef.current,
+        );
+
+        return revealMinesweeperCell(current, cellId, { random: recording.random });
+      }
+
+      return revealMinesweeperCell(current, cellId, { random: Math.random });
+    });
+  }, [startReplayRecording, updateCommittedGame]);
 
   const toggleFlag = useCallback((cellId: string) => {
-    setGame((current) => toggleMinesweeperFlag(current, cellId));
-  }, []);
+    updateCommittedGame((current) => {
+      if (current.status === "ready" && replayRecordingRef.current === null) {
+        void startReplayRecording({
+          cellId,
+          type: "toggleFlag",
+        });
+
+        return current;
+      }
+
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null) {
+        appendMinesweeperReplayEvent(
+          recording,
+          {
+            cellId,
+            type: "toggleFlag",
+          },
+          elapsedSecondsRef.current,
+        );
+      }
+
+      return toggleMinesweeperFlag(current, cellId);
+    });
+  }, [startReplayRecording, updateCommittedGame]);
 
   const startNewGame = useCallback(() => {
+    if (isReplayRunPendingRef.current) {
+      return;
+    }
+
+    replayRecordingRef.current = null;
+    pendingInitialActionRef.current = null;
     resetLeaderboardForm();
+    setFinishedReplay(null);
     setElapsedSeconds(0);
+    elapsedSecondsRef.current = 0;
     setIsFlagMode(false);
     setIsStartScreenVisible(true);
-    setGame((current) => restartMinesweeperGame(current));
-  }, [resetLeaderboardForm]);
+    setReplaySaveStatus("idle");
+    updateCommittedGame((current) => restartMinesweeperGame(current));
+  }, [resetLeaderboardForm, updateCommittedGame]);
+
+  const saveFinishedReplay = useCallback(async () => {
+    if (finishedReplay === null || replaySaveStatus === "saving") {
+      return;
+    }
+
+    setReplaySaveStatus("saving");
+
+    try {
+      await saveMinesweeperReplay(finishedReplay);
+      setReplaySaveStatus("saved");
+    } catch {
+      setReplaySaveStatus("failed");
+    }
+  }, [finishedReplay, replaySaveStatus]);
 
   useEffect(() => {
     if (game.status !== "running" || isHelpVisible) {
@@ -185,11 +432,60 @@ export function MinesweeperGame({
     }
 
     const timer = window.setInterval(() => {
-      setElapsedSeconds((current) => current + 1);
+      setElapsedSeconds((current) => {
+        const nextElapsedSeconds = current + 1;
+
+        elapsedSecondsRef.current = nextElapsedSeconds;
+
+        return nextElapsedSeconds;
+      });
     }, 1000);
 
     return () => window.clearInterval(timer);
   }, [game.status, isHelpVisible]);
+
+  useEffect(() => {
+    if (game.status !== "lost" && game.status !== "won") {
+      return;
+    }
+
+    const recording = replayRecordingRef.current;
+
+    if (recording === null || finishedReplay !== null) {
+      return;
+    }
+
+    const finalElapsedSeconds = elapsedSecondsRef.current;
+    const replay: MinesweeperReplayPayload = {
+      boardHeight: game.height,
+      boardWidth: game.width,
+      events: [...recording.events],
+      finalFlagCount: game.flagCount,
+      finalRevealedSafeCellCount: game.revealedSafeCellCount,
+      finalScore: finalElapsedSeconds,
+      finalStatus: game.status,
+      finalTick: finalElapsedSeconds,
+      gameId: MINESWEEPER_REPLAY_GAME_ID,
+      leaderboardKey,
+      mineCount: game.mineCount,
+      runId: recording.run.id,
+      schemaVersion: MINESWEEPER_REPLAY_SCHEMA_VERSION,
+      seed: recording.run.seed,
+      startedAt: recording.startedAt,
+    };
+
+    replayRecordingRef.current = null;
+    setFinishedReplay(replay);
+  }, [
+    finishedReplay,
+    game.flagCount,
+    game.height,
+    game.mineCount,
+    game.revealedSafeCellCount,
+    game.status,
+    game.width,
+    leaderboardKey,
+  ]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -286,14 +582,14 @@ export function MinesweeperGame({
               onBackToMenu={requestBackToMenu}
               onHelp={openHelp}
               onRestart={startNewGame}
-              restartDisabled={pendingLeaderboardEntry !== null}
+              restartDisabled={isReplayRunPending || pendingLeaderboardEntry !== null}
               testIdPrefix="minesweeper"
             />
           }
         >
           <MinesweeperBoard
             game={game}
-            isInputDisabled={showStartScreen}
+            isInputDisabled={showStartScreen || isReplayRunPending}
             isFlagMode={isFlagMode}
             onRevealCell={revealCell}
             onToggleFlag={toggleFlag}
@@ -325,6 +621,8 @@ export function MinesweeperGame({
                   action={
                     <Button
                       className="min-w-36"
+                      data-testid="minesweeper-new-game-button"
+                      disabled={isReplayRunPending}
                       onClick={startNewGame}
                       size="lg"
                       type="button"
@@ -344,6 +642,36 @@ export function MinesweeperGame({
                     title: game.status === "won" ? "Board cleared" : "Game over",
                   }}
                 />
+                <div className="flex w-full max-w-xs flex-col items-center gap-2">
+                  <Button
+                    className="w-full"
+                    data-testid="minesweeper-save-replay-button"
+                    disabled={
+                      finishedReplay === null ||
+                      replaySaveStatus === "saving" ||
+                      replaySaveStatus === "saved"
+                    }
+                    onClick={saveFinishedReplay}
+                    size="lg"
+                    type="button"
+                    variant="secondary"
+                  >
+                    <SaveIcon data-icon="inline-start" />
+                    {replaySaveStatus === "saving"
+                      ? "Saving replay"
+                      : replaySaveStatus === "saved"
+                        ? "Replay saved"
+                        : "Save replay"}
+                  </Button>
+                  {replaySaveStatus === "failed" ? (
+                    <p
+                      className="text-xs font-medium text-[#cbd5e1]"
+                      data-testid="minesweeper-save-replay-error"
+                    >
+                      Could not save replay. Sign in and try again.
+                    </p>
+                  ) : null}
+                </div>
               </GameEndScreen>
             ) : null}
             {isHelpVisible ? (
