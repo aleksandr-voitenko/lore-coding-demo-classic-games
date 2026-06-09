@@ -11,17 +11,25 @@ export const runtime = "nodejs";
 type HomeProps = {
   searchParams?: Promise<{
     auth?: string | string[];
+    replay?: string | string[];
   }>;
 };
 
 type HomeSearchParams = {
   auth?: string | string[];
+  replay?: string | string[];
 };
 
 function getInitialAuthMode(value: string | string[] | undefined): UserAuthMode | null {
   const authMode = Array.isArray(value) ? value[0] : value;
 
   return authMode === "login" || authMode === "signup" ? authMode : null;
+}
+
+function getInitialReplayGameId(value: string | string[] | undefined) {
+  const replayGameId = Array.isArray(value) ? value[0] : value;
+
+  return replayGameId === "snake" ? replayGameId : null;
 }
 
 export default async function Home({ searchParams }: HomeProps) {
@@ -34,10 +42,14 @@ export default async function Home({ searchParams }: HomeProps) {
   const sessionToken = cookieStore.get(USER_SESSION_COOKIE_NAME)?.value ?? null;
   const initialUser = await getUserProfileStore().getUserBySessionToken(sessionToken);
   const initialAuthMode = getInitialAuthMode(resolvedSearchParams.auth);
+  const initialReplayGameId = getInitialReplayGameId(resolvedSearchParams.replay);
 
   return (
     <CurrentUserProvider initialUser={initialUser}>
-      <GameLauncher initialAuthMode={initialAuthMode} />
+      <GameLauncher
+        initialAuthMode={initialAuthMode}
+        initialReplayGameId={initialReplayGameId}
+      />
     </CurrentUserProvider>
   );
 }

@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { PlayIcon } from "lucide-react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -102,7 +103,7 @@ export default async function ProfilePage() {
 
         {games.length > 0 ? (
           <div className="overflow-hidden rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] shadow-sm">
-            <div className="grid grid-cols-[5.5rem_minmax(9rem,1.2fr)_repeat(5,minmax(5rem,0.7fr))] gap-0 overflow-x-auto">
+            <div className="grid grid-cols-[5.5rem_minmax(9rem,1.2fr)_repeat(6,minmax(5rem,0.7fr))] gap-0 overflow-x-auto">
               <div className="contents text-xs font-semibold uppercase tracking-normal text-[var(--snake-muted)]">
                 <div className="border-b border-[var(--snake-border)] px-3 py-2">Preview</div>
                 <div className="border-b border-[var(--snake-border)] px-3 py-2">Game</div>
@@ -117,6 +118,9 @@ export default async function ProfilePage() {
                 </div>
                 <div className="border-b border-[var(--snake-border)] px-3 py-2 text-right">
                   Best
+                </div>
+                <div className="border-b border-[var(--snake-border)] px-3 py-2 text-right">
+                  Last Replay
                 </div>
                 <div className="border-b border-[var(--snake-border)] px-3 py-2 text-right">
                   Last played
@@ -168,6 +172,20 @@ export default async function ProfilePage() {
                       title={bestMetric.label}
                     >
                       {bestMetric.value}
+                    </div>
+                    <div className="flex items-center justify-end border-b border-[var(--snake-border)] px-3 py-3 text-right">
+                      {game.hasLastReplay ? (
+                        <Link
+                          aria-label={`Play latest ${gameLabel} replay`}
+                          className="inline-flex size-8 items-center justify-center rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] text-[var(--snake-ink)] shadow-sm transition hover:bg-[color-mix(in_oklch,var(--snake-head)_12%,white)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[color-mix(in_oklch,var(--snake-head)_25%,transparent)]"
+                          data-testid={`profile-${game.gameId}-last-replay`}
+                          href={`/?replay=${game.gameId}`}
+                        >
+                          <PlayIcon className="size-4" aria-hidden="true" />
+                        </Link>
+                      ) : (
+                        <span className="font-mono text-[var(--snake-muted)]">-</span>
+                      )}
                     </div>
                     <div className="flex items-center justify-end border-b border-[var(--snake-border)] px-3 py-3 text-right text-[var(--snake-muted)]">
                       {formatProfileLastPlayed(game.lastPlayedAt)}

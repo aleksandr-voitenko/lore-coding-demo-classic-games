@@ -24,7 +24,7 @@ type GameBoardActionsProps = {
   helpDisabled?: boolean;
   onBackToMenu?: () => void;
   onHelp?: () => void;
-  onRestart: () => void;
+  onRestart?: () => void;
   pauseAction?: GameBoardPauseAction;
   restartDisabled?: boolean;
   testIdPrefix: string;
@@ -73,17 +73,19 @@ export function GameBoardActions({
         </GameBoardActionButton>
       ) : null}
 
-      <GameBoardActionButton
-        disabled={helpDisabled}
-        isHintVisible={activeHint === "help"}
-        label="Help"
-        onHintActivate={() => setActiveHint("help")}
-        onHintClear={() => setActiveHint((current) => (current === "help" ? null : current))}
-        onClick={onHelp}
-        testId={`${testIdPrefix}-board-help`}
-      >
-        <CircleQuestionMarkIcon />
-      </GameBoardActionButton>
+      {onHelp ? (
+        <GameBoardActionButton
+          disabled={helpDisabled}
+          isHintVisible={activeHint === "help"}
+          label="Help"
+          onHintActivate={() => setActiveHint("help")}
+          onHintClear={() => setActiveHint((current) => (current === "help" ? null : current))}
+          onClick={onHelp}
+          testId={`${testIdPrefix}-board-help`}
+        >
+          <CircleQuestionMarkIcon />
+        </GameBoardActionButton>
+      ) : null}
 
       {pauseAction ? (
         <GameBoardActionButton
@@ -99,17 +101,21 @@ export function GameBoardActions({
         </GameBoardActionButton>
       ) : null}
 
-      <GameBoardActionButton
-        disabled={restartDisabled}
-        isHintVisible={activeHint === "restart"}
-        label="Restart"
-        onHintActivate={() => setActiveHint("restart")}
-        onHintClear={() => setActiveHint((current) => (current === "restart" ? null : current))}
-        onClick={onRestart}
-        testId={`${testIdPrefix}-board-restart`}
-      >
-        <RotateCcwIcon />
-      </GameBoardActionButton>
+      {onRestart ? (
+        <GameBoardActionButton
+          disabled={restartDisabled}
+          isHintVisible={activeHint === "restart"}
+          label="Restart"
+          onHintActivate={() => setActiveHint("restart")}
+          onHintClear={() =>
+            setActiveHint((current) => (current === "restart" ? null : current))
+          }
+          onClick={onRestart}
+          testId={`${testIdPrefix}-board-restart`}
+        >
+          <RotateCcwIcon />
+        </GameBoardActionButton>
+      ) : null}
     </div>
   );
 }

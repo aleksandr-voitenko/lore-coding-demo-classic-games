@@ -74,6 +74,8 @@ export type PlayableGameProps = {
   initialWinTarget?: number;
   initialWinTile?: number;
   onBackToMenu: () => void;
+  onReplayBackToProfile?: () => void;
+  replayMode?: "latest";
 };
 
 export type PlayableInitialProps = Omit<PlayableGameProps, "onBackToMenu">;

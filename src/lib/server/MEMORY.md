@@ -19,6 +19,8 @@ This file covers Node-only server helpers and storage adapters under
 - `sqlite-user-profile-store.ts` owns user registration, password login,
   signed-in session persistence, game-session recording, and aggregate profile
   stats.
+- `sqlite-replay-store.ts` owns server-issued Snake replay runs and one latest
+  saved Snake replay per signed-in user/game.
 - Keep this adapter boundary small so a future Postgres store can replace SQLite
   without changing the client API or game components.
 
@@ -42,6 +44,9 @@ This file covers Node-only server helpers and storage adapters under
   sign-up. `user_sessions` stores hashed cookie tokens, and `game_sessions`
   stores only signed-in play sessions with active duration, final score, result,
   sort direction, game id, and leaderboard key.
+- `game_replay_runs` stores server-issued run ids and seeds. `game_replays`
+  stores the latest signed-in replay payload per user/game and is used by the
+  profile page to expose the Last Replay action.
 - Schema initialization migrates legacy `snake_scores` rows into
   `leaderboard_scores` as `snake|board=<size>` keys.
 - Ranking ties use score order, then earlier `created_at`, then `id`, preserving

@@ -31,6 +31,7 @@ export type UserProfileGameStat = {
   bestScore: number | null;
   fastestWinScore: number | null;
   gameId: string;
+  hasLastReplay: boolean;
   lastPlayedAt: string;
   losses: number;
   sessionsPlayed: number;

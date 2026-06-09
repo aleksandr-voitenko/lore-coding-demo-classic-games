@@ -31,10 +31,17 @@ type MenuViewport = {
 
 type GameLauncherProps = {
   initialAuthMode?: UserAuthMode | null;
+  initialReplayGameId?: GameId | null;
 };
 
-export function GameLauncher({ initialAuthMode = null }: GameLauncherProps) {
-  const [selectedGameId, setSelectedGameId] = useState<GameId | null>(null);
+export function GameLauncher({
+  initialAuthMode = null,
+  initialReplayGameId = null,
+}: GameLauncherProps) {
+  const [selectedGameId, setSelectedGameId] = useState<GameId | null>(initialReplayGameId);
+  const [selectedReplayMode, setSelectedReplayMode] = useState<"latest" | null>(
+    initialReplayGameId === "snake" ? "latest" : null,
+  );
   const [parameterValues, setParameterValues] = useState<GameParameterValues>(() =>
     createDefaultParameterValues(),
   );
@@ -51,11 +58,17 @@ export function GameLauncher({ initialAuthMode = null }: GameLauncherProps) {
     shouldRestoreMenuViewportRef.current = false;
 
     setSelectedGameId(gameId);
+    setSelectedReplayMode(null);
   }, []);
 
   const returnToMenu = useCallback(() => {
     shouldRestoreMenuViewportRef.current = true;
     setSelectedGameId(null);
+    setSelectedReplayMode(null);
+  }, []);
+
+  const returnToProfile = useCallback(() => {
+    window.location.href = "/profile";
   }, []);
 
   const restoreMenuViewport = useCallback((element: HTMLElement | null) => {
@@ -86,6 +99,8 @@ export function GameLauncher({ initialAuthMode = null }: GameLauncherProps) {
       <SelectedGame
         {...initialGameProps}
         onBackToMenu={returnToMenu}
+        onReplayBackToProfile={returnToProfile}
+        replayMode={selectedReplayMode ?? undefined}
       />
     );
   }

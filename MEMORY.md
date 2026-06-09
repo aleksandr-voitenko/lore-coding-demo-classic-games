@@ -42,6 +42,11 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   owns browser auth state, `src/hooks/use-game-session.ts` records signed-in play
   sessions, `/api/auth/*`, `/api/me`, and `/api/game-sessions` expose server
   routes, and `/profile` renders aggregate stats for the current session.
+- Snake replays cross the same client/server boundary: `src/lib/snake-replay.ts`
+  owns the shared event payload, seeded replay random source, client helpers,
+  and replay application helpers; `/api/replays/snake/run` issues run ids and
+  seeds; `/api/replays/snake` saves/downloads the current signed-in user's
+  latest replay; `/profile` links saved replays back to `/?replay=snake`.
 
 ## Cross-Cutting Constraints
 
@@ -66,6 +71,9 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   saves remain allowed but do not create `game_sessions` rows. First-party auth
   uses normalized unique display names plus salted password hashes; private
   profile access is derived from the HTTP-only session cookie, never client ids.
+- Snake replay recording may run during guest play, but persisted profile
+  replays are signed-in and scoped by user and game. The MVP keeps one latest
+  replay per user/game in SQLite.
 - shadcn/ui is initialized with Tailwind CSS v4, the `base-nova` preset, and the
   `@/*` import alias. The shared button is `src/components/ui/button.tsx`.
 

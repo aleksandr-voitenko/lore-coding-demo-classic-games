@@ -7,10 +7,9 @@ import {
   ArrowUpIcon,
   PlayIcon,
   RotateCcwIcon,
+  SaveIcon,
 } from "lucide-react";
 import {
-  type Dispatch,
-  type SetStateAction,
   useCallback,
   useEffect,
   useRef,
@@ -44,6 +43,7 @@ import {
 } from "@/components/game-input";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { SnakeBoard, snakeSpriteSources } from "@/components/snake-board";
+import { SnakeReplayPlayer } from "@/components/snake-replay-player";
 import { Button } from "@/components/ui/button";
 import {
   advanceSnakeGame,
@@ -61,19 +61,44 @@ import {
 } from "@/lib/snake-game-engine";
 import { createFoodFeedback, type FoodFeedback } from "@/lib/snake-food-feedback";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
+import {
+  createSnakeReplayRandom,
+  createSnakeReplayRun,
+  saveSnakeReplay,
+  SNAKE_REPLAY_GAME_ID,
+  SNAKE_REPLAY_SCHEMA_VERSION,
+  type SnakeReplayEvent,
+  type SnakeReplayEventInput,
+  type SnakeReplayPayload,
+  type SnakeReplayRun,
+} from "@/lib/snake-replay";
 import { useGameSession } from "@/hooks/use-game-session";
 
 type TimedFoodLifecycleOptions = {
+  expireTimedFoodInGame: (kind: TimedFoodKind, expiresAt: number) => void;
   gameStatus: GameStatus;
   isIntroduced: boolean;
   kind: TimedFoodKind;
-  setGame: Dispatch<SetStateAction<GameState>>;
+  spawnTimedFoodInGame: (kind: TimedFoodKind) => void;
   timedFood: GameState[TimedFoodKind];
 };
 
 type SnakeGameProps = {
   onBackToMenu?: () => void;
+  onReplayBackToProfile?: () => void;
+  replayMode?: "latest";
 };
+
+type SnakeReplayRecording = {
+  events: SnakeReplayEvent[];
+  nextSeq: number;
+  random: () => number;
+  run: SnakeReplayRun;
+  startedAt: string;
+  tick: number;
+};
+
+type ReplaySaveStatus = "failed" | "idle" | "saved" | "saving";
 
 const START_SCREEN_CELLS: Array<{
   className?: string;
@@ -172,10 +197,11 @@ const SNAKE_HELP_SECTIONS: GameHelpSection[] = [
 ];
 
 function useTimedFoodLifecycle({
+  expireTimedFoodInGame,
   gameStatus,
   isIntroduced,
   kind,
-  setGame,
+  spawnTimedFoodInGame,
   timedFood,
 }: TimedFoodLifecycleOptions) {
   useEffect(() => {
@@ -184,11 +210,11 @@ function useTimedFoodLifecycle({
     }
 
     const spawn = window.setTimeout(() => {
-      setGame((current) => spawnTimedFood(current, kind));
+      spawnTimedFoodInGame(kind);
     }, getTimedFoodSpawnDelay(kind));
 
     return () => window.clearTimeout(spawn);
-  }, [gameStatus, isIntroduced, kind, setGame, timedFood]);
+  }, [gameStatus, isIntroduced, kind, spawnTimedFoodInGame, timedFood]);
 
   const expiresAt = timedFood?.expiresAt ?? null;
 
@@ -199,20 +225,59 @@ function useTimedFoodLifecycle({
 
     const timeout = window.setTimeout(
       () => {
-        setGame((current) => expireTimedFood(current, kind, expiresAt));
+        expireTimedFoodInGame(kind, expiresAt);
       },
       Math.max(0, expiresAt - Date.now()),
     );
 
     return () => window.clearTimeout(timeout);
-  }, [expiresAt, gameStatus, kind, setGame]);
+  }, [expireTimedFoodInGame, expiresAt, gameStatus, kind]);
 }
 
-export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
+function appendSnakeReplayEvent(
+  recording: SnakeReplayRecording,
+  event: SnakeReplayEventInput,
+) {
+  recording.events.push({
+    ...event,
+    seq: recording.nextSeq,
+    tick: recording.tick,
+  } as SnakeReplayEvent);
+  recording.nextSeq += 1;
+
+  if (event.type === "advance") {
+    recording.tick += 1;
+  }
+}
+
+export function SnakeGame({
+  onBackToMenu,
+  onReplayBackToProfile,
+  replayMode,
+}: SnakeGameProps = {}) {
+  if (replayMode === "latest") {
+    return (
+      <SnakeReplayPlayer
+        onBackToProfile={onReplayBackToProfile ?? onBackToMenu ?? (() => undefined)}
+      />
+    );
+  }
+
+  return <SnakeLiveGame onBackToMenu={onBackToMenu} />;
+}
+
+function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = {}) {
   const [game, setGame] = useState<GameState>(() => createInitialGame());
   const [foodFeedbacks, setFoodFeedbacks] = useState<FoodFeedback[]>([]);
+  const [finishedReplay, setFinishedReplay] = useState<SnakeReplayPayload | null>(null);
+  const [isReplayRunPending, setIsReplayRunPending] = useState(false);
+  const [replaySaveStatus, setReplaySaveStatus] = useState<ReplaySaveStatus>("idle");
   const foodFeedbackIdRef = useRef(0);
+  const gameRef = useRef(game);
+  const isReplayRunPendingRef = useRef(false);
+  const pendingInitialDirectionRef = useRef<Direction | null>(null);
   const previousGameRef = useRef(game);
+  const replayRecordingRef = useRef<SnakeReplayRecording | null>(null);
   const leaderboardKey = createGameLeaderboardKey("snake", [
     { name: "mode", value: "levels" },
   ]);
@@ -250,58 +315,236 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
     setFoodFeedbacks((current) => current.filter((feedback) => feedback.id !== id));
   }, []);
 
-  const queueDirection = useCallback((nextDirection: Direction) => {
-    setGame((current) => queueGameDirection(current, nextDirection));
+  const commitGame = useCallback((nextGame: GameState) => {
+    gameRef.current = nextGame;
+    setGame(nextGame);
   }, []);
+
+  const updateCommittedGame = useCallback(
+    (updateGame: (current: GameState) => GameState) => {
+      const current = gameRef.current;
+      const nextGame = updateGame(current);
+
+      if (nextGame !== current) {
+        commitGame(nextGame);
+      }
+
+      return nextGame;
+    },
+    [commitGame],
+  );
+
+  const queueDirection = useCallback((nextDirection: Direction) => {
+    updateCommittedGame((current) => {
+      const recording = replayRecordingRef.current;
+      const nextGame = queueGameDirection(current, nextDirection);
+
+      if (
+        recording !== null &&
+        current.status === "running" &&
+        nextGame !== current &&
+        current.queuedDirection !== nextDirection
+      ) {
+        appendSnakeReplayEvent(recording, {
+          direction: nextDirection,
+          type: "direction",
+        });
+      }
+
+      return nextGame;
+    });
+  }, [updateCommittedGame]);
 
   const advanceSnake = useCallback(() => {
-    setGame((current) => advanceSnakeGame(current));
-  }, []);
+    updateCommittedGame((current) => {
+      const recording = replayRecordingRef.current;
 
-  const toggleRunState = useCallback(() => {
+      if (recording !== null && current.status === "running") {
+        appendSnakeReplayEvent(recording, { type: "advance" });
+
+        return advanceSnakeGame(current, { random: recording.random });
+      }
+
+      return advanceSnakeGame(current);
+    });
+  }, [updateCommittedGame]);
+
+  const spawnTimedFoodInGame = useCallback((kind: TimedFoodKind) => {
+    updateCommittedGame((current) => {
+      const recording = replayRecordingRef.current;
+      const nowMs = Date.now();
+      const nextGame =
+        recording === null
+          ? spawnTimedFood(current, kind)
+          : spawnTimedFood(current, kind, {
+              now: () => nowMs,
+              random: recording.random,
+            });
+
+      if (recording !== null && nextGame !== current) {
+        appendSnakeReplayEvent(recording, {
+          kind,
+          nowMs,
+          type: "spawnTimedFood",
+        });
+      }
+
+      return nextGame;
+    });
+  }, [updateCommittedGame]);
+
+  const expireTimedFoodInGame = useCallback((kind: TimedFoodKind, expiresAt: number) => {
+    updateCommittedGame((current) => {
+      const nextGame = expireTimedFood(current, kind, expiresAt);
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null && nextGame !== current) {
+        appendSnakeReplayEvent(recording, {
+          expiresAt,
+          kind,
+          type: "expireTimedFood",
+        });
+      }
+
+      return nextGame;
+    });
+  }, [updateCommittedGame]);
+
+  const startNewGame = useCallback(async (initialDirection?: Direction) => {
+    if (isReplayRunPendingRef.current) {
+      if (initialDirection !== undefined) {
+        pendingInitialDirectionRef.current = initialDirection;
+      }
+
+      return;
+    }
+
+    isReplayRunPendingRef.current = true;
+    pendingInitialDirectionRef.current = initialDirection ?? null;
+    replayRecordingRef.current = null;
+    setIsReplayRunPending(true);
     resetLeaderboardForm();
-    setGame((current) => {
-      if (current.status === "running") {
-        return { ...current, status: "paused" };
-      }
+    setFinishedReplay(null);
+    setReplaySaveStatus("idle");
 
-      if (current.status === "paused") {
-        return { ...current, status: "running" };
-      }
-
-      return {
+    try {
+      const run = await createSnakeReplayRun();
+      const random = createSnakeReplayRandom(run.seed);
+      const recording: SnakeReplayRecording = {
+        events: [],
+        nextSeq: 0,
+        random,
+        run,
+        startedAt: new Date().toISOString(),
+        tick: 0,
+      };
+      let nextGame: GameState = {
         ...createInitialGame({
-          bestScore: Math.max(current.bestScore, leaderboardBestScore),
-          random: Math.random,
+          bestScore,
+          random,
         }),
         status: "running",
       };
-    });
-  }, [leaderboardBestScore, resetLeaderboardForm]);
+
+      appendSnakeReplayEvent(recording, { type: "start" });
+
+      const pendingInitialDirection = pendingInitialDirectionRef.current;
+
+      if (pendingInitialDirection !== null) {
+        appendSnakeReplayEvent(recording, {
+          direction: pendingInitialDirection,
+          type: "direction",
+        });
+        nextGame = queueGameDirection(nextGame, pendingInitialDirection);
+      }
+
+      replayRecordingRef.current = recording;
+      setFoodFeedbacks([]);
+      commitGame(nextGame);
+    } catch {
+      setReplaySaveStatus("failed");
+    } finally {
+      pendingInitialDirectionRef.current = null;
+      isReplayRunPendingRef.current = false;
+      setIsReplayRunPending(false);
+    }
+  }, [bestScore, commitGame, resetLeaderboardForm]);
+
+  const toggleRunState = useCallback(() => {
+    const current = gameRef.current;
+
+    if (current.status === "running") {
+      commitGame({ ...current, status: "paused" });
+      return;
+    }
+
+    if (current.status === "paused") {
+      commitGame({ ...current, status: "running" });
+      return;
+    }
+
+    void startNewGame();
+  }, [commitGame, startNewGame]);
 
   const restartGame = useCallback(() => {
-    resetLeaderboardForm();
-    setFoodFeedbacks([]);
-    setGame((current) => ({
-      ...createInitialGame({
-        bestScore: Math.max(current.bestScore, leaderboardBestScore),
-        random: Math.random,
-      }),
-      status: "running",
-    }));
-  }, [leaderboardBestScore, resetLeaderboardForm]);
+    void startNewGame();
+  }, [startNewGame]);
+
+  const saveFinishedReplay = useCallback(async () => {
+    if (finishedReplay === null || replaySaveStatus === "saving") {
+      return;
+    }
+
+    setReplaySaveStatus("saving");
+
+    try {
+      await saveSnakeReplay(finishedReplay);
+      setReplaySaveStatus("saved");
+    } catch {
+      setReplaySaveStatus("failed");
+    }
+  }, [finishedReplay, replaySaveStatus]);
+
+  useEffect(() => {
+    if (game.status !== "lost" && game.status !== "won") {
+      return;
+    }
+
+    const recording = replayRecordingRef.current;
+
+    if (recording === null || finishedReplay !== null) {
+      return;
+    }
+
+    const replay: SnakeReplayPayload = {
+      events: [...recording.events],
+      finalLevel: game.level,
+      finalScore: game.score,
+      finalStatus: game.status,
+      finalTick: recording.tick,
+      gameId: SNAKE_REPLAY_GAME_ID,
+      leaderboardKey,
+      runId: recording.run.id,
+      schemaVersion: SNAKE_REPLAY_SCHEMA_VERSION,
+      seed: recording.run.seed,
+      startedAt: recording.startedAt,
+    };
+
+    replayRecordingRef.current = null;
+    setFinishedReplay(replay);
+  }, [finishedReplay, game.level, game.score, game.status, leaderboardKey]);
 
   const pauseGameForHelp = useCallback(() => {
-    setGame((current) =>
+    updateCommittedGame((current) =>
       current.status === "running" ? { ...current, status: "paused" } : current,
     );
-  }, []);
+  }, [updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
-    setGame((current) =>
+    updateCommittedGame((current) =>
       current.status === "paused" ? { ...current, status: "running" } : current,
     );
-  }, []);
+  }, [updateCommittedGame]);
 
   const canPauseGame = game.status === "running" || game.status === "paused";
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({
@@ -338,31 +581,35 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
   }, [game]);
 
   useTimedFoodLifecycle({
+    expireTimedFoodInGame,
     gameStatus: game.status,
     isIntroduced: isPickupIntroduced("bonusFood", game.pickedUpObjects, game.level),
     kind: "bonusFood",
-    setGame,
+    spawnTimedFoodInGame,
     timedFood: game.bonusFood,
   });
   useTimedFoodLifecycle({
+    expireTimedFoodInGame,
     gameStatus: game.status,
     isIntroduced: isPickupIntroduced("speedFood", game.pickedUpObjects, game.level),
     kind: "speedFood",
-    setGame,
+    spawnTimedFoodInGame,
     timedFood: game.speedFood,
   });
   useTimedFoodLifecycle({
+    expireTimedFoodInGame,
     gameStatus: game.status,
     isIntroduced: isPickupIntroduced("slowFood", game.pickedUpObjects, game.level),
     kind: "slowFood",
-    setGame,
+    spawnTimedFoodInGame,
     timedFood: game.slowFood,
   });
   useTimedFoodLifecycle({
+    expireTimedFoodInGame,
     gameStatus: game.status,
     isIntroduced: isPickupIntroduced("shrinkFood", game.pickedUpObjects, game.level),
     kind: "shrinkFood",
-    setGame,
+    spawnTimedFoodInGame,
     timedFood: game.shrinkFood,
   });
 
@@ -391,6 +638,11 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
 
       if (nextDirection) {
         event.preventDefault();
+        if (game.status === "ready") {
+          void startNewGame(nextDirection);
+          return;
+        }
+
         queueDirection(nextDirection);
         return;
       }
@@ -419,6 +671,7 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
     pendingLeaderboardEntry,
     queueDirection,
     restartGame,
+    startNewGame,
     toggleRunState,
   ]);
 
@@ -485,12 +738,16 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
               onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{
-                disabled: isHelpVisible || !canPauseGame,
+                disabled: isHelpVisible || isReplayRunPending || !canPauseGame,
                 isResume: game.status === "paused",
                 label: pauseActionLabel,
                 onClick: toggleRunState,
               }}
-              restartDisabled={game.status === "ready" || pendingLeaderboardEntry !== null}
+              restartDisabled={
+                isReplayRunPending ||
+                game.status === "ready" ||
+                pendingLeaderboardEntry !== null
+              }
               testIdPrefix="snake"
             />
           }
@@ -536,30 +793,33 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
                 <Button
                   className="min-w-32"
                   data-testid="snake-start-button"
+                  disabled={isReplayRunPending}
                   onClick={toggleRunState}
                   size="lg"
                   type="button"
                   variant="secondary"
                 >
                   <PlayIcon data-icon="inline-start" />
-                  Start
+                  {isReplayRunPending ? "Starting" : "Start"}
                 </Button>
               </GameStartScreen>
             ) : showGameOverScreen ? (
               <GameEndScreen testId="snake-game-over-screen">
                 <GameEndLeaderboardContent
                   action={
-                    <Button
-                      className="min-w-36"
-                      data-testid="snake-new-game-button"
-                      onClick={restartGame}
-                      size="lg"
-                      type="button"
-                      variant="secondary"
-                    >
-                      <RotateCcwIcon data-icon="inline-start" />
-                      New game
-                    </Button>
+                    <div className="flex w-full max-w-xs flex-col items-center gap-2">
+                      <Button
+                        className="w-full"
+                        data-testid="snake-new-game-button"
+                        onClick={restartGame}
+                        size="lg"
+                        type="button"
+                        variant="secondary"
+                      >
+                        <RotateCcwIcon data-icon="inline-start" />
+                        New game
+                      </Button>
+                    </div>
                   }
                   leaderboard={finalLeaderboardProps}
                   pendingLeaderboardEntry={pendingLeaderboardEntry}
@@ -571,6 +831,36 @@ export function SnakeGame({ onBackToMenu }: SnakeGameProps = {}) {
                     title: statusLabels[game.status],
                   }}
                 />
+                <div className="flex w-full max-w-xs flex-col items-center gap-2">
+                  <Button
+                    className="w-full"
+                    data-testid="snake-save-replay-button"
+                    disabled={
+                      finishedReplay === null ||
+                      replaySaveStatus === "saving" ||
+                      replaySaveStatus === "saved"
+                    }
+                    onClick={saveFinishedReplay}
+                    size="lg"
+                    type="button"
+                    variant="secondary"
+                  >
+                    <SaveIcon data-icon="inline-start" />
+                    {replaySaveStatus === "saving"
+                      ? "Saving replay"
+                      : replaySaveStatus === "saved"
+                        ? "Replay saved"
+                        : "Save replay"}
+                  </Button>
+                  {replaySaveStatus === "failed" ? (
+                    <p
+                      className="text-xs font-medium text-[#cbd5e1]"
+                      data-testid="snake-save-replay-error"
+                    >
+                      Could not save replay. Sign in and try again.
+                    </p>
+                  ) : null}
+                </div>
               </GameEndScreen>
             ) : showBoardState ? (
               <div

@@ -102,6 +102,7 @@ type ProfileGameStatRow = {
   bestScore: number | null;
   fastestWinScore: number | null;
   gameId: string;
+  hasLastReplay: 0 | 1;
   lastPlayedAt: string;
   losses: number;
   sessionsPlayed: number;
@@ -261,6 +262,12 @@ export class SqliteUserProfileStore {
           WHEN result = 'won' AND sort_direction = 'asc' THEN final_score
           ELSE NULL
         END) AS fastestWinScore,
+        EXISTS (
+          SELECT 1
+          FROM game_replays
+          WHERE game_replays.user_id = @userId
+            AND game_replays.game_id = game_sessions.game_id
+        ) AS hasLastReplay,
         MAX(ended_at) AS lastPlayedAt
       FROM game_sessions
       WHERE user_id = @userId
@@ -431,6 +438,7 @@ export class SqliteUserProfileStore {
         bestScore: row.bestScore,
         fastestWinScore: row.fastestWinScore,
         gameId: row.gameId,
+        hasLastReplay: row.hasLastReplay === 1,
         lastPlayedAt: row.lastPlayedAt,
         losses: row.losses,
         sessionsPlayed: row.sessionsPlayed,

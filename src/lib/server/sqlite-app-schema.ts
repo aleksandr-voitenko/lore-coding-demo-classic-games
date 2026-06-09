@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 export type SqliteDatabase = InstanceType<typeof Database>;
 
 export const DEFAULT_SQLITE_FILENAME = "snake-leaderboard.sqlite";
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export function prepareSqliteDatabasePath(databasePath: string) {
   if (databasePath === ":memory:") {
@@ -112,6 +112,31 @@ export function initializeAppSchema(database: SqliteDatabase) {
 
     CREATE INDEX IF NOT EXISTS leaderboard_scores_user_idx
       ON leaderboard_scores (user_id, leaderboard_key);
+
+    CREATE TABLE IF NOT EXISTS game_replay_runs (
+      id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      game_id TEXT NOT NULL,
+      seed INTEGER NOT NULL CHECK (seed > 0),
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS game_replay_runs_user_idx
+      ON game_replay_runs (user_id, game_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS game_replays (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      game_id TEXT NOT NULL,
+      run_id TEXT NOT NULL REFERENCES game_replay_runs(id),
+      leaderboard_key TEXT NOT NULL,
+      final_score INTEGER NOT NULL CHECK (final_score >= 0),
+      final_status TEXT NOT NULL CHECK (final_status IN ('lost', 'won')),
+      final_tick INTEGER NOT NULL CHECK (final_tick >= 0),
+      payload_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, game_id)
+    );
 
     PRAGMA user_version = ${SCHEMA_VERSION};
   `);

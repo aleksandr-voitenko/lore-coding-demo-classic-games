@@ -68,6 +68,16 @@ This file covers React component ownership and shared game UI conventions under
   `gameId`, `leaderboardKey`, active/started state, terminal result, final score,
   and sort direction. The hook is a signed-in-only boundary; guest sessions are
   intentionally ignored.
+- Snake replay playback is launched through the root launcher query
+  `/?replay=snake`, passed into `SnakeGame` as replay mode, and rendered by the
+  focused `snake-replay-player.tsx` component. Replay mode should not record
+  profile sessions or expose live-game controls; use a Back-only board action
+  rail wired through the shared Escape-to-menu hook to return to the profile
+  during playback. Replay playback should mirror live Snake pickup feedback
+  popups by deriving them from replayed game-state transitions.
+- Snake live replay recordings are one-shot per run. Terminal replay payload
+  capture should consume the active recording, and starting a new run should
+  abandon any unsaved replay state so stale events cannot be saved later.
 - Use `GameEndScreen` for terminal won/lost overlays. Use
   `GameEndLeaderboardContent` when a terminal overlay needs the shared pending
   leaderboard branch; pass per-game summary text, leaderboard props, score-form
@@ -95,6 +105,11 @@ This file covers React component ownership and shared game UI conventions under
   behavior. Ready and terminal games return directly to the launcher; active
   unfinished games show the abandon confirmation. Keep this hook disabled while
   Help is visible so Help owns Escape until it closes.
+- Completed UI surfaces that show a Back, Close, Done, or equivalent return
+  action should let Escape trigger that same action. Keep this behavior
+  consistent across game overlays, replay screens, and modal-like UI unless a
+  focused text input, form submission flow, or higher-priority overlay owns
+  Escape.
 - Shared Help and Escape/back-to-menu transition rules live in
   `src/lib/game-ui-flow.ts`; component hooks should apply returned effects rather
   than reimplementing the state machine.
