@@ -42,6 +42,42 @@ type PlaybackState = {
   random: () => number;
 };
 
+type MinesweeperReplayFrame = {
+  eventIndex: number;
+  events: MinesweeperReplayEvent[];
+  game: MinesweeperGameState;
+  random: () => number;
+};
+
+export function advanceMinesweeperReplayFrame({
+  eventIndex,
+  events,
+  game,
+  random,
+}: MinesweeperReplayFrame) {
+  let nextEventIndex = eventIndex;
+  let nextGame = game;
+  let processedVisibleAction = false;
+
+  while (nextEventIndex < events.length && !processedVisibleAction) {
+    const event = events[nextEventIndex]!;
+    const previousGame = nextGame;
+
+    nextEventIndex += 1;
+    nextGame = applyMinesweeperReplayEvent(nextGame, event, random);
+    processedVisibleAction = event.type !== "start" && nextGame !== previousGame;
+  }
+
+  return {
+    eventIndex: nextEventIndex,
+    game: nextGame,
+    isFinished:
+      nextEventIndex >= events.length ||
+      nextGame.status === "lost" ||
+      nextGame.status === "won",
+  };
+}
+
 const MINESWEEPER_REPLAY_STEP_MS = 420;
 
 const replayStatusLabels = {
@@ -148,25 +184,19 @@ export function MinesweeperReplayPlayer({
       return;
     }
 
-    let nextGame = currentGame;
-    let processedVisibleAction = false;
+    const nextFrame = advanceMinesweeperReplayFrame({
+      eventIndex: playback.eventIndex,
+      events: playback.events,
+      game: currentGame,
+      random: playback.random,
+    });
+    const nextGame = nextFrame.game;
 
-    while (playback.eventIndex < playback.events.length && !processedVisibleAction) {
-      const event = playback.events[playback.eventIndex]!;
-
-      playback.eventIndex += 1;
-      nextGame = applyMinesweeperReplayEvent(nextGame, event, playback.random);
-      processedVisibleAction = event.type !== "start";
-    }
-
+    playback.eventIndex = nextFrame.eventIndex;
     gameRef.current = nextGame;
     setGame(nextGame);
 
-    if (
-      playback.eventIndex >= playback.events.length ||
-      nextGame.status === "lost" ||
-      nextGame.status === "won"
-    ) {
+    if (nextFrame.isFinished) {
       setIsFinished(true);
     }
   }, [isFinished]);
