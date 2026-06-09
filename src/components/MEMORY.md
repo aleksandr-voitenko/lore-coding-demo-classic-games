@@ -71,9 +71,10 @@ This file covers React component ownership and shared game UI conventions under
 - Snake replay playback is launched through the root launcher query
   `/?replay=snake`, passed into `SnakeGame` as replay mode, and rendered by the
   focused `snake-replay-player.tsx` component. Tetris, Breakout, Minesweeper,
-  Pong, and 2048 follow the same launcher query pattern at `/?replay=tetris`,
-  `/?replay=breakout`, `/?replay=minesweeper`, `/?replay=pong`, and
-  `/?replay=twenty-forty-eight` through their focused replay-player components,
+  Pong, Simon, and 2048 follow the same launcher query pattern at
+  `/?replay=tetris`, `/?replay=breakout`, `/?replay=minesweeper`,
+  `/?replay=pong`, `/?replay=simon`, and `/?replay=twenty-forty-eight`
+  through their focused replay-player components,
   with replayed parameters coming from the saved payload instead of current
   launcher selections. Replay mode should not record profile sessions or expose
   live-game controls; use a Back-only board action rail wired through the shared

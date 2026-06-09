@@ -1,7 +1,7 @@
 "use client";
 
-import { PlayIcon, RotateCcwIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { PlayIcon, RotateCcwIcon, SaveIcon } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   isGamePauseKey,
@@ -30,6 +30,7 @@ import {
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { SimonBoard } from "@/components/simon-board";
+import { SimonReplayPlayer } from "@/components/simon-replay-player";
 import { Button } from "@/components/ui/button";
 import {
   advanceSimonMiss,
@@ -50,11 +51,35 @@ import {
   type SimonStatus,
 } from "@/lib/simon-game-engine";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
+import {
+  createSimonReplayRandom,
+  createSimonReplayRun,
+  saveSimonReplay,
+  SIMON_REPLAY_GAME_ID,
+  SIMON_REPLAY_SCHEMA_VERSION,
+  type SimonReplayEvent,
+  type SimonReplayEventInput,
+  type SimonReplayPayload,
+  type SimonReplayRun,
+} from "@/lib/simon-replay";
 import { useGameSession } from "@/hooks/use-game-session";
 
 type SimonGameProps = {
   initialWinTarget?: number;
   onBackToMenu?: () => void;
+  onReplayBackToProfile?: () => void;
+  replayMode?: "latest";
+};
+
+type ReplaySaveStatus = "failed" | "idle" | "saved" | "saving";
+
+type SimonReplayRecording = {
+  events: SimonReplayEvent[];
+  nextSeq: number;
+  random: () => number;
+  run: SimonReplayRun;
+  startedAt: string;
+  tick: number;
 };
 
 const statusLabels: Record<SimonStatus, string> = {
@@ -127,10 +152,51 @@ function createReadySimonGame(winTarget?: number) {
   return createInitialSimonGame({ winTarget });
 }
 
-export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {}) {
+function appendSimonReplayEvent(
+  recording: SimonReplayRecording,
+  event: SimonReplayEventInput,
+) {
+  recording.events.push({
+    ...event,
+    seq: recording.nextSeq,
+    tick: recording.tick,
+  } as SimonReplayEvent);
+  recording.nextSeq += 1;
+  recording.tick += 1;
+}
+
+export function SimonGame({
+  initialWinTarget,
+  onBackToMenu,
+  onReplayBackToProfile,
+  replayMode,
+}: SimonGameProps = {}) {
+  if (replayMode === "latest") {
+    return (
+      <SimonReplayPlayer
+        onBackToProfile={onReplayBackToProfile ?? onBackToMenu ?? (() => undefined)}
+      />
+    );
+  }
+
+  return (
+    <SimonLiveGame initialWinTarget={initialWinTarget} onBackToMenu={onBackToMenu} />
+  );
+}
+
+function SimonLiveGame({
+  initialWinTarget,
+  onBackToMenu,
+}: Pick<SimonGameProps, "initialWinTarget" | "onBackToMenu"> = {}) {
   const [game, setGame] = useState<SimonGameState>(() =>
     createReadySimonGame(initialWinTarget),
   );
+  const [finishedReplay, setFinishedReplay] = useState<SimonReplayPayload | null>(null);
+  const [isReplayRunPending, setIsReplayRunPending] = useState(false);
+  const [replaySaveStatus, setReplaySaveStatus] = useState<ReplaySaveStatus>("idle");
+  const gameRef = useRef(game);
+  const isReplayRunPendingRef = useRef(false);
+  const replayRecordingRef = useRef<SimonReplayRecording | null>(null);
   const playbackDelay = game.status === "showing" ? getSimonPlaybackDelay() : null;
   const roundCompleteDelay =
     game.status === "correct" && game.activePad === null
@@ -196,43 +262,192 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
     testIdPrefix: "simon",
   });
 
+  const commitGame = useCallback((nextGame: SimonGameState) => {
+    gameRef.current = nextGame;
+    setGame(nextGame);
+  }, []);
+
+  const updateCommittedGame = useCallback(
+    (updateGame: (current: SimonGameState) => SimonGameState) => {
+      const current = gameRef.current;
+      const nextGame = updateGame(current);
+
+      if (nextGame !== current) {
+        commitGame(nextGame);
+      }
+
+      return nextGame;
+    },
+    [commitGame],
+  );
+
+  const startReplayRun = useCallback(async ({ restart = false }: { restart?: boolean } = {}) => {
+    if (isReplayRunPendingRef.current) {
+      return;
+    }
+
+    isReplayRunPendingRef.current = true;
+    replayRecordingRef.current = null;
+    setIsReplayRunPending(true);
+    resetLeaderboardForm();
+    setFinishedReplay(null);
+    setReplaySaveStatus("idle");
+
+    try {
+      const run = await createSimonReplayRun();
+      const random = createSimonReplayRandom(run.seed);
+      const recording: SimonReplayRecording = {
+        events: [],
+        nextSeq: 0,
+        random,
+        run,
+        startedAt: new Date().toISOString(),
+        tick: 0,
+      };
+
+      appendSimonReplayEvent(recording, { type: "start" });
+      replayRecordingRef.current = recording;
+      commitGame(
+        restart
+          ? restartSimonGame(gameRef.current, { random })
+          : startSimonGame(gameRef.current, { random }),
+      );
+    } catch {
+      setReplaySaveStatus("failed");
+    } finally {
+      isReplayRunPendingRef.current = false;
+      setIsReplayRunPending(false);
+    }
+  }, [commitGame, resetLeaderboardForm]);
+
   const startGame = useCallback(() => {
     resetLeaderboardForm();
-    setGame((current) => startSimonGame(current, { random: Math.random }));
-  }, [resetLeaderboardForm]);
+    setFinishedReplay(null);
+    setReplaySaveStatus("idle");
+
+    const current = gameRef.current;
+
+    if (current.status === "paused") {
+      updateCommittedGame((gameState) => startSimonGame(gameState));
+      return;
+    }
+
+    void startReplayRun({
+      restart: current.status === "lost" || current.status === "won",
+    });
+  }, [resetLeaderboardForm, startReplayRun, updateCommittedGame]);
 
   const toggleRunState = useCallback(() => {
     resetLeaderboardForm();
-    setGame((current) => {
-      if (
-        current.status === "showing" ||
-        current.status === "input" ||
-        current.status === "correct" ||
-        current.status === "missed"
-      ) {
-        return pauseSimonGame(current);
-      }
+    const current = gameRef.current;
 
-      return startSimonGame(current, { random: Math.random });
-    });
-  }, [resetLeaderboardForm]);
+    if (
+      current.status === "showing" ||
+      current.status === "input" ||
+      current.status === "correct" ||
+      current.status === "missed"
+    ) {
+      updateCommittedGame((gameState) => pauseSimonGame(gameState));
+      return;
+    }
+
+    if (current.status === "paused") {
+      updateCommittedGame((gameState) => startSimonGame(gameState));
+      return;
+    }
+
+    startGame();
+  }, [resetLeaderboardForm, startGame, updateCommittedGame]);
 
   const restartGame = useCallback(() => {
+    if (isReplayRunPendingRef.current) {
+      return;
+    }
+
+    replayRecordingRef.current = null;
     resetLeaderboardForm();
-    setGame((current) => restartSimonGame(current, { random: Math.random }));
-  }, [resetLeaderboardForm]);
+    void startReplayRun({ restart: true });
+  }, [resetLeaderboardForm, startReplayRun]);
 
   const pressPad = useCallback((pad: SimonPadId) => {
-    setGame((current) => playSimonPad(current, pad));
-  }, []);
+    updateCommittedGame((current) => {
+      const nextGame = playSimonPad(current, pad);
+      const recording = replayRecordingRef.current;
+
+      if (nextGame !== current && current.status === "input" && recording !== null) {
+        appendSimonReplayEvent(recording, {
+          pad,
+          type: "pad",
+        });
+      }
+
+      return nextGame;
+    });
+  }, [updateCommittedGame]);
 
   const pauseGameForHelp = useCallback(() => {
-    setGame((current) => pauseSimonGame(current));
-  }, []);
+    updateCommittedGame((current) => pauseSimonGame(current));
+  }, [updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
-    setGame((current) => startSimonGame(current, { random: Math.random }));
-  }, []);
+    updateCommittedGame((current) => startSimonGame(current));
+  }, [updateCommittedGame]);
+
+  const saveFinishedReplay = useCallback(async () => {
+    if (finishedReplay === null || replaySaveStatus === "saving") {
+      return;
+    }
+
+    setReplaySaveStatus("saving");
+
+    try {
+      await saveSimonReplay(finishedReplay);
+      setReplaySaveStatus("saved");
+    } catch {
+      setReplaySaveStatus("failed");
+    }
+  }, [finishedReplay, replaySaveStatus]);
+
+  useEffect(() => {
+    if (game.status !== "lost" && game.status !== "won") {
+      return;
+    }
+
+    const recording = replayRecordingRef.current;
+
+    if (recording === null || finishedReplay !== null) {
+      return;
+    }
+
+    const replay: SimonReplayPayload = {
+      events: [...recording.events],
+      finalInputIndex: game.inputIndex,
+      finalRound: game.round,
+      finalScore: game.score,
+      finalSequenceLength: game.sequence.length,
+      finalStatus: game.status,
+      finalTick: recording.tick,
+      gameId: SIMON_REPLAY_GAME_ID,
+      leaderboardKey,
+      runId: recording.run.id,
+      schemaVersion: SIMON_REPLAY_SCHEMA_VERSION,
+      seed: recording.run.seed,
+      startedAt: recording.startedAt,
+      winTarget: game.winTarget,
+    };
+
+    replayRecordingRef.current = null;
+    setFinishedReplay(replay);
+  }, [
+    finishedReplay,
+    game.inputIndex,
+    game.round,
+    game.score,
+    game.sequence.length,
+    game.status,
+    game.winTarget,
+    leaderboardKey,
+  ]);
 
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({
     isGameActive: isSimonActive,
@@ -254,11 +469,19 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
     }
 
     const playbackTimer = window.setTimeout(() => {
-      setGame((current) => advanceSimonPlayback(current));
+      updateCommittedGame((current) => {
+        const recording = replayRecordingRef.current;
+
+        if (recording !== null && current.status === "showing") {
+          appendSimonReplayEvent(recording, { type: "playback" });
+        }
+
+        return advanceSimonPlayback(current);
+      });
     }, playbackDelay);
 
     return () => window.clearTimeout(playbackTimer);
-  }, [game.activePad, game.playbackIndex, playbackDelay]);
+  }, [game.activePad, game.playbackIndex, playbackDelay, updateCommittedGame]);
 
   useEffect(() => {
     if (
@@ -271,11 +494,25 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
     }
 
     const flashTimer = window.setTimeout(() => {
-      setGame((current) => clearSimonActivePad(current));
+      updateCommittedGame((current) => {
+        const recording = replayRecordingRef.current;
+
+        if (
+          recording !== null &&
+          (current.status === "input" ||
+            current.status === "correct" ||
+            current.status === "missed") &&
+          current.activePad !== null
+        ) {
+          appendSimonReplayEvent(recording, { type: "clear" });
+        }
+
+        return clearSimonActivePad(current);
+      });
     }, getSimonInputFlashDelay());
 
     return () => window.clearTimeout(flashTimer);
-  }, [game.activePad, game.status]);
+  }, [game.activePad, game.status, updateCommittedGame]);
 
   useEffect(() => {
     if (roundCompleteDelay === null) {
@@ -283,11 +520,21 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
     }
 
     const roundCompleteTimer = window.setTimeout(() => {
-      setGame((current) => advanceSimonRound(current, { random: Math.random }));
+      updateCommittedGame((current) => {
+        const recording = replayRecordingRef.current;
+
+        if (recording !== null && current.status === "correct") {
+          appendSimonReplayEvent(recording, { type: "advanceRound" });
+
+          return advanceSimonRound(current, { random: recording.random });
+        }
+
+        return advanceSimonRound(current, { random: Math.random });
+      });
     }, roundCompleteDelay);
 
     return () => window.clearTimeout(roundCompleteTimer);
-  }, [roundCompleteDelay]);
+  }, [roundCompleteDelay, updateCommittedGame]);
 
   useEffect(() => {
     if (missFeedbackDelay === null) {
@@ -295,11 +542,19 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
     }
 
     const missFeedbackTimer = window.setTimeout(() => {
-      setGame((current) => advanceSimonMiss(current));
+      updateCommittedGame((current) => {
+        const recording = replayRecordingRef.current;
+
+        if (recording !== null && current.status === "missed") {
+          appendSimonReplayEvent(recording, { type: "advanceMiss" });
+        }
+
+        return advanceSimonMiss(current);
+      });
     }, missFeedbackDelay);
 
     return () => window.clearTimeout(missFeedbackTimer);
-  }, [missFeedbackDelay]);
+  }, [missFeedbackDelay, updateCommittedGame]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -395,12 +650,16 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
               onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{
-                disabled: isHelpVisible || !canPauseGame,
+                disabled: isHelpVisible || isReplayRunPending || !canPauseGame,
                 isResume: game.status === "paused",
                 label: pauseActionLabel,
                 onClick: toggleRunState,
               }}
-              restartDisabled={game.status === "ready" || pendingLeaderboardEntry !== null}
+              restartDisabled={
+                isReplayRunPending ||
+                game.status === "ready" ||
+                pendingLeaderboardEntry !== null
+              }
               testIdPrefix="simon"
             />
           }
@@ -426,13 +685,14 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
               <Button
                 className="min-w-32"
                 data-testid="simon-start-button"
+                disabled={isReplayRunPending}
                 onClick={startGame}
                 size="lg"
                 type="button"
                 variant="secondary"
               >
                 <PlayIcon data-icon="inline-start" />
-                Start
+                {isReplayRunPending ? "Starting" : "Start"}
               </Button>
               <GameLeaderboardPanel {...leaderboardPanelProps} />
             </GameStartScreen>
@@ -463,6 +723,7 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
                   <Button
                     className="min-w-36"
                     data-testid="simon-new-game-button"
+                    disabled={isReplayRunPending}
                     onClick={restartGame}
                     size="lg"
                     type="button"
@@ -482,6 +743,36 @@ export function SimonGame({ initialWinTarget, onBackToMenu }: SimonGameProps = {
                   title: game.status === "won" ? "Sequence cleared" : "Game over",
                 }}
               />
+              <div className="flex w-full max-w-xs flex-col items-center gap-2">
+                <Button
+                  className="w-full"
+                  data-testid="simon-save-replay-button"
+                  disabled={
+                    finishedReplay === null ||
+                    replaySaveStatus === "saving" ||
+                    replaySaveStatus === "saved"
+                  }
+                  onClick={saveFinishedReplay}
+                  size="lg"
+                  type="button"
+                  variant="secondary"
+                >
+                  <SaveIcon data-icon="inline-start" />
+                  {replaySaveStatus === "saving"
+                    ? "Saving replay"
+                    : replaySaveStatus === "saved"
+                      ? "Replay saved"
+                      : "Save replay"}
+                </Button>
+                {replaySaveStatus === "failed" ? (
+                  <p
+                    className="text-xs font-medium text-[#59687d]"
+                    data-testid="simon-save-replay-error"
+                  >
+                    Could not save replay. Sign in and try again.
+                  </p>
+                ) : null}
+              </div>
             </GameEndScreen>
           ) : showPauseScreen ? (
             <div

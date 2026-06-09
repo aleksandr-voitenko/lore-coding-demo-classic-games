@@ -38,14 +38,14 @@ This file covers deterministic game engines and shared source logic under
   replay random creation, API path/client helpers, and base replay payload
   validation for all future game-specific replay modules.
 - `snake-replay.ts`, `tetris-replay.ts`, `breakout-replay.ts`,
-  `minesweeper-replay.ts`, `pong-replay.ts`, and
+  `minesweeper-replay.ts`, `pong-replay.ts`, `simon-replay.ts`, and
   `twenty-forty-eight-replay.ts` own game-specific replay payload contracts,
   event parsing, and deterministic replay event application. Replay payloads
   record engine events such as direction changes, advances, timed-food lifecycle
   events, Tetris moves, rotations, soft drops, hard drops, Breakout
   starts/advances/paddle movement, Minesweeper reveals and flag toggles, Pong
-  starts/advances/paddle movement/score ticks, and 2048 move directions rather
-  than video or full board snapshots.
+  starts/advances/paddle movement/score ticks, Simon phase/input events, and
+  2048 move directions rather than video or full board snapshots.
 - `game-catalog.ts` owns the pure playable-game id and label catalog plus
   server-safe card artwork metadata and versioned artwork URLs. Launcher config
   should enrich these entries with descriptions and parameters locally, while

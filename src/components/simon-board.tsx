@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 type SimonBoardProps = {
   children?: ReactNode;
   game: SimonGameState;
+  isInteractive?: boolean;
   onPadPress: (pad: SimonPadId) => void;
   statusLabel: string;
 };
@@ -52,7 +53,13 @@ const simonPadActiveClassNames: Record<SimonPadId, string> = {
     "border-white/95 bg-[#fff08f] brightness-125 saturate-150 shadow-[inset_0_0_0_4px_rgba(255,255,255,0.94),inset_0_0_0_9px_rgba(255,226,122,0.62),inset_0_-2px_0_rgba(107,78,16,0.16),0_0_18px_rgba(255,255,255,0.82),0_0_72px_rgba(255,226,122,0.95)]",
 };
 
-export function SimonBoard({ children, game, onPadPress, statusLabel }: SimonBoardProps) {
+export function SimonBoard({
+  children,
+  game,
+  isInteractive = true,
+  onPadPress,
+  statusLabel,
+}: SimonBoardProps) {
   const isInputReady = game.status === "input";
 
   return (
@@ -77,7 +84,7 @@ export function SimonBoard({ children, game, onPadPress, statusLabel }: SimonBoa
                 isInputReady && "active:translate-y-px",
               )}
               data-testid={`simon-pad-${pad}`}
-              disabled={!isInputReady}
+              disabled={!isInputReady || !isInteractive}
               key={pad}
               onClick={() => onPadPress(pad)}
               type="button"
