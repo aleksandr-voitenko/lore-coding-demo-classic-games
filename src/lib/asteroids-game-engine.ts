@@ -11,6 +11,8 @@ export type AsteroidsControlInput = {
   thrust?: boolean;
 };
 
+export type AsteroidsRandom = () => number;
+
 export type AsteroidSize = "large" | "medium" | "small";
 
 export type AsteroidsShip = {
@@ -62,6 +64,11 @@ export type CreateAsteroidsGameOptions = {
   asteroidCount?: number;
   boardHeight?: number;
   boardWidth?: number;
+  random?: AsteroidsRandom;
+};
+
+export type AdvanceAsteroidsGameOptions = {
+  random?: AsteroidsRandom;
 };
 
 export const ASTEROIDS_BOARD_WIDTH = 640;
@@ -100,6 +107,7 @@ export function createInitialAsteroidsGame({
   asteroidCount = ASTEROIDS_STARTING_ASTEROID_COUNT,
   boardHeight = ASTEROIDS_BOARD_HEIGHT,
   boardWidth = ASTEROIDS_BOARD_WIDTH,
+  random,
 }: CreateAsteroidsGameOptions = {}): AsteroidsGameState {
   const normalizedBoardWidth = normalizeAsteroidsDimension(
     boardWidth,
@@ -117,6 +125,7 @@ export function createInitialAsteroidsGame({
     boardWidth: normalizedBoardWidth,
     count: normalizedAsteroidCount,
     nextAsteroidId: 0,
+    random,
     wave: 1,
   });
 
@@ -178,12 +187,14 @@ export function restartAsteroidsGame(
     boardWidth: ASTEROIDS_BOARD_WIDTH,
     startingAsteroidCount: ASTEROIDS_STARTING_ASTEROID_COUNT,
   },
+  { random }: AdvanceAsteroidsGameOptions = {},
 ): AsteroidsGameState {
   return {
     ...createInitialAsteroidsGame({
       asteroidCount: game.startingAsteroidCount,
       boardHeight: game.boardHeight,
       boardWidth: game.boardWidth,
+      random,
     }),
     respawnInvulnerabilityTicks: RESPAWN_INVULNERABILITY_TICKS,
     status: "running" as const,
@@ -231,6 +242,7 @@ export function fireAsteroidsBullet(game: AsteroidsGameState): AsteroidsGameStat
 export function advanceAsteroidsGame(
   game: AsteroidsGameState,
   controls: AsteroidsControlInput = {},
+  { random }: AdvanceAsteroidsGameOptions = {},
 ): AsteroidsGameState {
   if (game.status !== "running") {
     return game;
@@ -247,6 +259,7 @@ export function advanceAsteroidsGame(
     boardWidth: game.boardWidth,
     bullets,
     nextAsteroidId: game.nextAsteroidId,
+    random,
   });
   const cooldownTicks = Math.max(0, game.shotCooldownTicks - 1);
   const invulnerabilityTicks = Math.max(0, game.respawnInvulnerabilityTicks - 1);
@@ -256,6 +269,7 @@ export function advanceAsteroidsGame(
           boardHeight: game.boardHeight,
           boardWidth: game.boardWidth,
           nextAsteroidId: collisionResult.nextAsteroidId,
+          random,
           startingAsteroidCount: game.startingAsteroidCount,
           wave: game.wave + 1,
         })
@@ -343,12 +357,14 @@ function resolveBulletAsteroidCollisions({
   boardWidth,
   bullets,
   nextAsteroidId,
+  random,
 }: {
   asteroids: Asteroid[];
   boardHeight: number;
   boardWidth: number;
   bullets: AsteroidsBullet[];
   nextAsteroidId: number;
+  random?: AsteroidsRandom;
 }) {
   let remainingAsteroids = asteroids;
   let nextId = nextAsteroidId;
@@ -365,7 +381,7 @@ function resolveBulletAsteroidCollisions({
       continue;
     }
 
-    const split = splitAsteroid(hitAsteroid, nextId, boardWidth, boardHeight);
+    const split = splitAsteroid(hitAsteroid, nextId, boardWidth, boardHeight, random);
     nextId = split.nextAsteroidId;
     score += ASTEROID_SCORE[hitAsteroid.size];
     remainingAsteroids = [
@@ -419,12 +435,14 @@ function createNextWave({
   boardHeight,
   boardWidth,
   nextAsteroidId,
+  random,
   startingAsteroidCount,
   wave,
 }: {
   boardHeight: number;
   boardWidth: number;
   nextAsteroidId: number;
+  random?: AsteroidsRandom;
   startingAsteroidCount: number;
   wave: number;
 }) {
@@ -434,6 +452,7 @@ function createNextWave({
       boardWidth,
       count: Math.min(ASTEROID_WAVE_CAP, startingAsteroidCount + wave - 1),
       nextAsteroidId,
+      random,
       wave,
     }),
     wave,
@@ -445,12 +464,14 @@ function createWaveAsteroids({
   boardWidth,
   count,
   nextAsteroidId,
+  random,
   wave,
 }: {
   boardHeight: number;
   boardWidth: number;
   count: number;
   nextAsteroidId: number;
+  random?: AsteroidsRandom;
   wave: number;
 }) {
   const asteroids = Array.from({ length: count }, (_, index) =>
@@ -459,6 +480,7 @@ function createWaveAsteroids({
       boardWidth,
       idNumber: nextAsteroidId + index,
       index,
+      random,
       size: "large" as const,
       wave,
     }),
@@ -475,6 +497,7 @@ function createAsteroid({
   boardWidth,
   idNumber,
   index,
+  random,
   size,
   velocity,
   wave,
@@ -485,6 +508,7 @@ function createAsteroid({
   boardWidth: number;
   idNumber: number;
   index: number;
+  random?: AsteroidsRandom;
   size: AsteroidSize;
   velocity?: AsteroidsPoint;
   wave: number;
@@ -492,22 +516,26 @@ function createAsteroid({
   y?: number;
 }): Asteroid {
   const radius = getAsteroidRadius(size);
-  const spawned = getAsteroidSpawn({
-    boardHeight,
-    boardWidth,
-    index,
-    radius,
-    wave,
-  });
+  const spawned =
+    velocity === undefined || x === undefined || y === undefined
+      ? getAsteroidSpawn({
+          boardHeight,
+          boardWidth,
+          index,
+          random,
+          radius,
+          wave,
+        })
+      : null;
 
   return {
     id: `asteroid-${idNumber}`,
     radius,
-    shape: createAsteroidShape(idNumber),
+    shape: createAsteroidShape(idNumber, random),
     size,
-    velocity: velocity ?? spawned.velocity,
-    x: x ?? spawned.x,
-    y: y ?? spawned.y,
+    velocity: velocity ?? spawned!.velocity,
+    x: x ?? spawned!.x,
+    y: y ?? spawned!.y,
   };
 }
 
@@ -516,6 +544,7 @@ function splitAsteroid(
   nextAsteroidId: number,
   boardWidth: number,
   boardHeight: number,
+  random?: AsteroidsRandom,
 ) {
   const childSize = getAsteroidChildSize(asteroid.size);
 
@@ -526,25 +555,31 @@ function splitAsteroid(
     };
   }
 
-  const speed = (childSize === "medium" ? 1.55 : 1.9) * ASTEROIDS_MOTION_SCALE;
+  const speed =
+    (childSize === "medium" ? 1.55 : 1.9) *
+    ASTEROIDS_MOTION_SCALE *
+    getRandomRange(random, 0.9, 1.1);
   const baseAngle = Math.atan2(asteroid.velocity.y, asteroid.velocity.x);
   const asteroids = Array.from({ length: ASTEROID_SPLIT_CHILDREN }, (_, childIndex) => {
     const direction = childIndex === 0 ? -1 : 1;
-    const angle = baseAngle + direction * 1.1;
+    const angle =
+      baseAngle + direction * (random === undefined ? 1.1 : getRandomRange(random, 0.9, 1.2));
+    const offset = random === undefined ? childIndex * 2 : 2 + random() * 4;
 
     return createAsteroid({
       boardHeight,
       boardWidth,
       idNumber: nextAsteroidId + childIndex,
       index: childIndex,
+      random,
       size: childSize,
       velocity: {
         x: asteroid.velocity.x * 0.56 + Math.cos(angle) * speed,
         y: asteroid.velocity.y * 0.56 + Math.sin(angle) * speed,
       },
       wave: nextAsteroidId + childIndex,
-      x: wrapCoordinate(asteroid.x + direction * childIndex * 2, boardWidth),
-      y: wrapCoordinate(asteroid.y + direction * childIndex * 2, boardHeight),
+      x: wrapCoordinate(asteroid.x + direction * offset, boardWidth),
+      y: wrapCoordinate(asteroid.y + direction * offset, boardHeight),
     });
   });
 
@@ -558,20 +593,30 @@ function getAsteroidSpawn({
   boardHeight,
   boardWidth,
   index,
+  random,
   radius,
   wave,
 }: {
   boardHeight: number;
   boardWidth: number;
   index: number;
+  random?: AsteroidsRandom;
   radius: number;
   wave: number;
 }) {
-  const edge = index % 4;
-  const travel = 0.12 + (((index * 37 + wave * 11) % 76) / 100);
-  const drift = ((((index * 29 + wave * 7) % 21) - 10) / 20) * ASTEROIDS_MOTION_SCALE;
+  const edge = random === undefined ? index % 4 : Math.floor(random() * 4);
+  const travel =
+    random === undefined ? 0.12 + (((index * 37 + wave * 11) % 76) / 100) : 0.12 + random() * 0.76;
+  const drift =
+    (random === undefined ? (((index * 29 + wave * 7) % 21) - 10) / 20 : random() * 2 - 1) *
+    ASTEROIDS_MOTION_SCALE;
   const speed =
-    Math.min(2.4, 1.05 + (index % 3) * 0.24 + wave * 0.04) * ASTEROIDS_MOTION_SCALE;
+    Math.min(
+      2.4,
+      random === undefined
+        ? 1.05 + (index % 3) * 0.24 + wave * 0.04
+        : 1.05 + random() * 0.48 + wave * 0.04,
+    ) * ASTEROIDS_MOTION_SCALE;
 
   if (edge === 0) {
     return {
@@ -615,12 +660,24 @@ function createCenteredShip(boardWidth: number, boardHeight: number): AsteroidsS
   };
 }
 
-function createAsteroidShape(seed: number) {
+function createAsteroidShape(seed: number, random?: AsteroidsRandom) {
   return Array.from({ length: 10 }, (_, index) => {
+    if (random !== undefined) {
+      return 0.78 + random() * 0.3;
+    }
+
     const value = (seed * 37 + index * 23) % 31;
 
     return 0.78 + value / 100;
   });
+}
+
+function getRandomRange(random: AsteroidsRandom | undefined, minimum: number, maximum: number) {
+  if (random === undefined) {
+    return 1;
+  }
+
+  return minimum + random() * (maximum - minimum);
 }
 
 function moveWrappedEntity<Entity extends { velocity: AsteroidsPoint; x: number; y: number }>(

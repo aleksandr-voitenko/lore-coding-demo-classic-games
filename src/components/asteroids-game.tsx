@@ -6,8 +6,9 @@ import {
   ArrowUpIcon,
   PlayIcon,
   RotateCcwIcon,
+  SaveIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AsteroidsBoard } from "@/components/asteroids-board";
 import {
@@ -17,6 +18,7 @@ import {
   pressAsteroidsControlKey,
   releaseAsteroidsControlKey,
   resetAsteroidsControlState,
+  type AsteroidsControlState,
 } from "@/components/asteroids-player-input";
 import {
   isGamePauseKey,
@@ -45,6 +47,7 @@ import {
 } from "@/components/game-layout";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
+import { AsteroidsReplayPlayer } from "@/components/asteroids-replay-player";
 import { Button } from "@/components/ui/button";
 import { useGameSession } from "@/hooks/use-game-session";
 import {
@@ -54,11 +57,22 @@ import {
   fireAsteroidsBullet,
   getAsteroidsTickDelay,
   pauseAsteroidsGame,
-  restartAsteroidsGame,
   startAsteroidsGame,
   type AsteroidsGameState,
   type AsteroidsStatus,
 } from "@/lib/asteroids-game-engine";
+import {
+  createAsteroidsReplayRandom,
+  createAsteroidsReplayRun,
+  saveAsteroidsReplay,
+  ASTEROIDS_REPLAY_GAME_ID,
+  ASTEROIDS_REPLAY_SCHEMA_VERSION,
+  type AsteroidsReplayControls,
+  type AsteroidsReplayEvent,
+  type AsteroidsReplayEventInput,
+  type AsteroidsReplayPayload,
+  type AsteroidsReplayRun,
+} from "@/lib/asteroids-replay";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 
 type AsteroidsGameProps = {
@@ -66,6 +80,19 @@ type AsteroidsGameProps = {
   initialBoardHeight?: number;
   initialBoardWidth?: number;
   onBackToMenu?: () => void;
+  onReplayBackToProfile?: () => void;
+  replayMode?: "latest";
+};
+
+type ReplaySaveStatus = "failed" | "idle" | "saved" | "saving";
+
+type AsteroidsReplayRecording = {
+  events: AsteroidsReplayEvent[];
+  nextSeq: number;
+  random: () => number;
+  run: AsteroidsReplayRun;
+  startedAt: string;
+  tick: number;
 };
 
 const statusLabels: Record<AsteroidsStatus, string> = {
@@ -115,12 +142,80 @@ const ASTEROIDS_HELP_SECTIONS: GameHelpSection[] = [
   },
 ];
 
+function getCurrentAsteroidsReplayControls(
+  controlState: AsteroidsControlState,
+): AsteroidsReplayControls {
+  const controls = getAsteroidsControlInput(controlState);
+
+  return {
+    rotateLeft: controls.rotateLeft,
+    rotateRight: controls.rotateRight,
+    thrust: controls.thrust,
+  };
+}
+
+function areAsteroidsReplayControlsEqual(
+  left: AsteroidsReplayControls,
+  right: AsteroidsReplayControls,
+) {
+  return (
+    left.rotateLeft === right.rotateLeft &&
+    left.rotateRight === right.rotateRight &&
+    left.thrust === right.thrust
+  );
+}
+
+function appendAsteroidsReplayEvent(
+  recording: AsteroidsReplayRecording,
+  event: AsteroidsReplayEventInput,
+) {
+  recording.events.push({
+    ...event,
+    seq: recording.nextSeq,
+    tick: recording.tick,
+  } as AsteroidsReplayEvent);
+  recording.nextSeq += 1;
+
+  if (event.type === "advance") {
+    recording.tick += 1;
+  }
+}
+
 export function AsteroidsGame({
   initialAsteroidCount,
   initialBoardHeight,
   initialBoardWidth,
   onBackToMenu,
+  onReplayBackToProfile,
+  replayMode,
 }: AsteroidsGameProps = {}) {
+  if (replayMode === "latest") {
+    return (
+      <AsteroidsReplayPlayer
+        onBackToProfile={onReplayBackToProfile ?? onBackToMenu ?? (() => undefined)}
+      />
+    );
+  }
+
+  return (
+    <AsteroidsLiveGame
+      initialAsteroidCount={initialAsteroidCount}
+      initialBoardHeight={initialBoardHeight}
+      initialBoardWidth={initialBoardWidth}
+      onBackToMenu={onBackToMenu}
+    />
+  );
+}
+
+function AsteroidsLiveGame({
+  initialAsteroidCount,
+  initialBoardHeight,
+  initialBoardWidth,
+  onBackToMenu,
+}: Pick<
+  AsteroidsGameProps,
+  "initialAsteroidCount" | "initialBoardHeight" | "initialBoardWidth" | "onBackToMenu"
+> = {}) {
   const [controlState] = useState(() => createAsteroidsControlState());
   const [game, setGame] = useState<AsteroidsGameState>(() =>
     createInitialAsteroidsGame({
@@ -129,6 +224,12 @@ export function AsteroidsGame({
       boardWidth: initialBoardWidth,
     }),
   );
+  const [finishedReplay, setFinishedReplay] = useState<AsteroidsReplayPayload | null>(null);
+  const [isReplayRunPending, setIsReplayRunPending] = useState(false);
+  const [replaySaveStatus, setReplaySaveStatus] = useState<ReplaySaveStatus>("idle");
+  const gameRef = useRef(game);
+  const isReplayRunPendingRef = useRef(false);
+  const replayRecordingRef = useRef<AsteroidsReplayRecording | null>(null);
   const tickDelay = game.status === "running" ? getAsteroidsTickDelay() : null;
   const canPauseGame = game.status === "running" || game.status === "paused";
   const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
@@ -165,50 +266,231 @@ export function AsteroidsGame({
     testIdPrefix: "asteroids",
   });
 
-  const resetControls = useCallback(() => {
-    resetAsteroidsControlState(controlState);
-  }, [controlState]);
+  const commitGame = useCallback((nextGame: AsteroidsGameState) => {
+    gameRef.current = nextGame;
+    setGame(nextGame);
+  }, []);
 
-  const startGame = useCallback(() => {
-    resetControls();
-    resetLeaderboardForm();
-    setGame((current) => startAsteroidsGame(current));
-  }, [resetControls, resetLeaderboardForm]);
+  const updateCommittedGame = useCallback(
+    (updateGame: (current: AsteroidsGameState) => AsteroidsGameState) => {
+      const current = gameRef.current;
+      const nextGame = updateGame(current);
 
-  const toggleRunState = useCallback(() => {
-    resetControls();
-    resetLeaderboardForm();
-    setGame((current) => {
-      if (current.status === "running") {
-        return pauseAsteroidsGame(current);
+      if (nextGame !== current) {
+        commitGame(nextGame);
       }
 
-      return startAsteroidsGame(current);
-    });
-  }, [resetControls, resetLeaderboardForm]);
+      return nextGame;
+    },
+    [commitGame],
+  );
 
-  const restartGame = useCallback(() => {
+  const recordControlChange = useCallback(
+    (previousControls: AsteroidsReplayControls) => {
+      const recording = replayRecordingRef.current;
+
+      if (recording === null) {
+        return;
+      }
+
+      const nextControls = getCurrentAsteroidsReplayControls(controlState);
+
+      if (!areAsteroidsReplayControlsEqual(previousControls, nextControls)) {
+        appendAsteroidsReplayEvent(recording, {
+          controls: nextControls,
+          type: "control",
+        });
+      }
+    },
+    [controlState],
+  );
+
+  const resetControls = useCallback(
+    ({ record = false }: { record?: boolean } = {}) => {
+      const previousControls = getCurrentAsteroidsReplayControls(controlState);
+
+      resetAsteroidsControlState(controlState);
+
+      if (record) {
+        recordControlChange(previousControls);
+      }
+    },
+    [controlState, recordControlChange],
+  );
+
+  const startReplayRun = useCallback(async () => {
+    if (isReplayRunPendingRef.current) {
+      return;
+    }
+
+    isReplayRunPendingRef.current = true;
+    replayRecordingRef.current = null;
+    setIsReplayRunPending(true);
     resetControls();
     resetLeaderboardForm();
-    setGame((current) => restartAsteroidsGame(current));
-  }, [resetControls, resetLeaderboardForm]);
+    setFinishedReplay(null);
+    setReplaySaveStatus("idle");
+
+    try {
+      const run = await createAsteroidsReplayRun();
+      const random = createAsteroidsReplayRandom(run.seed);
+      const current = gameRef.current;
+      const recording: AsteroidsReplayRecording = {
+        events: [],
+        nextSeq: 0,
+        random,
+        run,
+        startedAt: new Date().toISOString(),
+        tick: 0,
+      };
+      const readyGame = createInitialAsteroidsGame({
+        asteroidCount: current.startingAsteroidCount,
+        boardHeight: current.boardHeight,
+        boardWidth: current.boardWidth,
+        random,
+      });
+
+      appendAsteroidsReplayEvent(recording, { type: "start" });
+      replayRecordingRef.current = recording;
+      commitGame(startAsteroidsGame(readyGame));
+    } catch {
+      setReplaySaveStatus("failed");
+    } finally {
+      isReplayRunPendingRef.current = false;
+      setIsReplayRunPending(false);
+    }
+  }, [commitGame, resetControls, resetLeaderboardForm]);
+
+  const startGame = useCallback(() => {
+    void startReplayRun();
+  }, [startReplayRun]);
+
+  const toggleRunState = useCallback(() => {
+    const current = gameRef.current;
+
+    resetLeaderboardForm();
+
+    if (current.status === "running") {
+      resetControls({ record: true });
+      updateCommittedGame((gameState) => pauseAsteroidsGame(gameState));
+      return;
+    }
+
+    if (current.status === "paused") {
+      resetControls();
+      updateCommittedGame((gameState) => startAsteroidsGame(gameState));
+      return;
+    }
+
+    startGame();
+  }, [resetControls, resetLeaderboardForm, startGame, updateCommittedGame]);
+
+  const restartGame = useCallback(() => {
+    if (isReplayRunPendingRef.current) {
+      return;
+    }
+
+    resetControls();
+    replayRecordingRef.current = null;
+    void startReplayRun();
+  }, [resetControls, startReplayRun]);
 
   const fireBullet = useCallback(() => {
-    setGame((current) => fireAsteroidsBullet(current));
-  }, []);
+    updateCommittedGame((current) => {
+      const nextGame = fireAsteroidsBullet(current);
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null && nextGame.bullets.length > current.bullets.length) {
+        appendAsteroidsReplayEvent(recording, { type: "fire" });
+      }
+
+      return nextGame;
+    });
+  }, [updateCommittedGame]);
 
   const advanceAsteroids = useCallback(() => {
-    setGame((current) => advanceAsteroidsGame(current, getAsteroidsControlInput(controlState)));
-  }, [controlState]);
+    updateCommittedGame((current) => {
+      const recording = replayRecordingRef.current;
+      const controls = getAsteroidsControlInput(controlState);
+
+      if (recording !== null && current.status === "running") {
+        appendAsteroidsReplayEvent(recording, { type: "advance" });
+
+        return advanceAsteroidsGame(current, controls, { random: recording.random });
+      }
+
+      return advanceAsteroidsGame(current, controls);
+    });
+  }, [controlState, updateCommittedGame]);
 
   const pauseGameForHelp = useCallback(() => {
-    resetControls();
-    setGame((current) => pauseAsteroidsGame(current));
-  }, [resetControls]);
+    resetControls({ record: true });
+    updateCommittedGame((current) => pauseAsteroidsGame(current));
+  }, [resetControls, updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
-    setGame((current) => startAsteroidsGame(current));
-  }, []);
+    updateCommittedGame((current) => startAsteroidsGame(current));
+  }, [updateCommittedGame]);
+
+  const saveFinishedReplay = useCallback(async () => {
+    if (finishedReplay === null || replaySaveStatus === "saving") {
+      return;
+    }
+
+    setReplaySaveStatus("saving");
+
+    try {
+      await saveAsteroidsReplay(finishedReplay);
+      setReplaySaveStatus("saved");
+    } catch {
+      setReplaySaveStatus("failed");
+    }
+  }, [finishedReplay, replaySaveStatus]);
+
+  useEffect(() => {
+    if (game.status !== "lost") {
+      return;
+    }
+
+    const recording = replayRecordingRef.current;
+
+    if (recording === null || finishedReplay !== null) {
+      return;
+    }
+
+    const replay: AsteroidsReplayPayload = {
+      boardHeight: game.boardHeight,
+      boardWidth: game.boardWidth,
+      events: [...recording.events],
+      finalAsteroidCount: game.asteroids.length,
+      finalLives: game.lives,
+      finalScore: game.score,
+      finalStatus: game.status,
+      finalTick: recording.tick,
+      finalWave: game.wave,
+      gameId: ASTEROIDS_REPLAY_GAME_ID,
+      leaderboardKey,
+      runId: recording.run.id,
+      schemaVersion: ASTEROIDS_REPLAY_SCHEMA_VERSION,
+      seed: recording.run.seed,
+      startedAt: recording.startedAt,
+      startingAsteroidCount: game.startingAsteroidCount,
+    };
+
+    replayRecordingRef.current = null;
+    setFinishedReplay(replay);
+  }, [
+    finishedReplay,
+    game.asteroids.length,
+    game.boardHeight,
+    game.boardWidth,
+    game.lives,
+    game.score,
+    game.startingAsteroidCount,
+    game.status,
+    game.wave,
+    leaderboardKey,
+  ]);
 
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({
     isGameActive: game.status === "running",
@@ -235,16 +517,31 @@ export function AsteroidsGame({
   }, [advanceAsteroids, tickDelay]);
 
   useEffect(() => {
-    if (isHelpVisible || pendingLeaderboardEntry !== null || game.status !== "running") {
+    if (
+      isHelpVisible ||
+      isReplayRunPending ||
+      pendingLeaderboardEntry !== null ||
+      game.status !== "running"
+    ) {
       resetControls();
     }
-  }, [game.status, isHelpVisible, pendingLeaderboardEntry, resetControls]);
+  }, [
+    game.status,
+    isHelpVisible,
+    isReplayRunPending,
+    pendingLeaderboardEntry,
+    resetControls,
+  ]);
 
   useEffect(() => {
-    window.addEventListener("blur", resetControls);
+    function handleBlur() {
+      resetControls({ record: gameRef.current.status === "running" });
+    }
+
+    window.addEventListener("blur", handleBlur);
 
     return () => {
-      window.removeEventListener("blur", resetControls);
+      window.removeEventListener("blur", handleBlur);
       resetControls();
     };
   }, [resetControls]);
@@ -260,7 +557,11 @@ export function AsteroidsGame({
         return;
       }
 
-      if (event.key === "Enter" && game.status !== "running" && game.status !== "paused") {
+      if (
+        event.key === "Enter" &&
+        game.status !== "running" &&
+        game.status !== "paused"
+      ) {
         event.preventDefault();
         startGame();
         return;
@@ -268,14 +569,18 @@ export function AsteroidsGame({
 
       if (isGamePauseKey(event.key)) {
         event.preventDefault();
-        toggleRunState();
+
+        if (!isReplayRunPendingRef.current) {
+          toggleRunState();
+        }
+
         return;
       }
 
       if (event.key === " ") {
         event.preventDefault();
 
-        if (game.status === "running") {
+        if (game.status === "running" && !isReplayRunPendingRef.current) {
           fireBullet();
         }
 
@@ -287,8 +592,11 @@ export function AsteroidsGame({
       if (controlKey !== null) {
         event.preventDefault();
 
-        if (game.status === "running") {
+        if (game.status === "running" && !isReplayRunPendingRef.current) {
+          const previousControls = getCurrentAsteroidsReplayControls(controlState);
+
           pressAsteroidsControlKey(controlState, controlKey);
+          recordControlChange(previousControls);
         }
       }
     }
@@ -300,8 +608,14 @@ export function AsteroidsGame({
         return;
       }
 
+      const previousControls = getCurrentAsteroidsReplayControls(controlState);
+
       if (releaseAsteroidsControlKey(controlState, controlKey)) {
         event.preventDefault();
+
+        if (gameRef.current.status === "running") {
+          recordControlChange(previousControls);
+        }
       }
     }
 
@@ -318,6 +632,7 @@ export function AsteroidsGame({
     game.status,
     isHelpVisible,
     pendingLeaderboardEntry,
+    recordControlChange,
     startGame,
     toggleRunState,
   ]);
@@ -373,12 +688,16 @@ export function AsteroidsGame({
               onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{
-                disabled: isHelpVisible || !canPauseGame,
+                disabled: isHelpVisible || isReplayRunPending || !canPauseGame,
                 isResume: game.status === "paused",
                 label: pauseActionLabel,
                 onClick: toggleRunState,
               }}
-              restartDisabled={game.status === "ready" || pendingLeaderboardEntry !== null}
+              restartDisabled={
+                isReplayRunPending ||
+                game.status === "ready" ||
+                pendingLeaderboardEntry !== null
+              }
               testIdPrefix="asteroids"
             />
           }
@@ -409,13 +728,14 @@ export function AsteroidsGame({
                 <Button
                   className="min-w-32"
                   data-testid="asteroids-start-button"
+                  disabled={isReplayRunPending}
                   onClick={startGame}
                   size="lg"
                   type="button"
                   variant="secondary"
                 >
                   <PlayIcon data-icon="inline-start" />
-                  Start
+                  {isReplayRunPending ? "Starting" : "Start"}
                 </Button>
                 <GameLeaderboardPanel {...leaderboardPanelProps} />
               </GameStartScreen>
@@ -426,6 +746,7 @@ export function AsteroidsGame({
                     <Button
                       className="min-w-36"
                       data-testid="asteroids-new-game-button"
+                      disabled={isReplayRunPending}
                       onClick={restartGame}
                       size="lg"
                       type="button"
@@ -445,6 +766,36 @@ export function AsteroidsGame({
                     title: "Game over",
                   }}
                 />
+                <div className="flex w-full max-w-xs flex-col items-center gap-2">
+                  <Button
+                    className="w-full"
+                    data-testid="asteroids-save-replay-button"
+                    disabled={
+                      finishedReplay === null ||
+                      replaySaveStatus === "saving" ||
+                      replaySaveStatus === "saved"
+                    }
+                    onClick={saveFinishedReplay}
+                    size="lg"
+                    type="button"
+                    variant="secondary"
+                  >
+                    <SaveIcon data-icon="inline-start" />
+                    {replaySaveStatus === "saving"
+                      ? "Saving replay"
+                      : replaySaveStatus === "saved"
+                        ? "Replay saved"
+                        : "Save replay"}
+                  </Button>
+                  {replaySaveStatus === "failed" ? (
+                    <p
+                      className="text-xs font-medium text-[#cbd5e1]"
+                      data-testid="asteroids-save-replay-error"
+                    >
+                      Could not save replay. Sign in and try again.
+                    </p>
+                  ) : null}
+                </div>
               </GameEndScreen>
             ) : showPauseScreen ? (
               <div

@@ -55,6 +55,17 @@ function createBullet(overrides: Partial<AsteroidsBullet> = {}): AsteroidsBullet
   };
 }
 
+function createLoopingRandom(values: number[]) {
+  let index = 0;
+
+  return () => {
+    const value = values[index % values.length]!;
+
+    index += 1;
+    return value;
+  };
+}
+
 describe("asteroids game engine", () => {
   it("creates a ready wave with a centered ship and large asteroids", () => {
     const game = createInitialAsteroidsGame();
@@ -102,6 +113,24 @@ describe("asteroids game engine", () => {
     expect(restarted.boardHeight).toBe(600);
     expect(restarted.startingAsteroidCount).toBe(8);
     expect(restarted.asteroids).toHaveLength(8);
+  });
+
+  it("uses optional injected randomness for deterministic recorded asteroid fields", () => {
+    const values = [0.92, 0.18, 0.73, 0.41, 0.06, 0.57, 0.34, 0.81, 0.25, 0.68];
+    const firstRecorded = createInitialAsteroidsGame({
+      random: createLoopingRandom(values),
+    });
+    const secondRecorded = createInitialAsteroidsGame({
+      random: createLoopingRandom(values),
+    });
+    const defaultGame = createInitialAsteroidsGame();
+
+    expect(firstRecorded.asteroids).toEqual(secondRecorded.asteroids);
+    expect(firstRecorded.asteroids[0]?.velocity).not.toEqual(
+      defaultGame.asteroids[0]?.velocity,
+    );
+    expect(defaultGame.asteroids[0]?.velocity.x).toBeCloseTo(0.872);
+    expect(defaultGame.asteroids[0]?.velocity.y).toBeCloseTo(-0.12);
   });
 
   it("starts, pauses, and resumes without replacing active asteroids", () => {
@@ -221,6 +250,10 @@ describe("asteroids game engine", () => {
     expect(
       Math.hypot(advanced.asteroids[0]!.velocity.x, advanced.asteroids[0]!.velocity.y),
     ).toBeCloseTo(1.24);
+    expect(advanced.asteroids[0]!.velocity.x).toBeCloseTo(Math.cos(1.1) * 1.24);
+    expect(advanced.asteroids[0]!.velocity.y).toBeCloseTo(Math.sin(-1.1) * 1.24);
+    expect(advanced.asteroids[1]!.velocity.x).toBeCloseTo(Math.cos(1.1) * 1.24);
+    expect(advanced.asteroids[1]!.velocity.y).toBeCloseTo(Math.sin(1.1) * 1.24);
     expect(advanced.nextAsteroidId).toBe(12);
   });
 
