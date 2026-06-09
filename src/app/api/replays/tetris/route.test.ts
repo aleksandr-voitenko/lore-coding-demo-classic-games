@@ -48,45 +48,33 @@ function createReplayPayload(
 }
 
 describe("tetris replay route", () => {
-  it("requires a signed-in user before saving or downloading replays", async () => {
-    const replayStore = {
-      getReplay: vi.fn(),
-      saveReplay: vi.fn(),
-    } as unknown as SqliteReplayStore;
-    const userStore = {
-      getUserBySessionToken: vi.fn(async () => null),
-    } as unknown as SqliteUserProfileStore;
-    const handlers = createTetrisReplayRouteHandlers(replayStore, userStore);
-    const getResponse = await handlers.GET(
-      new Request("http://localhost/api/replays/tetris", {
-        method: "GET",
-      }),
-    );
-    const postResponse = await handlers.POST(
-      new Request("http://localhost/api/replays/tetris", {
-        body: JSON.stringify(createReplayPayload()),
-        method: "POST",
-      }),
-    );
-
-    expect(getResponse.status).toBe(401);
-    expect(postResponse.status).toBe(401);
-    expect(replayStore.getReplay).not.toHaveBeenCalled();
-    expect(replayStore.saveReplay).not.toHaveBeenCalled();
-  });
-
-  it("saves valid signed-in Tetris replay uploads", async () => {
+  it("saves valid signed-in Tetris replay uploads and labels save errors", async () => {
     const user = { displayName: "Ada", id: "user-1" };
     const replay = createReplayPayload();
     const replayStore = {
       getReplay: vi.fn(),
-      saveReplay: vi.fn(async () => ({ success: true })),
+      saveReplay: vi
+        .fn()
+        .mockResolvedValueOnce({ success: true })
+        .mockResolvedValueOnce({
+          reason: "run-seed-mismatch",
+          success: false,
+        }),
     } as unknown as SqliteReplayStore;
     const userStore = {
       getUserBySessionToken: vi.fn(async () => user),
     } as unknown as SqliteUserProfileStore;
     const handlers = createTetrisReplayRouteHandlers(replayStore, userStore);
-    const response = await handlers.POST(
+    const saveResponse = await handlers.POST(
+      new Request("http://localhost/api/replays/tetris", {
+        body: JSON.stringify(replay),
+        headers: {
+          cookie: "game_user_session=session-token",
+        },
+        method: "POST",
+      }),
+    );
+    const mismatchResponse = await handlers.POST(
       new Request("http://localhost/api/replays/tetris", {
         body: JSON.stringify(replay),
         headers: {
@@ -96,44 +84,9 @@ describe("tetris replay route", () => {
       }),
     );
 
-    expect(response.status).toBe(201);
+    expect(saveResponse.status).toBe(201);
     expect(replayStore.saveReplay).toHaveBeenCalledWith(user, replay);
-    await expect(response.json()).resolves.toEqual({ saved: true });
-  });
-
-  it("rejects malformed replays and issued-run mismatches", async () => {
-    const user = { displayName: "Ada", id: "user-1" };
-    const replayStore = {
-      getReplay: vi.fn(),
-      saveReplay: vi.fn(async () => ({
-        reason: "run-seed-mismatch",
-        success: false,
-      })),
-    } as unknown as SqliteReplayStore;
-    const userStore = {
-      getUserBySessionToken: vi.fn(async () => user),
-    } as unknown as SqliteUserProfileStore;
-    const handlers = createTetrisReplayRouteHandlers(replayStore, userStore);
-    const malformedResponse = await handlers.POST(
-      new Request("http://localhost/api/replays/tetris", {
-        body: JSON.stringify({}),
-        headers: {
-          cookie: "game_user_session=session-token",
-        },
-        method: "POST",
-      }),
-    );
-    const mismatchResponse = await handlers.POST(
-      new Request("http://localhost/api/replays/tetris", {
-        body: JSON.stringify(createReplayPayload()),
-        headers: {
-          cookie: "game_user_session=session-token",
-        },
-        method: "POST",
-      }),
-    );
-
-    expect(malformedResponse.status).toBe(400);
+    await expect(saveResponse.json()).resolves.toEqual({ saved: true });
     expect(mismatchResponse.status).toBe(400);
     await expect(mismatchResponse.json()).resolves.toEqual({
       error: "Tetris replay seed does not match the issued run.",

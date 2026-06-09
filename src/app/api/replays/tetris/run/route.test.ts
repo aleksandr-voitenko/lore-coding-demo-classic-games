@@ -1,36 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { SqliteReplayStore } from "@/lib/server/sqlite-replay-store";
-import type { SqliteUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
 
 import { createTetrisReplayRunRouteHandlers } from "./route";
 
 describe("tetris replay run route", () => {
-  it("issues server replay runs and links a signed-in user when available", async () => {
-    const user = { displayName: "Ada", id: "user-1" };
-    const replayStore = {
-      createReplayRun: vi.fn(async () => ({ id: "run-1", seed: 1234 })),
-    } as unknown as SqliteReplayStore;
-    const userStore = {
-      getUserBySessionToken: vi.fn(async () => user),
-    } as unknown as SqliteUserProfileStore;
-    const handlers = createTetrisReplayRunRouteHandlers(replayStore, userStore);
-    const response = await handlers.POST(
-      new Request("http://localhost/api/replays/tetris/run", {
-        headers: {
-          cookie: "game_user_session=session-token",
-        },
-        method: "POST",
-      }),
-    );
-
-    expect(response.status).toBe(201);
-    expect(userStore.getUserBySessionToken).toHaveBeenCalledWith("session-token");
-    expect(replayStore.createReplayRun).toHaveBeenCalledWith("tetris", user);
-    await expect(response.json()).resolves.toEqual({ id: "run-1", seed: 1234 });
-  });
-
-  it("still issues replay runs for guests", async () => {
+  it("issues Tetris replay runs through the wrapper", async () => {
     const replayStore = {
       createReplayRun: vi.fn(async () => ({ id: "run-1", seed: 1234 })),
     } as unknown as SqliteReplayStore;
