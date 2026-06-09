@@ -112,6 +112,42 @@ function getSimonReplayEventDelay(event: SimonReplayEvent | undefined) {
   }
 }
 
+export function SimonReplayTurnFeedback({
+  game,
+}: {
+  game: Pick<SimonGameState, "activePad" | "status">;
+}) {
+  if (game.status === "correct" && game.activePad === null) {
+    return (
+      <div
+        className="pointer-events-none absolute inset-3 flex items-center justify-center rounded-[0.375rem] text-center text-[#172033]"
+        data-testid="simon-replay-correct-feedback"
+        role="status"
+      >
+        <p className="simon-turn-feedback rounded-md border border-[#172033]/10 bg-[#f8fbff]/88 px-5 py-3 text-3xl font-black tracking-normal shadow-[0_18px_46px_rgba(15,23,42,0.22)] backdrop-blur-[2px] sm:text-4xl">
+          CORRECT!
+        </p>
+      </div>
+    );
+  }
+
+  if (game.status === "missed" && game.activePad === null) {
+    return (
+      <div
+        className="pointer-events-none absolute inset-3 flex items-center justify-center rounded-[0.375rem] text-center text-[#172033]"
+        data-testid="simon-replay-miss-feedback"
+        role="status"
+      >
+        <p className="simon-turn-feedback rounded-md border border-[#8a2431]/20 bg-[#fff5f6]/90 px-5 py-3 text-3xl font-black tracking-normal text-[#8a2431] shadow-[0_18px_46px_rgba(138,36,49,0.24)] backdrop-blur-[2px] sm:text-4xl">
+          MISS!
+        </p>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 function SimonReplayMessage({
   message,
   onBackToProfile,
@@ -308,6 +344,7 @@ export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
             onPadPress={ignorePadPress}
             statusLabel={statusLabel}
           >
+            <SimonReplayTurnFeedback game={game} />
             {isFinished ? (
               <GameEndScreen
                 className="gap-3 px-3 py-4"
