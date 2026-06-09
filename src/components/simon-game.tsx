@@ -1,6 +1,6 @@
 "use client";
 
-import { PlayIcon, RotateCcwIcon, SaveIcon } from "lucide-react";
+import { PlayIcon, RotateCcwIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -17,6 +17,7 @@ import {
   GameEndScreen,
   GameHeader,
   GameHelpScreen,
+  GameReplaySaveAction,
   GameShell,
   GameSidebar,
   GameStartScreen,
@@ -26,6 +27,7 @@ import {
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
+  type ReplaySaveStatus,
 } from "@/components/game-layout";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
@@ -70,8 +72,6 @@ type SimonGameProps = {
   onReplayBackToProfile?: () => void;
   replayMode?: "latest";
 };
-
-type ReplaySaveStatus = "failed" | "idle" | "saved" | "saving";
 
 type SimonReplayRecording = {
   events: SimonReplayEvent[];
@@ -745,36 +745,13 @@ function SimonLiveGame({
                   title: game.status === "won" ? "Sequence cleared" : "Game over",
                 }}
               />
-              <div className="flex w-full max-w-xs flex-col items-center gap-2">
-                <Button
-                  className="w-full"
-                  data-testid="simon-save-replay-button"
-                  disabled={
-                    finishedReplay === null ||
-                    replaySaveStatus === "saving" ||
-                    replaySaveStatus === "saved"
-                  }
-                  onClick={saveFinishedReplay}
-                  size="lg"
-                  type="button"
-                  variant="secondary"
-                >
-                  <SaveIcon data-icon="inline-start" />
-                  {replaySaveStatus === "saving"
-                    ? "Saving replay"
-                    : replaySaveStatus === "saved"
-                      ? "Replay saved"
-                      : "Save replay"}
-                </Button>
-                {replaySaveStatus === "failed" ? (
-                  <p
-                    className="text-xs font-medium text-[#59687d]"
-                    data-testid="simon-save-replay-error"
-                  >
-                    Could not save replay. Sign in and try again.
-                  </p>
-                ) : null}
-              </div>
+              <GameReplaySaveAction
+                errorClassName="text-[#59687d]"
+                onSave={saveFinishedReplay}
+                replayReady={finishedReplay !== null}
+                status={replaySaveStatus}
+                testIdPrefix="simon"
+              />
             </GameEndScreen>
           ) : showPauseScreen ? (
             <div

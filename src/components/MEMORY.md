@@ -85,6 +85,10 @@ This file covers React component ownership and shared game UI conventions under
 - Live replay recordings are one-shot per run. Terminal replay payload capture
   should consume the active recording, and starting a new run should abandon any
   unsaved replay state so stale events cannot be saved later.
+- Use `GameReplaySaveAction` for replay-enabled terminal Save replay footers.
+  Keep finished replay payload creation and save handlers local to each game,
+  and pass a game-specific `testIdPrefix` so existing replay save button and
+  error test IDs stay stable.
 - Use `GameEndScreen` for terminal won/lost overlays. Use
   `GameEndLeaderboardContent` when a terminal overlay needs the shared pending
   leaderboard branch; pass per-game summary text, leaderboard props, score-form

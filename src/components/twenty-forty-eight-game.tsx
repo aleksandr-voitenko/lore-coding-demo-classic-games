@@ -7,7 +7,6 @@ import {
   ArrowUpIcon,
   PlayIcon,
   RotateCcwIcon,
-  SaveIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -21,6 +20,7 @@ import {
   GameEndScreen,
   GameHeader,
   GameHelpScreen,
+  GameReplaySaveAction,
   GameShell,
   GameSidebar,
   GameStartScreen,
@@ -30,6 +30,7 @@ import {
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
+  type ReplaySaveStatus,
 } from "@/components/game-layout";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
@@ -67,8 +68,6 @@ type TwentyFortyEightGameProps = {
   onReplayBackToProfile?: () => void;
   replayMode?: "latest";
 };
-
-type ReplaySaveStatus = "failed" | "idle" | "saved" | "saving";
 
 type TwentyFortyEightReplayRecording = {
   events: TwentyFortyEightReplayEvent[];
@@ -588,36 +587,12 @@ function TwentyFortyEightLiveGame({
                   title: game.status === "won" ? `${game.winTile} reached` : "No moves left",
                 }}
               />
-              <div className="flex w-full max-w-xs flex-col items-center gap-2">
-                <Button
-                  className="w-full"
-                  data-testid="twenty-forty-eight-save-replay-button"
-                  disabled={
-                    finishedReplay === null ||
-                    replaySaveStatus === "saving" ||
-                    replaySaveStatus === "saved"
-                  }
-                  onClick={saveFinishedReplay}
-                  size="lg"
-                  type="button"
-                  variant="secondary"
-                >
-                  <SaveIcon data-icon="inline-start" />
-                  {replaySaveStatus === "saving"
-                    ? "Saving replay"
-                    : replaySaveStatus === "saved"
-                      ? "Replay saved"
-                      : "Save replay"}
-                </Button>
-                {replaySaveStatus === "failed" ? (
-                  <p
-                    className="text-xs font-medium text-[#cbd5e1]"
-                    data-testid="twenty-forty-eight-save-replay-error"
-                  >
-                    Could not save replay. Sign in and try again.
-                  </p>
-                ) : null}
-              </div>
+              <GameReplaySaveAction
+                onSave={saveFinishedReplay}
+                replayReady={finishedReplay !== null}
+                status={replaySaveStatus}
+                testIdPrefix="twenty-forty-eight"
+              />
             </GameEndScreen>
           ) : null}
           {isHelpVisible ? (

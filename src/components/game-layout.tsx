@@ -8,6 +8,10 @@ export {
   GameEndSummary,
 } from "@/components/game-end-screen";
 export {
+  GameReplaySaveAction,
+  type ReplaySaveStatus,
+} from "@/components/game-replay-save-action";
+export {
   GameStartScreen,
   GameStartScreenHeader,
 } from "@/components/game-start-screen";

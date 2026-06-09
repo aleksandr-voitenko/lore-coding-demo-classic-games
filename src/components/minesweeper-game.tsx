@@ -1,6 +1,6 @@
 "use client";
 
-import { PlayIcon, RotateCcwIcon, SaveIcon } from "lucide-react";
+import { PlayIcon, RotateCcwIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { registerGameKeyDown, shouldIgnoreGameKeyDown } from "@/components/game-input";
@@ -13,6 +13,7 @@ import {
   GameEndScreen,
   GameHeader,
   GameHelpScreen,
+  GameReplaySaveAction,
   GameShell,
   GameSidebar,
   GameStartScreen,
@@ -22,6 +23,7 @@ import {
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
+  type ReplaySaveStatus,
 } from "@/components/game-layout";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { MinesweeperBoard, MinesweeperStartPreview } from "@/components/minesweeper-board";
@@ -60,8 +62,6 @@ type MinesweeperGameProps = {
   onReplayBackToProfile?: () => void;
   replayMode?: "latest";
 };
-
-type ReplaySaveStatus = "failed" | "idle" | "saved" | "saving";
 
 type MinesweeperReplayRecording = {
   events: MinesweeperReplayEvent[];
@@ -644,36 +644,12 @@ function MinesweeperLiveGame({
                     title: game.status === "won" ? "Board cleared" : "Game over",
                   }}
                 />
-                <div className="flex w-full max-w-xs flex-col items-center gap-2">
-                  <Button
-                    className="w-full"
-                    data-testid="minesweeper-save-replay-button"
-                    disabled={
-                      finishedReplay === null ||
-                      replaySaveStatus === "saving" ||
-                      replaySaveStatus === "saved"
-                    }
-                    onClick={saveFinishedReplay}
-                    size="lg"
-                    type="button"
-                    variant="secondary"
-                  >
-                    <SaveIcon data-icon="inline-start" />
-                    {replaySaveStatus === "saving"
-                      ? "Saving replay"
-                      : replaySaveStatus === "saved"
-                        ? "Replay saved"
-                        : "Save replay"}
-                  </Button>
-                  {replaySaveStatus === "failed" ? (
-                    <p
-                      className="text-xs font-medium text-[#cbd5e1]"
-                      data-testid="minesweeper-save-replay-error"
-                    >
-                      Could not save replay. Sign in and try again.
-                    </p>
-                  ) : null}
-                </div>
+                <GameReplaySaveAction
+                  onSave={saveFinishedReplay}
+                  replayReady={finishedReplay !== null}
+                  status={replaySaveStatus}
+                  testIdPrefix="minesweeper"
+                />
               </GameEndScreen>
             ) : null}
             {isHelpVisible ? (
