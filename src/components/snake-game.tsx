@@ -36,6 +36,13 @@ import {
   type GameHelpSection,
   type ReplaySaveStatus,
 } from "@/components/game-layout";
+import {
+  createGameReplayRecordingClock,
+  getGameReplayRecordingElapsedMs,
+  pauseGameReplayRecordingClock,
+  resumeGameReplayRecordingClock,
+  type GameReplayClockedRecording,
+} from "@/components/game-replay-timing";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import {
   isGamePauseKey,
@@ -90,7 +97,7 @@ type SnakeGameProps = {
   replayMode?: "latest";
 };
 
-type SnakeReplayRecording = {
+type SnakeReplayRecording = GameReplayClockedRecording & {
   events: SnakeReplayEvent[];
   nextSeq: number;
   random: () => number;
@@ -239,9 +246,10 @@ function appendSnakeReplayEvent(
 ) {
   recording.events.push({
     ...event,
+    elapsedMs: getGameReplayRecordingElapsedMs(recording),
     seq: recording.nextSeq,
     tick: recording.tick,
-  } as SnakeReplayEvent);
+  } as unknown as SnakeReplayEvent);
   recording.nextSeq += 1;
 
   if (event.type === "advance") {
@@ -430,6 +438,7 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
       const run = await createSnakeReplayRun();
       const random = createSnakeReplayRandom(run.seed);
       const recording: SnakeReplayRecording = {
+        clock: createGameReplayRecordingClock(),
         events: [],
         nextSeq: 0,
         random,
@@ -473,11 +482,13 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
     const current = gameRef.current;
 
     if (current.status === "running") {
+      pauseGameReplayRecordingClock(replayRecordingRef.current);
       commitGame({ ...current, status: "paused" });
       return;
     }
 
     if (current.status === "paused") {
+      resumeGameReplayRecordingClock(replayRecordingRef.current);
       commitGame({ ...current, status: "running" });
       return;
     }
@@ -534,12 +545,14 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
   }, [finishedReplay, game.level, game.score, game.status, leaderboardKey]);
 
   const pauseGameForHelp = useCallback(() => {
+    pauseGameReplayRecordingClock(replayRecordingRef.current);
     updateCommittedGame((current) =>
       current.status === "running" ? { ...current, status: "paused" } : current,
     );
   }, [updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
+    resumeGameReplayRecordingClock(replayRecordingRef.current);
     updateCommittedGame((current) =>
       current.status === "paused" ? { ...current, status: "running" } : current,
     );

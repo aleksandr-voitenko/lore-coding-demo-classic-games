@@ -16,10 +16,16 @@ import {
   GameStatCard,
   useGameEscapeToMenu,
 } from "@/components/game-layout";
+import {
+  getReplayEventElapsedMs,
+  getReplayPlaybackDelayMs,
+  isFutureReplayEventFrame,
+  type GameReplayTimedPlayback,
+} from "@/components/game-replay-playback";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { PongBoard } from "@/components/pong-board";
 import { Button } from "@/components/ui/button";
-import { getPongTickDelay, type PongGameState } from "@/lib/pong-game-engine";
+import { type PongGameState } from "@/lib/pong-game-engine";
 import {
   applyPongReplayEvent,
   createDefaultPongReplayLeaderboardKey,
@@ -33,7 +39,7 @@ type PongReplayPlayerProps = {
   onBackToProfile: () => void;
 };
 
-type PlaybackState = {
+type PlaybackState = GameReplayTimedPlayback & {
   eventIndex: number;
   events: PongReplayEvent[];
 };
@@ -76,6 +82,7 @@ export function PongReplayPlayer({ onBackToProfile }: PongReplayPlayerProps) {
   const [game, setGame] = useState<PongGameState | null>(null);
   const [isFinished, setIsFinished] = useState(false);
   const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">("loading");
+  const [playbackStep, setPlaybackStep] = useState(0);
   const [replay, setReplay] = useState<PongReplayPayload | null>(null);
   const gameRef = useRef<PongGameState | null>(null);
   const playbackRef = useRef<PlaybackState | null>(null);
@@ -105,6 +112,7 @@ export function PongReplayPlayer({ onBackToProfile }: PongReplayPlayerProps) {
         playbackRef.current = {
           eventIndex: 0,
           events: latestReplay.events,
+          lastElapsedMs: 0,
         };
         setGame(initialReplay.game);
         setIsFinished(false);
@@ -131,18 +139,30 @@ export function PongReplayPlayer({ onBackToProfile }: PongReplayPlayerProps) {
     }
 
     let nextGame = currentGame;
+    let lastElapsedMs: number | null = null;
     let processedFrame = false;
+    const frameElapsedMs = getReplayEventElapsedMs(
+      playback.events[playback.eventIndex],
+    );
+    const isTimedFrame = frameElapsedMs !== null;
 
-    while (playback.eventIndex < playback.events.length && !processedFrame) {
+    while (playback.eventIndex < playback.events.length && (isTimedFrame || !processedFrame)) {
       const event = playback.events[playback.eventIndex]!;
+
+      if (isFutureReplayEventFrame(frameElapsedMs, event)) {
+        break;
+      }
 
       playback.eventIndex += 1;
       nextGame = applyPongReplayEvent(nextGame, event);
-      processedFrame = isReplayFrameBoundary(event);
+      lastElapsedMs = getReplayEventElapsedMs(event) ?? lastElapsedMs;
+      processedFrame = isTimedFrame ? false : isReplayFrameBoundary(event);
     }
 
+    playback.lastElapsedMs = lastElapsedMs ?? playback.lastElapsedMs;
     gameRef.current = nextGame;
     setGame(nextGame);
+    setPlaybackStep((current) => current + 1);
 
     if (
       playback.eventIndex >= playback.events.length ||
@@ -158,10 +178,23 @@ export function PongReplayPlayer({ onBackToProfile }: PongReplayPlayerProps) {
       return;
     }
 
-    const timeout = window.setTimeout(advanceReplayFrame, getPongTickDelay());
+    const playback = playbackRef.current;
+    const nextEvent = playback?.events[playback.eventIndex];
+
+    if (playback === null || nextEvent === undefined) {
+      return;
+    }
+
+    const timeout = window.setTimeout(
+      advanceReplayFrame,
+      getReplayPlaybackDelayMs({
+        event: nextEvent,
+        playback,
+      }),
+    );
 
     return () => window.clearTimeout(timeout);
-  }, [advanceReplayFrame, game, isFinished, loadStatus]);
+  }, [advanceReplayFrame, isFinished, loadStatus, playbackStep]);
 
   if (loadStatus === "loading") {
     return (

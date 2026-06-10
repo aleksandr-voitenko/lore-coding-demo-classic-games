@@ -25,6 +25,7 @@ import {
   parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
+  type GameReplayEventEnvelope,
   type GameReplayRun,
   type ParseGameReplayPayloadResult,
 } from "@/lib/game-replay";
@@ -34,29 +35,19 @@ export type AsteroidsReplayRun = GameReplayRun;
 
 export type AsteroidsReplayControls = Required<AsteroidsControlInput>;
 
-export type AsteroidsReplayStartEvent = {
-  seq: number;
-  tick: number;
-  type: "start";
-};
+type AsteroidsReplayEventInputFor<Event> = Omit<
+  Event,
+  "elapsedMs" | "seq" | "tick"
+>;
 
-export type AsteroidsReplayAdvanceEvent = {
-  seq: number;
-  tick: number;
-  type: "advance";
-};
+export type AsteroidsReplayStartEvent = GameReplayEventEnvelope<"start">;
 
-export type AsteroidsReplayFireEvent = {
-  seq: number;
-  tick: number;
-  type: "fire";
-};
+export type AsteroidsReplayAdvanceEvent = GameReplayEventEnvelope<"advance">;
 
-export type AsteroidsReplayControlEvent = {
+export type AsteroidsReplayFireEvent = GameReplayEventEnvelope<"fire">;
+
+export type AsteroidsReplayControlEvent = GameReplayEventEnvelope<"control"> & {
   controls: AsteroidsReplayControls;
-  seq: number;
-  tick: number;
-  type: "control";
 };
 
 export type AsteroidsReplayEvent =
@@ -66,10 +57,10 @@ export type AsteroidsReplayEvent =
   | AsteroidsReplayStartEvent;
 
 export type AsteroidsReplayEventInput =
-  | Omit<AsteroidsReplayAdvanceEvent, "seq" | "tick">
-  | Omit<AsteroidsReplayControlEvent, "seq" | "tick">
-  | Omit<AsteroidsReplayFireEvent, "seq" | "tick">
-  | Omit<AsteroidsReplayStartEvent, "seq" | "tick">;
+  | AsteroidsReplayEventInputFor<AsteroidsReplayAdvanceEvent>
+  | AsteroidsReplayEventInputFor<AsteroidsReplayControlEvent>
+  | AsteroidsReplayEventInputFor<AsteroidsReplayFireEvent>
+  | AsteroidsReplayEventInputFor<AsteroidsReplayStartEvent>;
 
 export type AsteroidsReplayPayload = BaseGameReplayPayload<
   typeof ASTEROIDS_REPLAY_GAME_ID,

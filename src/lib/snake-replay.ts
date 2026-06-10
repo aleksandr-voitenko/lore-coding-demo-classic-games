@@ -23,45 +23,33 @@ import {
   parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
+  type GameReplayEventEnvelope,
   type GameReplayRun,
   type ParseGameReplayPayloadResult,
 } from "@/lib/game-replay";
 
 export type SnakeReplayRun = GameReplayRun;
 
-export type SnakeReplayStartEvent = {
-  seq: number;
-  tick: number;
-  type: "start";
-};
+type SnakeReplayEventInputFor<Event> = Omit<Event, "elapsedMs" | "seq" | "tick">;
 
-export type SnakeReplayDirectionEvent = {
+export type SnakeReplayStartEvent = GameReplayEventEnvelope<"start">;
+
+export type SnakeReplayDirectionEvent = GameReplayEventEnvelope<"direction"> & {
   direction: Direction;
-  seq: number;
-  tick: number;
-  type: "direction";
 };
 
-export type SnakeReplayAdvanceEvent = {
-  seq: number;
-  tick: number;
-  type: "advance";
-};
+export type SnakeReplayAdvanceEvent = GameReplayEventEnvelope<"advance">;
 
-export type SnakeReplaySpawnTimedFoodEvent = {
+export type SnakeReplaySpawnTimedFoodEvent =
+  GameReplayEventEnvelope<"spawnTimedFood"> & {
   kind: TimedFoodKind;
   nowMs: number;
-  seq: number;
-  tick: number;
-  type: "spawnTimedFood";
 };
 
-export type SnakeReplayExpireTimedFoodEvent = {
+export type SnakeReplayExpireTimedFoodEvent =
+  GameReplayEventEnvelope<"expireTimedFood"> & {
   expiresAt: number;
   kind: TimedFoodKind;
-  seq: number;
-  tick: number;
-  type: "expireTimedFood";
 };
 
 export type SnakeReplayEvent =
@@ -72,11 +60,11 @@ export type SnakeReplayEvent =
   | SnakeReplayStartEvent;
 
 export type SnakeReplayEventInput =
-  | Omit<SnakeReplayAdvanceEvent, "seq" | "tick">
-  | Omit<SnakeReplayDirectionEvent, "seq" | "tick">
-  | Omit<SnakeReplayExpireTimedFoodEvent, "seq" | "tick">
-  | Omit<SnakeReplaySpawnTimedFoodEvent, "seq" | "tick">
-  | Omit<SnakeReplayStartEvent, "seq" | "tick">;
+  | SnakeReplayEventInputFor<SnakeReplayAdvanceEvent>
+  | SnakeReplayEventInputFor<SnakeReplayDirectionEvent>
+  | SnakeReplayEventInputFor<SnakeReplayExpireTimedFoodEvent>
+  | SnakeReplayEventInputFor<SnakeReplaySpawnTimedFoodEvent>
+  | SnakeReplayEventInputFor<SnakeReplayStartEvent>;
 
 export type SnakeReplayPayload = BaseGameReplayPayload<
   typeof SNAKE_REPLAY_GAME_ID,

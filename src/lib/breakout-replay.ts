@@ -25,6 +25,7 @@ import {
   parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
+  type GameReplayEventEnvelope,
   type GameReplayRun,
   type ParseGameReplayPayloadResult,
 } from "@/lib/game-replay";
@@ -32,29 +33,13 @@ import { createGameLeaderboardKey } from "@/lib/leaderboard";
 
 export type BreakoutReplayRun = GameReplayRun;
 
-export type BreakoutReplayStartEvent = {
-  seq: number;
-  tick: number;
-  type: "start";
-};
+export type BreakoutReplayStartEvent = GameReplayEventEnvelope<"start">;
 
-export type BreakoutReplayAdvanceEvent = {
-  seq: number;
-  tick: number;
-  type: "advance";
-};
+export type BreakoutReplayAdvanceEvent = GameReplayEventEnvelope<"advance">;
 
-export type BreakoutReplayMoveLeftEvent = {
-  seq: number;
-  tick: number;
-  type: "moveLeft";
-};
+export type BreakoutReplayMoveLeftEvent = GameReplayEventEnvelope<"moveLeft">;
 
-export type BreakoutReplayMoveRightEvent = {
-  seq: number;
-  tick: number;
-  type: "moveRight";
-};
+export type BreakoutReplayMoveRightEvent = GameReplayEventEnvelope<"moveRight">;
 
 export type BreakoutReplayEvent =
   | BreakoutReplayAdvanceEvent
@@ -62,7 +47,10 @@ export type BreakoutReplayEvent =
   | BreakoutReplayMoveRightEvent
   | BreakoutReplayStartEvent;
 
-export type BreakoutReplayEventInput = Omit<BreakoutReplayEvent, "seq" | "tick">;
+export type BreakoutReplayEventInput = Omit<
+  BreakoutReplayEvent,
+  "elapsedMs" | "seq" | "tick"
+>;
 
 export type BreakoutReplayPayload = BaseGameReplayPayload<
   typeof BREAKOUT_REPLAY_GAME_ID,

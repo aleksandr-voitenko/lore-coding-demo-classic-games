@@ -11,13 +11,22 @@ import {
   type MinesweeperReplayEvent,
 } from "@/lib/minesweeper-replay";
 
+function withReplayElapsed<Event extends Record<string, unknown> & { tick: number }>(
+  events: Event[],
+) {
+  return events.map((event, index) => ({
+    ...event,
+    elapsedMs: event.tick * 1_000 + index,
+  })) as unknown as MinesweeperReplayEvent[];
+}
+
 describe("advanceMinesweeperReplayFrame", () => {
-  it("skips no-op replay events until the next visible board change", () => {
+  it("advances timed no-op replay actions without waiting for a visible change", () => {
     const flaggedGame = toggleMinesweeperFlag(
       createInitialMinesweeperGame(),
       getMinesweeperCellId(0, 0),
     );
-    const events: MinesweeperReplayEvent[] = [
+    const events: MinesweeperReplayEvent[] = withReplayElapsed([
       {
         cellId: getMinesweeperCellId(0, 0),
         seq: 0,
@@ -36,7 +45,7 @@ describe("advanceMinesweeperReplayFrame", () => {
         tick: 3,
         type: "reveal",
       },
-    ];
+    ]);
 
     const frame = advanceMinesweeperReplayFrame({
       eventIndex: 0,
@@ -45,24 +54,25 @@ describe("advanceMinesweeperReplayFrame", () => {
       random: () => 0,
     });
 
-    expect(frame.eventIndex).toBe(2);
-    expect(frame.game.flagCount).toBe(0);
+    expect(frame.eventIndex).toBe(1);
+    expect(frame.game).toBe(flaggedGame);
     expect(frame.isFinished).toBe(false);
+    expect(frame.lastElapsedMs).toBe(1_000);
   });
 
-  it("finishes playback when only no-op replay events remain", () => {
+  it("finishes timed playback when only no-op replay events remain", () => {
     const flaggedGame = toggleMinesweeperFlag(
       createInitialMinesweeperGame(),
       getMinesweeperCellId(0, 0),
     );
-    const events: MinesweeperReplayEvent[] = [
+    const events: MinesweeperReplayEvent[] = withReplayElapsed([
       {
         cellId: getMinesweeperCellId(0, 0),
         seq: 0,
         tick: 1,
         type: "reveal",
       },
-    ];
+    ]);
 
     const frame = advanceMinesweeperReplayFrame({
       eventIndex: 0,
@@ -74,10 +84,11 @@ describe("advanceMinesweeperReplayFrame", () => {
     expect(frame.eventIndex).toBe(1);
     expect(frame.game).toBe(flaggedGame);
     expect(frame.isFinished).toBe(true);
+    expect(frame.lastElapsedMs).toBe(1_000);
   });
 
   it("plays a duplicate-reveal terminal win through to completion", () => {
-    const events: MinesweeperReplayEvent[] = [
+    const events: MinesweeperReplayEvent[] = withReplayElapsed([
       { seq: 0, tick: 0, type: "start" },
       { cellId: "4:4", seq: 1, tick: 0, type: "reveal" },
       { cellId: "6:2", seq: 2, tick: 1, type: "toggleFlag" },
@@ -106,7 +117,7 @@ describe("advanceMinesweeperReplayFrame", () => {
       { cellId: "0:6", seq: 25, tick: 29, type: "reveal" },
       { cellId: "2:6", seq: 26, tick: 30, type: "reveal" },
       { cellId: "2:7", seq: 27, tick: 31, type: "reveal" },
-    ];
+    ]);
     const initialReplay = createInitialMinesweeperReplayGame({
       boardHeight: 9,
       boardWidth: 9,

@@ -32,6 +32,13 @@ import {
   type GameHelpSection,
   type ReplaySaveStatus,
 } from "@/components/game-layout";
+import {
+  createGameReplayRecordingClock,
+  getGameReplayRecordingElapsedMs,
+  pauseGameReplayRecordingClock,
+  resumeGameReplayRecordingClock,
+  type GameReplayClockedRecording,
+} from "@/components/game-replay-timing";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { TwentyFortyEightBoard } from "@/components/twenty-forty-eight-board";
@@ -69,7 +76,7 @@ type TwentyFortyEightGameProps = {
   replayMode?: "latest";
 };
 
-type TwentyFortyEightReplayRecording = {
+type TwentyFortyEightReplayRecording = GameReplayClockedRecording & {
   events: TwentyFortyEightReplayEvent[];
   nextSeq: number;
   random: () => number;
@@ -170,9 +177,10 @@ function appendTwentyFortyEightReplayEvent(
 ) {
   recording.events.push({
     ...event,
+    elapsedMs: getGameReplayRecordingElapsedMs(recording),
     seq: recording.nextSeq,
     tick: recording.tick,
-  } as TwentyFortyEightReplayEvent);
+  } as unknown as TwentyFortyEightReplayEvent);
   recording.nextSeq += 1;
 
   if (event.type === "move") {
@@ -308,6 +316,7 @@ function TwentyFortyEightLiveGame({
       const run = await createTwentyFortyEightReplayRun();
       const random = createTwentyFortyEightReplayRandom(run.seed);
       const recording: TwentyFortyEightReplayRecording = {
+        clock: createGameReplayRecordingClock(),
         events: [],
         nextSeq: 0,
         random,
@@ -403,6 +412,18 @@ function TwentyFortyEightLiveGame({
       setReplaySaveStatus("failed");
     }
   }, [finishedReplay, replaySaveStatus]);
+
+  useEffect(() => {
+    if (game.status !== "running") {
+      return;
+    }
+
+    if (isHelpVisible) {
+      pauseGameReplayRecordingClock(replayRecordingRef.current);
+    } else {
+      resumeGameReplayRecordingClock(replayRecordingRef.current);
+    }
+  }, [game.status, isHelpVisible]);
 
   useEffect(() => {
     if (game.status !== "lost" && game.status !== "won") {

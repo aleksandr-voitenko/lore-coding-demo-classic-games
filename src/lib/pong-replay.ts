@@ -24,6 +24,7 @@ import {
   parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
+  type GameReplayEventEnvelope,
   type GameReplayRun,
   type ParseGameReplayPayloadResult,
 } from "@/lib/game-replay";
@@ -31,35 +32,15 @@ import { createGameLeaderboardKey } from "@/lib/leaderboard";
 
 export type PongReplayRun = GameReplayRun;
 
-export type PongReplayStartEvent = {
-  seq: number;
-  tick: number;
-  type: "start";
-};
+export type PongReplayStartEvent = GameReplayEventEnvelope<"start">;
 
-export type PongReplayAdvanceEvent = {
-  seq: number;
-  tick: number;
-  type: "advance";
-};
+export type PongReplayAdvanceEvent = GameReplayEventEnvelope<"advance">;
 
-export type PongReplayMoveUpEvent = {
-  seq: number;
-  tick: number;
-  type: "moveUp";
-};
+export type PongReplayMoveUpEvent = GameReplayEventEnvelope<"moveUp">;
 
-export type PongReplayMoveDownEvent = {
-  seq: number;
-  tick: number;
-  type: "moveDown";
-};
+export type PongReplayMoveDownEvent = GameReplayEventEnvelope<"moveDown">;
 
-export type PongReplayScoreTickEvent = {
-  seq: number;
-  tick: number;
-  type: "scoreTick";
-};
+export type PongReplayScoreTickEvent = GameReplayEventEnvelope<"scoreTick">;
 
 export type PongReplayEvent =
   | PongReplayAdvanceEvent
@@ -68,7 +49,10 @@ export type PongReplayEvent =
   | PongReplayScoreTickEvent
   | PongReplayStartEvent;
 
-export type PongReplayEventInput = Omit<PongReplayEvent, "seq" | "tick">;
+export type PongReplayEventInput = Omit<
+  PongReplayEvent,
+  "elapsedMs" | "seq" | "tick"
+>;
 
 export type PongReplayPayload = BaseGameReplayPayload<
   typeof PONG_REPLAY_GAME_ID,

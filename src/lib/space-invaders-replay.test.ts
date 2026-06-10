@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { withReplayElapsed } from "./game-replay.test-helpers";
 import {
   applySpaceInvadersReplayEvent,
   createInitialSpaceInvadersReplayGame,
@@ -18,7 +19,7 @@ function createReplayPayload(
   const boardHeight = overrides.boardHeight ?? 560;
   const boardWidth = overrides.boardWidth ?? 420;
 
-  return {
+  const payload = {
     alienCount,
     boardHeight,
     boardWidth,
@@ -62,6 +63,11 @@ function createReplayPayload(
     startedAt: "2026-06-09T12:00:00.000Z",
     ...overrides,
   };
+
+  return {
+    ...payload,
+    events: withReplayElapsed(payload.events),
+  } as SpaceInvadersReplayPayload;
 }
 
 function applyReplayEvents(replay: SpaceInvadersReplayPayload) {
@@ -83,6 +89,7 @@ function createTerminalLossReplay(seed: number) {
   };
   const events: SpaceInvadersReplayEvent[] = [
     {
+      elapsedMs: 0,
       seq: 0,
       tick: 0,
       type: "start",
@@ -95,6 +102,7 @@ function createTerminalLossReplay(seed: number) {
 
   while (replayState.game.status === "running" && events.length < 120_000) {
     const event: SpaceInvadersReplayEvent = {
+      elapsedMs: tick * 1_000,
       seq: events.length,
       tick,
       type: "advance",

@@ -42,6 +42,13 @@ import {
   type GameHelpSection,
   type ReplaySaveStatus,
 } from "@/components/game-layout";
+import {
+  createGameReplayRecordingClock,
+  getGameReplayRecordingElapsedMs,
+  pauseGameReplayRecordingClock,
+  resumeGameReplayRecordingClock,
+  type GameReplayClockedRecording,
+} from "@/components/game-replay-timing";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { BreakoutReplayPlayer } from "@/components/breakout-replay-player";
@@ -83,7 +90,7 @@ type BreakoutGameProps = {
   replayMode?: "latest";
 };
 
-type BreakoutReplayRecording = {
+type BreakoutReplayRecording = GameReplayClockedRecording & {
   events: BreakoutReplayEvent[];
   nextSeq: number;
   random: () => number;
@@ -140,6 +147,7 @@ function appendBreakoutReplayEvent(
 ) {
   recording.events.push({
     ...event,
+    elapsedMs: getGameReplayRecordingElapsedMs(recording),
     seq: recording.nextSeq,
     tick: recording.tick,
   } as BreakoutReplayEvent);
@@ -272,6 +280,7 @@ function BreakoutLiveGame({
       const run = await createBreakoutReplayRun();
       const random = createBreakoutReplayRandom(run.seed);
       const recording: BreakoutReplayRecording = {
+        clock: createGameReplayRecordingClock(),
         events: [],
         nextSeq: 0,
         random,
@@ -321,12 +330,14 @@ function BreakoutLiveGame({
 
     if (current.status === "running") {
       resetLeaderboardForm();
+      pauseGameReplayRecordingClock(replayRecordingRef.current);
       updateCommittedGame((gameState) => pauseBreakoutGame(gameState));
       return;
     }
 
     if (current.status === "paused") {
       resetLeaderboardForm();
+      resumeGameReplayRecordingClock(replayRecordingRef.current);
       updateCommittedGame((gameState) => startBreakoutGame(gameState));
       return;
     }
@@ -387,10 +398,12 @@ function BreakoutLiveGame({
   }, [updateCommittedGame]);
 
   const pauseGameForHelp = useCallback(() => {
+    pauseGameReplayRecordingClock(replayRecordingRef.current);
     updateCommittedGame((current) => pauseBreakoutGame(current));
   }, [updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
+    resumeGameReplayRecordingClock(replayRecordingRef.current);
     updateCommittedGame((current) => startBreakoutGame(current));
   }, [updateCommittedGame]);
 

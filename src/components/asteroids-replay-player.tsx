@@ -17,12 +17,15 @@ import {
   GameStatCard,
   useGameEscapeToMenu,
 } from "@/components/game-layout";
+import {
+  getReplayEventElapsedMs,
+  getReplayPlaybackDelayMs,
+  isFutureReplayEventFrame,
+  type GameReplayTimedPlayback,
+} from "@/components/game-replay-playback";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { Button } from "@/components/ui/button";
-import {
-  getAsteroidsTickDelay,
-  type AsteroidsGameState,
-} from "@/lib/asteroids-game-engine";
+import { type AsteroidsGameState } from "@/lib/asteroids-game-engine";
 import {
   applyAsteroidsReplayEvent,
   createDefaultAsteroidsReplayLeaderboardKey,
@@ -37,7 +40,7 @@ type AsteroidsReplayPlayerProps = {
   onBackToProfile: () => void;
 };
 
-type PlaybackState = {
+type PlaybackState = GameReplayTimedPlayback & {
   eventIndex: number;
   events: AsteroidsReplayEvent[];
   replayState: AsteroidsReplayPlaybackState;
@@ -85,6 +88,7 @@ export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayer
   const [game, setGame] = useState<AsteroidsGameState | null>(null);
   const [isFinished, setIsFinished] = useState(false);
   const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">("loading");
+  const [playbackStep, setPlaybackStep] = useState(0);
   const [replay, setReplay] = useState<AsteroidsReplayPayload | null>(null);
   const playbackRef = useRef<PlaybackState | null>(null);
   const leaderboardKey =
@@ -113,6 +117,7 @@ export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayer
         playbackRef.current = {
           eventIndex: 0,
           events: latestReplay.events,
+          lastElapsedMs: 0,
           replayState: initialReplay,
         };
         setGame(initialReplay.game);
@@ -139,18 +144,30 @@ export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayer
     }
 
     let nextReplayState = playback.replayState;
+    let lastElapsedMs: number | null = null;
     let processedFrame = false;
+    const frameElapsedMs = getReplayEventElapsedMs(
+      playback.events[playback.eventIndex],
+    );
+    const isTimedFrame = frameElapsedMs !== null;
 
-    while (playback.eventIndex < playback.events.length && !processedFrame) {
+    while (playback.eventIndex < playback.events.length && (isTimedFrame || !processedFrame)) {
       const event = playback.events[playback.eventIndex]!;
+
+      if (isFutureReplayEventFrame(frameElapsedMs, event)) {
+        break;
+      }
 
       playback.eventIndex += 1;
       nextReplayState = applyAsteroidsReplayEvent(nextReplayState, event);
-      processedFrame = isReplayFrameBoundary(event);
+      lastElapsedMs = getReplayEventElapsedMs(event) ?? lastElapsedMs;
+      processedFrame = isTimedFrame ? false : isReplayFrameBoundary(event);
     }
 
+    playback.lastElapsedMs = lastElapsedMs ?? playback.lastElapsedMs;
     playback.replayState = nextReplayState;
     setGame(nextReplayState.game);
+    setPlaybackStep((current) => current + 1);
 
     if (
       playback.eventIndex >= playback.events.length ||
@@ -165,10 +182,23 @@ export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayer
       return;
     }
 
-    const timeout = window.setTimeout(advanceReplayFrame, getAsteroidsTickDelay());
+    const playback = playbackRef.current;
+    const nextEvent = playback?.events[playback.eventIndex];
+
+    if (playback === null || nextEvent === undefined) {
+      return;
+    }
+
+    const timeout = window.setTimeout(
+      advanceReplayFrame,
+      getReplayPlaybackDelayMs({
+        event: nextEvent,
+        playback,
+      }),
+    );
 
     return () => window.clearTimeout(timeout);
-  }, [advanceReplayFrame, game, isFinished, loadStatus]);
+  }, [advanceReplayFrame, isFinished, loadStatus, playbackStep]);
 
   if (loadStatus === "loading") {
     return (

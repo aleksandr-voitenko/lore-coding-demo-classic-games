@@ -16,6 +16,12 @@ import {
   GameStatCard,
   useGameEscapeToMenu,
 } from "@/components/game-layout";
+import {
+  getReplayEventElapsedMs,
+  getReplayPlaybackDelayMs,
+  isFutureReplayEventFrame,
+  type GameReplayTimedPlayback,
+} from "@/components/game-replay-playback";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { SnakeBoard } from "@/components/snake-board";
 import { Button } from "@/components/ui/button";
@@ -33,7 +39,7 @@ type SnakeReplayPlayerProps = {
   onBackToProfile: () => void;
 };
 
-type PlaybackState = {
+type PlaybackState = GameReplayTimedPlayback & {
   eventIndex: number;
   events: SnakeReplayEvent[];
   random: () => number;
@@ -74,6 +80,7 @@ export function SnakeReplayPlayer({ onBackToProfile }: SnakeReplayPlayerProps) {
   const [game, setGame] = useState<GameState | null>(null);
   const [isFinished, setIsFinished] = useState(false);
   const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">("loading");
+  const [playbackStep, setPlaybackStep] = useState(0);
   const foodFeedbackIdRef = useRef(0);
   const gameRef = useRef<GameState | null>(null);
   const playbackRef = useRef<PlaybackState | null>(null);
@@ -109,6 +116,7 @@ export function SnakeReplayPlayer({ onBackToProfile }: SnakeReplayPlayerProps) {
         playbackRef.current = {
           eventIndex: 0,
           events: replay.events,
+          lastElapsedMs: 0,
           random: initialReplay.random,
         };
         setFoodFeedbacks([]);
@@ -138,15 +146,25 @@ export function SnakeReplayPlayer({ onBackToProfile }: SnakeReplayPlayerProps) {
     let nextGame = currentGame;
     const nextFoodFeedbacks: FoodFeedback[] = [];
     let didChangeLevel = false;
+    let lastElapsedMs: number | null = null;
     let processedAdvance = false;
+    const frameElapsedMs = getReplayEventElapsedMs(
+      playback.events[playback.eventIndex],
+    );
+    const isTimedFrame = frameElapsedMs !== null;
 
-    while (playback.eventIndex < playback.events.length && !processedAdvance) {
+    while (playback.eventIndex < playback.events.length && (isTimedFrame || !processedAdvance)) {
       const event = playback.events[playback.eventIndex]!;
       const previousEventGame = nextGame;
 
+      if (isFutureReplayEventFrame(frameElapsedMs, event)) {
+        break;
+      }
+
       playback.eventIndex += 1;
       nextGame = applySnakeReplayEvent(nextGame, event, playback.random);
-      processedAdvance = event.type === "advance";
+      lastElapsedMs = getReplayEventElapsedMs(event) ?? lastElapsedMs;
+      processedAdvance = isTimedFrame ? false : event.type === "advance";
 
       if (previousEventGame.level !== nextGame.level) {
         didChangeLevel = true;
@@ -166,8 +184,10 @@ export function SnakeReplayPlayer({ onBackToProfile }: SnakeReplayPlayerProps) {
       }
     }
 
+    playback.lastElapsedMs = lastElapsedMs ?? playback.lastElapsedMs;
     gameRef.current = nextGame;
     setGame(nextGame);
+    setPlaybackStep((current) => current + 1);
 
     if (didChangeLevel || nextFoodFeedbacks.length > 0) {
       setFoodFeedbacks((current) =>
@@ -190,23 +210,28 @@ export function SnakeReplayPlayer({ onBackToProfile }: SnakeReplayPlayerProps) {
     }
 
     const currentGame = gameRef.current;
-    const tickDelay =
-      currentGame === null
-        ? null
-        : getGameTickDelay({
-            pickedUpObjects: currentGame.pickedUpObjects,
-            speedBoosts: currentGame.speedBoosts,
-            status: currentGame.status,
-          });
 
-    if (tickDelay === null) {
+    if (currentGame === null || currentGame.status !== "running") {
       return;
     }
 
-    const timeout = window.setTimeout(advanceReplayFrame, tickDelay);
+    const playback = playbackRef.current;
+    const nextEvent = playback?.events[playback.eventIndex];
+
+    if (playback === null || nextEvent === undefined) {
+      return;
+    }
+
+    const timeout = window.setTimeout(
+      advanceReplayFrame,
+      getReplayPlaybackDelayMs({
+        event: nextEvent,
+        playback,
+      }),
+    );
 
     return () => window.clearTimeout(timeout);
-  }, [advanceReplayFrame, game, isFinished, loadStatus]);
+  }, [advanceReplayFrame, game, isFinished, loadStatus, playbackStep]);
 
   if (loadStatus === "loading") {
     return (

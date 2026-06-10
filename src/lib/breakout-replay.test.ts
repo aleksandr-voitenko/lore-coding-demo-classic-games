@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { withReplayElapsed } from "./game-replay.test-helpers";
 import {
   advanceBreakoutGame,
   startBreakoutGame,
@@ -22,7 +23,7 @@ function createReplayPayload(
   const boardWidth = overrides.boardWidth ?? 360;
   const startingLives = overrides.startingLives ?? 2;
 
-  return {
+  const payload = {
     boardHeight,
     boardWidth,
     events: [
@@ -65,6 +66,11 @@ function createReplayPayload(
     startingLives,
     ...overrides,
   };
+
+  return {
+    ...payload,
+    events: withReplayElapsed(payload.events),
+  } as BreakoutReplayPayload;
 }
 
 function applyReplayEvents(
@@ -91,6 +97,7 @@ function createTerminalReplay(seed: number) {
   const random = initialReplay.random;
   const events: BreakoutReplayEvent[] = [
     {
+      elapsedMs: 0,
       seq: 0,
       tick: 0,
       type: "start",
@@ -101,6 +108,7 @@ function createTerminalReplay(seed: number) {
 
   while (game.status === "running" && events.length < 20_000) {
     events.push({
+      elapsedMs: tick * 1_000,
       seq: events.length,
       tick,
       type: "advance",
@@ -227,16 +235,19 @@ describe("breakout replay", () => {
     const replay = createReplayPayload({
       events: [
         {
+          elapsedMs: 0,
           seq: 0,
           tick: 0,
           type: "moveLeft",
         },
         {
+          elapsedMs: 1,
           seq: 1,
           tick: 0,
           type: "moveLeft",
         },
         {
+          elapsedMs: 2,
           seq: 2,
           tick: 0,
           type: "start",

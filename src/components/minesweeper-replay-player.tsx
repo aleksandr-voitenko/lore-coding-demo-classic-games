@@ -16,6 +16,12 @@ import {
   GameStatCard,
   useGameEscapeToMenu,
 } from "@/components/game-layout";
+import {
+  getReplayEventElapsedMs,
+  getReplayPlaybackDelayMs,
+  isFutureReplayEventFrame,
+  type GameReplayTimedPlayback,
+} from "@/components/game-replay-playback";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { MinesweeperBoard } from "@/components/minesweeper-board";
 import { Button } from "@/components/ui/button";
@@ -36,7 +42,7 @@ type MinesweeperReplayPlayerProps = {
   onBackToProfile: () => void;
 };
 
-type PlaybackState = {
+type PlaybackState = GameReplayTimedPlayback & {
   eventIndex: number;
   events: MinesweeperReplayEvent[];
   random: () => number;
@@ -58,14 +64,23 @@ export function advanceMinesweeperReplayFrame({
   let nextEventIndex = eventIndex;
   let nextGame = game;
   let processedVisibleAction = false;
+  let lastElapsedMs: number | null = null;
+  const frameElapsedMs = getReplayEventElapsedMs(events[eventIndex]);
+  const isTimedFrame = frameElapsedMs !== null;
 
-  while (nextEventIndex < events.length && !processedVisibleAction) {
+  while (nextEventIndex < events.length && (isTimedFrame || !processedVisibleAction)) {
     const event = events[nextEventIndex]!;
     const previousGame = nextGame;
 
+    if (isFutureReplayEventFrame(frameElapsedMs, event)) {
+      break;
+    }
+
     nextEventIndex += 1;
     nextGame = applyMinesweeperReplayEvent(nextGame, event, random);
-    processedVisibleAction = event.type !== "start" && nextGame !== previousGame;
+    lastElapsedMs = getReplayEventElapsedMs(event) ?? lastElapsedMs;
+    processedVisibleAction =
+      isTimedFrame ? false : event.type !== "start" && nextGame !== previousGame;
   }
 
   return {
@@ -75,10 +90,9 @@ export function advanceMinesweeperReplayFrame({
       nextEventIndex >= events.length ||
       nextGame.status === "lost" ||
       nextGame.status === "won",
+    lastElapsedMs,
   };
 }
-
-const MINESWEEPER_REPLAY_STEP_MS = 420;
 
 const replayStatusLabels = {
   failed: "Replay unavailable",
@@ -120,6 +134,7 @@ export function MinesweeperReplayPlayer({
   const [game, setGame] = useState<MinesweeperGameState | null>(null);
   const [isFinished, setIsFinished] = useState(false);
   const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">("loading");
+  const [playbackStep, setPlaybackStep] = useState(0);
   const [replay, setReplay] = useState<MinesweeperReplayPayload | null>(null);
   const gameRef = useRef<MinesweeperGameState | null>(null);
   const playbackRef = useRef<PlaybackState | null>(null);
@@ -158,6 +173,7 @@ export function MinesweeperReplayPlayer({
         playbackRef.current = {
           eventIndex: 0,
           events: latestReplay.events,
+          lastElapsedMs: 0,
           random: initialReplay.random,
         };
         setGame(initialReplay.game);
@@ -193,8 +209,10 @@ export function MinesweeperReplayPlayer({
     const nextGame = nextFrame.game;
 
     playback.eventIndex = nextFrame.eventIndex;
+    playback.lastElapsedMs = nextFrame.lastElapsedMs ?? playback.lastElapsedMs;
     gameRef.current = nextGame;
     setGame(nextGame);
+    setPlaybackStep((current) => current + 1);
 
     if (nextFrame.isFinished) {
       setIsFinished(true);
@@ -206,10 +224,23 @@ export function MinesweeperReplayPlayer({
       return;
     }
 
-    const timeout = window.setTimeout(advanceReplayFrame, MINESWEEPER_REPLAY_STEP_MS);
+    const playback = playbackRef.current;
+    const nextEvent = playback?.events[playback.eventIndex];
+
+    if (playback === null || nextEvent === undefined) {
+      return;
+    }
+
+    const timeout = window.setTimeout(
+      advanceReplayFrame,
+      getReplayPlaybackDelayMs({
+        event: nextEvent,
+        playback,
+      }),
+    );
 
     return () => window.clearTimeout(timeout);
-  }, [advanceReplayFrame, game, isFinished, loadStatus]);
+  }, [advanceReplayFrame, isFinished, loadStatus, playbackStep]);
 
   if (loadStatus === "loading") {
     return (

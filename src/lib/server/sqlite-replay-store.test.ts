@@ -38,11 +38,13 @@ function createReplayPayload(run: SnakeReplayRun, finalScore = 4): SnakeReplayPa
   return {
     events: [
       {
+        elapsedMs: 0,
         seq: 0,
         tick: 0,
         type: "start",
       },
       {
+        elapsedMs: 1000,
         seq: 1,
         tick: 0,
         type: "advance",

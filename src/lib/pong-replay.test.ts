@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { withReplayElapsed } from "./game-replay.test-helpers";
 import {
   advancePongGame,
   decrementPongRemainingScore,
@@ -23,7 +24,7 @@ function createReplayPayload(
   const boardWidth = overrides.boardWidth ?? 360;
   const targetScore = overrides.targetScore ?? 3;
 
-  return {
+  const payload = {
     boardHeight,
     boardWidth,
     events: [
@@ -71,6 +72,11 @@ function createReplayPayload(
     targetScore,
     ...overrides,
   };
+
+  return {
+    ...payload,
+    events: withReplayElapsed(payload.events),
+  } as PongReplayPayload;
 }
 
 function applyReplayEvents(game: PongGameState, events: PongReplayEvent[]) {
@@ -88,6 +94,7 @@ function createTerminalReplay() {
   });
   const events: PongReplayEvent[] = [
     {
+      elapsedMs: 0,
       seq: 0,
       tick: 0,
       type: "start",
@@ -99,6 +106,7 @@ function createTerminalReplay() {
   while (game.status !== "lost" && game.status !== "won" && events.length < 20_000) {
     if (game.status === "ready") {
       events.push({
+        elapsedMs: advanceTick * 1_000,
         seq: events.length,
         tick: advanceTick,
         type: "start",
@@ -108,6 +116,7 @@ function createTerminalReplay() {
     }
 
     events.push({
+      elapsedMs: advanceTick * 1_000,
       seq: events.length,
       tick: advanceTick,
       type: "advance",
@@ -117,6 +126,7 @@ function createTerminalReplay() {
 
     if (game.status === "running" && advanceTick % 63 === 0) {
       events.push({
+        elapsedMs: advanceTick * 1_000,
         seq: events.length,
         tick: advanceTick,
         type: "scoreTick",
@@ -242,21 +252,25 @@ describe("pong replay", () => {
     const replay = createReplayPayload({
       events: [
         {
+          elapsedMs: 0,
           seq: 0,
           tick: 0,
           type: "moveUp",
         },
         {
+          elapsedMs: 1,
           seq: 1,
           tick: 0,
           type: "moveUp",
         },
         {
+          elapsedMs: 2,
           seq: 2,
           tick: 0,
           type: "start",
         },
         {
+          elapsedMs: 3,
           seq: 3,
           tick: 0,
           type: "scoreTick",

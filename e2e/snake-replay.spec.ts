@@ -26,12 +26,14 @@ type SnakeReplayRunResponse = {
 
 type SnakeReplayTestEvent =
   | {
+      elapsedMs: number;
       seq: number;
       tick: number;
       type: "advance" | "start";
     }
   | {
       direction: Direction;
+      elapsedMs: number;
       seq: number;
       tick: number;
       type: "direction";
@@ -135,6 +137,7 @@ function appendReplayDirectionEvent({
 }) {
   events.push({
     direction,
+    elapsedMs: tick * 1_000 + events.length,
     seq: events.length,
     tick,
     type: "direction",
@@ -143,6 +146,7 @@ function appendReplayDirectionEvent({
 
 function appendReplayAdvanceEvent(events: SnakeReplayTestEvent[], tick: number) {
   events.push({
+    elapsedMs: tick * 1_000 + events.length,
     seq: events.length,
     tick,
     type: "advance",
@@ -157,6 +161,7 @@ function createReplayPayloadWithInitialPickup(
   const { game: initialGame, random } = createReplayInitialGame(run.seed);
   const events: SnakeReplayTestEvent[] = [
     {
+      elapsedMs: 0,
       seq: 0,
       tick: 0,
       type: "start",

@@ -105,6 +105,7 @@ describe("game replay", () => {
     expect(
       parseGameReplayEventEnvelope(
         {
+          elapsedMs: 1200,
           ignored: "game-specific",
           seq: 2,
           tick: 8,
@@ -113,6 +114,7 @@ describe("game replay", () => {
         allowedTypes,
       ),
     ).toEqual({
+      elapsedMs: 1200,
       seq: 2,
       tick: 8,
       type: "advance",
@@ -146,6 +148,28 @@ describe("game replay", () => {
     expect(
       parseGameReplayEventEnvelope(
         {
+          seq: 2,
+          tick: 8,
+          type: "advance",
+        },
+        allowedTypes,
+      ),
+    ).toBeNull();
+    expect(
+      parseGameReplayEventEnvelope(
+        {
+          elapsedMs: -1,
+          seq: 2,
+          tick: 8,
+          type: "advance",
+        },
+        allowedTypes,
+      ),
+    ).toBeNull();
+    expect(
+      parseGameReplayEventEnvelope(
+        {
+          elapsedMs: 0,
           seq: 2,
           tick: 8,
           type: "unsupported",

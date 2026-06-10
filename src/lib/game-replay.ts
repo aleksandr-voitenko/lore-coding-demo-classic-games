@@ -37,11 +37,17 @@ export type GameReplayPayloadParser<Payload> = (
 export type GameReplayEventEnvelope<EventType extends string = string> =
   EventType extends string
     ? {
+        elapsedMs: number;
         seq: number;
         tick: number;
         type: EventType;
       }
     : never;
+
+export type GameReplayActiveClock = {
+  activeElapsedMs: number;
+  lastStartedAtMs: number | null;
+};
 
 export const MAX_GAME_REPLAY_SEED = 2_147_483_646;
 
@@ -92,6 +98,72 @@ export function createGameReplayRandom(seed: number) {
   };
 }
 
+export function createGameReplayActiveClock(nowMs: number): GameReplayActiveClock {
+  return {
+    activeElapsedMs: 0,
+    lastStartedAtMs: Math.max(0, nowMs),
+  };
+}
+
+export function getGameReplayActiveElapsedMs(
+  clock: GameReplayActiveClock,
+  nowMs: number,
+) {
+  const runningElapsedMs =
+    clock.lastStartedAtMs === null ? 0 : Math.max(0, nowMs - clock.lastStartedAtMs);
+
+  return Math.max(0, Math.round(clock.activeElapsedMs + runningElapsedMs));
+}
+
+export function pauseGameReplayActiveClock(
+  clock: GameReplayActiveClock,
+  nowMs: number,
+) {
+  if (clock.lastStartedAtMs === null) {
+    return;
+  }
+
+  clock.activeElapsedMs = getGameReplayActiveElapsedMs(clock, nowMs);
+  clock.lastStartedAtMs = null;
+}
+
+export function resumeGameReplayActiveClock(
+  clock: GameReplayActiveClock,
+  nowMs: number,
+) {
+  if (clock.lastStartedAtMs !== null) {
+    return;
+  }
+
+  clock.lastStartedAtMs = Math.max(0, nowMs);
+}
+
+export function getGameReplayEventElapsedMs(
+  event:
+    | {
+        elapsedMs?: number;
+      }
+    | undefined,
+) {
+  return event?.elapsedMs ?? null;
+}
+
+export function getGameReplayEventDelayMs({
+  event,
+  previousElapsedMs,
+}: {
+  event: {
+    elapsedMs?: number;
+  };
+  previousElapsedMs: number;
+}) {
+  if (!isNonNegativeInteger(event.elapsedMs)) {
+    throw new Error("Replay event is missing elapsed timing.");
+  }
+
+  return Math.max(0, event.elapsedMs - previousElapsedMs);
+}
+
 export function getGameReplayApiPath(gameId: string) {
   return `/api/replays/${encodeURIComponent(gameId)}`;
 }
@@ -118,7 +190,12 @@ export function parseGameReplayEventEnvelope<const EventType extends string>(
     return null;
   }
 
+  if (!isNonNegativeInteger(value.elapsedMs)) {
+    return null;
+  }
+
   return {
+    elapsedMs: value.elapsedMs,
     seq: value.seq,
     tick: value.tick,
     type: eventType,

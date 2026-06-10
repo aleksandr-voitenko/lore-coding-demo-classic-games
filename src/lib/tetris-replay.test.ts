@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { withReplayElapsed } from "./game-replay.test-helpers";
 import { hardDropTetrisPiece } from "./tetris-game-engine";
 import {
   applyTetrisReplayEvent,
@@ -18,7 +19,7 @@ function createReplayPayload(
   const boardWidth = overrides.boardWidth ?? 4;
   const startLevel = overrides.startLevel ?? 5;
 
-  return {
+  const payload = {
     boardHeight,
     boardWidth,
     events: [
@@ -81,6 +82,11 @@ function createReplayPayload(
     startedAt: "2026-06-08T12:00:00.000Z",
     ...overrides,
   };
+
+  return {
+    ...payload,
+    events: withReplayElapsed(payload.events),
+  } as TetrisReplayPayload;
 }
 
 function createHardDropReplay(seed: number) {
@@ -96,6 +102,7 @@ function createHardDropReplay(seed: number) {
   const random = initialReplay.random;
   const events: TetrisReplayEvent[] = [
     {
+      elapsedMs: 0,
       seq: 0,
       tick: 0,
       type: "start",
@@ -105,6 +112,7 @@ function createHardDropReplay(seed: number) {
 
   while (game.status === "running" && events.length < 80) {
     events.push({
+      elapsedMs: events.length,
       seq: events.length,
       tick: 0,
       type: "hardDrop",

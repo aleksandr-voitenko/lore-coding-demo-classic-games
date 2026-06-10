@@ -18,11 +18,13 @@ function createReplayPayload(
   return {
     events: [
       {
+        elapsedMs: 0,
         seq: 0,
         tick: 0,
         type: "start",
       },
       {
+        elapsedMs: 1000,
         seq: 1,
         tick: 1,
         type: "playback",

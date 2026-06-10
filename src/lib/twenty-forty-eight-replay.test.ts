@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { withReplayElapsed } from "./game-replay.test-helpers";
 import {
   getTwentyFortyEightTopTile,
   moveTwentyFortyEightGame,
@@ -21,7 +22,7 @@ function createReplayPayload(
   const boardSize = overrides.boardSize ?? 5;
   const winTile = overrides.winTile ?? 4096;
 
-  return {
+  const payload = {
     boardSize,
     events: [
       {
@@ -53,6 +54,11 @@ function createReplayPayload(
     winTile,
     ...overrides,
   };
+
+  return {
+    ...payload,
+    events: withReplayElapsed(payload.events),
+  } as TwentyFortyEightReplayPayload;
 }
 
 function createTerminalReplay(seed: number) {
@@ -67,6 +73,7 @@ function createTerminalReplay(seed: number) {
   const directions: TwentyFortyEightDirection[] = ["left", "up", "right", "down"];
   const events: TwentyFortyEightReplayEvent[] = [
     {
+      elapsedMs: 0,
       seq: 0,
       tick: 0,
       type: "start",
@@ -79,6 +86,7 @@ function createTerminalReplay(seed: number) {
 
     events.push({
       direction,
+      elapsedMs: (events.length - 1) * 1_000,
       seq: events.length,
       tick: events.length - 1,
       type: "move",

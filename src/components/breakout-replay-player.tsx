@@ -17,11 +17,16 @@ import {
   GameStatCard,
   useGameEscapeToMenu,
 } from "@/components/game-layout";
+import {
+  getReplayEventElapsedMs,
+  getReplayPlaybackDelayMs,
+  isFutureReplayEventFrame,
+  type GameReplayTimedPlayback,
+} from "@/components/game-replay-playback";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { Button } from "@/components/ui/button";
 import {
   getBreakoutBallSpeed,
-  getBreakoutTickDelay,
   type BreakoutGameState,
 } from "@/lib/breakout-game-engine";
 import {
@@ -37,7 +42,7 @@ type BreakoutReplayPlayerProps = {
   onBackToProfile: () => void;
 };
 
-type PlaybackState = {
+type PlaybackState = GameReplayTimedPlayback & {
   eventIndex: number;
   events: BreakoutReplayEvent[];
   random: () => number;
@@ -81,6 +86,7 @@ export function BreakoutReplayPlayer({ onBackToProfile }: BreakoutReplayPlayerPr
   const [game, setGame] = useState<BreakoutGameState | null>(null);
   const [isFinished, setIsFinished] = useState(false);
   const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">("loading");
+  const [playbackStep, setPlaybackStep] = useState(0);
   const [replay, setReplay] = useState<BreakoutReplayPayload | null>(null);
   const gameRef = useRef<BreakoutGameState | null>(null);
   const playbackRef = useRef<PlaybackState | null>(null);
@@ -110,6 +116,7 @@ export function BreakoutReplayPlayer({ onBackToProfile }: BreakoutReplayPlayerPr
         playbackRef.current = {
           eventIndex: 0,
           events: latestReplay.events,
+          lastElapsedMs: 0,
           random: initialReplay.random,
         };
         setGame(initialReplay.game);
@@ -137,18 +144,30 @@ export function BreakoutReplayPlayer({ onBackToProfile }: BreakoutReplayPlayerPr
     }
 
     let nextGame = currentGame;
+    let lastElapsedMs: number | null = null;
     let processedAdvance = false;
+    const frameElapsedMs = getReplayEventElapsedMs(
+      playback.events[playback.eventIndex],
+    );
+    const isTimedFrame = frameElapsedMs !== null;
 
-    while (playback.eventIndex < playback.events.length && !processedAdvance) {
+    while (playback.eventIndex < playback.events.length && (isTimedFrame || !processedAdvance)) {
       const event = playback.events[playback.eventIndex]!;
+
+      if (isFutureReplayEventFrame(frameElapsedMs, event)) {
+        break;
+      }
 
       playback.eventIndex += 1;
       nextGame = applyBreakoutReplayEvent(nextGame, event, playback.random);
-      processedAdvance = event.type === "advance";
+      lastElapsedMs = getReplayEventElapsedMs(event) ?? lastElapsedMs;
+      processedAdvance = isTimedFrame ? false : event.type === "advance";
     }
 
+    playback.lastElapsedMs = lastElapsedMs ?? playback.lastElapsedMs;
     gameRef.current = nextGame;
     setGame(nextGame);
+    setPlaybackStep((current) => current + 1);
 
     if (
       playback.eventIndex >= playback.events.length ||
@@ -164,10 +183,23 @@ export function BreakoutReplayPlayer({ onBackToProfile }: BreakoutReplayPlayerPr
       return;
     }
 
-    const timeout = window.setTimeout(advanceReplayFrame, getBreakoutTickDelay());
+    const playback = playbackRef.current;
+    const nextEvent = playback?.events[playback.eventIndex];
+
+    if (playback === null || nextEvent === undefined) {
+      return;
+    }
+
+    const timeout = window.setTimeout(
+      advanceReplayFrame,
+      getReplayPlaybackDelayMs({
+        event: nextEvent,
+        playback,
+      }),
+    );
 
     return () => window.clearTimeout(timeout);
-  }, [advanceReplayFrame, game, isFinished, loadStatus]);
+  }, [advanceReplayFrame, isFinished, loadStatus, playbackStep]);
 
   if (loadStatus === "loading") {
     return (

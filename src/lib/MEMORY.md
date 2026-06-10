@@ -35,8 +35,8 @@ This file covers deterministic game engines and shared source logic under
   types; display-name/password/game-id/session-id validation; and client helpers
   for `/api/auth/*`, `/api/me`, and `/api/game-sessions`.
 - `game-replay.ts` owns shared replay run ids, seed normalization, deterministic
-  replay random creation, API path/client helpers, and base replay payload
-  validation for all future game-specific replay modules.
+  replay random creation, active-play replay clocks, API path/client helpers,
+  and base replay payload validation for all future game-specific replay modules.
 - `snake-replay.ts`, `tetris-replay.ts`, `breakout-replay.ts`,
   `minesweeper-replay.ts`, `space-invaders-replay.ts`, `pong-replay.ts`,
   `simon-replay.ts`, `twenty-forty-eight-replay.ts`, and
@@ -48,7 +48,8 @@ This file covers deterministic game engines and shared source logic under
   Invaders start/move/fire/advance events, Pong
   starts/advances/paddle movement/score ticks, Simon phase/input events, 2048
   move directions, and Asteroids starts/advances/control-state changes/fire
-  events rather than video or full board snapshots.
+  events rather than video or full board snapshots. Each replay event requires
+  active elapsed milliseconds; parsers reject payloads without event timing.
 - `game-catalog.ts` owns the pure playable-game id and label catalog plus
   server-safe card artwork metadata and versioned artwork URLs. Launcher config
   should enrich these entries with descriptions and parameters locally, while

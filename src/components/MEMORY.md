@@ -84,7 +84,11 @@ This file covers React component ownership and shared game UI conventions under
   replayed game-state transitions.
 - Live replay recordings are one-shot per run. Terminal replay payload capture
   should consume the active recording, and starting a new run should abandon any
-  unsaved replay state so stale events cannot be saved later.
+  unsaved replay state so stale events cannot be saved later. Replay recordings
+  stamp active elapsed milliseconds on each event and pause that replay clock
+  while Pause, Help, or abandon-confirm overlays stop the player's active view;
+  replay players schedule playback from those elapsed timestamps instead of
+  fixed per-turn delays.
 - Use `GameReplaySaveAction` for replay-enabled terminal Save replay footers.
   Keep finished replay payload creation and save handlers local to each game,
   and pass a game-specific `testIdPrefix` so existing replay save button and

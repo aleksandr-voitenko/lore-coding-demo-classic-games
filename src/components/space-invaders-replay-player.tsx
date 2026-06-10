@@ -13,13 +13,16 @@ import {
   GameShell,
   useGameEscapeToMenu,
 } from "@/components/game-layout";
+import {
+  getReplayEventElapsedMs,
+  getReplayPlaybackDelayMs,
+  isFutureReplayEventFrame,
+  type GameReplayTimedPlayback,
+} from "@/components/game-replay-playback";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { SpaceInvadersBoard } from "@/components/space-invaders-board";
 import { Button } from "@/components/ui/button";
-import {
-  getSpaceInvadersTickDelay,
-  type SpaceInvadersGameState,
-} from "@/lib/space-invaders-game-engine";
+import { type SpaceInvadersGameState } from "@/lib/space-invaders-game-engine";
 import {
   applySpaceInvadersReplayEvent,
   createDefaultSpaceInvadersReplayLeaderboardKey,
@@ -34,7 +37,7 @@ type SpaceInvadersReplayPlayerProps = {
   onBackToProfile: () => void;
 };
 
-type PlaybackState = {
+type PlaybackState = GameReplayTimedPlayback & {
   eventIndex: number;
   events: SpaceInvadersReplayEvent[];
   replayState: SpaceInvadersReplayPlaybackState;
@@ -88,6 +91,7 @@ export function SpaceInvadersReplayPlayer({
   const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">(
     "loading",
   );
+  const [playbackStep, setPlaybackStep] = useState(0);
   const [replay, setReplay] = useState<SpaceInvadersReplayPayload | null>(null);
   const playbackRef = useRef<PlaybackState | null>(null);
   const leaderboardKey =
@@ -116,6 +120,7 @@ export function SpaceInvadersReplayPlayer({
         playbackRef.current = {
           eventIndex: 0,
           events: latestReplay.events,
+          lastElapsedMs: 0,
           replayState: initialReplay,
         };
         setGame(initialReplay.game);
@@ -142,18 +147,30 @@ export function SpaceInvadersReplayPlayer({
     }
 
     let nextReplayState = playback.replayState;
+    let lastElapsedMs: number | null = null;
     let processedFrame = false;
+    const frameElapsedMs = getReplayEventElapsedMs(
+      playback.events[playback.eventIndex],
+    );
+    const isTimedFrame = frameElapsedMs !== null;
 
-    while (playback.eventIndex < playback.events.length && !processedFrame) {
+    while (playback.eventIndex < playback.events.length && (isTimedFrame || !processedFrame)) {
       const event = playback.events[playback.eventIndex]!;
+
+      if (isFutureReplayEventFrame(frameElapsedMs, event)) {
+        break;
+      }
 
       playback.eventIndex += 1;
       nextReplayState = applySpaceInvadersReplayEvent(nextReplayState, event);
-      processedFrame = isReplayFrameBoundary(event);
+      lastElapsedMs = getReplayEventElapsedMs(event) ?? lastElapsedMs;
+      processedFrame = isTimedFrame ? false : isReplayFrameBoundary(event);
     }
 
+    playback.lastElapsedMs = lastElapsedMs ?? playback.lastElapsedMs;
     playback.replayState = nextReplayState;
     setGame(nextReplayState.game);
+    setPlaybackStep((current) => current + 1);
 
     if (
       playback.eventIndex >= playback.events.length ||
@@ -169,13 +186,23 @@ export function SpaceInvadersReplayPlayer({
       return;
     }
 
+    const playback = playbackRef.current;
+    const nextEvent = playback?.events[playback.eventIndex];
+
+    if (playback === null || nextEvent === undefined) {
+      return;
+    }
+
     const timeout = window.setTimeout(
       advanceReplayFrame,
-      getSpaceInvadersTickDelay(),
+      getReplayPlaybackDelayMs({
+        event: nextEvent,
+        playback,
+      }),
     );
 
     return () => window.clearTimeout(timeout);
-  }, [advanceReplayFrame, game, isFinished, loadStatus]);
+  }, [advanceReplayFrame, isFinished, loadStatus, playbackStep]);
 
   if (loadStatus === "loading") {
     return (

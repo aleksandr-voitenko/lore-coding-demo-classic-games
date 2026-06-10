@@ -16,17 +16,15 @@ import {
   GameStatCard,
   useGameEscapeToMenu,
 } from "@/components/game-layout";
+import {
+  getReplayEventElapsedMs,
+  getReplayPlaybackDelayMs,
+  type GameReplayTimedPlayback,
+} from "@/components/game-replay-playback";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { SimonBoard } from "@/components/simon-board";
 import { Button } from "@/components/ui/button";
-import {
-  getSimonInputFlashDelay,
-  getSimonMissFeedbackDelay,
-  getSimonPlaybackDelay,
-  getSimonRoundCompleteDelay,
-  type SimonGameState,
-  type SimonStatus,
-} from "@/lib/simon-game-engine";
+import { type SimonGameState, type SimonStatus } from "@/lib/simon-game-engine";
 import {
   applySimonReplayEvent,
   createDefaultSimonReplayLeaderboardKey,
@@ -40,14 +38,11 @@ type SimonReplayPlayerProps = {
   onBackToProfile: () => void;
 };
 
-type PlaybackState = {
+type PlaybackState = GameReplayTimedPlayback & {
   eventIndex: number;
   events: SimonReplayEvent[];
   random: () => number;
 };
-
-const SIMON_REPLAY_START_DELAY_MS = 180;
-const SIMON_REPLAY_INPUT_STEP_MS = 420;
 
 const replayStatusLabels = {
   failed: "Replay unavailable",
@@ -89,27 +84,6 @@ function getSimonReplayStatusLabel(game: SimonGameState, isFinished: boolean) {
   }
 
   return simonStatusLabels[game.status];
-}
-
-function getSimonReplayEventDelay(event: SimonReplayEvent | undefined) {
-  if (event === undefined) {
-    return SIMON_REPLAY_START_DELAY_MS;
-  }
-
-  switch (event.type) {
-    case "advanceMiss":
-      return getSimonMissFeedbackDelay();
-    case "advanceRound":
-      return getSimonRoundCompleteDelay();
-    case "clear":
-      return getSimonInputFlashDelay();
-    case "pad":
-      return SIMON_REPLAY_INPUT_STEP_MS;
-    case "playback":
-      return getSimonPlaybackDelay();
-    case "start":
-      return SIMON_REPLAY_START_DELAY_MS;
-  }
 }
 
 export function SimonReplayTurnFeedback({
@@ -175,6 +149,7 @@ export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
   const [game, setGame] = useState<SimonGameState | null>(null);
   const [isFinished, setIsFinished] = useState(false);
   const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">("loading");
+  const [playbackStep, setPlaybackStep] = useState(0);
   const [replay, setReplay] = useState<SimonReplayPayload | null>(null);
   const gameRef = useRef<SimonGameState | null>(null);
   const playbackRef = useRef<PlaybackState | null>(null);
@@ -204,6 +179,7 @@ export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
         playbackRef.current = {
           eventIndex: 0,
           events: latestReplay.events,
+          lastElapsedMs: 0,
           random: initialReplay.random,
         };
         setGame(initialReplay.game);
@@ -239,9 +215,11 @@ export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
 
     const nextGame = applySimonReplayEvent(currentGame, event, playback.random);
 
+    playback.lastElapsedMs = getReplayEventElapsedMs(event) ?? playback.lastElapsedMs;
     playback.eventIndex += 1;
     gameRef.current = nextGame;
     setGame(nextGame);
+    setPlaybackStep((current) => current + 1);
 
     if (
       playback.eventIndex >= playback.events.length ||
@@ -257,14 +235,23 @@ export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
       return;
     }
 
-    const nextEvent = playbackRef.current?.events[playbackRef.current.eventIndex];
+    const playback = playbackRef.current;
+    const nextEvent = playback?.events[playback.eventIndex];
+
+    if (playback === null || nextEvent === undefined) {
+      return;
+    }
+
     const timeout = window.setTimeout(
       advanceReplayFrame,
-      getSimonReplayEventDelay(nextEvent),
+      getReplayPlaybackDelayMs({
+        event: nextEvent,
+        playback,
+      }),
     );
 
     return () => window.clearTimeout(timeout);
-  }, [advanceReplayFrame, game, isFinished, loadStatus]);
+  }, [advanceReplayFrame, isFinished, loadStatus, playbackStep]);
 
   const ignorePadPress = useCallback(() => undefined, []);
 

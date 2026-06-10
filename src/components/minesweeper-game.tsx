@@ -25,6 +25,13 @@ import {
   type GameHelpSection,
   type ReplaySaveStatus,
 } from "@/components/game-layout";
+import {
+  createGameReplayRecordingClock,
+  getGameReplayRecordingElapsedMs,
+  pauseGameReplayRecordingClock,
+  resumeGameReplayRecordingClock,
+  type GameReplayClockedRecording,
+} from "@/components/game-replay-timing";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { MinesweeperBoard, MinesweeperStartPreview } from "@/components/minesweeper-board";
 import { MinesweeperReplayPlayer } from "@/components/minesweeper-replay-player";
@@ -63,7 +70,7 @@ type MinesweeperGameProps = {
   replayMode?: "latest";
 };
 
-type MinesweeperReplayRecording = {
+type MinesweeperReplayRecording = GameReplayClockedRecording & {
   events: MinesweeperReplayEvent[];
   nextSeq: number;
   random: () => number;
@@ -169,9 +176,10 @@ function appendMinesweeperReplayEvent(
 ) {
   recording.events.push({
     ...event,
+    elapsedMs: getGameReplayRecordingElapsedMs(recording),
     seq: recording.nextSeq,
     tick,
-  } as MinesweeperReplayEvent);
+  } as unknown as MinesweeperReplayEvent);
   recording.nextSeq += 1;
 }
 
@@ -274,15 +282,17 @@ function MinesweeperLiveGame({
     [commitGame],
   );
 
-  const startReplayRecording = useCallback(async (initialAction: MinesweeperReplayPendingAction) => {
+  const startReplayRecording = useCallback(async (initialAction?: MinesweeperReplayPendingAction) => {
     if (isReplayRunPendingRef.current) {
-      pendingInitialActionRef.current ??= initialAction;
+      if (initialAction !== undefined) {
+        pendingInitialActionRef.current ??= initialAction;
+      }
 
       return;
     }
 
     isReplayRunPendingRef.current = true;
-    pendingInitialActionRef.current = initialAction;
+    pendingInitialActionRef.current = initialAction ?? null;
     replayRecordingRef.current = null;
     setIsReplayRunPending(true);
     resetLeaderboardForm();
@@ -290,9 +300,11 @@ function MinesweeperLiveGame({
     setReplaySaveStatus("idle");
 
     try {
+      const clock = createGameReplayRecordingClock();
       const run = await createMinesweeperReplayRun();
       const random = createMinesweeperReplayRandom(run.seed);
       const recording: MinesweeperReplayRecording = {
+        clock,
         events: [],
         nextSeq: 0,
         random,
@@ -334,7 +346,8 @@ function MinesweeperLiveGame({
     setFinishedReplay(null);
     setIsStartScreenVisible(false);
     setReplaySaveStatus("idle");
-  }, [resetLeaderboardForm]);
+    void startReplayRecording();
+  }, [resetLeaderboardForm, startReplayRecording]);
 
   const revealCell = useCallback((cellId: string) => {
     updateCommittedGame((current) => {
@@ -425,6 +438,18 @@ function MinesweeperLiveGame({
       setReplaySaveStatus("failed");
     }
   }, [finishedReplay, replaySaveStatus]);
+
+  useEffect(() => {
+    if (game.status === "lost" || game.status === "won") {
+      return;
+    }
+
+    if (isHelpVisible) {
+      pauseGameReplayRecordingClock(replayRecordingRef.current);
+    } else {
+      resumeGameReplayRecordingClock(replayRecordingRef.current);
+    }
+  }, [game.status, isHelpVisible]);
 
   useEffect(() => {
     if (game.status !== "running" || isHelpVisible) {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { withReplayElapsed } from "./game-replay.test-helpers";
 import {
   getMinesweeperCellId,
   type MinesweeperGameState,
@@ -21,7 +22,7 @@ function createReplayPayload(
   const boardWidth = overrides.boardWidth ?? 4;
   const mineCount = overrides.mineCount ?? 2;
 
-  return {
+  const payload = {
     boardHeight,
     boardWidth,
     events: [
@@ -61,6 +62,11 @@ function createReplayPayload(
     startedAt: "2026-06-08T12:00:00.000Z",
     ...overrides,
   };
+
+  return {
+    ...payload,
+    events: withReplayElapsed(payload.events),
+  } as MinesweeperReplayPayload;
 }
 
 function applyReplayEvents(
@@ -87,18 +93,21 @@ function createTerminalReplay(seed: number) {
   const random = initialReplay.random;
   const events: MinesweeperReplayEvent[] = [
     {
+      elapsedMs: 0,
       seq: 0,
       tick: 0,
       type: "start",
     },
     {
       cellId: getMinesweeperCellId(3, 3),
+      elapsedMs: 1,
       seq: 1,
       tick: 0,
       type: "toggleFlag",
     },
     {
       cellId: getMinesweeperCellId(0, 0),
+      elapsedMs: 1_000,
       seq: 2,
       tick: 1,
       type: "reveal",
@@ -113,6 +122,7 @@ function createTerminalReplay(seed: number) {
 
   events.push({
     cellId: mine.id,
+    elapsedMs: 3_000,
     seq: events.length,
     tick: 3,
     type: "reveal",

@@ -13,6 +13,7 @@ function createReplayPayload(overrides: Partial<SnakeReplayPayload> = {}): Snake
   return {
     events: [
       {
+        elapsedMs: 0,
         seq: 0,
         tick: 0,
         type: "start",

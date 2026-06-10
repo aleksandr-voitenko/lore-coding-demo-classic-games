@@ -12,6 +12,7 @@ import {
   parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
+  type GameReplayEventEnvelope,
   type GameReplayRun,
   type ParseGameReplayPayloadResult,
 } from "@/lib/game-replay";
@@ -25,17 +26,17 @@ import {
 
 export type TwentyFortyEightReplayRun = GameReplayRun;
 
-export type TwentyFortyEightReplayStartEvent = {
-  seq: number;
-  tick: number;
-  type: "start";
-};
+type TwentyFortyEightReplayEventInputFor<Event> = Omit<
+  Event,
+  "elapsedMs" | "seq" | "tick"
+>;
 
-export type TwentyFortyEightReplayMoveEvent = {
+export type TwentyFortyEightReplayStartEvent =
+  GameReplayEventEnvelope<"start">;
+
+export type TwentyFortyEightReplayMoveEvent =
+  GameReplayEventEnvelope<"move"> & {
   direction: TwentyFortyEightDirection;
-  seq: number;
-  tick: number;
-  type: "move";
 };
 
 export type TwentyFortyEightReplayEvent =
@@ -43,8 +44,8 @@ export type TwentyFortyEightReplayEvent =
   | TwentyFortyEightReplayStartEvent;
 
 export type TwentyFortyEightReplayEventInput =
-  | Omit<TwentyFortyEightReplayMoveEvent, "seq" | "tick">
-  | Omit<TwentyFortyEightReplayStartEvent, "seq" | "tick">;
+  | TwentyFortyEightReplayEventInputFor<TwentyFortyEightReplayMoveEvent>
+  | TwentyFortyEightReplayEventInputFor<TwentyFortyEightReplayStartEvent>;
 
 export type TwentyFortyEightReplayPayload = BaseGameReplayPayload<
   typeof TWENTY_FORTY_EIGHT_REPLAY_GAME_ID,

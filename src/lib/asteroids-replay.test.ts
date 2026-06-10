@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { withReplayElapsed } from "./game-replay.test-helpers";
 import {
   applyAsteroidsReplayEvent,
   createAsteroidsReplayLeaderboardKey,
@@ -18,7 +19,7 @@ function createReplayPayload(
   const boardWidth = overrides.boardWidth ?? 640;
   const startingAsteroidCount = overrides.startingAsteroidCount ?? 6;
 
-  return {
+  const payload = {
     boardHeight,
     boardWidth,
     events: [
@@ -67,6 +68,11 @@ function createReplayPayload(
     startingAsteroidCount,
     ...overrides,
   };
+
+  return {
+    ...payload,
+    events: withReplayElapsed(payload.events),
+  } as AsteroidsReplayPayload;
 }
 
 function applyReplayEvents(replay: AsteroidsReplayPayload) {
@@ -88,6 +94,7 @@ function createTerminalReplay(seed: number) {
   };
   const events: AsteroidsReplayEvent[] = [
     {
+      elapsedMs: 0,
       seq: 0,
       tick: 0,
       type: "start",
@@ -98,6 +105,7 @@ function createTerminalReplay(seed: number) {
         rotateRight: false,
         thrust: true,
       },
+      elapsedMs: 1,
       seq: 1,
       tick: 0,
       type: "control",
@@ -111,6 +119,7 @@ function createTerminalReplay(seed: number) {
 
   while (replayState.game.status === "running" && events.length < 120_000) {
     const event: AsteroidsReplayEvent = {
+      elapsedMs: tick * 1_000,
       seq: events.length,
       tick,
       type: "advance",

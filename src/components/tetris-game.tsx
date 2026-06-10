@@ -31,6 +31,13 @@ import {
   type GameHelpSection,
   type ReplaySaveStatus,
 } from "@/components/game-layout";
+import {
+  createGameReplayRecordingClock,
+  getGameReplayRecordingElapsedMs,
+  pauseGameReplayRecordingClock,
+  resumeGameReplayRecordingClock,
+  type GameReplayClockedRecording,
+} from "@/components/game-replay-timing";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import {
   isGamePauseKey,
@@ -80,7 +87,7 @@ type TetrisGameProps = {
   replayMode?: "latest";
 };
 
-type TetrisReplayRecording = {
+type TetrisReplayRecording = GameReplayClockedRecording & {
   events: TetrisReplayEvent[];
   nextSeq: number;
   random: () => number;
@@ -188,6 +195,7 @@ function appendTetrisReplayEvent(
 ) {
   recording.events.push({
     ...event,
+    elapsedMs: getGameReplayRecordingElapsedMs(recording),
     seq: recording.nextSeq,
     tick: recording.tick,
   } as TetrisReplayEvent);
@@ -312,6 +320,7 @@ function TetrisLiveGame({
       const run = await createTetrisReplayRun();
       const random = createTetrisReplayRandom(run.seed);
       const recording: TetrisReplayRecording = {
+        clock: createGameReplayRecordingClock(),
         events: [],
         nextSeq: 0,
         random,
@@ -339,10 +348,12 @@ function TetrisLiveGame({
   const toggleRunState = useCallback(() => {
     updateCommittedGame((current) => {
       if (current.status === "running") {
+        pauseGameReplayRecordingClock(replayRecordingRef.current);
         return pauseTetrisGame(current);
       }
 
       if (current.status === "paused") {
+        resumeGameReplayRecordingClock(replayRecordingRef.current);
         return startTetrisGame(current);
       }
 
@@ -451,10 +462,12 @@ function TetrisLiveGame({
   }, [updateCommittedGame]);
 
   const pauseGameForHelp = useCallback(() => {
+    pauseGameReplayRecordingClock(replayRecordingRef.current);
     updateCommittedGame((current) => pauseTetrisGame(current));
   }, [updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
+    resumeGameReplayRecordingClock(replayRecordingRef.current);
     updateCommittedGame((current) => startTetrisGame(current));
   }, [updateCommittedGame]);
 

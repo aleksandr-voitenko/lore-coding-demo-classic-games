@@ -26,6 +26,7 @@ import {
   parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
+  type GameReplayEventEnvelope,
   type GameReplayRun,
   type ParseGameReplayPayloadResult,
 } from "@/lib/game-replay";
@@ -33,29 +34,20 @@ import { createGameLeaderboardKey } from "@/lib/leaderboard";
 
 export type SpaceInvadersReplayRun = GameReplayRun;
 
-export type SpaceInvadersReplayStartEvent = {
-  seq: number;
-  tick: number;
-  type: "start";
-};
+type SpaceInvadersReplayEventInputFor<Event> = Omit<
+  Event,
+  "elapsedMs" | "seq" | "tick"
+>;
 
-export type SpaceInvadersReplayAdvanceEvent = {
-  seq: number;
-  tick: number;
-  type: "advance";
-};
+export type SpaceInvadersReplayStartEvent = GameReplayEventEnvelope<"start">;
 
-export type SpaceInvadersReplayFireEvent = {
-  seq: number;
-  tick: number;
-  type: "fire";
-};
+export type SpaceInvadersReplayAdvanceEvent =
+  GameReplayEventEnvelope<"advance">;
 
-export type SpaceInvadersReplayMoveEvent = {
+export type SpaceInvadersReplayFireEvent = GameReplayEventEnvelope<"fire">;
+
+export type SpaceInvadersReplayMoveEvent = GameReplayEventEnvelope<"move"> & {
   direction: "left" | "right";
-  seq: number;
-  tick: number;
-  type: "move";
 };
 
 export type SpaceInvadersReplayEvent =
@@ -65,10 +57,10 @@ export type SpaceInvadersReplayEvent =
   | SpaceInvadersReplayStartEvent;
 
 export type SpaceInvadersReplayEventInput =
-  | Omit<SpaceInvadersReplayAdvanceEvent, "seq" | "tick">
-  | Omit<SpaceInvadersReplayFireEvent, "seq" | "tick">
-  | Omit<SpaceInvadersReplayMoveEvent, "seq" | "tick">
-  | Omit<SpaceInvadersReplayStartEvent, "seq" | "tick">;
+  | SpaceInvadersReplayEventInputFor<SpaceInvadersReplayAdvanceEvent>
+  | SpaceInvadersReplayEventInputFor<SpaceInvadersReplayFireEvent>
+  | SpaceInvadersReplayEventInputFor<SpaceInvadersReplayMoveEvent>
+  | SpaceInvadersReplayEventInputFor<SpaceInvadersReplayStartEvent>;
 
 export type SpaceInvadersReplayPayload = BaseGameReplayPayload<
   typeof SPACE_INVADERS_REPLAY_GAME_ID,

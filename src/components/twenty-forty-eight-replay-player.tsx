@@ -16,6 +16,12 @@ import {
   GameStatCard,
   useGameEscapeToMenu,
 } from "@/components/game-layout";
+import {
+  getReplayEventElapsedMs,
+  getReplayPlaybackDelayMs,
+  isFutureReplayEventFrame,
+  type GameReplayTimedPlayback,
+} from "@/components/game-replay-playback";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { TwentyFortyEightBoard } from "@/components/twenty-forty-eight-board";
 import { Button } from "@/components/ui/button";
@@ -36,13 +42,16 @@ type TwentyFortyEightReplayPlayerProps = {
   onBackToProfile: () => void;
 };
 
-type PlaybackState = {
+type PlaybackState = GameReplayTimedPlayback & {
   eventIndex: number;
   events: TwentyFortyEightReplayEvent[];
   random: () => number;
 };
 
-type AdvanceTwentyFortyEightReplayFrameInput = PlaybackState & {
+type AdvanceTwentyFortyEightReplayFrameInput = Pick<
+  PlaybackState,
+  "eventIndex" | "events" | "random"
+> & {
   game: TwentyFortyEightGameState;
 };
 
@@ -50,9 +59,8 @@ type AdvanceTwentyFortyEightReplayFrameResult = {
   eventIndex: number;
   game: TwentyFortyEightGameState;
   isFinished: boolean;
+  lastElapsedMs: number | null;
 };
-
-const TWENTY_FORTY_EIGHT_REPLAY_STEP_MS = 420;
 
 const statusLabels = {
   failed: "Replay unavailable",
@@ -97,14 +105,22 @@ export function advanceTwentyFortyEightReplayFrame({
   let nextEventIndex = eventIndex;
   let nextGame = game;
   let hasVisibleChange = false;
+  let lastElapsedMs: number | null = null;
+  const frameElapsedMs = getReplayEventElapsedMs(events[eventIndex]);
+  const isTimedFrame = frameElapsedMs !== null;
 
-  while (nextEventIndex < events.length && !hasVisibleChange) {
+  while (nextEventIndex < events.length && (isTimedFrame || !hasVisibleChange)) {
     const event = events[nextEventIndex]!;
     const previousGame = nextGame;
 
+    if (isFutureReplayEventFrame(frameElapsedMs, event)) {
+      break;
+    }
+
     nextEventIndex += 1;
     nextGame = applyTwentyFortyEightReplayEvent(nextGame, event, random);
-    hasVisibleChange = nextGame !== previousGame;
+    lastElapsedMs = getReplayEventElapsedMs(event) ?? lastElapsedMs;
+    hasVisibleChange = isTimedFrame ? false : nextGame !== previousGame;
 
     if (nextGame.status === "lost" || nextGame.status === "won") {
       break;
@@ -116,6 +132,7 @@ export function advanceTwentyFortyEightReplayFrame({
     game: nextGame,
     isFinished:
       nextEventIndex >= events.length || nextGame.status === "lost" || nextGame.status === "won",
+    lastElapsedMs,
   };
 }
 
@@ -125,6 +142,7 @@ export function TwentyFortyEightReplayPlayer({
   const [game, setGame] = useState<TwentyFortyEightGameState | null>(null);
   const [isFinished, setIsFinished] = useState(false);
   const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">("loading");
+  const [playbackStep, setPlaybackStep] = useState(0);
   const [replay, setReplay] = useState<TwentyFortyEightReplayPayload | null>(null);
   const gameRef = useRef<TwentyFortyEightGameState | null>(null);
   const playbackRef = useRef<PlaybackState | null>(null);
@@ -159,6 +177,7 @@ export function TwentyFortyEightReplayPlayer({
         playbackRef.current = {
           eventIndex: 0,
           events: latestReplay.events,
+          lastElapsedMs: 0,
           random: initialReplay.random,
         };
         setGame(initialReplay.game);
@@ -193,8 +212,10 @@ export function TwentyFortyEightReplayPlayer({
     });
 
     playback.eventIndex = nextFrame.eventIndex;
+    playback.lastElapsedMs = nextFrame.lastElapsedMs ?? playback.lastElapsedMs;
     gameRef.current = nextFrame.game;
     setGame(nextFrame.game);
+    setPlaybackStep((current) => current + 1);
 
     if (nextFrame.isFinished) {
       setIsFinished(true);
@@ -206,13 +227,23 @@ export function TwentyFortyEightReplayPlayer({
       return;
     }
 
+    const playback = playbackRef.current;
+    const nextEvent = playback?.events[playback.eventIndex];
+
+    if (playback === null || nextEvent === undefined) {
+      return;
+    }
+
     const timeout = window.setTimeout(
       advanceReplayFrame,
-      TWENTY_FORTY_EIGHT_REPLAY_STEP_MS,
+      getReplayPlaybackDelayMs({
+        event: nextEvent,
+        playback,
+      }),
     );
 
     return () => window.clearTimeout(timeout);
-  }, [advanceReplayFrame, game, isFinished, loadStatus]);
+  }, [advanceReplayFrame, isFinished, loadStatus, playbackStep]);
 
   if (loadStatus === "loading") {
     return (

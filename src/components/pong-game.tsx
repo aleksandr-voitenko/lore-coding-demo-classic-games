@@ -36,6 +36,13 @@ import {
   type GameHelpSection,
   type ReplaySaveStatus,
 } from "@/components/game-layout";
+import {
+  createGameReplayRecordingClock,
+  getGameReplayRecordingElapsedMs,
+  pauseGameReplayRecordingClock,
+  resumeGameReplayRecordingClock,
+  type GameReplayClockedRecording,
+} from "@/components/game-replay-timing";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import {
@@ -86,7 +93,7 @@ type PongGameProps = {
   replayMode?: "latest";
 };
 
-type PongReplayRecording = {
+type PongReplayRecording = GameReplayClockedRecording & {
   events: PongReplayEvent[];
   nextSeq: number;
   run: PongReplayRun;
@@ -110,6 +117,7 @@ function appendPongReplayEvent(
 ) {
   recording.events.push({
     ...event,
+    elapsedMs: getGameReplayRecordingElapsedMs(recording),
     seq: recording.nextSeq,
     tick: recording.tick,
   } as PongReplayEvent);
@@ -283,6 +291,7 @@ function PongLiveGame({
     try {
       const run = await createPongReplayRun();
       const recording: PongReplayRecording = {
+        clock: createGameReplayRecordingClock(),
         events: [],
         nextSeq: 0,
         run,
@@ -329,12 +338,14 @@ function PongLiveGame({
 
     if (current.status === "running") {
       resetLeaderboardForm();
+      pauseGameReplayRecordingClock(replayRecordingRef.current);
       updateCommittedGame((gameState) => pausePongGame(gameState));
       return;
     }
 
     if (current.status === "paused") {
       resetLeaderboardForm();
+      resumeGameReplayRecordingClock(replayRecordingRef.current);
       updateCommittedGame((gameState) => startPongGame(gameState));
       return;
     }
@@ -393,10 +404,12 @@ function PongLiveGame({
   }, [updateCommittedGame]);
 
   const pauseGameForHelp = useCallback(() => {
+    pauseGameReplayRecordingClock(replayRecordingRef.current);
     updateCommittedGame((current) => pausePongGame(current));
   }, [updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
+    resumeGameReplayRecordingClock(replayRecordingRef.current);
     updateCommittedGame((current) => startPongGame(current));
   }, [updateCommittedGame]);
 

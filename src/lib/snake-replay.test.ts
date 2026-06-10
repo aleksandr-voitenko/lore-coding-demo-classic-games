@@ -1,15 +1,17 @@
 import { describe, expect, it } from "vitest";
 
+import { withReplayElapsed } from "./game-replay.test-helpers";
 import {
   applySnakeReplayEvent,
   createInitialSnakeReplayGame,
   parseSnakeReplayPayload,
   SNAKE_REPLAY_SCHEMA_VERSION,
+  type SnakeReplayEvent,
   type SnakeReplayPayload,
 } from "./snake-replay";
 
 function createReplayPayload(overrides: Partial<SnakeReplayPayload> = {}): SnakeReplayPayload {
-  return {
+  const payload = {
     events: [
       {
         seq: 0,
@@ -40,6 +42,11 @@ function createReplayPayload(overrides: Partial<SnakeReplayPayload> = {}): Snake
     startedAt: "2026-06-08T12:00:00.000Z",
     ...overrides,
   };
+
+  return {
+    ...payload,
+    events: withReplayElapsed(payload.events as SnakeReplayEvent[]),
+  } as SnakeReplayPayload;
 }
 
 describe("snake replay", () => {

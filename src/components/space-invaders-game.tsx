@@ -26,6 +26,13 @@ import {
   type GameHelpSection,
   type ReplaySaveStatus,
 } from "@/components/game-layout";
+import {
+  createGameReplayRecordingClock,
+  getGameReplayRecordingElapsedMs,
+  pauseGameReplayRecordingClock,
+  resumeGameReplayRecordingClock,
+  type GameReplayClockedRecording,
+} from "@/components/game-replay-timing";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import {
@@ -88,7 +95,7 @@ type SpaceInvadersGameProps = {
   replayMode?: "latest";
 };
 
-type SpaceInvadersReplayRecording = {
+type SpaceInvadersReplayRecording = GameReplayClockedRecording & {
   events: SpaceInvadersReplayEvent[];
   nextSeq: number;
   random: () => number;
@@ -188,9 +195,10 @@ function appendSpaceInvadersReplayEvent(
 ) {
   recording.events.push({
     ...event,
+    elapsedMs: getGameReplayRecordingElapsedMs(recording),
     seq: recording.nextSeq,
     tick: recording.tick,
-  } as SpaceInvadersReplayEvent);
+  } as unknown as SpaceInvadersReplayEvent);
   recording.nextSeq += 1;
 
   if (event.type === "advance") {
@@ -289,6 +297,7 @@ function SpaceInvadersLiveGame({
       const random = createSpaceInvadersReplayRandom(run.seed);
       const current = gameRef.current;
       const recording: SpaceInvadersReplayRecording = {
+        clock: createGameReplayRecordingClock(),
         events: [],
         nextSeq: 0,
         random,
@@ -324,11 +333,13 @@ function SpaceInvadersLiveGame({
     resetLeaderboardForm();
 
     if (current.status === "running") {
+      pauseGameReplayRecordingClock(replayRecordingRef.current);
       updateCommittedGame((gameState) => pauseSpaceInvadersGame(gameState));
       return;
     }
 
     if (current.status === "paused") {
+      resumeGameReplayRecordingClock(replayRecordingRef.current);
       updateCommittedGame((gameState) => startSpaceInvadersGame(gameState));
       return;
     }
@@ -395,10 +406,12 @@ function SpaceInvadersLiveGame({
   }, [updateCommittedGame]);
 
   const pauseGameForHelp = useCallback(() => {
+    pauseGameReplayRecordingClock(replayRecordingRef.current);
     updateCommittedGame((current) => pauseSpaceInvadersGame(current));
   }, [updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
+    resumeGameReplayRecordingClock(replayRecordingRef.current);
     updateCommittedGame((current) => startSpaceInvadersGame(current));
   }, [updateCommittedGame]);
 

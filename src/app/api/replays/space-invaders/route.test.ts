@@ -23,22 +23,26 @@ function createReplayPayload(
     boardWidth,
     events: [
       {
+        elapsedMs: 0,
         seq: 0,
         tick: 0,
         type: "start",
       },
       {
         direction: "right",
+        elapsedMs: 100,
         seq: 1,
         tick: 0,
         type: "move",
       },
       {
+        elapsedMs: 200,
         seq: 2,
         tick: 0,
         type: "fire",
       },
       {
+        elapsedMs: 300,
         seq: 3,
         tick: 0,
         type: "advance",

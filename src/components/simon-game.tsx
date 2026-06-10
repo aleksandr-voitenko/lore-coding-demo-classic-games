@@ -29,6 +29,13 @@ import {
   type GameHelpSection,
   type ReplaySaveStatus,
 } from "@/components/game-layout";
+import {
+  createGameReplayRecordingClock,
+  getGameReplayRecordingElapsedMs,
+  pauseGameReplayRecordingClock,
+  resumeGameReplayRecordingClock,
+  type GameReplayClockedRecording,
+} from "@/components/game-replay-timing";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { SimonBoard } from "@/components/simon-board";
@@ -73,7 +80,7 @@ type SimonGameProps = {
   replayMode?: "latest";
 };
 
-type SimonReplayRecording = {
+type SimonReplayRecording = GameReplayClockedRecording & {
   events: SimonReplayEvent[];
   nextSeq: number;
   random: () => number;
@@ -158,9 +165,10 @@ function appendSimonReplayEvent(
 ) {
   recording.events.push({
     ...event,
+    elapsedMs: getGameReplayRecordingElapsedMs(recording),
     seq: recording.nextSeq,
     tick: recording.tick,
-  } as SimonReplayEvent);
+  } as unknown as SimonReplayEvent);
   recording.nextSeq += 1;
   recording.tick += 1;
 }
@@ -297,6 +305,7 @@ function SimonLiveGame({
       const run = await createSimonReplayRun();
       const random = createSimonReplayRandom(run.seed);
       const recording: SimonReplayRecording = {
+        clock: createGameReplayRecordingClock(),
         events: [],
         nextSeq: 0,
         random,
@@ -328,6 +337,7 @@ function SimonLiveGame({
     const current = gameRef.current;
 
     if (current.status === "paused") {
+      resumeGameReplayRecordingClock(replayRecordingRef.current);
       updateCommittedGame((gameState) => startSimonGame(gameState));
       return;
     }
@@ -347,11 +357,13 @@ function SimonLiveGame({
       current.status === "correct" ||
       current.status === "missed"
     ) {
+      pauseGameReplayRecordingClock(replayRecordingRef.current);
       updateCommittedGame((gameState) => pauseSimonGame(gameState));
       return;
     }
 
     if (current.status === "paused") {
+      resumeGameReplayRecordingClock(replayRecordingRef.current);
       updateCommittedGame((gameState) => startSimonGame(gameState));
       return;
     }
@@ -386,10 +398,12 @@ function SimonLiveGame({
   }, [updateCommittedGame]);
 
   const pauseGameForHelp = useCallback(() => {
+    pauseGameReplayRecordingClock(replayRecordingRef.current);
     updateCommittedGame((current) => pauseSimonGame(current));
   }, [updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
+    resumeGameReplayRecordingClock(replayRecordingRef.current);
     updateCommittedGame((current) => startSimonGame(current));
   }, [updateCommittedGame]);
 

@@ -16,6 +16,12 @@ import {
   GameStatCard,
   useGameEscapeToMenu,
 } from "@/components/game-layout";
+import {
+  getReplayEventElapsedMs,
+  getReplayPlaybackDelayMs,
+  isFutureReplayEventFrame,
+  type GameReplayTimedPlayback,
+} from "@/components/game-replay-playback";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { TetrisBoard } from "@/components/tetris-board";
 import { TetrisNextPiecePreview } from "@/components/tetris-next-piece-preview";
@@ -34,7 +40,7 @@ type TetrisReplayPlayerProps = {
   onBackToProfile: () => void;
 };
 
-type PlaybackState = {
+type PlaybackState = GameReplayTimedPlayback & {
   eventIndex: number;
   events: TetrisReplayEvent[];
   random: () => number;
@@ -74,6 +80,7 @@ export function TetrisReplayPlayer({ onBackToProfile }: TetrisReplayPlayerProps)
   const [game, setGame] = useState<TetrisGameState | null>(null);
   const [isFinished, setIsFinished] = useState(false);
   const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">("loading");
+  const [playbackStep, setPlaybackStep] = useState(0);
   const [replay, setReplay] = useState<TetrisReplayPayload | null>(null);
   const gameRef = useRef<TetrisGameState | null>(null);
   const playbackRef = useRef<PlaybackState | null>(null);
@@ -109,6 +116,7 @@ export function TetrisReplayPlayer({ onBackToProfile }: TetrisReplayPlayerProps)
         playbackRef.current = {
           eventIndex: 0,
           events: latestReplay.events,
+          lastElapsedMs: 0,
           random: initialReplay.random,
         };
         setGame(initialReplay.game);
@@ -136,18 +144,30 @@ export function TetrisReplayPlayer({ onBackToProfile }: TetrisReplayPlayerProps)
     }
 
     let nextGame = currentGame;
+    let lastElapsedMs: number | null = null;
     let processedAdvance = false;
+    const frameElapsedMs = getReplayEventElapsedMs(
+      playback.events[playback.eventIndex],
+    );
+    const isTimedFrame = frameElapsedMs !== null;
 
-    while (playback.eventIndex < playback.events.length && !processedAdvance) {
+    while (playback.eventIndex < playback.events.length && (isTimedFrame || !processedAdvance)) {
       const event = playback.events[playback.eventIndex]!;
+
+      if (isFutureReplayEventFrame(frameElapsedMs, event)) {
+        break;
+      }
 
       playback.eventIndex += 1;
       nextGame = applyTetrisReplayEvent(nextGame, event, playback.random);
-      processedAdvance = event.type === "advance";
+      lastElapsedMs = getReplayEventElapsedMs(event) ?? lastElapsedMs;
+      processedAdvance = isTimedFrame ? false : event.type === "advance";
     }
 
+    playback.lastElapsedMs = lastElapsedMs ?? playback.lastElapsedMs;
     gameRef.current = nextGame;
     setGame(nextGame);
+    setPlaybackStep((current) => current + 1);
 
     if (playback.eventIndex >= playback.events.length || nextGame.status === "lost") {
       setIsFinished(true);
@@ -165,13 +185,23 @@ export function TetrisReplayPlayer({ onBackToProfile }: TetrisReplayPlayerProps)
       return;
     }
 
+    const playback = playbackRef.current;
+    const nextEvent = playback?.events[playback.eventIndex];
+
+    if (playback === null || nextEvent === undefined) {
+      return;
+    }
+
     const timeout = window.setTimeout(
       advanceReplayFrame,
-      getTetrisTickDelay(currentGame.level),
+      getReplayPlaybackDelayMs({
+        event: nextEvent,
+        playback,
+      }),
     );
 
     return () => window.clearTimeout(timeout);
-  }, [advanceReplayFrame, game, isFinished, loadStatus]);
+  }, [advanceReplayFrame, game, isFinished, loadStatus, playbackStep]);
 
   if (loadStatus === "loading") {
     return (

@@ -5,6 +5,7 @@ import {
   type SimonGameState,
   type SimonPadId,
 } from "./simon-game-engine";
+import { withReplayElapsed } from "./game-replay.test-helpers";
 import {
   applySimonReplayEvent,
   createInitialSimonReplayGame,
@@ -27,7 +28,7 @@ function createReplayPayload(
 ): SimonReplayPayload {
   const winTarget = overrides.winTarget ?? 3;
 
-  return {
+  const payload = {
     events: [
       {
         seq: 0,
@@ -66,6 +67,11 @@ function createReplayPayload(
     winTarget,
     ...overrides,
   };
+
+  return {
+    ...payload,
+    events: withReplayElapsed(payload.events),
+  } as SimonReplayPayload;
 }
 
 function appendReplayEvent(
@@ -74,9 +80,10 @@ function appendReplayEvent(
 ) {
   recording.events.push({
     ...event,
+    elapsedMs: Math.max(0, recording.tick * 1_000 + recording.nextSeq),
     seq: recording.nextSeq,
     tick: recording.tick,
-  } as SimonReplayEvent);
+  } as unknown as SimonReplayEvent);
   recording.nextSeq += 1;
   recording.tick += 1;
 
@@ -323,28 +330,28 @@ describe("simon replay", () => {
     const initialReplay = createInitialSimonReplayGame(payload);
     const started = applySimonReplayEvent(
       initialReplay.game,
-      { seq: 0, tick: 0, type: "start" },
+      { elapsedMs: 0, seq: 0, tick: 0, type: "start" },
       initialReplay.random,
     );
     const inputReady = applySimonReplayEvent(
       started,
-      { seq: 1, tick: 1, type: "playback" },
+      { elapsedMs: 1_000, seq: 1, tick: 1, type: "playback" },
       initialReplay.random,
     );
     const correctPad = inputReady.sequence[0]!;
     const correctFlash = applySimonReplayEvent(
       inputReady,
-      { pad: correctPad, seq: 2, tick: 2, type: "pad" },
+      { elapsedMs: 2_000, pad: correctPad, seq: 2, tick: 2, type: "pad" },
       initialReplay.random,
     );
     const correctPause = applySimonReplayEvent(
       correctFlash,
-      { seq: 3, tick: 3, type: "clear" },
+      { elapsedMs: 3_000, seq: 3, tick: 3, type: "clear" },
       initialReplay.random,
     );
     const nextRound = applySimonReplayEvent(
       correctPause,
-      { seq: 4, tick: 4, type: "advanceRound" },
+      { elapsedMs: 4_000, seq: 4, tick: 4, type: "advanceRound" },
       initialReplay.random,
     );
 

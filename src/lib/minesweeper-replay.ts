@@ -12,6 +12,7 @@ import {
   parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
+  type GameReplayEventEnvelope,
   type GameReplayRun,
   type ParseGameReplayPayloadResult,
 } from "@/lib/game-replay";
@@ -26,24 +27,20 @@ import {
 
 export type MinesweeperReplayRun = GameReplayRun;
 
-export type MinesweeperReplayStartEvent = {
-  seq: number;
-  tick: number;
-  type: "start";
+type MinesweeperReplayEventInputFor<Event> = Omit<
+  Event,
+  "elapsedMs" | "seq" | "tick"
+>;
+
+export type MinesweeperReplayStartEvent = GameReplayEventEnvelope<"start">;
+
+export type MinesweeperReplayRevealEvent = GameReplayEventEnvelope<"reveal"> & {
+  cellId: string;
 };
 
-export type MinesweeperReplayRevealEvent = {
+export type MinesweeperReplayToggleFlagEvent =
+  GameReplayEventEnvelope<"toggleFlag"> & {
   cellId: string;
-  seq: number;
-  tick: number;
-  type: "reveal";
-};
-
-export type MinesweeperReplayToggleFlagEvent = {
-  cellId: string;
-  seq: number;
-  tick: number;
-  type: "toggleFlag";
 };
 
 export type MinesweeperReplayEvent =
@@ -52,9 +49,9 @@ export type MinesweeperReplayEvent =
   | MinesweeperReplayToggleFlagEvent;
 
 export type MinesweeperReplayEventInput =
-  | Omit<MinesweeperReplayRevealEvent, "seq" | "tick">
-  | Omit<MinesweeperReplayStartEvent, "seq" | "tick">
-  | Omit<MinesweeperReplayToggleFlagEvent, "seq" | "tick">;
+  | MinesweeperReplayEventInputFor<MinesweeperReplayRevealEvent>
+  | MinesweeperReplayEventInputFor<MinesweeperReplayStartEvent>
+  | MinesweeperReplayEventInputFor<MinesweeperReplayToggleFlagEvent>;
 
 export type MinesweeperReplayPayload = BaseGameReplayPayload<
   typeof MINESWEEPER_REPLAY_GAME_ID,

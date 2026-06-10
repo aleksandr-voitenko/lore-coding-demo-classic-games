@@ -22,59 +22,30 @@ import {
   parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
+  type GameReplayEventEnvelope,
   type GameReplayRun,
   type ParseGameReplayPayloadResult,
 } from "@/lib/game-replay";
 
 export type TetrisReplayRun = GameReplayRun;
 
-export type TetrisReplayStartEvent = {
-  seq: number;
-  tick: number;
-  type: "start";
-};
+export type TetrisReplayStartEvent = GameReplayEventEnvelope<"start">;
 
-export type TetrisReplayAdvanceEvent = {
-  seq: number;
-  tick: number;
-  type: "advance";
-};
+export type TetrisReplayAdvanceEvent = GameReplayEventEnvelope<"advance">;
 
-export type TetrisReplayMoveLeftEvent = {
-  seq: number;
-  tick: number;
-  type: "moveLeft";
-};
+export type TetrisReplayMoveLeftEvent = GameReplayEventEnvelope<"moveLeft">;
 
-export type TetrisReplayMoveRightEvent = {
-  seq: number;
-  tick: number;
-  type: "moveRight";
-};
+export type TetrisReplayMoveRightEvent = GameReplayEventEnvelope<"moveRight">;
 
-export type TetrisReplayRotateClockwiseEvent = {
-  seq: number;
-  tick: number;
-  type: "rotateClockwise";
-};
+export type TetrisReplayRotateClockwiseEvent =
+  GameReplayEventEnvelope<"rotateClockwise">;
 
-export type TetrisReplayRotateCounterclockwiseEvent = {
-  seq: number;
-  tick: number;
-  type: "rotateCounterclockwise";
-};
+export type TetrisReplayRotateCounterclockwiseEvent =
+  GameReplayEventEnvelope<"rotateCounterclockwise">;
 
-export type TetrisReplaySoftDropEvent = {
-  seq: number;
-  tick: number;
-  type: "softDrop";
-};
+export type TetrisReplaySoftDropEvent = GameReplayEventEnvelope<"softDrop">;
 
-export type TetrisReplayHardDropEvent = {
-  seq: number;
-  tick: number;
-  type: "hardDrop";
-};
+export type TetrisReplayHardDropEvent = GameReplayEventEnvelope<"hardDrop">;
 
 export type TetrisReplayEvent =
   | TetrisReplayAdvanceEvent
@@ -86,7 +57,10 @@ export type TetrisReplayEvent =
   | TetrisReplaySoftDropEvent
   | TetrisReplayStartEvent;
 
-export type TetrisReplayEventInput = Omit<TetrisReplayEvent, "seq" | "tick">;
+export type TetrisReplayEventInput = Omit<
+  TetrisReplayEvent,
+  "elapsedMs" | "seq" | "tick"
+>;
 
 export type TetrisReplayPayload = BaseGameReplayPayload<
   typeof TETRIS_REPLAY_GAME_ID,

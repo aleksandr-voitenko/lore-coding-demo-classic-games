@@ -44,12 +44,14 @@ function randomSequence(values: number[]) {
 function createMoveEvents(directions: TwentyFortyEightDirection[]) {
   return [
     {
+      elapsedMs: 0,
       seq: 0,
       tick: 0,
       type: "start" as const,
     },
     ...directions.map((direction, index) => ({
       direction,
+      elapsedMs: (index + 1) * 500,
       seq: index + 1,
       tick: index,
       type: "move" as const,
@@ -58,46 +60,78 @@ function createMoveEvents(directions: TwentyFortyEightDirection[]) {
 }
 
 describe("advanceTwentyFortyEightReplayFrame", () => {
-  it("skips no-op replay moves until the next visible board change", () => {
+  it("advances timed replay frames at recorded event boundaries", () => {
     const game = createGame([
       { value: 2, x: 0, y: 0 },
       { value: 4, x: 1, y: 0 },
     ]);
     const events = createMoveEvents(["left", "right"]);
 
-    const frame = advanceTwentyFortyEightReplayFrame({
+    const startFrame = advanceTwentyFortyEightReplayFrame({
       eventIndex: 0,
       events,
       game,
       random: randomSequence([0, 0]),
     });
 
-    expect(frame.eventIndex).toBe(3);
-    expect(frame.game).not.toBe(game);
-    expect(frame.game).toMatchObject({
+    expect(startFrame.eventIndex).toBe(1);
+    expect(startFrame.game).toBe(game);
+    expect(startFrame.isFinished).toBe(false);
+    expect(startFrame.lastElapsedMs).toBe(0);
+
+    const noOpFrame = advanceTwentyFortyEightReplayFrame({
+      eventIndex: startFrame.eventIndex,
+      events,
+      game: startFrame.game,
+      random: randomSequence([0, 0]),
+    });
+
+    expect(noOpFrame.eventIndex).toBe(2);
+    expect(noOpFrame.game).toBe(game);
+    expect(noOpFrame.isFinished).toBe(false);
+    expect(noOpFrame.lastElapsedMs).toBe(500);
+
+    const visibleFrame = advanceTwentyFortyEightReplayFrame({
+      eventIndex: noOpFrame.eventIndex,
+      events,
+      game: noOpFrame.game,
+      random: randomSequence([0, 0]),
+    });
+
+    expect(visibleFrame.eventIndex).toBe(3);
+    expect(visibleFrame.game).not.toBe(game);
+    expect(visibleFrame.game).toMatchObject({
       moveCount: 1,
       status: "running",
     });
-    expect(frame.isFinished).toBe(true);
+    expect(visibleFrame.isFinished).toBe(true);
+    expect(visibleFrame.lastElapsedMs).toBe(1_000);
   });
 
-  it("finishes playback when only no-op replay moves remain", () => {
+  it("finishes timed playback when only no-op replay moves remain", () => {
     const game = createGame([
       { value: 2, x: 0, y: 0 },
       { value: 4, x: 1, y: 0 },
     ]);
     const events = createMoveEvents(["left"]);
 
-    const frame = advanceTwentyFortyEightReplayFrame({
+    const startFrame = advanceTwentyFortyEightReplayFrame({
       eventIndex: 0,
       events,
       game,
+      random: randomSequence([0, 0]),
+    });
+    const frame = advanceTwentyFortyEightReplayFrame({
+      eventIndex: startFrame.eventIndex,
+      events,
+      game: startFrame.game,
       random: randomSequence([0, 0]),
     });
 
     expect(frame.eventIndex).toBe(2);
     expect(frame.game).toBe(game);
     expect(frame.isFinished).toBe(true);
+    expect(frame.lastElapsedMs).toBe(500);
   });
 
   it("plays the saved fast-input loss through to completion", () => {

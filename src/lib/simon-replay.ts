@@ -25,6 +25,7 @@ import {
   parseGameReplayEventEnvelope,
   saveGameReplay,
   type BaseGameReplayPayload,
+  type GameReplayEventEnvelope,
   type GameReplayRun,
   type ParseGameReplayPayloadResult,
 } from "@/lib/game-replay";
@@ -32,42 +33,26 @@ import { createGameLeaderboardKey } from "@/lib/leaderboard";
 
 export type SimonReplayRun = GameReplayRun;
 
-export type SimonReplayStartEvent = {
-  seq: number;
-  tick: number;
-  type: "start";
-};
+type SimonReplayEventInputFor<Event> = Omit<
+  Event,
+  "elapsedMs" | "seq" | "tick"
+>;
 
-export type SimonReplayPlaybackEvent = {
-  seq: number;
-  tick: number;
-  type: "playback";
-};
+export type SimonReplayStartEvent = GameReplayEventEnvelope<"start">;
 
-export type SimonReplayPadEvent = {
+export type SimonReplayPlaybackEvent = GameReplayEventEnvelope<"playback">;
+
+export type SimonReplayPadEvent = GameReplayEventEnvelope<"pad"> & {
   pad: SimonPadId;
-  seq: number;
-  tick: number;
-  type: "pad";
 };
 
-export type SimonReplayClearEvent = {
-  seq: number;
-  tick: number;
-  type: "clear";
-};
+export type SimonReplayClearEvent = GameReplayEventEnvelope<"clear">;
 
-export type SimonReplayAdvanceRoundEvent = {
-  seq: number;
-  tick: number;
-  type: "advanceRound";
-};
+export type SimonReplayAdvanceRoundEvent =
+  GameReplayEventEnvelope<"advanceRound">;
 
-export type SimonReplayAdvanceMissEvent = {
-  seq: number;
-  tick: number;
-  type: "advanceMiss";
-};
+export type SimonReplayAdvanceMissEvent =
+  GameReplayEventEnvelope<"advanceMiss">;
 
 export type SimonReplayEvent =
   | SimonReplayAdvanceMissEvent
@@ -78,12 +63,12 @@ export type SimonReplayEvent =
   | SimonReplayStartEvent;
 
 export type SimonReplayEventInput =
-  | Omit<SimonReplayAdvanceMissEvent, "seq" | "tick">
-  | Omit<SimonReplayAdvanceRoundEvent, "seq" | "tick">
-  | Omit<SimonReplayClearEvent, "seq" | "tick">
-  | Omit<SimonReplayPadEvent, "seq" | "tick">
-  | Omit<SimonReplayPlaybackEvent, "seq" | "tick">
-  | Omit<SimonReplayStartEvent, "seq" | "tick">;
+  | SimonReplayEventInputFor<SimonReplayAdvanceMissEvent>
+  | SimonReplayEventInputFor<SimonReplayAdvanceRoundEvent>
+  | SimonReplayEventInputFor<SimonReplayClearEvent>
+  | SimonReplayEventInputFor<SimonReplayPadEvent>
+  | SimonReplayEventInputFor<SimonReplayPlaybackEvent>
+  | SimonReplayEventInputFor<SimonReplayStartEvent>;
 
 export type SimonReplayPayload = BaseGameReplayPayload<
   typeof SIMON_REPLAY_GAME_ID,
