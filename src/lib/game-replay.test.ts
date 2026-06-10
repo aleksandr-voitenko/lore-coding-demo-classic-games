@@ -1,15 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  createGameReplayActiveClock,
   createGameReplayRandom,
   createGameReplayRun,
   fetchGameReplay,
+  getGameReplayActiveElapsedMs,
   getGameReplayApiPath,
+  getGameReplayEventDelayMs,
   getGameReplayRunApiPath,
   normalizeGameReplayRunId,
   normalizeGameReplaySeed,
+  pauseGameReplayActiveClock,
   parseBaseGameReplayPayload,
   parseGameReplayEventEnvelope,
+  resumeGameReplayActiveClock,
   saveGameReplay,
   type BaseGameReplayPayload,
 } from "./game-replay";
@@ -66,6 +71,52 @@ describe("game replay", () => {
     const second = createGameReplayRandom(1234);
 
     expect([first(), first(), first()]).toEqual([second(), second(), second()]);
+  });
+
+  it("tracks active replay elapsed time while excluding pauses", () => {
+    const clock = createGameReplayActiveClock(-10);
+
+    expect(clock).toEqual({
+      activeElapsedMs: 0,
+      lastStartedAtMs: 0,
+    });
+    expect(getGameReplayActiveElapsedMs(clock, 10.4)).toBe(10);
+
+    pauseGameReplayActiveClock(clock, 10.6);
+    pauseGameReplayActiveClock(clock, 50);
+
+    expect(clock).toEqual({
+      activeElapsedMs: 11,
+      lastStartedAtMs: null,
+    });
+    expect(getGameReplayActiveElapsedMs(clock, 50)).toBe(11);
+
+    resumeGameReplayActiveClock(clock, 100);
+    resumeGameReplayActiveClock(clock, 120);
+
+    expect(clock.lastStartedAtMs).toBe(100);
+    expect(getGameReplayActiveElapsedMs(clock, 125)).toBe(36);
+  });
+
+  it("computes replay event delays from required elapsed timing", () => {
+    expect(
+      getGameReplayEventDelayMs({
+        event: { elapsedMs: 1_500 },
+        previousElapsedMs: 1_000,
+      }),
+    ).toBe(500);
+    expect(
+      getGameReplayEventDelayMs({
+        event: { elapsedMs: 900 },
+        previousElapsedMs: 1_000,
+      }),
+    ).toBe(0);
+    expect(() =>
+      getGameReplayEventDelayMs({
+        event: {},
+        previousElapsedMs: 1_000,
+      }),
+    ).toThrow("Replay event is missing elapsed timing.");
   });
 
   it("parses shared replay payload fields before game-specific event validation", () => {
@@ -213,5 +264,16 @@ describe("game replay", () => {
     expect(fetchStub).toHaveBeenNthCalledWith(3, "/api/replays/tetris", {
       cache: "no-store",
     });
+  });
+
+  it("surfaces failed replay API statuses with request context", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(Response.json({ error: "Nope" }, { status: 503 })),
+    );
+
+    await expect(
+      createGameReplayRun("tetris", { replayLabel: "Tetris replay" }),
+    ).rejects.toThrow("Tetris replay run request failed with status 503");
   });
 });

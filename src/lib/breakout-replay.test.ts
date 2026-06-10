@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { withReplayElapsed } from "./game-replay.test-helpers";
 import {
@@ -8,9 +8,13 @@ import {
 } from "./breakout-game-engine";
 import {
   applyBreakoutReplayEvent,
+  createBreakoutReplayRun,
+  createDefaultBreakoutReplayLeaderboardKey,
   createInitialBreakoutReplayGame,
   createBreakoutReplayLeaderboardKey,
+  fetchBreakoutReplay,
   parseBreakoutReplayPayload,
+  saveBreakoutReplay,
   BREAKOUT_REPLAY_SCHEMA_VERSION,
   type BreakoutReplayEvent,
   type BreakoutReplayPayload,
@@ -141,6 +145,10 @@ function createTerminalReplay(seed: number) {
 }
 
 describe("breakout replay", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("parses supported replay payloads and rejects malformed parameters and events", () => {
     const parsedReplay = parseBreakoutReplayPayload(createReplayPayload());
 
@@ -285,5 +293,40 @@ describe("breakout replay", () => {
     expect(firstResult.bricks.filter((brick) => brick.isActive)).toHaveLength(
       replay.finalActiveBrickCount,
     );
+  });
+
+  it("uses Breakout-specific replay API clients and default leaderboard key", async () => {
+    const replay = createReplayPayload();
+    const fetchStub = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ id: "run-1", seed: 1234 }, { status: 201 }))
+      .mockResolvedValueOnce(Response.json({ saved: true }, { status: 201 }))
+      .mockResolvedValueOnce(Response.json({ replay }));
+
+    vi.stubGlobal("fetch", fetchStub);
+
+    await expect(createBreakoutReplayRun()).resolves.toEqual({
+      id: "run-1",
+      seed: 1234,
+    });
+    await expect(saveBreakoutReplay(replay)).resolves.toBeUndefined();
+    await expect(fetchBreakoutReplay()).resolves.toEqual(replay);
+
+    expect(createDefaultBreakoutReplayLeaderboardKey()).toBe(
+      "breakout|board=420x560|lives=3",
+    );
+    expect(fetchStub).toHaveBeenNthCalledWith(1, "/api/replays/breakout/run", {
+      method: "POST",
+    });
+    expect(fetchStub).toHaveBeenNthCalledWith(2, "/api/replays/breakout", {
+      body: JSON.stringify(replay),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+    expect(fetchStub).toHaveBeenNthCalledWith(3, "/api/replays/breakout", {
+      cache: "no-store",
+    });
   });
 });

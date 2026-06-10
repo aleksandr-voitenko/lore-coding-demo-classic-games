@@ -97,6 +97,8 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
 - Run coverage checks when code changes are significant, especially when they
   touch core coverage surfaces or add new branches that CI will gate with
   `npm run test:coverage:core`.
+- After large implementation tasks, run `npm run test:coverage:core` before
+  final reporting so global core coverage regressions are caught locally.
 - `npm run test:e2e` runs the focused Chromium Playwright smoke suite. Browser
   flow details live in `e2e/MEMORY.md`.
 - `npm run typecheck`, `npm run lint`, and `npm run build` are the standard

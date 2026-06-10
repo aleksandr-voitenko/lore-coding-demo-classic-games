@@ -348,6 +348,96 @@ describe("held direction movement input", () => {
     expect(moves).toEqual(["right", "right"]);
   });
 
+  it("switches and stops controller movement through key releases", () => {
+    const state = createTestMovementState();
+    const testTimers = createTestMovementTimers();
+    const moves: TestMovementDirection[] = [];
+    const controller = createHeldDirectionMovementController({
+      intervalMs: 16,
+      move: (direction) => moves.push(direction),
+      state,
+      timers: testTimers.timers,
+    });
+    const leftKey = getMovementKey("ArrowLeft");
+    const rightKey = getMovementKey("ArrowRight");
+
+    expect(leftKey).not.toBeNull();
+    expect(rightKey).not.toBeNull();
+
+    controller.beginMovement(leftKey!);
+    controller.beginMovement(rightKey!);
+
+    expect(moves).toEqual(["left", "right"]);
+    expect(testTimers.activeIntervalCount).toBe(1);
+
+    expect(controller.endMovement(rightKey!)).toBe(true);
+    expect(state.direction).toBe("left");
+    expect(testTimers.activeIntervalCount).toBe(1);
+
+    testTimers.runActiveIntervals();
+    expect(moves).toEqual(["left", "right", "left"]);
+
+    expect(controller.endMovement(rightKey!)).toBe(false);
+    expect(controller.endMovement(leftKey!)).toBe(true);
+    expect(state.direction).toBeNull();
+    expect(testTimers.activeIntervalCount).toBe(0);
+    expect(testTimers.clearedIntervals).toEqual([1]);
+  });
+
+  it("uses window timers when no custom timers are provided", () => {
+    const originalWindow = globalThis.window;
+    const intervalListeners = new Map<number, () => void>();
+    const clearedIntervals: number[] = [];
+
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        clearInterval(intervalId: number) {
+          clearedIntervals.push(intervalId);
+          intervalListeners.delete(intervalId);
+        },
+        setInterval(listener: () => void, intervalMs: number) {
+          expect(intervalMs).toBe(16);
+          intervalListeners.set(99, listener);
+
+          return 99;
+        },
+      },
+    });
+
+    try {
+      const state = createTestMovementState();
+      const moves: TestMovementDirection[] = [];
+      const controller = createHeldDirectionMovementController({
+        intervalMs: 16,
+        move: (direction) => moves.push(direction),
+        state,
+      });
+      const rightKey = getMovementKey("ArrowRight");
+
+      expect(rightKey).not.toBeNull();
+      controller.beginMovement(rightKey!);
+
+      expect(moves).toEqual(["right"]);
+      intervalListeners.get(99)?.();
+      expect(moves).toEqual(["right", "right"]);
+
+      controller.resetMovement();
+
+      expect(clearedIntervals).toEqual([99]);
+      expect(intervalListeners.size).toBe(0);
+    } finally {
+      if (originalWindow === undefined) {
+        Reflect.deleteProperty(globalThis, "window");
+      } else {
+        Object.defineProperty(globalThis, "window", {
+          configurable: true,
+          value: originalWindow,
+        });
+      }
+    }
+  });
+
   it("registers blur cleanup that resets active movement and cleans up on unmount", () => {
     const state = createTestMovementState();
     const testTimers = createTestMovementTimers();
