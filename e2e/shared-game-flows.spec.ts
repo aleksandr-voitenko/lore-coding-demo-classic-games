@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { APIRequestContext, Page } from "@playwright/test";
 
 import { expect, test } from "./support/fixtures";
 import { openGame, openLauncher } from "./support/app";
@@ -168,6 +168,40 @@ async function startRealtimeGame(page: Page, flowCase: RealtimeSharedFlowCase) {
   );
 }
 
+async function selectInjectedGameParameter(page: Page, testId: string, value: string) {
+  const select = page.getByTestId(testId);
+
+  await select.evaluate(
+    (element, injectedValue) => {
+      const option = document.createElement("option");
+      option.value = injectedValue;
+      option.textContent = injectedValue;
+      element.append(option);
+    },
+    value,
+  );
+  await select.selectOption(value);
+}
+
+async function seedDescendingLeaderboard(
+  request: APIRequestContext,
+  leaderboardKey: string,
+  scores: number[],
+) {
+  for (const [index, score] of scores.entries()) {
+    const response = await request.post("/api/leaderboard", {
+      data: {
+        leaderboardKey,
+        name: `Seed ${index + 1}`,
+        score,
+        sortDirection: "desc",
+      },
+    });
+
+    expect(response.status()).toBe(201);
+  }
+}
+
 test("Tetris supports ready Escape, Help pause/resume, and abandon confirmation", async ({
   page,
 }) => {
@@ -233,6 +267,57 @@ test("Minesweeper supports flagging and blocks keyboard mode changes while Help 
 
   await expect(page.getByTestId("minesweeper-help-screen")).toBeHidden();
   await expect(page.getByTestId("minesweeper-active-mode")).toHaveText("Reveal");
+});
+
+test("terminal New game actions start playable boards without returning to the start screen", async ({
+  page,
+  request,
+}) => {
+  await openLauncher(page);
+  await selectInjectedGameParameter(page, "minesweeper-mines", "80");
+  await openGame(page, "minesweeper");
+
+  await page.getByTestId("minesweeper-start-button").click();
+  await expect(page.getByTestId("minesweeper-cell-0:0")).toBeEnabled();
+  await page.getByTestId("minesweeper-cell-0:0").click();
+  await expect(page.getByTestId("minesweeper-end-screen")).toBeVisible();
+
+  await page.getByTestId("minesweeper-new-game-button").click();
+
+  await expect(page.getByTestId("minesweeper-end-screen")).toBeHidden();
+  await expect(page.getByTestId("minesweeper-start-screen")).toBeHidden();
+  await expect(page.getByTestId("minesweeper-cell-0:0")).toBeEnabled();
+  await expect(page.getByTestId("minesweeper-safe-cells")).toHaveText("0/1");
+
+  await page.keyboard.press("Escape");
+  await expectGameMenuVisible(page);
+
+  await seedDescendingLeaderboard(request, "twenty-forty-eight|board=4|goal=4", [
+    1_000,
+    900,
+    800,
+  ]);
+  await selectInjectedGameParameter(page, "twenty-forty-eight-goal", "4");
+  await openGame(page, "twenty-forty-eight");
+
+  await page.getByTestId("twenty-forty-eight-overlay-start-button").click();
+  await expect(page.getByTestId("twenty-forty-eight-status")).toHaveText("Running");
+
+  const endScreen = page.getByTestId("twenty-forty-eight-end-screen");
+  for (const key of ["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"]) {
+    await page.keyboard.press(key);
+
+    if (await endScreen.isVisible()) {
+      break;
+    }
+  }
+
+  await expect(endScreen).toBeVisible();
+  await page.getByTestId("twenty-forty-eight-overlay-new-game-button").click();
+
+  await expect(endScreen).toBeHidden();
+  await expect(page.getByTestId("twenty-forty-eight-start-screen")).toBeHidden();
+  await expect(page.getByTestId("twenty-forty-eight-status")).toHaveText("Running");
 });
 
 for (const flowCase of realtimeSharedFlowCases) {

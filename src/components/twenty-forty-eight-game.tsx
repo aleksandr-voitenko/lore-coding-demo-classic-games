@@ -556,7 +556,7 @@ function TwentyFortyEightLiveGame({
                       className="w-full"
                       data-testid="twenty-forty-eight-overlay-new-game-button"
                       disabled={isReplayRunPending}
-                      onClick={restartGame}
+                      onClick={startGame}
                       size="lg"
                       type="button"
                       variant="secondary"

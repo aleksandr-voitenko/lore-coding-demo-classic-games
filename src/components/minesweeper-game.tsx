@@ -420,6 +420,28 @@ function MinesweeperLiveGame({
     updateCommittedGame((current) => restartMinesweeperGame(current));
   }, [isReplayRunPendingRef, resetLeaderboardForm, resetReplayRecording, updateCommittedGame]);
 
+  const startNewPlayableGame = useCallback(() => {
+    if (isReplayRunPendingRef.current) {
+      return;
+    }
+
+    resetReplayRecording();
+    pendingInitialActionRef.current = null;
+    resetLeaderboardForm();
+    setElapsedSeconds(0);
+    elapsedSecondsRef.current = 0;
+    setIsFlagMode(false);
+    setIsStartScreenVisible(false);
+    updateCommittedGame((current) => restartMinesweeperGame(current));
+    void startReplayRecording();
+  }, [
+    isReplayRunPendingRef,
+    resetLeaderboardForm,
+    resetReplayRecording,
+    startReplayRecording,
+    updateCommittedGame,
+  ]);
+
   useEffect(() => {
     if (game.status === "lost" || game.status === "won") {
       return;
@@ -623,7 +645,7 @@ function MinesweeperLiveGame({
                         className="w-full"
                         data-testid="minesweeper-new-game-button"
                         disabled={isReplayRunPending}
-                        onClick={startNewGame}
+                        onClick={startNewPlayableGame}
                         size="lg"
                         type="button"
                         variant="secondary"
