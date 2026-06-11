@@ -233,6 +233,14 @@ async function expectChromeUsesAppTheme(
   expect(sample.storedTheme).toBe(expectedTheme);
 }
 
+async function expectThemeToggleSwitchChrome(page: Page, testId: string) {
+  const toggle = page.getByTestId(testId);
+
+  await expect(toggle.locator("[data-theme-toggle-thumb]")).toHaveCount(1);
+  await expect(toggle.locator('[data-theme-icon="sun"]')).toHaveCount(1);
+  await expect(toggle.locator('[data-theme-icon="moon"]')).toHaveCount(1);
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(({ cleanupFlag, seedFlag, storageKey }) => {
     if (window.sessionStorage.getItem(cleanupFlag) === "1") {
@@ -291,19 +299,33 @@ test("theme switching persists from launcher controls into profile chrome", asyn
   await expect(page.getByTestId("launcher-theme-toggle")).toHaveAccessibleName(
     "Switch to light mode",
   );
+  await expect(page.getByTestId("launcher-theme-toggle")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expectThemeToggleSwitchChrome(page, "launcher-theme-toggle");
   await expectChromeUsesAppTheme(page, "game-menu", "dark");
 
   await page.getByTestId("launcher-theme-toggle").click();
   await expect(page.getByTestId("launcher-theme-toggle")).toHaveAccessibleName(
     "Switch to dark mode",
   );
+  await expect(page.getByTestId("launcher-theme-toggle")).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
   await expectChromeUsesAppTheme(page, "game-menu", "light");
 
   await page.getByTestId("sign-up-open-button").click();
   await expect(page.getByTestId("auth-dialog")).toBeVisible();
+  await expectThemeToggleSwitchChrome(page, "auth-theme-toggle");
   await page.getByTestId("auth-theme-toggle").click();
   await expect(page.getByTestId("auth-theme-toggle")).toHaveAccessibleName(
     "Switch to light mode",
+  );
+  await expect(page.getByTestId("auth-theme-toggle")).toHaveAttribute(
+    "aria-pressed",
+    "true",
   );
   await expectChromeUsesAppTheme(page, "auth-dialog", "dark", "--chrome-panel");
   await page.getByTestId("auth-displayName-input").fill("Theme Hero");
