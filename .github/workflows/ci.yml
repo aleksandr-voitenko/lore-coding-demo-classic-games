@@ -49,6 +49,9 @@ jobs:
       - name: Run typecheck
         run: npm run typecheck
 
+      - name: Run dependency boundary check
+        run: npm run check:deps
+
       - name: Run unused-code check
         run: npm run check:unused
 

@@ -125,13 +125,15 @@ The image uses Next.js standalone output and listens on port `3000`.
 | `npm run test:e2e:ui` | Open Playwright's interactive test runner. |
 | `npm run typecheck` | Run TypeScript without emitting. |
 | `npm run lint` | Run ESLint. |
+| `npm run check:deps` | Run dependency-cruiser to enforce source dependency boundaries. |
 | `npm run check:unused` | Run Knip to catch unused files, exports, and dependencies. |
 | `npm run lore-coding -- --file <path>` | Validate a Lore Coding commit message file. |
 | `npm run build` | Build the Next.js app. |
 
 GitHub Actions runs these checks on pushes to `main` and pull requests that
 change code or build-affecting files: `npm ci`, `npm run build`,
-`npm run lint`, `npm run typecheck`, `npm run check:unused`,
+`npm run lint`, `npm run typecheck`, `npm run check:deps`,
+`npm run check:unused`,
 `npm run test:coverage:core`, and `npm run test:e2e`. Documentation-only
 changes such as Markdown, `docs/**`, and `LICENSE` are ignored by CI.
 

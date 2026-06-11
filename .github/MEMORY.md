@@ -10,8 +10,9 @@ This file covers repository automation under `.github/`.
   Markdown files, `docs/**`, and `LICENSE`.
 - The first Ubuntu job uses `.node-version`, installs with `npm ci`, then runs
   `npm run build`, `npm run lint`, `npm run typecheck`,
-  `npm run check:unused`, `npm run test:coverage:core`, installs Playwright
-  Chromium with Linux dependencies, and runs `npm run test:e2e`.
+  `npm run check:deps`, `npm run check:unused`,
+  `npm run test:coverage:core`, installs Playwright Chromium with Linux
+  dependencies, and runs `npm run test:e2e`.
 - The Docker publish job depends on the full build/check/test job and only runs
   for successful pushes to `main`, never for pull requests. It logs in to
   Docker Hub with `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`, uses
