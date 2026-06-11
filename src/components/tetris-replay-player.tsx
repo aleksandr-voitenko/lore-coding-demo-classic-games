@@ -66,7 +66,7 @@ function TetrisReplayMessage({
     <GameShell className="bg-[var(--tetris-page)] text-[var(--tetris-ink)]">
       <div className="mx-auto flex min-h-[60svh] w-full max-w-md flex-col items-center justify-center gap-4 rounded-md border border-[var(--tetris-border)] bg-[var(--tetris-panel)] p-6 text-center shadow-sm">
         <GameHeader status={status} statusTestId="tetris-replay-status" title="Tetris replay" />
-        <p className="text-lg font-semibold tracking-normal text-black">{message}</p>
+        <p className="text-lg font-semibold tracking-normal">{message}</p>
         <Button onClick={onBackToProfile} type="button" variant="secondary">
           <ArrowLeftIcon data-icon="inline-start" />
           Back

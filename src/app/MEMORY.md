@@ -23,9 +23,12 @@ This file covers routes and App Router conventions under `src/app/`.
   visible catalog changes.
 - `globals.css` owns global Tailwind/theme styles for the game collection. The
   launcher, profile, and account chrome consume app-level `--chrome-*` variables
-  supplied by `src/lib/app-theme.ts`; per-game board and page/panel palettes
-  remain separate game tokens unless a task is explicitly auditing those
-  palettes.
+  supplied by `src/lib/app-theme.ts`; game screens consume their own
+  `--<game>-page`, `--<game>-panel`, `--<game>-ink`, `--<game>-muted`, and
+  `--<game>-border` tokens, with `.dark` overrides for surrounding game chrome.
+  Board/playfield tokens stay separate so intentionally dark arcade boards remain
+  dark across light and dark app chrome. Simon also exposes `--simon-board-*`
+  shell tokens for its board casing while the classic pad colors remain stable.
 
 ## Leaderboard API
 

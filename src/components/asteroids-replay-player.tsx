@@ -74,7 +74,7 @@ function AsteroidsReplayMessage({
           statusTestId="asteroids-replay-status"
           title="Asteroids replay"
         />
-        <p className="text-lg font-semibold tracking-normal text-black">{message}</p>
+        <p className="text-lg font-semibold tracking-normal">{message}</p>
         <Button onClick={onBackToProfile} type="button" variant="secondary">
           <ArrowLeftIcon data-icon="inline-start" />
           Back

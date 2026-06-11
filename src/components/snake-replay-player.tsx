@@ -65,7 +65,7 @@ function SnakeReplayMessage({
     <GameShell className="bg-[var(--snake-page)] text-[var(--snake-ink)]">
       <div className="mx-auto flex min-h-[60svh] w-full max-w-md flex-col items-center justify-center gap-4 rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] p-6 text-center shadow-sm">
         <GameHeader status={status} statusTestId="snake-replay-status" title="Snake replay" />
-        <p className="text-lg font-semibold tracking-normal text-black">{message}</p>
+        <p className="text-lg font-semibold tracking-normal">{message}</p>
         <Button onClick={onBackToProfile} type="button" variant="secondary">
           <ArrowLeftIcon data-icon="inline-start" />
           Back

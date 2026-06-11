@@ -94,11 +94,11 @@ export function SimonReplayTurnFeedback({
   if (game.status === "correct" && game.activePad === null) {
     return (
       <div
-        className="pointer-events-none absolute inset-3 flex items-center justify-center rounded-[0.375rem] text-center text-[#172033]"
+        className="pointer-events-none absolute inset-3 flex items-center justify-center rounded-[0.375rem] text-center text-[var(--simon-feedback-ink)]"
         data-testid="simon-replay-correct-feedback"
         role="status"
       >
-        <p className="simon-turn-feedback rounded-md border border-[#172033]/10 bg-[#f8fbff]/88 px-5 py-3 text-3xl font-black tracking-normal shadow-[0_18px_46px_rgba(15,23,42,0.22)] backdrop-blur-[2px] sm:text-4xl">
+        <p className="simon-turn-feedback simon-feedback-border rounded-md border bg-[var(--simon-feedback-panel)] px-5 py-3 text-3xl font-black tracking-normal shadow-[0_18px_46px_var(--simon-feedback-shadow)] backdrop-blur-[2px] sm:text-4xl">
           CORRECT!
         </p>
       </div>
@@ -108,11 +108,11 @@ export function SimonReplayTurnFeedback({
   if (game.status === "missed" && game.activePad === null) {
     return (
       <div
-        className="pointer-events-none absolute inset-3 flex items-center justify-center rounded-[0.375rem] text-center text-[#172033]"
+        className="pointer-events-none absolute inset-3 flex items-center justify-center rounded-[0.375rem] text-center text-[var(--simon-feedback-ink)]"
         data-testid="simon-replay-miss-feedback"
         role="status"
       >
-        <p className="simon-turn-feedback rounded-md border border-[#8a2431]/20 bg-[#fff5f6]/90 px-5 py-3 text-3xl font-black tracking-normal text-[#8a2431] shadow-[0_18px_46px_rgba(138,36,49,0.24)] backdrop-blur-[2px] sm:text-4xl">
+        <p className="simon-turn-feedback simon-miss-border rounded-md border bg-[var(--simon-miss-panel)] px-5 py-3 text-3xl font-black tracking-normal text-[var(--simon-miss)] shadow-[0_18px_46px_color-mix(in_oklch,var(--simon-miss)_24%,transparent)] backdrop-blur-[2px] sm:text-4xl">
           MISS!
         </p>
       </div>
@@ -132,10 +132,10 @@ function SimonReplayMessage({
   status: string;
 }) {
   return (
-    <GameShell className="bg-[#f6f9fc] text-[#172033]">
-      <div className="mx-auto flex min-h-[60svh] w-full max-w-md flex-col items-center justify-center gap-4 rounded-md border border-[#d6dfeb] bg-white p-6 text-center shadow-sm">
+    <GameShell className="bg-[var(--simon-page)] text-[var(--simon-ink)]">
+      <div className="simon-chrome-border mx-auto flex min-h-[60svh] w-full max-w-md flex-col items-center justify-center gap-4 rounded-md border bg-[var(--simon-panel)] p-6 text-center shadow-sm">
         <GameHeader status={status} statusTestId="simon-replay-status" title="Simon replay" />
-        <p className="text-lg font-semibold tracking-normal text-black">{message}</p>
+        <p className="text-lg font-semibold tracking-normal">{message}</p>
         <Button onClick={onBackToProfile} type="button" variant="secondary">
           <ArrowLeftIcon data-icon="inline-start" />
           Back
@@ -279,9 +279,9 @@ export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
   const progressLabel = getSimonReplayProgressLabel(game);
 
   return (
-    <GameShell className="bg-[#f6f9fc] text-[#172033]">
+    <GameShell className="bg-[var(--simon-page)] text-[var(--simon-ink)]">
       <GameBoardColumn className="w-[min(92vw,37.25rem,calc(100svh_-_12rem))]">
-        <GameSidebar className="border-[#d6dfeb] bg-white">
+        <GameSidebar className="simon-chrome-border bg-[var(--simon-panel)]">
           <GameHeader
             status={statusLabel}
             statusTestId="simon-replay-status"
@@ -290,30 +290,30 @@ export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
 
           <GameStatsBar>
             <GameStatCard
-              className="border-[#d6dfeb]"
+              className="simon-chrome-border"
               label="Score"
-              labelClassName="text-[#59687d]"
+              labelClassName="text-[var(--simon-muted)]"
               value={game.score}
               valueTestId="simon-replay-score"
             />
             <GameStatCard
-              className="border-[#d6dfeb]"
+              className="simon-chrome-border"
               label="Round"
-              labelClassName="text-[#59687d]"
+              labelClassName="text-[var(--simon-muted)]"
               value={game.round}
               valueTestId="simon-replay-round"
             />
             <GameStatCard
-              className="border-[#d6dfeb]"
+              className="simon-chrome-border"
               label="Progress"
-              labelClassName="text-[#59687d]"
+              labelClassName="text-[var(--simon-muted)]"
               value={progressLabel}
               valueTestId="simon-replay-progress"
             />
             <GameStatCard
-              className="border-[#d6dfeb]"
+              className="simon-chrome-border"
               label="Target"
-              labelClassName="text-[#59687d]"
+              labelClassName="text-[var(--simon-muted)]"
               value={game.winTarget}
               valueTestId="simon-replay-target"
             />
@@ -341,7 +341,7 @@ export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
                   <p className="text-2xl font-semibold tracking-normal text-balance sm:text-3xl">
                     {game.status === "won" ? "Sequence cleared" : "Game over"}
                   </p>
-                  <p className="text-xs font-semibold text-[#59687d] sm:text-sm">
+                  <p className="text-xs font-semibold text-[#cbd5e1] sm:text-sm">
                     Final score:
                   </p>
                   <p

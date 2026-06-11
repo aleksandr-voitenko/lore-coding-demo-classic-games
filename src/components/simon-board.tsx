@@ -63,10 +63,10 @@ export function SimonBoard({
   const isInputReady = game.status === "input";
 
   return (
-    <div className="relative aspect-square overflow-hidden rounded-md border border-[#cfd8e6] bg-[#f8fbff] p-3 shadow-[0_24px_70px_rgba(15,23,42,0.13)]">
+    <div className="simon-board-shell-border relative aspect-square overflow-hidden rounded-md border bg-[var(--simon-board-shell)] p-3 shadow-[0_24px_70px_var(--simon-board-shell-shadow)]">
       <div
         aria-label={`Simon board. Round ${game.round}. Score ${game.score}. Target ${game.winTarget}. ${statusLabel}.`}
-        className="relative grid size-full grid-cols-2 gap-3 rounded-full border-[12px] border-[#141923] bg-[#141923] p-2"
+        className="simon-board-ring-border relative grid size-full grid-cols-2 gap-3 rounded-full border-[12px] bg-[var(--simon-board-ring)] p-2"
         data-testid="simon-board"
       >
         {SIMON_PADS.map((pad) => {
@@ -96,9 +96,9 @@ export function SimonBoard({
 
         <div
           aria-hidden="true"
-          className="absolute left-1/2 top-1/2 flex size-[34%] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[10px] border-[#141923] bg-[#f8fbff] shadow-[0_12px_34px_rgba(15,23,42,0.28)]"
+          className="simon-board-ring-border absolute left-1/2 top-1/2 flex size-[34%] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[10px] bg-[var(--simon-board-shell)] shadow-[0_12px_34px_var(--simon-board-shell-shadow)]"
         >
-          <div className="flex size-[68%] items-center justify-center rounded-full bg-[#202735] font-mono text-xl font-semibold text-white">
+          <div className="flex size-[68%] items-center justify-center rounded-full bg-[var(--simon-board-center)] font-mono text-xl font-semibold text-[var(--simon-board-center-ink)]">
             {game.round || 0}
           </div>
         </div>

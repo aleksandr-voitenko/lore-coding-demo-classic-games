@@ -12,6 +12,7 @@ const compactDesktopViewport = {
   width: 1280,
 };
 
+const appThemeStorageKey = "game-library-theme";
 const centeredBoardTolerancePx = 48;
 const alignedEdgeTolerancePx = 1;
 const stackedGapPx = 16;
@@ -23,6 +24,7 @@ const layoutCases = [
     boardTestId: "snake-board",
     gameId: "snake",
     name: "Snake",
+    palettePrefix: "snake",
     startScreenTestId: "snake-start-screen",
     statsMode: "top-bar",
     statusTestId: "snake-status",
@@ -31,6 +33,7 @@ const layoutCases = [
     boardTestId: "tetris-board",
     gameId: "tetris",
     name: "Tetris",
+    palettePrefix: "tetris",
     startScreenTestId: "tetris-start-screen",
     statsMode: "top-bar",
     statusTestId: "tetris-status",
@@ -39,6 +42,7 @@ const layoutCases = [
     boardTestId: "breakout-board",
     gameId: "breakout",
     name: "Breakout",
+    palettePrefix: "breakout",
     startScreenTestId: "breakout-start-screen",
     statsMode: "top-bar",
     statusTestId: "breakout-status",
@@ -47,6 +51,7 @@ const layoutCases = [
     boardTestId: "minesweeper-board",
     gameId: "minesweeper",
     name: "Minesweeper",
+    palettePrefix: "minesweeper",
     startScreenTestId: "minesweeper-start-screen",
     statsMode: "top-bar",
     statusTestId: "minesweeper-status",
@@ -55,6 +60,7 @@ const layoutCases = [
     boardTestId: "space-invaders-board",
     gameId: "space-invaders",
     name: "Space Invaders",
+    palettePrefix: "invaders",
     startScreenTestId: "space-invaders-start-screen",
     statsMode: "board-hud",
     statusTestId: "space-invaders-status",
@@ -63,6 +69,7 @@ const layoutCases = [
     boardTestId: "pong-board",
     gameId: "pong",
     name: "Pong",
+    palettePrefix: "pong",
     startScreenTestId: "pong-start-screen",
     statsMode: "top-bar",
     statusTestId: "pong-status",
@@ -71,6 +78,7 @@ const layoutCases = [
     boardTestId: "twenty-forty-eight-board",
     gameId: "twenty-forty-eight",
     name: "2048",
+    palettePrefix: "twenty",
     startScreenTestId: "twenty-forty-eight-start-screen",
     statsMode: "top-bar",
     statusTestId: "twenty-forty-eight-status",
@@ -79,6 +87,7 @@ const layoutCases = [
     boardTestId: "simon-board",
     gameId: "simon",
     name: "Simon",
+    palettePrefix: "simon",
     startScreenTestId: "simon-start-screen",
     statsMode: "top-bar",
     statusTestId: "simon-status",
@@ -87,9 +96,32 @@ const layoutCases = [
     boardTestId: "asteroids-board",
     gameId: "asteroids",
     name: "Asteroids",
+    palettePrefix: "asteroids",
     startScreenTestId: "asteroids-start-screen",
     statsMode: "top-bar",
     statusTestId: "asteroids-status",
+  },
+] as const;
+
+const darkPlayfieldPalettePrefixes = new Set([
+  "asteroids",
+  "breakout",
+  "invaders",
+  "pong",
+  "snake",
+  "tetris",
+]);
+
+const replayMessageCases = [
+  {
+    gameId: "snake",
+    message: "No Snake replay is available",
+    panelBackgroundVariable: "--snake-panel",
+  },
+  {
+    gameId: "simon",
+    message: "No Simon replay is available",
+    panelBackgroundVariable: "--simon-panel",
   },
 ] as const;
 
@@ -160,6 +192,173 @@ function getContrastRatio(foreground: RgbColor, background: RgbColor) {
   const darker = Math.min(foregroundLuminance, backgroundLuminance);
 
   return (lighter + 0.05) / (darker + 0.05);
+}
+
+async function seedDarkAppTheme(page: Page) {
+  await page.addInitScript((storageKey) => {
+    window.localStorage.setItem(storageKey, "dark");
+  }, appThemeStorageKey);
+}
+
+async function expectResolvedThemeColor(
+  page: Page,
+  actual: string,
+  variableName: string,
+  property: "backgroundColor" | "borderColor" | "color",
+) {
+  const expected = await page.evaluate(
+    ({ cssProperty, cssVariable }) => {
+      const rootStyles = getComputedStyle(document.documentElement);
+      const probe = document.createElement("span");
+      const value = rootStyles.getPropertyValue(cssVariable).trim();
+
+      if (cssProperty === "backgroundColor") {
+        probe.style.backgroundColor = value;
+      } else if (cssProperty === "borderColor") {
+        probe.style.borderColor = value;
+      } else {
+        probe.style.color = value;
+      }
+
+      document.body.append(probe);
+      const resolvedValue = getComputedStyle(probe)[cssProperty];
+
+      probe.remove();
+
+      return resolvedValue;
+    },
+    {
+      cssProperty: property,
+      cssVariable: variableName,
+    },
+  );
+
+  expect(actual).toBe(expected);
+}
+
+async function expectDarkGameChrome(
+  page: Page,
+  layoutCase: (typeof layoutCases)[number],
+) {
+  const sample = await page.locator("main").first().evaluate((shell, boardTestId) => {
+    const shellStyles = getComputedStyle(shell);
+    const sidebar = document.querySelector<HTMLElement>('[data-testid="game-sidebar"]');
+    const statCard = sidebar?.querySelector<HTMLElement>("dl > div") ?? null;
+    const statLabel = sidebar?.querySelector<HTMLElement>("dt") ?? null;
+    const board = document.querySelector<HTMLElement>(
+      `[data-testid="${boardTestId}"]`,
+    );
+
+    return {
+      boardFrameBackground: board?.parentElement
+        ? getComputedStyle(board.parentElement).backgroundColor
+        : "",
+      htmlHasDarkClass: document.documentElement.classList.contains("dark"),
+      shellBackground: shellStyles.backgroundColor,
+      shellColor: shellStyles.color,
+      sidebarBackground: sidebar ? getComputedStyle(sidebar).backgroundColor : "",
+      sidebarBorderColor: sidebar ? getComputedStyle(sidebar).borderColor : "",
+      statCardBorderColor: statCard ? getComputedStyle(statCard).borderColor : "",
+      statLabelColor: statLabel ? getComputedStyle(statLabel).color : "",
+    };
+  }, layoutCase.boardTestId);
+  const prefix = layoutCase.palettePrefix;
+
+  expect(sample.htmlHasDarkClass).toBe(true);
+  await expectResolvedThemeColor(
+    page,
+    sample.shellBackground,
+    `--${prefix}-page`,
+    "backgroundColor",
+  );
+  await expectResolvedThemeColor(page, sample.shellColor, `--${prefix}-ink`, "color");
+
+  if (layoutCase.statsMode === "top-bar") {
+    await expectResolvedThemeColor(
+      page,
+      sample.sidebarBackground,
+      `--${prefix}-panel`,
+      "backgroundColor",
+    );
+    await expectResolvedThemeColor(
+      page,
+      sample.sidebarBorderColor,
+      `--${prefix}-border`,
+      "borderColor",
+    );
+    await expectResolvedThemeColor(
+      page,
+      sample.statCardBorderColor,
+      `--${prefix}-border`,
+      "borderColor",
+    );
+    await expectResolvedThemeColor(
+      page,
+      sample.statLabelColor,
+      `--${prefix}-muted`,
+      "color",
+    );
+  }
+
+  if (darkPlayfieldPalettePrefixes.has(prefix)) {
+    await expectResolvedThemeColor(
+      page,
+      sample.boardFrameBackground,
+      `--${prefix}-board`,
+      "backgroundColor",
+    );
+  }
+
+  if (prefix === "simon") {
+    await expectResolvedThemeColor(
+      page,
+      sample.boardFrameBackground,
+      "--simon-board-shell",
+      "backgroundColor",
+    );
+  }
+}
+
+async function expectDarkReplayMessagePanel(
+  page: Page,
+  {
+    gameId,
+    message,
+    panelBackgroundVariable,
+  }: (typeof replayMessageCases)[number],
+) {
+  await page.route(`**/api/replays/${gameId}`, async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({ replay: null }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await page.goto(`/?replay=${gameId}`);
+
+  const replayMessage = page.getByText(message, { exact: true });
+
+  await expect(replayMessage).toBeVisible();
+
+  const sample = await replayMessage.evaluate((messageElement) => {
+    const panel = messageElement.parentElement;
+
+    return {
+      htmlHasDarkClass: document.documentElement.classList.contains("dark"),
+      messageColor: getComputedStyle(messageElement).color,
+      panelBackground: panel ? getComputedStyle(panel).backgroundColor : "",
+      shellColor: getComputedStyle(document.querySelector("main")!).color,
+    };
+  });
+
+  expect(sample.htmlHasDarkClass).toBe(true);
+  expect(sample.messageColor).toBe(sample.shellColor);
+  await expectResolvedThemeColor(
+    page,
+    sample.panelBackground,
+    panelBackgroundVariable,
+    "backgroundColor",
+  );
 }
 
 async function expectSharedStartScreenTheme(page: Page, startScreenTestId: string) {
@@ -328,6 +527,28 @@ for (const layoutCase of layoutCases) {
     await expectGameLayout(page, layoutCase);
   });
 }
+
+test.describe("dark app theme game palettes", () => {
+  for (const layoutCase of layoutCases) {
+    test(`${layoutCase.name} uses dark game chrome tokens`, async ({ page }) => {
+      await seedDarkAppTheme(page);
+      await openLauncher(page);
+      await openGame(page, layoutCase.gameId);
+
+      await expect(page.getByTestId(layoutCase.statusTestId)).toHaveText("Ready");
+      await expectDarkGameChrome(page, layoutCase);
+    });
+  }
+
+  for (const replayMessageCase of replayMessageCases) {
+    test(`${replayMessageCase.gameId} replay message uses dark game chrome`, async ({
+      page,
+    }) => {
+      await seedDarkAppTheme(page);
+      await expectDarkReplayMessagePanel(page, replayMessageCase);
+    });
+  }
+});
 
 test.describe("compact desktop viewport", () => {
   test.use({ viewport: compactDesktopViewport });

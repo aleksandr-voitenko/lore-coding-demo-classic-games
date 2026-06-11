@@ -611,44 +611,44 @@ function SimonLiveGame({
   }, [game.status, isHelpVisible, pendingLeaderboardEntry, pressPad, startGame, toggleRunState]);
 
   return (
-    <GameShell className="bg-[#f6f9fc] text-[#172033]">
+    <GameShell className="bg-[var(--simon-page)] text-[var(--simon-ink)]">
       <GameBoardColumn className="w-[min(92vw,37.25rem,calc(100svh_-_12rem))]">
-        <GameSidebar className="border-[#d6dfeb] bg-white">
+        <GameSidebar className="simon-chrome-border bg-[var(--simon-panel)]">
           <GameHeader status={statusLabel} statusTestId="simon-status" title="Simon" />
 
           <GameStatsBar>
             <GameStatCard
-              className="border-[#d6dfeb]"
+              className="simon-chrome-border"
               label="Score"
-              labelClassName="text-[#59687d]"
+              labelClassName="text-[var(--simon-muted)]"
               value={game.score}
               valueTestId="simon-score"
             />
             <GameStatCard
-              className="border-[#d6dfeb]"
+              className="simon-chrome-border"
               label="Round"
-              labelClassName="text-[#59687d]"
+              labelClassName="text-[var(--simon-muted)]"
               value={game.round}
               valueTestId="simon-round"
             />
             <GameStatCard
-              className="border-[#d6dfeb]"
+              className="simon-chrome-border"
               label="Progress"
-              labelClassName="text-[#59687d]"
+              labelClassName="text-[var(--simon-muted)]"
               value={progressLabel}
               valueTestId="simon-progress"
             />
             <GameStatCard
-              className="border-[#d6dfeb]"
+              className="simon-chrome-border"
               label="Target"
-              labelClassName="text-[#59687d]"
+              labelClassName="text-[var(--simon-muted)]"
               value={game.winTarget}
               valueTestId="simon-target"
             />
             <GameStatCard
-              className="border-[#d6dfeb]"
+              className="simon-chrome-border"
               label="Speed"
-              labelClassName="text-[#59687d]"
+              labelClassName="text-[var(--simon-muted)]"
               value={playbackDelay === null ? "0" : Math.round(1000 / playbackDelay)}
               valueTestId="simon-speed"
             />
@@ -684,7 +684,7 @@ function SimonLiveGame({
               <GameStartScreenHeader
                 preview={
                   <div
-                    className="grid size-20 grid-cols-2 gap-1 rounded-full border-8 border-[#141923] bg-[#141923] p-1"
+                    className="simon-board-ring-border grid size-20 grid-cols-2 gap-1 rounded-full border-8 bg-[var(--simon-board-ring)] p-1"
                     aria-hidden="true"
                   >
                     <span className="rounded-tl-full bg-[#25a75a]" />
@@ -712,21 +712,21 @@ function SimonLiveGame({
             </GameStartScreen>
           ) : showCorrectFeedback ? (
             <div
-              className="pointer-events-none absolute inset-3 flex items-center justify-center rounded-[0.375rem] text-center text-[#172033]"
+              className="pointer-events-none absolute inset-3 flex items-center justify-center rounded-[0.375rem] text-center text-[var(--simon-feedback-ink)]"
               data-testid="simon-correct-feedback"
               role="status"
             >
-              <p className="simon-turn-feedback rounded-md border border-[#172033]/10 bg-[#f8fbff]/88 px-5 py-3 text-3xl font-black tracking-normal shadow-[0_18px_46px_rgba(15,23,42,0.22)] backdrop-blur-[2px] sm:text-4xl">
+              <p className="simon-turn-feedback simon-feedback-border rounded-md border bg-[var(--simon-feedback-panel)] px-5 py-3 text-3xl font-black tracking-normal shadow-[0_18px_46px_var(--simon-feedback-shadow)] backdrop-blur-[2px] sm:text-4xl">
                 CORRECT!
               </p>
             </div>
           ) : showMissFeedback ? (
             <div
-              className="pointer-events-none absolute inset-3 flex items-center justify-center rounded-[0.375rem] text-center text-[#172033]"
+              className="pointer-events-none absolute inset-3 flex items-center justify-center rounded-[0.375rem] text-center text-[var(--simon-feedback-ink)]"
               data-testid="simon-miss-feedback"
               role="status"
             >
-              <p className="simon-turn-feedback rounded-md border border-[#8a2431]/20 bg-[#fff5f6]/90 px-5 py-3 text-3xl font-black tracking-normal text-[#8a2431] shadow-[0_18px_46px_rgba(138,36,49,0.24)] backdrop-blur-[2px] sm:text-4xl">
+              <p className="simon-turn-feedback simon-miss-border rounded-md border bg-[var(--simon-miss-panel)] px-5 py-3 text-3xl font-black tracking-normal text-[var(--simon-miss)] shadow-[0_18px_46px_color-mix(in_oklch,var(--simon-miss)_24%,transparent)] backdrop-blur-[2px] sm:text-4xl">
                 MISS!
               </p>
             </div>
@@ -760,7 +760,6 @@ function SimonLiveGame({
                 }}
               />
               <GameReplaySaveAction
-                errorClassName="text-[#59687d]"
                 onSave={saveFinishedReplay}
                 replayReady={finishedReplay !== null}
                 status={replaySaveStatus}
@@ -769,7 +768,7 @@ function SimonLiveGame({
             </GameEndScreen>
           ) : showPauseScreen ? (
             <div
-              className="absolute inset-3 flex items-center justify-center rounded-[0.375rem] bg-[#f8fbff]/78 text-center text-[#172033] backdrop-blur-[2px]"
+              className="absolute inset-3 flex items-center justify-center rounded-[0.375rem] bg-[var(--simon-pause-scrim)] text-center text-[var(--simon-feedback-ink)] backdrop-blur-[2px]"
               data-testid="simon-board-state"
             >
               <div className="flex flex-col items-center gap-3">

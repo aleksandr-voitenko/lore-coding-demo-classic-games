@@ -72,7 +72,7 @@ function BreakoutReplayMessage({
           statusTestId="breakout-replay-status"
           title="Breakout replay"
         />
-        <p className="text-lg font-semibold tracking-normal text-black">{message}</p>
+        <p className="text-lg font-semibold tracking-normal">{message}</p>
         <Button onClick={onBackToProfile} type="button" variant="secondary">
           <ArrowLeftIcon data-icon="inline-start" />
           Back

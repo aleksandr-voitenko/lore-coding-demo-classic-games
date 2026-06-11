@@ -68,7 +68,7 @@ function PongReplayMessage({
     <GameShell className="bg-[var(--pong-page)] text-[var(--pong-ink)]">
       <div className="mx-auto flex min-h-[60svh] w-full max-w-md flex-col items-center justify-center gap-4 rounded-md border border-[var(--pong-border)] bg-[var(--pong-panel)] p-6 text-center shadow-sm">
         <GameHeader status={status} statusTestId="pong-replay-status" title="Pong replay" />
-        <p className="text-lg font-semibold tracking-normal text-black">{message}</p>
+        <p className="text-lg font-semibold tracking-normal">{message}</p>
         <Button onClick={onBackToProfile} type="button" variant="secondary">
           <ArrowLeftIcon data-icon="inline-start" />
           Back

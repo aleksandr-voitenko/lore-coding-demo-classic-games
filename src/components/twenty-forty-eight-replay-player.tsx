@@ -86,7 +86,7 @@ function TwentyFortyEightReplayMessage({
           statusTestId="twenty-forty-eight-replay-status"
           title="2048 replay"
         />
-        <p className="text-lg font-semibold tracking-normal text-black">{message}</p>
+        <p className="text-lg font-semibold tracking-normal">{message}</p>
         <Button onClick={onBackToProfile} type="button" variant="secondary">
           <ArrowLeftIcon data-icon="inline-start" />
           Back

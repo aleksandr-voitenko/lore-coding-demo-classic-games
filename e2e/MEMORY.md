@@ -8,6 +8,10 @@ This file covers Playwright browser-flow coverage under `e2e/`.
   for broad TSX markup assertions: launcher handoff, configurable parameters,
   Help/Escape flows, real keyboard/pointer input, responsive overlays, and
   leaderboard client/server integration.
+- `game-layout.spec.ts` covers shared board/stats geometry, high-contrast ready
+  screens, and dark app-theme game palette regressions. Dark palette checks
+  compare rendered game chrome to the resolved per-game CSS variables so tests
+  can tolerate browser color serialization differences.
 - Keep the suite focused as a smoke/regression layer over the browser experience.
   Deterministic game rules and pure helpers belong in Vitest near `src/lib`.
 - `support/app.ts` contains small route and interaction helpers such as

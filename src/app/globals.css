@@ -184,6 +184,24 @@
   --pong-panel: oklch(1 0 0);
   --pong-pink: oklch(0.75 0.17 335);
   --pong-score-line: oklch(0.91 0.02 245 / 70%);
+  --simon-board-center: oklch(0.23 0.03 255);
+  --simon-board-center-ink: oklch(0.99 0.004 245);
+  --simon-board-ring: oklch(0.17 0.025 255);
+  --simon-board-shell: oklch(0.985 0.01 245);
+  --simon-board-shell-border: oklch(0.88 0.02 245);
+  --simon-board-shell-shadow: oklch(0.26 0.03 250 / 13%);
+  --simon-border: oklch(0.87 0.026 245);
+  --simon-feedback-border: oklch(0.2 0.03 245 / 10%);
+  --simon-feedback-ink: oklch(0.19 0.035 245);
+  --simon-feedback-panel: oklch(0.985 0.01 245 / 88%);
+  --simon-feedback-shadow: oklch(0.26 0.03 250 / 22%);
+  --simon-ink: oklch(0.19 0.035 245);
+  --simon-miss: oklch(0.48 0.16 25);
+  --simon-miss-panel: oklch(0.97 0.018 20 / 90%);
+  --simon-muted: oklch(0.46 0.035 245);
+  --simon-page: oklch(0.982 0.011 245);
+  --simon-panel: oklch(1 0 0);
+  --simon-pause-scrim: oklch(0.985 0.01 245 / 78%);
   --twenty-board: oklch(0.41 0.04 246);
   --twenty-board-border: oklch(0.35 0.04 246);
   --twenty-board-text: oklch(0.98 0.01 245);
@@ -260,6 +278,64 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
+  --snake-border: oklch(1 0 0 / 14%);
+  --snake-ink: oklch(0.97 0.012 145);
+  --snake-muted: oklch(0.73 0.04 150);
+  --snake-page: oklch(0.14 0.026 158);
+  --snake-panel: oklch(0.2 0.032 158);
+  --breakout-border: oklch(1 0 0 / 14%);
+  --breakout-ink: oklch(0.97 0.012 250);
+  --breakout-muted: oklch(0.73 0.036 250);
+  --breakout-page: oklch(0.14 0.022 265);
+  --breakout-panel: oklch(0.205 0.026 265);
+  --minesweeper-border: oklch(1 0 0 / 14%);
+  --minesweeper-ink: oklch(0.97 0.012 150);
+  --minesweeper-muted: oklch(0.73 0.036 155);
+  --minesweeper-page: oklch(0.145 0.022 160);
+  --minesweeper-panel: oklch(0.205 0.026 160);
+  --invaders-border: oklch(1 0 0 / 14%);
+  --invaders-ink: oklch(0.97 0.012 245);
+  --invaders-muted: oklch(0.73 0.036 245);
+  --invaders-page: oklch(0.12 0.024 270);
+  --invaders-panel: oklch(0.18 0.03 270);
+  --asteroids-border: oklch(1 0 0 / 14%);
+  --asteroids-ink: oklch(0.97 0.012 220);
+  --asteroids-muted: oklch(0.73 0.035 220);
+  --asteroids-page: oklch(0.12 0.024 235);
+  --asteroids-panel: oklch(0.18 0.028 235);
+  --pong-border: oklch(1 0 0 / 14%);
+  --pong-ink: oklch(0.97 0.012 245);
+  --pong-muted: oklch(0.73 0.036 245);
+  --pong-page: oklch(0.13 0.022 260);
+  --pong-panel: oklch(0.19 0.028 260);
+  --simon-board-center: oklch(0.24 0.03 250);
+  --simon-board-center-ink: oklch(0.985 0.006 245);
+  --simon-board-ring: oklch(0.1 0.018 255);
+  --simon-board-shell: oklch(0.18 0.025 250);
+  --simon-board-shell-border: oklch(1 0 0 / 13%);
+  --simon-board-shell-shadow: oklch(0 0 0 / 42%);
+  --simon-border: oklch(1 0 0 / 14%);
+  --simon-feedback-border: oklch(1 0 0 / 16%);
+  --simon-feedback-ink: oklch(0.97 0.012 245);
+  --simon-feedback-panel: oklch(0.2 0.026 250 / 88%);
+  --simon-feedback-shadow: oklch(0 0 0 / 45%);
+  --simon-ink: oklch(0.97 0.012 245);
+  --simon-miss: oklch(0.78 0.16 25);
+  --simon-miss-panel: oklch(0.22 0.04 25 / 90%);
+  --simon-muted: oklch(0.73 0.036 245);
+  --simon-page: oklch(0.145 0.018 250);
+  --simon-panel: oklch(0.205 0.022 250);
+  --simon-pause-scrim: oklch(0.16 0.022 250 / 78%);
+  --twenty-border: oklch(1 0 0 / 14%);
+  --twenty-ink: oklch(0.97 0.012 245);
+  --twenty-muted: oklch(0.73 0.036 245);
+  --twenty-page: oklch(0.145 0.018 246);
+  --twenty-panel: oklch(0.205 0.022 246);
+  --tetris-border: oklch(1 0 0 / 14%);
+  --tetris-ink: oklch(0.97 0.012 250);
+  --tetris-muted: oklch(0.73 0.036 250);
+  --tetris-page: oklch(0.13 0.022 258);
+  --tetris-panel: oklch(0.19 0.028 258);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -314,6 +390,26 @@
 .simon-turn-feedback {
   animation: simon-turn-feedback-fade 1000ms ease-out forwards;
   will-change: opacity, transform;
+}
+
+.simon-board-ring-border {
+  border-color: var(--simon-board-ring);
+}
+
+.simon-board-shell-border {
+  border-color: var(--simon-board-shell-border);
+}
+
+.simon-chrome-border {
+  border-color: var(--simon-border);
+}
+
+.simon-feedback-border {
+  border-color: var(--simon-feedback-border);
+}
+
+.simon-miss-border {
+  border-color: color-mix(in oklch, var(--simon-miss) 36%, transparent);
 }
 
 @keyframes space-invaders-player-shield-pulse {
