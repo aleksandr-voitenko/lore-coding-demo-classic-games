@@ -22,6 +22,7 @@ import {
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
   parseGameReplayEventEnvelope,
+  parseGameReplayEvents,
   saveGameReplay,
   type BaseGameReplayPayload,
   type GameReplayEventEnvelope,
@@ -171,20 +172,15 @@ export function parsePongReplayPayload(value: unknown): ParsePongReplayPayloadRe
     };
   }
 
-  if (!Array.isArray(value.events) || value.events.length > MAX_PONG_REPLAY_EVENTS) {
-    return {
-      error: "Pong replay events are not supported.",
-      success: false,
-    };
-  }
+  const events = parseGameReplayEvents(value.events, {
+    maxEventCount: MAX_PONG_REPLAY_EVENTS,
+    parseEvent: parsePongReplayEvent,
+    unsupportedEventError: "Pong replay includes an unsupported event.",
+    unsupportedEventsError: "Pong replay events are not supported.",
+  });
 
-  const events = value.events.map(parsePongReplayEvent);
-
-  if (events.some((event) => event === null)) {
-    return {
-      error: "Pong replay includes an unsupported event.",
-      success: false,
-    };
+  if (!events.success) {
+    return events;
   }
 
   return {
@@ -192,7 +188,7 @@ export function parsePongReplayPayload(value: unknown): ParsePongReplayPayloadRe
       ...baseReplay.payload,
       boardHeight,
       boardWidth,
-      events: events as PongReplayEvent[],
+      events: events.payload,
       finalCpuScore: value.finalCpuScore,
       finalPlayerScore: value.finalPlayerScore,
       targetScore,

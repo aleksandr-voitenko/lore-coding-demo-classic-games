@@ -24,6 +24,7 @@ import {
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
   parseGameReplayEventEnvelope,
+  parseGameReplayEvents,
   saveGameReplay,
   type BaseGameReplayPayload,
   type GameReplayEventEnvelope,
@@ -215,23 +216,15 @@ export function parseSpaceInvadersReplayPayload(
     };
   }
 
-  if (
-    !Array.isArray(value.events) ||
-    value.events.length > MAX_SPACE_INVADERS_REPLAY_EVENTS
-  ) {
-    return {
-      error: "Space Invaders replay events are not supported.",
-      success: false,
-    };
-  }
+  const events = parseGameReplayEvents(value.events, {
+    maxEventCount: MAX_SPACE_INVADERS_REPLAY_EVENTS,
+    parseEvent: parseSpaceInvadersReplayEvent,
+    unsupportedEventError: "Space Invaders replay includes an unsupported event.",
+    unsupportedEventsError: "Space Invaders replay events are not supported.",
+  });
 
-  const events = value.events.map(parseSpaceInvadersReplayEvent);
-
-  if (events.some((event) => event === null)) {
-    return {
-      error: "Space Invaders replay includes an unsupported event.",
-      success: false,
-    };
+  if (!events.success) {
+    return events;
   }
 
   return {
@@ -240,7 +233,7 @@ export function parseSpaceInvadersReplayPayload(
       alienCount,
       boardHeight,
       boardWidth,
-      events: events as SpaceInvadersReplayEvent[],
+      events: events.payload,
       finalInvaderCount: value.finalInvaderCount,
       finalLives: value.finalLives,
     },

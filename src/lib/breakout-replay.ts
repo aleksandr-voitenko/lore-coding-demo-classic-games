@@ -23,6 +23,7 @@ import {
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
   parseGameReplayEventEnvelope,
+  parseGameReplayEvents,
   saveGameReplay,
   type BaseGameReplayPayload,
   type GameReplayEventEnvelope,
@@ -172,20 +173,15 @@ export function parseBreakoutReplayPayload(
     };
   }
 
-  if (!Array.isArray(value.events) || value.events.length > MAX_BREAKOUT_REPLAY_EVENTS) {
-    return {
-      error: "Breakout replay events are not supported.",
-      success: false,
-    };
-  }
+  const events = parseGameReplayEvents(value.events, {
+    maxEventCount: MAX_BREAKOUT_REPLAY_EVENTS,
+    parseEvent: parseBreakoutReplayEvent,
+    unsupportedEventError: "Breakout replay includes an unsupported event.",
+    unsupportedEventsError: "Breakout replay events are not supported.",
+  });
 
-  const events = value.events.map(parseBreakoutReplayEvent);
-
-  if (events.some((event) => event === null)) {
-    return {
-      error: "Breakout replay includes an unsupported event.",
-      success: false,
-    };
+  if (!events.success) {
+    return events;
   }
 
   return {
@@ -193,7 +189,7 @@ export function parseBreakoutReplayPayload(
       ...baseReplay.payload,
       boardHeight,
       boardWidth,
-      events: events as BreakoutReplayEvent[],
+      events: events.payload,
       finalActiveBrickCount: value.finalActiveBrickCount,
       finalLives: value.finalLives,
       startingLives,

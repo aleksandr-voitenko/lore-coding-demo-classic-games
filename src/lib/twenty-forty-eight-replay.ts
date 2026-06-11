@@ -10,6 +10,7 @@ import {
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
   parseGameReplayEventEnvelope,
+  parseGameReplayEvents,
   saveGameReplay,
   type BaseGameReplayPayload,
   type GameReplayEventEnvelope,
@@ -185,30 +186,22 @@ export function parseTwentyFortyEightReplayPayload(
     };
   }
 
-  if (
-    !Array.isArray(value.events) ||
-    value.events.length > MAX_TWENTY_FORTY_EIGHT_REPLAY_EVENTS
-  ) {
-    return {
-      error: "2048 replay events are not supported.",
-      success: false,
-    };
-  }
+  const events = parseGameReplayEvents(value.events, {
+    maxEventCount: MAX_TWENTY_FORTY_EIGHT_REPLAY_EVENTS,
+    parseEvent: parseTwentyFortyEightReplayEvent,
+    unsupportedEventError: "2048 replay includes an unsupported event.",
+    unsupportedEventsError: "2048 replay events are not supported.",
+  });
 
-  const events = value.events.map(parseTwentyFortyEightReplayEvent);
-
-  if (events.some((event) => event === null)) {
-    return {
-      error: "2048 replay includes an unsupported event.",
-      success: false,
-    };
+  if (!events.success) {
+    return events;
   }
 
   return {
     payload: {
       ...baseReplay.payload,
       boardSize,
-      events: events as TwentyFortyEightReplayEvent[],
+      events: events.payload,
       finalMoveCount: value.finalMoveCount,
       finalTopTile: value.finalTopTile,
       winTile,

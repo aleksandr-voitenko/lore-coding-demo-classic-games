@@ -23,6 +23,7 @@ import {
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
   parseGameReplayEventEnvelope,
+  parseGameReplayEvents,
   saveGameReplay,
   type BaseGameReplayPayload,
   type GameReplayEventEnvelope,
@@ -244,20 +245,15 @@ export function parseAsteroidsReplayPayload(
     };
   }
 
-  if (!Array.isArray(value.events) || value.events.length > MAX_ASTEROIDS_REPLAY_EVENTS) {
-    return {
-      error: "Asteroids replay events are not supported.",
-      success: false,
-    };
-  }
+  const events = parseGameReplayEvents(value.events, {
+    maxEventCount: MAX_ASTEROIDS_REPLAY_EVENTS,
+    parseEvent: parseAsteroidsReplayEvent,
+    unsupportedEventError: "Asteroids replay includes an unsupported event.",
+    unsupportedEventsError: "Asteroids replay events are not supported.",
+  });
 
-  const events = value.events.map(parseAsteroidsReplayEvent);
-
-  if (events.some((event) => event === null)) {
-    return {
-      error: "Asteroids replay includes an unsupported event.",
-      success: false,
-    };
+  if (!events.success) {
+    return events;
   }
 
   return {
@@ -265,7 +261,7 @@ export function parseAsteroidsReplayPayload(
       ...baseReplay.payload,
       boardHeight,
       boardWidth,
-      events: events as AsteroidsReplayEvent[],
+      events: events.payload,
       finalAsteroidCount: value.finalAsteroidCount,
       finalLives: value.finalLives,
       finalWave: value.finalWave,

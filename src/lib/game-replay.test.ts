@@ -14,6 +14,7 @@ import {
   pauseGameReplayActiveClock,
   parseBaseGameReplayPayload,
   parseGameReplayEventEnvelope,
+  parseGameReplayEvents,
   resumeGameReplayActiveClock,
   saveGameReplay,
   type BaseGameReplayPayload,
@@ -228,6 +229,55 @@ describe("game replay", () => {
         allowedTypes,
       ),
     ).toBeNull();
+  });
+
+  it("parses replay event arrays with the provided game event parser", () => {
+    const parseEvent = (value: unknown) =>
+      typeof value === "string" ? { type: value.toUpperCase() } : null;
+
+    expect(
+      parseGameReplayEvents(["start", "advance"], {
+        maxEventCount: 2,
+        parseEvent,
+        unsupportedEventError: "Tetris replay includes an unsupported event.",
+        unsupportedEventsError: "Tetris replay events are not supported.",
+      }),
+    ).toEqual({
+      payload: [{ type: "START" }, { type: "ADVANCE" }],
+      success: true,
+    });
+  });
+
+  it("rejects replay event arrays that are missing or exceed the max event count", () => {
+    const options = {
+      maxEventCount: 1,
+      parseEvent: (value: unknown) => (typeof value === "string" ? value : null),
+      unsupportedEventError: "Tetris replay includes an unsupported event.",
+      unsupportedEventsError: "Tetris replay events are not supported.",
+    };
+
+    expect(parseGameReplayEvents(undefined, options)).toEqual({
+      error: "Tetris replay events are not supported.",
+      success: false,
+    });
+    expect(parseGameReplayEvents(["start", "advance"], options)).toEqual({
+      error: "Tetris replay events are not supported.",
+      success: false,
+    });
+  });
+
+  it("rejects replay event arrays with unsupported parsed events", () => {
+    expect(
+      parseGameReplayEvents(["start", 42], {
+        maxEventCount: 2,
+        parseEvent: (value) => (typeof value === "string" ? value : null),
+        unsupportedEventError: "Tetris replay includes an unsupported event.",
+        unsupportedEventsError: "Tetris replay events are not supported.",
+      }),
+    ).toEqual({
+      error: "Tetris replay includes an unsupported event.",
+      success: false,
+    });
   });
 
   it("shares run creation, save, and fetch API clients by game id", async () => {

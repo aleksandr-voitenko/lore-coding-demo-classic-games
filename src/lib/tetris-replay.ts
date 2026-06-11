@@ -20,6 +20,7 @@ import {
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
   parseGameReplayEventEnvelope,
+  parseGameReplayEvents,
   saveGameReplay,
   type BaseGameReplayPayload,
   type GameReplayEventEnvelope,
@@ -178,20 +179,15 @@ export function parseTetrisReplayPayload(value: unknown): ParseTetrisReplayPaylo
     };
   }
 
-  if (!Array.isArray(value.events) || value.events.length > MAX_TETRIS_REPLAY_EVENTS) {
-    return {
-      error: "Tetris replay events are not supported.",
-      success: false,
-    };
-  }
+  const events = parseGameReplayEvents(value.events, {
+    maxEventCount: MAX_TETRIS_REPLAY_EVENTS,
+    parseEvent: parseTetrisReplayEvent,
+    unsupportedEventError: "Tetris replay includes an unsupported event.",
+    unsupportedEventsError: "Tetris replay events are not supported.",
+  });
 
-  const events = value.events.map(parseTetrisReplayEvent);
-
-  if (events.some((event) => event === null)) {
-    return {
-      error: "Tetris replay includes an unsupported event.",
-      success: false,
-    };
+  if (!events.success) {
+    return events;
   }
 
   return {
@@ -199,7 +195,7 @@ export function parseTetrisReplayPayload(value: unknown): ParseTetrisReplayPaylo
       ...baseReplay.payload,
       boardHeight,
       boardWidth,
-      events: events as TetrisReplayEvent[],
+      events: events.payload,
       finalLevel: value.finalLevel,
       finalLines: value.finalLines,
       startLevel,

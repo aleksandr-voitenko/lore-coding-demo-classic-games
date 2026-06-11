@@ -10,6 +10,7 @@ import {
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
   parseGameReplayEventEnvelope,
+  parseGameReplayEvents,
   saveGameReplay,
   type BaseGameReplayPayload,
   type GameReplayEventEnvelope,
@@ -235,25 +236,19 @@ export function parseMinesweeperReplayPayload(
     };
   }
 
-  if (!Array.isArray(value.events) || value.events.length > MAX_MINESWEEPER_REPLAY_EVENTS) {
-    return {
-      error: "Minesweeper replay events are not supported.",
-      success: false,
-    };
-  }
+  const events = parseGameReplayEvents(value.events, {
+    maxEventCount: MAX_MINESWEEPER_REPLAY_EVENTS,
+    parseEvent: (event) =>
+      parseMinesweeperReplayEvent(event, {
+        boardHeight,
+        boardWidth,
+      }),
+    unsupportedEventError: "Minesweeper replay includes an unsupported event.",
+    unsupportedEventsError: "Minesweeper replay events are not supported.",
+  });
 
-  const events = value.events.map((event) =>
-    parseMinesweeperReplayEvent(event, {
-      boardHeight,
-      boardWidth,
-    }),
-  );
-
-  if (events.some((event) => event === null)) {
-    return {
-      error: "Minesweeper replay includes an unsupported event.",
-      success: false,
-    };
+  if (!events.success) {
+    return events;
   }
 
   return {
@@ -261,7 +256,7 @@ export function parseMinesweeperReplayPayload(
       ...baseReplay.payload,
       boardHeight,
       boardWidth,
-      events: events as MinesweeperReplayEvent[],
+      events: events.payload,
       finalFlagCount: value.finalFlagCount,
       finalRevealedSafeCellCount: value.finalRevealedSafeCellCount,
       mineCount,

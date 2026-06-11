@@ -202,6 +202,48 @@ export function parseGameReplayEventEnvelope<const EventType extends string>(
   } as GameReplayEventEnvelope<EventType>;
 }
 
+export function parseGameReplayEvents<Event>(
+  value: unknown,
+  {
+    maxEventCount,
+    parseEvent,
+    unsupportedEventError,
+    unsupportedEventsError,
+  }: {
+    maxEventCount: number;
+    parseEvent: (value: unknown) => Event | null;
+    unsupportedEventError: string;
+    unsupportedEventsError: string;
+  },
+): ParseGameReplayPayloadResult<Event[]> {
+  if (!Array.isArray(value) || value.length > maxEventCount) {
+    return {
+      error: unsupportedEventsError,
+      success: false,
+    };
+  }
+
+  const events: Event[] = [];
+
+  for (const eventValue of value) {
+    const event = parseEvent(eventValue);
+
+    if (event === null) {
+      return {
+        error: unsupportedEventError,
+        success: false,
+      };
+    }
+
+    events.push(event);
+  }
+
+  return {
+    payload: events,
+    success: true,
+  };
+}
+
 export function parseBaseGameReplayPayload<
   const GameId extends string,
   const SchemaVersion extends number,

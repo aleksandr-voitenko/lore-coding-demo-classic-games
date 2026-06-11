@@ -21,6 +21,7 @@ import {
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
   parseGameReplayEventEnvelope,
+  parseGameReplayEvents,
   saveGameReplay,
   type BaseGameReplayPayload,
   type GameReplayEventEnvelope,
@@ -166,26 +167,21 @@ export function parseSnakeReplayPayload(value: unknown): ParseSnakeReplayPayload
     };
   }
 
-  if (!Array.isArray(value.events) || value.events.length > MAX_SNAKE_REPLAY_EVENTS) {
-    return {
-      error: "Snake replay events are not supported.",
-      success: false,
-    };
-  }
+  const events = parseGameReplayEvents(value.events, {
+    maxEventCount: MAX_SNAKE_REPLAY_EVENTS,
+    parseEvent: parseSnakeReplayEvent,
+    unsupportedEventError: "Snake replay includes an unsupported event.",
+    unsupportedEventsError: "Snake replay events are not supported.",
+  });
 
-  const events = value.events.map(parseSnakeReplayEvent);
-
-  if (events.some((event) => event === null)) {
-    return {
-      error: "Snake replay includes an unsupported event.",
-      success: false,
-    };
+  if (!events.success) {
+    return events;
   }
 
   return {
     payload: {
       ...baseReplay.payload,
-      events: events as SnakeReplayEvent[],
+      events: events.payload,
       finalLevel: value.finalLevel,
     },
     success: true,

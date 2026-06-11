@@ -23,6 +23,7 @@ import {
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
   parseGameReplayEventEnvelope,
+  parseGameReplayEvents,
   saveGameReplay,
   type BaseGameReplayPayload,
   type GameReplayEventEnvelope,
@@ -197,26 +198,21 @@ export function parseSimonReplayPayload(value: unknown): ParseSimonReplayPayload
     };
   }
 
-  if (!Array.isArray(value.events) || value.events.length > MAX_SIMON_REPLAY_EVENTS) {
-    return {
-      error: "Simon replay events are not supported.",
-      success: false,
-    };
-  }
+  const events = parseGameReplayEvents(value.events, {
+    maxEventCount: MAX_SIMON_REPLAY_EVENTS,
+    parseEvent: parseSimonReplayEvent,
+    unsupportedEventError: "Simon replay includes an unsupported event.",
+    unsupportedEventsError: "Simon replay events are not supported.",
+  });
 
-  const events = value.events.map(parseSimonReplayEvent);
-
-  if (events.some((event) => event === null)) {
-    return {
-      error: "Simon replay includes an unsupported event.",
-      success: false,
-    };
+  if (!events.success) {
+    return events;
   }
 
   return {
     payload: {
       ...baseReplay.payload,
-      events: events as SimonReplayEvent[],
+      events: events.payload,
       finalInputIndex: value.finalInputIndex,
       finalRound: value.finalRound,
       finalSequenceLength: value.finalSequenceLength,
