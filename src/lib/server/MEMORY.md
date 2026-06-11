@@ -5,6 +5,11 @@ This file covers Node-only server helpers and storage adapters under
 
 ## Leaderboard Store Boundary
 
+- Production modules in this folder import `server-only` so Next fails the build
+  if a client component accidentally pulls Node-only storage, cookie, or crypto
+  helpers into a browser bundle. Add the same marker to new runtime modules under
+  this boundary; tests use the shared Vitest resolver alias for the empty server
+  marker implementation.
 - `leaderboard-store.ts` defines the small `LeaderboardStore` interface used by
   the API route and tests. Keep parsing, validation, normalized submissions, JSON
   response shaping, and rank calculation behind this boundary.

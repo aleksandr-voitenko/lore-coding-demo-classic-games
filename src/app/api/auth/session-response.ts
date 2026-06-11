@@ -1,3 +1,5 @@
+import "server-only";
+
 import { NextResponse } from "next/server";
 
 import type { UserSession } from "@/lib/server/sqlite-user-profile-store";

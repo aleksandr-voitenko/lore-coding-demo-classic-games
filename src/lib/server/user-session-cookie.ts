@@ -1,3 +1,5 @@
+import "server-only";
+
 export const USER_SESSION_COOKIE_NAME = "game_user_session";
 export const USER_SESSION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 60;
 
