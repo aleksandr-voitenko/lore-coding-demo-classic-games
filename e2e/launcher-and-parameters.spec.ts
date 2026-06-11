@@ -13,6 +13,10 @@ import {
   signUpFromLauncher,
 } from "./support/app";
 
+const appThemeStorageKey = "game-library-theme";
+const themeCleanupSessionFlag = "game-library-theme-cleaned";
+const themeSeedSessionFlag = "game-library-theme-seeded";
+
 const gameCardIds = [
   "snake",
   "tetris",
@@ -35,6 +39,15 @@ type LauncherParameterHandoffCase = {
     testId: string;
     value: string;
   }[];
+};
+
+type ChromeThemeSample = {
+  background: string;
+  color: string;
+  expectedBackground: string;
+  expectedColor: string;
+  htmlHasDarkClass: boolean;
+  storedTheme: string | null;
 };
 
 const launcherParameterHandoffCases: LauncherParameterHandoffCase[] = [
@@ -158,6 +171,91 @@ const launcherParameterHandoffCases: LauncherParameterHandoffCase[] = [
   },
 ];
 
+async function expectChromeUsesAppTheme(
+  page: Page,
+  testId: string,
+  expectedTheme: "dark" | "light",
+  backgroundVariable = "--chrome-page",
+) {
+  const sample = await page
+    .getByTestId(testId)
+    .evaluate(
+      (
+        element,
+        {
+          expectedBackgroundVariable,
+          storageKey,
+          targetTestId,
+        }: {
+          expectedBackgroundVariable: string;
+          storageKey: string;
+          targetTestId: string;
+        },
+      ): ChromeThemeSample => {
+        const rootStyles = getComputedStyle(document.documentElement);
+        const probe = document.createElement("span");
+
+        probe.style.backgroundColor = rootStyles
+          .getPropertyValue(expectedBackgroundVariable)
+          .trim();
+        probe.style.color = rootStyles.getPropertyValue("--chrome-ink").trim();
+        document.body.append(probe);
+
+        const elementStyles = getComputedStyle(element);
+        const probeStyles = getComputedStyle(probe);
+        const sample = {
+          background: elementStyles.backgroundColor,
+          color: elementStyles.color,
+          expectedBackground: probeStyles.backgroundColor,
+          expectedColor: probeStyles.color,
+          htmlHasDarkClass: document.documentElement.classList.contains("dark"),
+          storedTheme: window.localStorage.getItem(storageKey),
+        };
+
+        probe.remove();
+
+        if (element.dataset.testid !== targetTestId) {
+          throw new Error(`Expected ${targetTestId} chrome sample.`);
+        }
+
+        return sample;
+      },
+      {
+        expectedBackgroundVariable: backgroundVariable,
+        storageKey: appThemeStorageKey,
+        targetTestId: testId,
+      },
+    );
+
+  expect(sample.background).toBe(sample.expectedBackground);
+  expect(sample.color).toBe(sample.expectedColor);
+  expect(sample.htmlHasDarkClass).toBe(expectedTheme === "dark");
+  expect(sample.storedTheme).toBe(expectedTheme);
+}
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(({ cleanupFlag, seedFlag, storageKey }) => {
+    if (window.sessionStorage.getItem(cleanupFlag) === "1") {
+      return;
+    }
+
+    window.localStorage.removeItem(storageKey);
+    window.sessionStorage.removeItem(seedFlag);
+    window.sessionStorage.setItem(cleanupFlag, "1");
+
+    const root = document.documentElement;
+
+    if (root) {
+      root.classList.remove("dark");
+      root.style.setProperty("color-scheme", "light");
+    }
+  }, {
+    cleanupFlag: themeCleanupSessionFlag,
+    seedFlag: themeSeedSessionFlag,
+    storageKey: appThemeStorageKey,
+  });
+});
+
 test("launcher renders game cards and configurable parameters", async ({ page }) => {
   await openLauncher(page);
 
@@ -171,6 +269,74 @@ test("launcher renders game cards and configurable parameters", async ({ page })
   await expect(page.getByTestId("tetris-start-level")).toHaveValue("1");
   await expect(page.getByTestId("minesweeper-mines")).toHaveValue("10");
   await expect(page.getByTestId("asteroids-rocks")).toHaveValue("6");
+});
+
+test("theme switching persists across launcher, auth dialog, profile, and account menu chrome", async ({
+  page,
+}) => {
+  await page.addInitScript(({ flagKey, storageKey }) => {
+    if (window.sessionStorage.getItem(flagKey) === "1") {
+      return;
+    }
+
+    window.localStorage.setItem(storageKey, "dark");
+    window.sessionStorage.setItem(flagKey, "1");
+  }, {
+    flagKey: themeSeedSessionFlag,
+    storageKey: appThemeStorageKey,
+  });
+
+  await openLauncher(page);
+
+  await expect(page.getByTestId("launcher-theme-toggle")).toHaveAccessibleName(
+    "Switch to light mode",
+  );
+  await expectChromeUsesAppTheme(page, "game-menu", "dark");
+
+  await page.getByTestId("launcher-theme-toggle").click();
+  await expect(page.getByTestId("launcher-theme-toggle")).toHaveAccessibleName(
+    "Switch to dark mode",
+  );
+  await expectChromeUsesAppTheme(page, "game-menu", "light");
+
+  await page.getByTestId("sign-up-open-button").click();
+  await expect(page.getByTestId("auth-dialog")).toBeVisible();
+  await page.getByTestId("auth-theme-toggle").click();
+  await expect(page.getByTestId("auth-theme-toggle")).toHaveAccessibleName(
+    "Switch to light mode",
+  );
+  await expectChromeUsesAppTheme(page, "auth-dialog", "dark", "--chrome-panel");
+  await page.getByTestId("auth-displayName-input").fill("Theme Hero");
+  await page.getByTestId("auth-password-input").fill("password123");
+  await page.getByTestId("auth-passwordConfirmation-input").fill("password123");
+  await page.getByTestId("auth-submit-button").click();
+  await expectSignedInProfileMenu(page, "Theme Hero");
+  await expectChromeUsesAppTheme(page, "game-menu", "dark");
+
+  await openProfileMenu(page);
+  await expect(page.getByTestId("profile-menu-theme-toggle")).toHaveText("Light mode");
+  await expectChromeUsesAppTheme(page, "profile-menu", "dark", "--chrome-panel");
+  await page.getByTestId("profile-menu-theme-toggle").click();
+  await expect(page.getByTestId("profile-menu")).toHaveCount(0);
+  await expectChromeUsesAppTheme(page, "game-menu", "light");
+
+  await page.reload();
+  await expect(page.getByTestId("game-menu")).toBeVisible();
+  await expectChromeUsesAppTheme(page, "game-menu", "light");
+
+  await page.getByTestId("launcher-theme-toggle").click();
+  await openProfileFromLauncher(page);
+  await expect(page.getByRole("heading", { name: "Theme Hero" })).toBeVisible();
+  await expect(page.getByTestId("profile-theme-toggle")).toHaveAccessibleName(
+    "Switch to light mode",
+  );
+  await expectChromeUsesAppTheme(page, "profile-page", "dark");
+
+  await page.getByTestId("profile-theme-toggle").click();
+  await expect(page.getByTestId("profile-theme-toggle")).toHaveAccessibleName(
+    "Switch to dark mode",
+  );
+  await expectChromeUsesAppTheme(page, "profile-page", "light");
 });
 
 test("Snake opens in level progression mode at level one", async ({ page }) => {
@@ -298,9 +464,9 @@ test("launcher renders signed-in account controls as one circular profile menu",
     const rootStyles = getComputedStyle(document.documentElement);
     const probe = document.createElement("span");
 
-    probe.style.backgroundColor = rootStyles.getPropertyValue("--snake-panel").trim();
-    probe.style.borderColor = rootStyles.getPropertyValue("--snake-border").trim();
-    probe.style.color = rootStyles.getPropertyValue("--snake-ink").trim();
+    probe.style.backgroundColor = rootStyles.getPropertyValue("--chrome-panel").trim();
+    probe.style.borderColor = rootStyles.getPropertyValue("--chrome-border").trim();
+    probe.style.color = rootStyles.getPropertyValue("--chrome-ink").trim();
     document.body.append(probe);
 
     const tooltipStyles = getComputedStyle(element);

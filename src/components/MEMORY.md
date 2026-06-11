@@ -30,7 +30,9 @@ This file covers React component ownership and shared game UI conventions under
   `user-account-auth-dialog.tsx` and the signed-in circular menu implementation
   in `user-account-profile-menu.tsx`. Durable account state belongs in the
   provider; local component state should stay limited to auth mode, form values,
-  menu/tooltip intent, pending state, and field-level errors.
+  menu/tooltip intent, pending state, and field-level errors. Account chrome can
+  host the shared `ThemeToggle`, but theme persistence and `<html class="dark">`
+  mutation belong to `use-app-theme.ts`.
 
 ## Shared Layout
 

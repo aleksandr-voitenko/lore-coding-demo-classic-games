@@ -17,9 +17,15 @@ This file covers routes and App Router conventions under `src/app/`.
   tiny client shortcut component so Escape mirrors the visible Back to games
   action and returns signed-in users to the launcher.
 - `layout.tsx` owns the global HTML shell, Geist font variables, `globals.css`
-  import, and app metadata. Keep public title/description changes aligned with
-  README when the visible catalog changes.
-- `globals.css` owns global Tailwind/theme styles for the game collection.
+  import, app metadata, and the small pre-hydration script that applies the
+  persisted light/dark chrome theme class and `--chrome-*` variables to
+  `<html>`. Keep public title/description changes aligned with README when the
+  visible catalog changes.
+- `globals.css` owns global Tailwind/theme styles for the game collection. The
+  launcher, profile, and account chrome consume app-level `--chrome-*` variables
+  supplied by `src/lib/app-theme.ts`; per-game board and page/panel palettes
+  remain separate game tokens unless a task is explicitly auditing those
+  palettes.
 
 ## Leaderboard API
 

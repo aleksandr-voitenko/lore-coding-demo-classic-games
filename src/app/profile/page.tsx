@@ -14,6 +14,7 @@ import { formatProfileLastPlayed } from "@/lib/profile-time";
 import { getUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
 import { USER_SESSION_COOKIE_NAME } from "@/lib/server/user-session-cookie";
 import type { UserProfileGameStat } from "@/lib/user-profile";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { ProfileEscapeToLauncher } from "./profile-escape-to-launcher";
 
 export const dynamic = "force-dynamic";
@@ -73,22 +74,28 @@ export default async function ProfilePage() {
   );
 
   return (
-    <main className="min-h-svh bg-[var(--snake-page)] px-4 py-6 text-[var(--snake-ink)] sm:px-6 lg:py-8">
+    <main
+      className="min-h-svh bg-[var(--chrome-page)] px-4 py-6 text-[var(--chrome-ink)] sm:px-6 lg:py-8"
+      data-testid="profile-page"
+    >
       <ProfileEscapeToLauncher />
       <section className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex flex-col gap-1">
-            <p className="text-sm font-semibold text-[var(--snake-muted)]">Profile</p>
-            <h1 className="text-3xl font-semibold tracking-normal text-black sm:text-4xl">
+            <p className="text-sm font-semibold text-[var(--chrome-muted)]">Profile</p>
+            <h1 className="text-3xl font-semibold tracking-normal text-[var(--chrome-ink)] sm:text-4xl">
               {profile.user.displayName}
             </h1>
           </div>
-          <Link
-            className="inline-flex h-9 w-fit items-center justify-center rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] px-3 text-sm font-medium shadow-sm transition hover:bg-[color-mix(in_oklch,var(--snake-head)_12%,white)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[color-mix(in_oklch,var(--snake-head)_25%,transparent)]"
-            href="/"
-          >
-            Back to games
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <ThemeToggle testId="profile-theme-toggle" />
+            <Link
+              className="inline-flex h-9 w-fit items-center justify-center rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] px-3 text-sm font-medium text-[var(--chrome-ink)] shadow-sm transition hover:bg-[var(--chrome-accent-faint)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--chrome-focus-ring)]"
+              href="/"
+            >
+              Back to games
+            </Link>
+          </div>
         </header>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -102,27 +109,27 @@ export default async function ProfilePage() {
         </div>
 
         {games.length > 0 ? (
-          <div className="overflow-hidden rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] shadow-sm">
+          <div className="overflow-hidden rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] shadow-sm">
             <div className="grid grid-cols-[5.5rem_minmax(9rem,1.2fr)_repeat(6,minmax(5rem,0.7fr))] gap-0 overflow-x-auto">
-              <div className="contents text-xs font-semibold uppercase tracking-normal text-[var(--snake-muted)]">
-                <div className="border-b border-[var(--snake-border)] px-3 py-2">Preview</div>
-                <div className="border-b border-[var(--snake-border)] px-3 py-2">Game</div>
-                <div className="border-b border-[var(--snake-border)] px-3 py-2 text-right">
+              <div className="contents text-xs font-semibold uppercase tracking-normal text-[var(--chrome-muted)]">
+                <div className="border-b border-[var(--chrome-border)] px-3 py-2">Preview</div>
+                <div className="border-b border-[var(--chrome-border)] px-3 py-2">Game</div>
+                <div className="border-b border-[var(--chrome-border)] px-3 py-2 text-right">
                   Time
                 </div>
-                <div className="border-b border-[var(--snake-border)] px-3 py-2 text-right">
+                <div className="border-b border-[var(--chrome-border)] px-3 py-2 text-right">
                   Sessions
                 </div>
-                <div className="border-b border-[var(--snake-border)] px-3 py-2 text-right">
+                <div className="border-b border-[var(--chrome-border)] px-3 py-2 text-right">
                   Wins
                 </div>
-                <div className="border-b border-[var(--snake-border)] px-3 py-2 text-right">
+                <div className="border-b border-[var(--chrome-border)] px-3 py-2 text-right">
                   Best
                 </div>
-                <div className="border-b border-[var(--snake-border)] px-3 py-2 text-right">
+                <div className="border-b border-[var(--chrome-border)] px-3 py-2 text-right">
                   Last Replay
                 </div>
-                <div className="border-b border-[var(--snake-border)] px-3 py-2 text-right">
+                <div className="border-b border-[var(--chrome-border)] px-3 py-2 text-right">
                   Last played
                 </div>
               </div>
@@ -133,8 +140,8 @@ export default async function ProfilePage() {
 
                 return (
                   <div className="contents text-sm" key={game.gameId}>
-                    <div className="flex items-center border-b border-[var(--snake-border)] px-3 py-2">
-                      <span className="relative block h-10 w-16 overflow-hidden rounded border border-[color-mix(in_oklch,var(--snake-border)_70%,white)] bg-[var(--snake-board)]">
+                    <div className="flex items-center border-b border-[var(--chrome-border)] px-3 py-2">
+                      <span className="relative block h-10 w-16 overflow-hidden rounded border border-[color-mix(in_oklch,var(--chrome-border)_70%,var(--chrome-panel))] bg-[var(--snake-board)]">
                         {gameArtwork !== null ? (
                           <Image
                             alt=""
@@ -148,46 +155,46 @@ export default async function ProfilePage() {
                         ) : (
                           <span
                             aria-hidden="true"
-                            className="flex h-full w-full items-center justify-center text-xs text-[var(--snake-muted)]"
+                            className="flex h-full w-full items-center justify-center text-xs text-[var(--chrome-muted)]"
                           >
                             -
                           </span>
                         )}
                       </span>
                     </div>
-                    <div className="flex items-center border-b border-[var(--snake-border)] px-3 py-3 font-semibold">
+                    <div className="flex items-center border-b border-[var(--chrome-border)] px-3 py-3 font-semibold">
                       {gameLabel}
                     </div>
-                    <div className="flex items-center justify-end border-b border-[var(--snake-border)] px-3 py-3 text-right font-mono">
+                    <div className="flex items-center justify-end border-b border-[var(--chrome-border)] px-3 py-3 text-right font-mono">
                       {formatDuration(game.totalActiveDurationMs)}
                     </div>
-                    <div className="flex items-center justify-end border-b border-[var(--snake-border)] px-3 py-3 text-right font-mono">
+                    <div className="flex items-center justify-end border-b border-[var(--chrome-border)] px-3 py-3 text-right font-mono">
                       {game.sessionsPlayed}
                     </div>
-                    <div className="flex items-center justify-end border-b border-[var(--snake-border)] px-3 py-3 text-right font-mono">
+                    <div className="flex items-center justify-end border-b border-[var(--chrome-border)] px-3 py-3 text-right font-mono">
                       {game.wins}
                     </div>
                     <div
-                      className="flex items-center justify-end border-b border-[var(--snake-border)] px-3 py-3 text-right font-mono"
+                      className="flex items-center justify-end border-b border-[var(--chrome-border)] px-3 py-3 text-right font-mono"
                       title={bestMetric.label}
                     >
                       {bestMetric.value}
                     </div>
-                    <div className="flex items-center justify-end border-b border-[var(--snake-border)] px-3 py-3 text-right">
+                    <div className="flex items-center justify-end border-b border-[var(--chrome-border)] px-3 py-3 text-right">
                       {game.hasLastReplay ? (
                         <Link
                           aria-label={`Play latest ${gameLabel} replay`}
-                          className="inline-flex size-8 items-center justify-center rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] text-[var(--snake-ink)] shadow-sm transition hover:bg-[color-mix(in_oklch,var(--snake-head)_12%,white)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[color-mix(in_oklch,var(--snake-head)_25%,transparent)]"
+                          className="inline-flex size-8 items-center justify-center rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] text-[var(--chrome-ink)] shadow-sm transition hover:bg-[var(--chrome-accent-faint)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--chrome-focus-ring)]"
                           data-testid={`profile-${game.gameId}-last-replay`}
                           href={`/?replay=${game.gameId}`}
                         >
                           <PlayIcon className="size-4" aria-hidden="true" />
                         </Link>
                       ) : (
-                        <span className="font-mono text-[var(--snake-muted)]">-</span>
+                        <span className="font-mono text-[var(--chrome-muted)]">-</span>
                       )}
                     </div>
-                    <div className="flex items-center justify-end border-b border-[var(--snake-border)] px-3 py-3 text-right text-[var(--snake-muted)]">
+                    <div className="flex items-center justify-end border-b border-[var(--chrome-border)] px-3 py-3 text-right text-[var(--chrome-muted)]">
                       {formatProfileLastPlayed(game.lastPlayedAt)}
                     </div>
                   </div>
@@ -196,7 +203,7 @@ export default async function ProfilePage() {
             </div>
           </div>
         ) : (
-          <div className="rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] p-5 text-sm font-medium text-[var(--snake-muted)] shadow-sm">
+          <div className="rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] p-5 text-sm font-medium text-[var(--chrome-muted)] shadow-sm">
             No signed-in sessions yet.
           </div>
         )}
@@ -207,9 +214,9 @@ export default async function ProfilePage() {
 
 function ProfileMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] p-4 shadow-sm">
-      <p className="text-sm font-semibold text-[var(--snake-muted)]">{label}</p>
-      <p className="mt-1 font-mono text-3xl font-semibold tracking-normal text-black">{value}</p>
+    <div className="rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] p-4 shadow-sm">
+      <p className="text-sm font-semibold text-[var(--chrome-muted)]">{label}</p>
+      <p className="mt-1 font-mono text-3xl font-semibold tracking-normal text-[var(--chrome-ink)]">{value}</p>
     </div>
   );
 }

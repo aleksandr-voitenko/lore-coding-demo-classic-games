@@ -6,6 +6,7 @@ import { Input } from "@base-ui/react/input";
 import { LogInIcon, UserPlusIcon, XIcon } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   MAX_USER_DISPLAY_NAME_LENGTH,
@@ -230,18 +231,23 @@ export function UserAccountAuthDialog({
         </Button>
       </div>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 bg-black/35" />
+        <Dialog.Backdrop className="fixed inset-0 bg-black/45" />
         <Dialog.Popup
-          className="fixed left-1/2 top-1/2 max-h-[min(42rem,calc(100svh-2rem))] w-[min(calc(100vw-2rem),28rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] p-4 text-[var(--snake-ink)] shadow-[0_24px_90px_rgb(15_23_42/0.28)] outline-none"
+          className="fixed left-1/2 top-1/2 max-h-[min(42rem,calc(100svh-2rem))] w-[min(calc(100vw-2rem),28rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] p-4 text-[var(--chrome-ink)] shadow-[0_24px_90px_var(--chrome-shadow-modal)] outline-none"
           data-testid="auth-dialog"
         >
           <div className="relative flex min-h-8 items-center justify-center">
-            <Dialog.Title className="px-10 text-center text-3xl font-semibold tracking-normal text-black">
+            <ThemeToggle
+              className="absolute left-0 top-1/2 -translate-y-1/2"
+              compact
+              testId="auth-theme-toggle"
+            />
+            <Dialog.Title className="px-20 text-center text-3xl font-semibold tracking-normal text-[var(--chrome-ink)]">
               {activeModeLabel}
             </Dialog.Title>
             <Dialog.Close
               aria-label="Close account dialog"
-              className="absolute right-0 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-md border border-[var(--snake-border)] bg-white text-[var(--snake-ink)] shadow-sm transition hover:bg-[color-mix(in_oklch,var(--snake-head)_10%,white)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[color-mix(in_oklch,var(--snake-head)_25%,transparent)]"
+              className="absolute right-0 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] text-[var(--chrome-ink)] shadow-sm transition hover:bg-[var(--chrome-accent-faint)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--chrome-focus-ring)]"
               type="button"
             >
               <XIcon aria-hidden="true" />
@@ -343,7 +349,7 @@ function AuthField({
   return (
     <Field.Root className="flex flex-col gap-1.5" invalid={hasError}>
       <Field.Label
-        className="text-sm font-semibold text-[var(--snake-ink)]"
+        className="text-sm font-semibold text-[var(--chrome-ink)]"
         htmlFor={id}
       >
         {label}
@@ -352,7 +358,7 @@ function AuthField({
         aria-describedby={hasError ? errorId : undefined}
         aria-invalid={hasError}
         autoComplete={autoComplete}
-        className="h-9 min-w-0 rounded-md border border-[var(--snake-border)] bg-white px-3 text-sm font-medium outline-none transition placeholder:text-[var(--snake-muted)] focus-visible:border-[var(--snake-head)] focus-visible:ring-3 focus-visible:ring-[color-mix(in_oklch,var(--snake-head)_25%,transparent)] aria-invalid:border-[color-mix(in_oklch,red_60%,var(--snake-border))]"
+        className="h-9 min-w-0 rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] px-3 text-sm font-medium text-[var(--chrome-ink)] outline-none transition placeholder:text-[var(--chrome-muted)] focus-visible:border-[var(--chrome-accent)] focus-visible:ring-3 focus-visible:ring-[var(--chrome-focus-ring)] aria-invalid:border-[color-mix(in_oklch,red_60%,var(--chrome-border))]"
         data-testid={`auth-${name}-input`}
         disabled={disabled}
         id={id}

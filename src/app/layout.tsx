@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+
+import { APP_THEME_CSS_VARIABLES, APP_THEME_STORAGE_KEY } from "@/lib/app-theme";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,6 +20,25 @@ export const metadata: Metadata = {
     "A card-based launcher with classic arcade and puzzle games including Snake, Tetris, Breakout, Minesweeper, Space Invaders, and Asteroids.",
 };
 
+const themeInitScript = `
+(() => {
+  try {
+    const themeVariables = ${JSON.stringify(APP_THEME_CSS_VARIABLES)};
+    const storedTheme = window.localStorage.getItem(${JSON.stringify(APP_THEME_STORAGE_KEY)});
+    const theme = storedTheme === "dark" ? "dark" : "light";
+    const root = document.documentElement;
+
+    root.classList.toggle("dark", theme === "dark");
+    root.style.colorScheme = theme;
+
+    for (const [property, value] of Object.entries(themeVariables[theme])) {
+      root.style.setProperty(property, value);
+    }
+  } catch {
+  }
+})();
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -27,8 +48,15 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <script
+          dangerouslySetInnerHTML={{ __html: themeInitScript }}
+          id="app-theme-init"
+        />
+        {children}
+      </body>
     </html>
   );
 }

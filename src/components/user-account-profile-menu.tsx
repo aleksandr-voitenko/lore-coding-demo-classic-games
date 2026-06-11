@@ -1,10 +1,12 @@
 "use client";
 
 import { Menu } from "@base-ui/react/menu";
-import { LogOutIcon, UserIcon } from "lucide-react";
+import { LogOutIcon, MoonIcon, SunIcon, UserIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { useAppTheme } from "@/hooks/use-app-theme";
+import { getOppositeAppTheme } from "@/lib/app-theme";
 import type { AuthenticatedUser } from "@/lib/user-profile";
 
 type UserAccountProfileMenuProps = {
@@ -31,6 +33,7 @@ export function UserAccountProfileMenu({
   user,
   userError,
 }: UserAccountProfileMenuProps) {
+  const { setTheme, theme } = useAppTheme();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isProfileTooltipVisible, setIsProfileTooltipVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,6 +41,7 @@ export function UserAccountProfileMenu({
   const isProfileTooltipAvailable = !isProfileMenuOpen && !isSubmitting;
   const shouldShowProfileTooltip =
     isProfileTooltipAvailable && isProfileTooltipVisible;
+  const nextTheme = getOppositeAppTheme(theme);
 
   function handleProfileMenuOpenChange(open: boolean) {
     setIsProfileMenuOpen(open);
@@ -91,7 +95,7 @@ export function UserAccountProfileMenu({
               isProfileTooltipAvailable ? PROFILE_MENU_TOOLTIP_ID : undefined
             }
             aria-label={`${user.displayName} account menu`}
-            className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-[var(--snake-border)] bg-[color-mix(in_oklch,var(--snake-head)_16%,white)] text-sm font-bold text-[var(--snake-ink)] shadow-sm transition hover:border-[color-mix(in_oklch,var(--snake-head)_55%,var(--snake-border))] hover:bg-[color-mix(in_oklch,var(--snake-head)_24%,white)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[color-mix(in_oklch,var(--snake-head)_25%,transparent)] disabled:pointer-events-none disabled:opacity-50 data-[popup-open]:border-[color-mix(in_oklch,var(--snake-head)_65%,var(--snake-border))]"
+            className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-[var(--chrome-border)] bg-[var(--chrome-accent-soft)] text-sm font-bold text-[var(--chrome-ink)] shadow-sm transition hover:border-[color-mix(in_oklch,var(--chrome-accent)_55%,var(--chrome-border))] hover:bg-[var(--chrome-accent-hover)] hover:text-[var(--chrome-accent-ink)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--chrome-focus-ring)] disabled:pointer-events-none disabled:opacity-50 data-[popup-open]:border-[color-mix(in_oklch,var(--chrome-accent)_65%,var(--chrome-border))]"
             data-testid="profile-menu-trigger"
             disabled={isSubmitting}
             onBlur={resetProfileTooltipIntent}
@@ -104,7 +108,7 @@ export function UserAccountProfileMenu({
           </Menu.Trigger>
           {isProfileTooltipAvailable ? (
             <span
-              className={`pointer-events-none absolute left-0 top-full z-40 mt-2 whitespace-nowrap rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] px-3 py-2 text-sm font-semibold text-[var(--snake-ink)] shadow-[0_18px_50px_rgb(15_23_42/0.14)] transition-[opacity,transform] duration-150 ease-out sm:left-auto sm:right-0 ${
+              className={`pointer-events-none absolute left-0 top-full z-40 mt-2 whitespace-nowrap rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] px-3 py-2 text-sm font-semibold text-[var(--chrome-ink)] shadow-[0_18px_50px_var(--chrome-shadow-soft)] transition-[opacity,transform] duration-150 ease-out sm:left-auto sm:right-0 ${
                 shouldShowProfileTooltip
                   ? "translate-y-0 scale-100 opacity-100"
                   : "translate-y-1 scale-95 opacity-0"
@@ -120,11 +124,11 @@ export function UserAccountProfileMenu({
         <Menu.Portal>
           <Menu.Positioner align="end" collisionPadding={12} side="bottom" sideOffset={8}>
             <Menu.Popup
-              className="z-50 flex min-w-40 origin-top-right flex-col gap-1 rounded-md border border-[var(--snake-border)] bg-[var(--snake-panel)] p-1.5 text-sm font-medium text-[var(--snake-ink)] shadow-[0_18px_50px_rgb(15_23_42/0.18)] outline-none transition-[opacity,transform] duration-150 ease-out data-[ending-style]:-translate-y-1 data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:-translate-y-1 data-[starting-style]:scale-95 data-[starting-style]:opacity-0"
+              className="z-50 flex min-w-40 origin-top-right flex-col gap-1 rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] p-1.5 text-sm font-medium text-[var(--chrome-ink)] shadow-[0_18px_50px_var(--chrome-shadow-soft)] outline-none transition-[opacity,transform] duration-150 ease-out data-[ending-style]:-translate-y-1 data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:-translate-y-1 data-[starting-style]:scale-95 data-[starting-style]:opacity-0"
               data-testid="profile-menu"
             >
               <Menu.LinkItem
-                className="flex h-9 items-center gap-2 rounded-md px-2.5 transition hover:bg-[color-mix(in_oklch,var(--snake-head)_10%,white)] focus-visible:outline-none data-[highlighted]:bg-[color-mix(in_oklch,var(--snake-head)_14%,white)]"
+                className="flex h-9 items-center gap-2 rounded-md px-2.5 transition hover:bg-[var(--chrome-accent-faint)] focus-visible:outline-none data-[highlighted]:bg-[var(--chrome-accent-faint)]"
                 closeOnClick
                 data-testid="profile-link"
                 render={<Link href="/profile" />}
@@ -132,6 +136,18 @@ export function UserAccountProfileMenu({
                 <UserIcon className="size-4 shrink-0" aria-hidden="true" />
                 Profile
               </Menu.LinkItem>
+              <Menu.Item
+                className="flex h-9 items-center gap-2 rounded-md px-2.5 transition hover:bg-[var(--chrome-accent-faint)] focus-visible:outline-none data-[highlighted]:bg-[var(--chrome-accent-faint)]"
+                data-testid="profile-menu-theme-toggle"
+                onClick={() => setTheme(nextTheme)}
+              >
+                {theme === "dark" ? (
+                  <SunIcon className="size-4 shrink-0" aria-hidden="true" />
+                ) : (
+                  <MoonIcon className="size-4 shrink-0" aria-hidden="true" />
+                )}
+                {nextTheme === "dark" ? "Dark mode" : "Light mode"}
+              </Menu.Item>
               <Menu.Item
                 className="flex h-9 items-center gap-2 rounded-md px-2.5 text-destructive transition hover:bg-destructive/10 focus-visible:outline-none data-[highlighted]:bg-destructive/10 data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
                 data-testid="sign-out-button"
