@@ -34,15 +34,13 @@ import {
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
-  type ReplaySaveStatus,
 } from "@/components/game-layout";
 import {
-  createGameReplayRecordingClock,
-  getGameReplayRecordingElapsedMs,
-  pauseGameReplayRecordingClock,
-  resumeGameReplayRecordingClock,
-  type GameReplayClockedRecording,
-} from "@/components/game-replay-timing";
+  appendLiveGameReplayEvent,
+  createLiveGameReplayRecording,
+  useLiveGameReplayRecording,
+  type LiveGameReplayRecording,
+} from "@/components/game-replay-recording";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import {
   isGamePauseKey,
@@ -97,13 +95,8 @@ type SnakeGameProps = {
   replayMode?: "latest";
 };
 
-type SnakeReplayRecording = GameReplayClockedRecording & {
-  events: SnakeReplayEvent[];
-  nextSeq: number;
+type SnakeReplayRecording = LiveGameReplayRecording<SnakeReplayEvent, SnakeReplayRun> & {
   random: () => number;
-  run: SnakeReplayRun;
-  startedAt: string;
-  tick: number;
 };
 
 const START_SCREEN_CELLS: Array<{
@@ -244,17 +237,9 @@ function appendSnakeReplayEvent(
   recording: SnakeReplayRecording,
   event: SnakeReplayEventInput,
 ) {
-  recording.events.push({
-    ...event,
-    elapsedMs: getGameReplayRecordingElapsedMs(recording),
-    seq: recording.nextSeq,
-    tick: recording.tick,
-  } as unknown as SnakeReplayEvent);
-  recording.nextSeq += 1;
-
-  if (event.type === "advance") {
-    recording.tick += 1;
-  }
+  appendLiveGameReplayEvent(recording, event, {
+    advancesTick: event.type === "advance",
+  });
 }
 
 export function SnakeGame({
@@ -276,15 +261,24 @@ export function SnakeGame({
 function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = {}) {
   const [game, setGame] = useState<GameState>(() => createInitialGame());
   const [foodFeedbacks, setFoodFeedbacks] = useState<FoodFeedback[]>([]);
-  const [finishedReplay, setFinishedReplay] = useState<SnakeReplayPayload | null>(null);
-  const [isReplayRunPending, setIsReplayRunPending] = useState(false);
-  const [replaySaveStatus, setReplaySaveStatus] = useState<ReplaySaveStatus>("idle");
   const foodFeedbackIdRef = useRef(0);
   const gameRef = useRef(game);
-  const isReplayRunPendingRef = useRef(false);
   const pendingInitialDirectionRef = useRef<Direction | null>(null);
   const previousGameRef = useRef(game);
-  const replayRecordingRef = useRef<SnakeReplayRecording | null>(null);
+  const {
+    beginReplayRecording,
+    captureFinishedReplay,
+    finishedReplay,
+    isReplayRunPending,
+    isReplayRunPendingRef,
+    pauseRecordingClock,
+    replayRecordingRef,
+    replaySaveStatus,
+    resumeRecordingClock,
+    saveFinishedReplay,
+  } = useLiveGameReplayRecording<SnakeReplayRecording, SnakeReplayPayload>({
+    saveReplay: saveSnakeReplay,
+  });
   const leaderboardKey = createGameLeaderboardKey("snake", [
     { name: "mode", value: "levels" },
   ]);
@@ -360,7 +354,7 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
 
       return nextGame;
     });
-  }, [updateCommittedGame]);
+  }, [replayRecordingRef, updateCommittedGame]);
 
   const advanceSnake = useCallback(() => {
     updateCommittedGame((current) => {
@@ -374,7 +368,7 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
 
       return advanceSnakeGame(current);
     });
-  }, [updateCommittedGame]);
+  }, [replayRecordingRef, updateCommittedGame]);
 
   const spawnTimedFoodInGame = useCallback((kind: TimedFoodKind) => {
     updateCommittedGame((current) => {
@@ -398,7 +392,7 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
 
       return nextGame;
     });
-  }, [updateCommittedGame]);
+  }, [replayRecordingRef, updateCommittedGame]);
 
   const expireTimedFoodInGame = useCallback((kind: TimedFoodKind, expiresAt: number) => {
     updateCommittedGame((current) => {
@@ -415,7 +409,7 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
 
       return nextGame;
     });
-  }, [updateCommittedGame]);
+  }, [replayRecordingRef, updateCommittedGame]);
 
   const startNewGame = useCallback(async (initialDirection?: Direction) => {
     if (isReplayRunPendingRef.current) {
@@ -426,111 +420,87 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
       return;
     }
 
-    isReplayRunPendingRef.current = true;
     pendingInitialDirectionRef.current = initialDirection ?? null;
-    replayRecordingRef.current = null;
-    setIsReplayRunPending(true);
     resetLeaderboardForm();
-    setFinishedReplay(null);
-    setReplaySaveStatus("idle");
-
-    try {
+    const recording = await beginReplayRecording(async () => {
       const run = await createSnakeReplayRun();
       const random = createSnakeReplayRandom(run.seed);
-      const recording: SnakeReplayRecording = {
-        clock: createGameReplayRecordingClock(),
-        events: [],
-        nextSeq: 0,
+
+      return createLiveGameReplayRecording<
+        SnakeReplayEvent,
+        SnakeReplayRun,
+        { random: () => number }
+      >({
         random,
         run,
-        startedAt: new Date().toISOString(),
-        tick: 0,
-      };
-      let nextGame: GameState = {
-        ...createInitialGame({
-          bestScore,
-          random,
-        }),
-        status: "running",
-      };
+      });
+    });
 
-      appendSnakeReplayEvent(recording, { type: "start" });
-
-      const pendingInitialDirection = pendingInitialDirectionRef.current;
-
-      if (pendingInitialDirection !== null) {
-        appendSnakeReplayEvent(recording, {
-          direction: pendingInitialDirection,
-          type: "direction",
-        });
-        nextGame = queueGameDirection(nextGame, pendingInitialDirection);
-      }
-
-      replayRecordingRef.current = recording;
-      setFoodFeedbacks([]);
-      commitGame(nextGame);
-    } catch {
-      setReplaySaveStatus("failed");
-    } finally {
+    if (recording === null) {
       pendingInitialDirectionRef.current = null;
-      isReplayRunPendingRef.current = false;
-      setIsReplayRunPending(false);
+      return;
     }
-  }, [bestScore, commitGame, resetLeaderboardForm]);
+
+    let nextGame: GameState = {
+      ...createInitialGame({
+        bestScore,
+        random: recording.random,
+      }),
+      status: "running",
+    };
+
+    appendSnakeReplayEvent(recording, { type: "start" });
+
+    const pendingInitialDirection = pendingInitialDirectionRef.current;
+
+    if (pendingInitialDirection !== null) {
+      appendSnakeReplayEvent(recording, {
+        direction: pendingInitialDirection,
+        type: "direction",
+      });
+      nextGame = queueGameDirection(nextGame, pendingInitialDirection);
+    }
+
+    pendingInitialDirectionRef.current = null;
+    replayRecordingRef.current = recording;
+    setFoodFeedbacks([]);
+    commitGame(nextGame);
+  }, [beginReplayRecording, bestScore, commitGame, isReplayRunPendingRef, resetLeaderboardForm, replayRecordingRef]);
 
   const toggleRunState = useCallback(() => {
     const current = gameRef.current;
 
     if (current.status === "running") {
-      pauseGameReplayRecordingClock(replayRecordingRef.current);
+      pauseRecordingClock();
       commitGame({ ...current, status: "paused" });
       return;
     }
 
     if (current.status === "paused") {
-      resumeGameReplayRecordingClock(replayRecordingRef.current);
+      resumeRecordingClock();
       commitGame({ ...current, status: "running" });
       return;
     }
 
     void startNewGame();
-  }, [commitGame, startNewGame]);
+  }, [commitGame, pauseRecordingClock, resumeRecordingClock, startNewGame]);
 
   const restartGame = useCallback(() => {
     void startNewGame();
   }, [startNewGame]);
-
-  const saveFinishedReplay = useCallback(async () => {
-    if (finishedReplay === null || replaySaveStatus === "saving") {
-      return;
-    }
-
-    setReplaySaveStatus("saving");
-
-    try {
-      await saveSnakeReplay(finishedReplay);
-      setReplaySaveStatus("saved");
-    } catch {
-      setReplaySaveStatus("failed");
-    }
-  }, [finishedReplay, replaySaveStatus]);
 
   useEffect(() => {
     if (game.status !== "lost" && game.status !== "won") {
       return;
     }
 
-    const recording = replayRecordingRef.current;
+    const finalStatus = game.status;
 
-    if (recording === null || finishedReplay !== null) {
-      return;
-    }
-
-    const replay: SnakeReplayPayload = {
+    captureFinishedReplay((recording) => ({
       events: [...recording.events],
       finalLevel: game.level,
       finalScore: game.score,
-      finalStatus: game.status,
+      finalStatus,
       finalTick: recording.tick,
       gameId: SNAKE_REPLAY_GAME_ID,
       leaderboardKey,
@@ -538,25 +508,22 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
       schemaVersion: SNAKE_REPLAY_SCHEMA_VERSION,
       seed: recording.run.seed,
       startedAt: recording.startedAt,
-    };
-
-    replayRecordingRef.current = null;
-    setFinishedReplay(replay);
-  }, [finishedReplay, game.level, game.score, game.status, leaderboardKey]);
+    }));
+  }, [captureFinishedReplay, game.level, game.score, game.status, leaderboardKey]);
 
   const pauseGameForHelp = useCallback(() => {
-    pauseGameReplayRecordingClock(replayRecordingRef.current);
+    pauseRecordingClock();
     updateCommittedGame((current) =>
       current.status === "running" ? { ...current, status: "paused" } : current,
     );
-  }, [updateCommittedGame]);
+  }, [pauseRecordingClock, updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
-    resumeGameReplayRecordingClock(replayRecordingRef.current);
+    resumeRecordingClock();
     updateCommittedGame((current) =>
       current.status === "paused" ? { ...current, status: "running" } : current,
     );
-  }, [updateCommittedGame]);
+  }, [resumeRecordingClock, updateCommittedGame]);
 
   const canPauseGame = game.status === "running" || game.status === "paused";
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({

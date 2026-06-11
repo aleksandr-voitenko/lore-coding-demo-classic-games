@@ -40,15 +40,13 @@ import {
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
-  type ReplaySaveStatus,
 } from "@/components/game-layout";
 import {
-  createGameReplayRecordingClock,
-  getGameReplayRecordingElapsedMs,
-  pauseGameReplayRecordingClock,
-  resumeGameReplayRecordingClock,
-  type GameReplayClockedRecording,
-} from "@/components/game-replay-timing";
+  appendLiveGameReplayEvent,
+  createLiveGameReplayRecording,
+  useLiveGameReplayRecording,
+  type LiveGameReplayRecording,
+} from "@/components/game-replay-recording";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { BreakoutReplayPlayer } from "@/components/breakout-replay-player";
@@ -90,13 +88,8 @@ type BreakoutGameProps = {
   replayMode?: "latest";
 };
 
-type BreakoutReplayRecording = GameReplayClockedRecording & {
-  events: BreakoutReplayEvent[];
-  nextSeq: number;
+type BreakoutReplayRecording = LiveGameReplayRecording<BreakoutReplayEvent, BreakoutReplayRun> & {
   random: () => number;
-  run: BreakoutReplayRun;
-  startedAt: string;
-  tick: number;
 };
 
 const statusLabels: Record<BreakoutStatus, string> = {
@@ -145,17 +138,9 @@ function appendBreakoutReplayEvent(
   recording: BreakoutReplayRecording,
   event: BreakoutReplayEventInput,
 ) {
-  recording.events.push({
-    ...event,
-    elapsedMs: getGameReplayRecordingElapsedMs(recording),
-    seq: recording.nextSeq,
-    tick: recording.tick,
-  } as BreakoutReplayEvent);
-  recording.nextSeq += 1;
-
-  if (event.type === "advance") {
-    recording.tick += 1;
-  }
+  appendLiveGameReplayEvent(recording, event, {
+    advancesTick: event.type === "advance",
+  });
 }
 
 export function BreakoutGame({
@@ -200,13 +185,23 @@ function BreakoutLiveGame({
       lives: initialLives,
     }),
   );
-  const [finishedReplay, setFinishedReplay] = useState<BreakoutReplayPayload | null>(null);
-  const [isReplayRunPending, setIsReplayRunPending] = useState(false);
-  const [replaySaveStatus, setReplaySaveStatus] = useState<ReplaySaveStatus>("idle");
   const gameRef = useRef(game);
-  const isReplayRunPendingRef = useRef(false);
   const preStartReplayEventsRef = useRef<BreakoutReplayEventInput[]>([]);
-  const replayRecordingRef = useRef<BreakoutReplayRecording | null>(null);
+  const {
+    beginReplayRecording,
+    captureFinishedReplay,
+    finishedReplay,
+    isReplayRunPending,
+    isReplayRunPendingRef,
+    pauseRecordingClock,
+    replayRecordingRef,
+    replaySaveStatus,
+    resetReplayRecording,
+    resumeRecordingClock,
+    saveFinishedReplay,
+  } = useLiveGameReplayRecording<BreakoutReplayRecording, BreakoutReplayPayload>({
+    saveReplay: saveBreakoutReplay,
+  });
   const tickDelay = game.status === "running" ? getBreakoutTickDelay() : null;
   const ballSpeed = game.status === "running" ? getBreakoutBallSpeed(game.ball.velocity) : null;
   const activeBrickCount = game.bricks.filter((brick) => brick.isActive).length;
@@ -269,49 +264,38 @@ function BreakoutLiveGame({
       return;
     }
 
-    isReplayRunPendingRef.current = true;
-    replayRecordingRef.current = null;
-    setIsReplayRunPending(true);
     resetLeaderboardForm();
-    setFinishedReplay(null);
-    setReplaySaveStatus("idle");
-
-    try {
+    const recording = await beginReplayRecording(async () => {
       const run = await createBreakoutReplayRun();
       const random = createBreakoutReplayRandom(run.seed);
-      const recording: BreakoutReplayRecording = {
-        clock: createGameReplayRecordingClock(),
-        events: [],
-        nextSeq: 0,
+
+      return createLiveGameReplayRecording<
+        BreakoutReplayEvent,
+        BreakoutReplayRun,
+        { random: () => number }
+      >({
         random,
         run,
-        startedAt: new Date().toISOString(),
-        tick: 0,
-      };
-
-      preStartReplayEventsRef.current.forEach((event) => {
-        appendBreakoutReplayEvent(recording, event);
       });
-      appendBreakoutReplayEvent(recording, { type: "start" });
-      preStartReplayEventsRef.current = [];
-      replayRecordingRef.current = recording;
-      commitGame(
-        restart
-          ? restartBreakoutGame(gameRef.current)
-          : startBreakoutGame(gameRef.current),
-      );
-    } catch {
-      setReplaySaveStatus("failed");
-    } finally {
-      isReplayRunPendingRef.current = false;
-      setIsReplayRunPending(false);
+    });
+
+    if (recording === null) {
+      return;
     }
-  }, [commitGame, resetLeaderboardForm]);
+
+    preStartReplayEventsRef.current.forEach((event) => {
+      appendBreakoutReplayEvent(recording, event);
+    });
+    appendBreakoutReplayEvent(recording, { type: "start" });
+    preStartReplayEventsRef.current = [];
+    replayRecordingRef.current = recording;
+    commitGame(
+      restart ? restartBreakoutGame(gameRef.current) : startBreakoutGame(gameRef.current),
+    );
+  }, [beginReplayRecording, commitGame, isReplayRunPendingRef, resetLeaderboardForm, replayRecordingRef]);
 
   const startGame = useCallback(() => {
     resetLeaderboardForm();
-    setFinishedReplay(null);
-    setReplaySaveStatus("idle");
 
     const recording = replayRecordingRef.current;
 
@@ -323,27 +307,27 @@ function BreakoutLiveGame({
     }
 
     void startReplayRun();
-  }, [resetLeaderboardForm, startReplayRun, updateCommittedGame]);
+  }, [replayRecordingRef, resetLeaderboardForm, startReplayRun, updateCommittedGame]);
 
   const toggleRunState = useCallback(() => {
     const current = gameRef.current;
 
     if (current.status === "running") {
       resetLeaderboardForm();
-      pauseGameReplayRecordingClock(replayRecordingRef.current);
+      pauseRecordingClock();
       updateCommittedGame((gameState) => pauseBreakoutGame(gameState));
       return;
     }
 
     if (current.status === "paused") {
       resetLeaderboardForm();
-      resumeGameReplayRecordingClock(replayRecordingRef.current);
+      resumeRecordingClock();
       updateCommittedGame((gameState) => startBreakoutGame(gameState));
       return;
     }
 
     startGame();
-  }, [resetLeaderboardForm, startGame, updateCommittedGame]);
+  }, [pauseRecordingClock, resetLeaderboardForm, resumeRecordingClock, startGame, updateCommittedGame]);
 
   const restartGame = useCallback(() => {
     if (isReplayRunPendingRef.current) {
@@ -351,9 +335,9 @@ function BreakoutLiveGame({
     }
 
     preStartReplayEventsRef.current = [];
-    replayRecordingRef.current = null;
+    resetReplayRecording();
     void startReplayRun({ restart: true });
-  }, [startReplayRun]);
+  }, [isReplayRunPendingRef, resetReplayRecording, startReplayRun]);
 
   const movePaddle = useCallback(
     (direction: BreakoutPaddleMovementDirection) => {
@@ -380,7 +364,7 @@ function BreakoutLiveGame({
         return nextGame;
       });
     },
-    [updateCommittedGame],
+    [isReplayRunPendingRef, replayRecordingRef, updateCommittedGame],
   );
 
   const advanceBreakout = useCallback(() => {
@@ -395,52 +379,33 @@ function BreakoutLiveGame({
 
       return advanceBreakoutGame(current, { random: Math.random });
     });
-  }, [updateCommittedGame]);
+  }, [replayRecordingRef, updateCommittedGame]);
 
   const pauseGameForHelp = useCallback(() => {
-    pauseGameReplayRecordingClock(replayRecordingRef.current);
+    pauseRecordingClock();
     updateCommittedGame((current) => pauseBreakoutGame(current));
-  }, [updateCommittedGame]);
+  }, [pauseRecordingClock, updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
-    resumeGameReplayRecordingClock(replayRecordingRef.current);
+    resumeRecordingClock();
     updateCommittedGame((current) => startBreakoutGame(current));
-  }, [updateCommittedGame]);
-
-  const saveFinishedReplay = useCallback(async () => {
-    if (finishedReplay === null || replaySaveStatus === "saving") {
-      return;
-    }
-
-    setReplaySaveStatus("saving");
-
-    try {
-      await saveBreakoutReplay(finishedReplay);
-      setReplaySaveStatus("saved");
-    } catch {
-      setReplaySaveStatus("failed");
-    }
-  }, [finishedReplay, replaySaveStatus]);
+  }, [resumeRecordingClock, updateCommittedGame]);
 
   useEffect(() => {
     if (game.status !== "lost" && game.status !== "won") {
       return;
     }
 
-    const recording = replayRecordingRef.current;
+    const finalStatus = game.status;
 
-    if (recording === null || finishedReplay !== null) {
-      return;
-    }
-
-    const replay: BreakoutReplayPayload = {
+    captureFinishedReplay((recording) => ({
       boardHeight: game.boardHeight,
       boardWidth: game.boardWidth,
       events: [...recording.events],
       finalActiveBrickCount: activeBrickCount,
       finalLives: game.lives,
       finalScore: game.score,
-      finalStatus: game.status,
+      finalStatus,
       finalTick: recording.tick,
       gameId: BREAKOUT_REPLAY_GAME_ID,
       leaderboardKey,
@@ -449,14 +414,11 @@ function BreakoutLiveGame({
       seed: recording.run.seed,
       startedAt: recording.startedAt,
       startingLives: game.startingLives,
-    };
-
-    replayRecordingRef.current = null;
+    }));
     preStartReplayEventsRef.current = [];
-    setFinishedReplay(replay);
   }, [
     activeBrickCount,
-    finishedReplay,
+    captureFinishedReplay,
     game.boardHeight,
     game.boardWidth,
     game.lives,

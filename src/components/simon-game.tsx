@@ -27,15 +27,13 @@ import {
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
-  type ReplaySaveStatus,
 } from "@/components/game-layout";
 import {
-  createGameReplayRecordingClock,
-  getGameReplayRecordingElapsedMs,
-  pauseGameReplayRecordingClock,
-  resumeGameReplayRecordingClock,
-  type GameReplayClockedRecording,
-} from "@/components/game-replay-timing";
+  appendLiveGameReplayEvent,
+  createLiveGameReplayRecording,
+  useLiveGameReplayRecording,
+  type LiveGameReplayRecording,
+} from "@/components/game-replay-recording";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { SimonBoard } from "@/components/simon-board";
@@ -80,13 +78,8 @@ type SimonGameProps = {
   replayMode?: "latest";
 };
 
-type SimonReplayRecording = GameReplayClockedRecording & {
-  events: SimonReplayEvent[];
-  nextSeq: number;
+type SimonReplayRecording = LiveGameReplayRecording<SimonReplayEvent, SimonReplayRun> & {
   random: () => number;
-  run: SimonReplayRun;
-  startedAt: string;
-  tick: number;
 };
 
 const statusLabels: Record<SimonStatus, string> = {
@@ -163,14 +156,7 @@ function appendSimonReplayEvent(
   recording: SimonReplayRecording,
   event: SimonReplayEventInput,
 ) {
-  recording.events.push({
-    ...event,
-    elapsedMs: getGameReplayRecordingElapsedMs(recording),
-    seq: recording.nextSeq,
-    tick: recording.tick,
-  } as unknown as SimonReplayEvent);
-  recording.nextSeq += 1;
-  recording.tick += 1;
+  appendLiveGameReplayEvent(recording, event, { advancesTick: true });
 }
 
 export function SimonGame({
@@ -199,12 +185,22 @@ function SimonLiveGame({
   const [game, setGame] = useState<SimonGameState>(() =>
     createReadySimonGame(initialWinTarget),
   );
-  const [finishedReplay, setFinishedReplay] = useState<SimonReplayPayload | null>(null);
-  const [isReplayRunPending, setIsReplayRunPending] = useState(false);
-  const [replaySaveStatus, setReplaySaveStatus] = useState<ReplaySaveStatus>("idle");
   const gameRef = useRef(game);
-  const isReplayRunPendingRef = useRef(false);
-  const replayRecordingRef = useRef<SimonReplayRecording | null>(null);
+  const {
+    beginReplayRecording,
+    captureFinishedReplay,
+    finishedReplay,
+    isReplayRunPending,
+    isReplayRunPendingRef,
+    pauseRecordingClock,
+    replayRecordingRef,
+    replaySaveStatus,
+    resetReplayRecording,
+    resumeRecordingClock,
+    saveFinishedReplay,
+  } = useLiveGameReplayRecording<SimonReplayRecording, SimonReplayPayload>({
+    saveReplay: saveSimonReplay,
+  });
   const playbackDelay = game.status === "showing" ? getSimonPlaybackDelay() : null;
   const roundCompleteDelay =
     game.status === "correct" && game.activePad === null
@@ -294,50 +290,41 @@ function SimonLiveGame({
       return;
     }
 
-    isReplayRunPendingRef.current = true;
-    replayRecordingRef.current = null;
-    setIsReplayRunPending(true);
     resetLeaderboardForm();
-    setFinishedReplay(null);
-    setReplaySaveStatus("idle");
-
-    try {
+    const recording = await beginReplayRecording(async () => {
       const run = await createSimonReplayRun();
       const random = createSimonReplayRandom(run.seed);
-      const recording: SimonReplayRecording = {
-        clock: createGameReplayRecordingClock(),
-        events: [],
-        nextSeq: 0,
+
+      return createLiveGameReplayRecording<
+        SimonReplayEvent,
+        SimonReplayRun,
+        { random: () => number }
+      >({
         random,
         run,
-        startedAt: new Date().toISOString(),
-        tick: 0,
-      };
+      });
+    });
 
-      appendSimonReplayEvent(recording, { type: "start" });
-      replayRecordingRef.current = recording;
-      commitGame(
-        restart
-          ? restartSimonGame(gameRef.current, { random })
-          : startSimonGame(gameRef.current, { random }),
-      );
-    } catch {
-      setReplaySaveStatus("failed");
-    } finally {
-      isReplayRunPendingRef.current = false;
-      setIsReplayRunPending(false);
+    if (recording === null) {
+      return;
     }
-  }, [commitGame, resetLeaderboardForm]);
+
+    appendSimonReplayEvent(recording, { type: "start" });
+    replayRecordingRef.current = recording;
+    commitGame(
+      restart
+        ? restartSimonGame(gameRef.current, { random: recording.random })
+        : startSimonGame(gameRef.current, { random: recording.random }),
+    );
+  }, [beginReplayRecording, commitGame, isReplayRunPendingRef, resetLeaderboardForm, replayRecordingRef]);
 
   const startGame = useCallback(() => {
     resetLeaderboardForm();
-    setFinishedReplay(null);
-    setReplaySaveStatus("idle");
 
     const current = gameRef.current;
 
     if (current.status === "paused") {
-      resumeGameReplayRecordingClock(replayRecordingRef.current);
+      resumeRecordingClock();
       updateCommittedGame((gameState) => startSimonGame(gameState));
       return;
     }
@@ -345,7 +332,7 @@ function SimonLiveGame({
     void startReplayRun({
       restart: current.status === "lost" || current.status === "won",
     });
-  }, [resetLeaderboardForm, startReplayRun, updateCommittedGame]);
+  }, [resetLeaderboardForm, resumeRecordingClock, startReplayRun, updateCommittedGame]);
 
   const toggleRunState = useCallback(() => {
     resetLeaderboardForm();
@@ -357,29 +344,29 @@ function SimonLiveGame({
       current.status === "correct" ||
       current.status === "missed"
     ) {
-      pauseGameReplayRecordingClock(replayRecordingRef.current);
+      pauseRecordingClock();
       updateCommittedGame((gameState) => pauseSimonGame(gameState));
       return;
     }
 
     if (current.status === "paused") {
-      resumeGameReplayRecordingClock(replayRecordingRef.current);
+      resumeRecordingClock();
       updateCommittedGame((gameState) => startSimonGame(gameState));
       return;
     }
 
     startGame();
-  }, [resetLeaderboardForm, startGame, updateCommittedGame]);
+  }, [pauseRecordingClock, resetLeaderboardForm, resumeRecordingClock, startGame, updateCommittedGame]);
 
   const restartGame = useCallback(() => {
     if (isReplayRunPendingRef.current) {
       return;
     }
 
-    replayRecordingRef.current = null;
+    resetReplayRecording();
     resetLeaderboardForm();
     void startReplayRun({ restart: true });
-  }, [resetLeaderboardForm, startReplayRun]);
+  }, [isReplayRunPendingRef, resetLeaderboardForm, resetReplayRecording, startReplayRun]);
 
   const pressPad = useCallback((pad: SimonPadId) => {
     updateCommittedGame((current) => {
@@ -395,51 +382,32 @@ function SimonLiveGame({
 
       return nextGame;
     });
-  }, [updateCommittedGame]);
+  }, [replayRecordingRef, updateCommittedGame]);
 
   const pauseGameForHelp = useCallback(() => {
-    pauseGameReplayRecordingClock(replayRecordingRef.current);
+    pauseRecordingClock();
     updateCommittedGame((current) => pauseSimonGame(current));
-  }, [updateCommittedGame]);
+  }, [pauseRecordingClock, updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
-    resumeGameReplayRecordingClock(replayRecordingRef.current);
+    resumeRecordingClock();
     updateCommittedGame((current) => startSimonGame(current));
-  }, [updateCommittedGame]);
-
-  const saveFinishedReplay = useCallback(async () => {
-    if (finishedReplay === null || replaySaveStatus === "saving") {
-      return;
-    }
-
-    setReplaySaveStatus("saving");
-
-    try {
-      await saveSimonReplay(finishedReplay);
-      setReplaySaveStatus("saved");
-    } catch {
-      setReplaySaveStatus("failed");
-    }
-  }, [finishedReplay, replaySaveStatus]);
+  }, [resumeRecordingClock, updateCommittedGame]);
 
   useEffect(() => {
     if (game.status !== "lost" && game.status !== "won") {
       return;
     }
 
-    const recording = replayRecordingRef.current;
+    const finalStatus = game.status;
 
-    if (recording === null || finishedReplay !== null) {
-      return;
-    }
-
-    const replay: SimonReplayPayload = {
+    captureFinishedReplay((recording) => ({
       events: [...recording.events],
       finalInputIndex: game.inputIndex,
       finalRound: game.round,
       finalScore: game.score,
       finalSequenceLength: game.sequence.length,
-      finalStatus: game.status,
+      finalStatus,
       finalTick: recording.tick,
       gameId: SIMON_REPLAY_GAME_ID,
       leaderboardKey,
@@ -448,12 +416,9 @@ function SimonLiveGame({
       seed: recording.run.seed,
       startedAt: recording.startedAt,
       winTarget: game.winTarget,
-    };
-
-    replayRecordingRef.current = null;
-    setFinishedReplay(replay);
+    }));
   }, [
-    finishedReplay,
+    captureFinishedReplay,
     game.inputIndex,
     game.round,
     game.score,
@@ -495,7 +460,7 @@ function SimonLiveGame({
     }, playbackDelay);
 
     return () => window.clearTimeout(playbackTimer);
-  }, [game.activePad, game.playbackIndex, playbackDelay, updateCommittedGame]);
+  }, [game.activePad, game.playbackIndex, playbackDelay, replayRecordingRef, updateCommittedGame]);
 
   useEffect(() => {
     if (
@@ -526,7 +491,7 @@ function SimonLiveGame({
     }, getSimonInputFlashDelay());
 
     return () => window.clearTimeout(flashTimer);
-  }, [game.activePad, game.status, updateCommittedGame]);
+  }, [game.activePad, game.status, replayRecordingRef, updateCommittedGame]);
 
   useEffect(() => {
     if (roundCompleteDelay === null) {
@@ -548,7 +513,7 @@ function SimonLiveGame({
     }, roundCompleteDelay);
 
     return () => window.clearTimeout(roundCompleteTimer);
-  }, [roundCompleteDelay, updateCommittedGame]);
+  }, [replayRecordingRef, roundCompleteDelay, updateCommittedGame]);
 
   useEffect(() => {
     if (missFeedbackDelay === null) {
@@ -568,7 +533,7 @@ function SimonLiveGame({
     }, missFeedbackDelay);
 
     return () => window.clearTimeout(missFeedbackTimer);
-  }, [missFeedbackDelay, updateCommittedGame]);
+  }, [missFeedbackDelay, replayRecordingRef, updateCommittedGame]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {

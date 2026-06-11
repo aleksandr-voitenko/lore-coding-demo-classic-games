@@ -29,15 +29,13 @@ import {
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
-  type ReplaySaveStatus,
 } from "@/components/game-layout";
 import {
-  createGameReplayRecordingClock,
-  getGameReplayRecordingElapsedMs,
-  pauseGameReplayRecordingClock,
-  resumeGameReplayRecordingClock,
-  type GameReplayClockedRecording,
-} from "@/components/game-replay-timing";
+  appendLiveGameReplayEvent,
+  createLiveGameReplayRecording,
+  useLiveGameReplayRecording,
+  type LiveGameReplayRecording,
+} from "@/components/game-replay-recording";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import {
   isGamePauseKey,
@@ -87,13 +85,11 @@ type TetrisGameProps = {
   replayMode?: "latest";
 };
 
-type TetrisReplayRecording = GameReplayClockedRecording & {
-  events: TetrisReplayEvent[];
-  nextSeq: number;
+type TetrisReplayRecording = LiveGameReplayRecording<
+  TetrisReplayEvent,
+  TetrisReplayRun
+> & {
   random: () => number;
-  run: TetrisReplayRun;
-  startedAt: string;
-  tick: number;
 };
 
 const statusLabels: Record<TetrisStatus, string> = {
@@ -189,23 +185,6 @@ function createRunningTetrisGame(
   };
 }
 
-function appendTetrisReplayEvent(
-  recording: TetrisReplayRecording,
-  event: TetrisReplayEventInput,
-) {
-  recording.events.push({
-    ...event,
-    elapsedMs: getGameReplayRecordingElapsedMs(recording),
-    seq: recording.nextSeq,
-    tick: recording.tick,
-  } as TetrisReplayEvent);
-  recording.nextSeq += 1;
-
-  if (event.type === "advance") {
-    recording.tick += 1;
-  }
-}
-
 export function TetrisGame({
   initialBoardHeight,
   initialBoardWidth,
@@ -248,12 +227,21 @@ function TetrisLiveGame({
       startLevel: initialStartLevel,
     }),
   );
-  const [finishedReplay, setFinishedReplay] = useState<TetrisReplayPayload | null>(null);
-  const [isReplayRunPending, setIsReplayRunPending] = useState(false);
-  const [replaySaveStatus, setReplaySaveStatus] = useState<ReplaySaveStatus>("idle");
   const gameRef = useRef(game);
-  const isReplayRunPendingRef = useRef(false);
-  const replayRecordingRef = useRef<TetrisReplayRecording | null>(null);
+  const {
+    beginReplayRecording,
+    captureFinishedReplay,
+    finishedReplay,
+    isReplayRunPending,
+    isReplayRunPendingRef,
+    pauseRecordingClock,
+    replayRecordingRef,
+    replaySaveStatus,
+    resumeRecordingClock,
+    saveFinishedReplay,
+  } = useLiveGameReplayRecording<TetrisReplayRecording, TetrisReplayPayload>({
+    saveReplay: saveTetrisReplay,
+  });
   const tickDelay = game.status === "running" ? getTetrisTickDelay(game.level) : null;
   const canPauseGame = game.status === "running" || game.status === "paused";
   const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
@@ -309,37 +297,34 @@ function TetrisLiveGame({
       return;
     }
 
-    isReplayRunPendingRef.current = true;
-    replayRecordingRef.current = null;
-    setIsReplayRunPending(true);
     resetLeaderboardForm();
-    setFinishedReplay(null);
-    setReplaySaveStatus("idle");
-
-    try {
+    const recording = await beginReplayRecording(async () => {
       const run = await createTetrisReplayRun();
       const random = createTetrisReplayRandom(run.seed);
-      const recording: TetrisReplayRecording = {
-        clock: createGameReplayRecordingClock(),
-        events: [],
-        nextSeq: 0,
+
+      return createLiveGameReplayRecording<
+        TetrisReplayEvent,
+        TetrisReplayRun,
+        { random: () => number }
+      >({
         random,
         run,
-        startedAt: new Date().toISOString(),
-        tick: 0,
-      };
-      const nextGame = createRunningTetrisGame(gameRef.current, random);
+      });
+    });
 
-      appendTetrisReplayEvent(recording, { type: "start" });
-      replayRecordingRef.current = recording;
-      commitGame(nextGame);
-    } catch {
-      setReplaySaveStatus("failed");
-    } finally {
-      isReplayRunPendingRef.current = false;
-      setIsReplayRunPending(false);
+    if (recording === null) {
+      return;
     }
-  }, [commitGame, resetLeaderboardForm]);
+
+    const nextGame = createRunningTetrisGame(gameRef.current, recording.random);
+
+    appendLiveGameReplayEvent<TetrisReplayEvent, TetrisReplayRecording, TetrisReplayEventInput>(
+      recording,
+      { type: "start" },
+    );
+    replayRecordingRef.current = recording;
+    commitGame(nextGame);
+  }, [beginReplayRecording, commitGame, isReplayRunPendingRef, resetLeaderboardForm, replayRecordingRef]);
 
   const startGame = useCallback(() => {
     void startNewGame();
@@ -348,12 +333,12 @@ function TetrisLiveGame({
   const toggleRunState = useCallback(() => {
     updateCommittedGame((current) => {
       if (current.status === "running") {
-        pauseGameReplayRecordingClock(replayRecordingRef.current);
+        pauseRecordingClock();
         return pauseTetrisGame(current);
       }
 
       if (current.status === "paused") {
-        resumeGameReplayRecordingClock(replayRecordingRef.current);
+        resumeRecordingClock();
         return startTetrisGame(current);
       }
 
@@ -361,7 +346,7 @@ function TetrisLiveGame({
 
       return current;
     });
-  }, [startNewGame, updateCommittedGame]);
+  }, [pauseRecordingClock, resumeRecordingClock, startNewGame, updateCommittedGame]);
 
   const restartGame = useCallback(() => {
     void startNewGame();
@@ -373,12 +358,12 @@ function TetrisLiveGame({
       const recording = replayRecordingRef.current;
 
       if (recording !== null && current.status === "running" && nextGame !== current) {
-        appendTetrisReplayEvent(recording, { type: "moveLeft" });
+        appendLiveGameReplayEvent(recording, { type: "moveLeft" });
       }
 
       return nextGame;
     });
-  }, [updateCommittedGame]);
+  }, [replayRecordingRef, updateCommittedGame]);
 
   const moveRight = useCallback(() => {
     updateCommittedGame((current) => {
@@ -386,40 +371,40 @@ function TetrisLiveGame({
       const recording = replayRecordingRef.current;
 
       if (recording !== null && current.status === "running" && nextGame !== current) {
-        appendTetrisReplayEvent(recording, { type: "moveRight" });
+        appendLiveGameReplayEvent(recording, { type: "moveRight" });
       }
 
       return nextGame;
     });
-  }, [updateCommittedGame]);
+  }, [replayRecordingRef, updateCommittedGame]);
 
   const softDrop = useCallback(() => {
     updateCommittedGame((current) => {
       const recording = replayRecordingRef.current;
 
       if (recording !== null && current.status === "running") {
-        appendTetrisReplayEvent(recording, { type: "softDrop" });
+        appendLiveGameReplayEvent(recording, { type: "softDrop" });
 
         return softDropTetrisPiece(current, { random: recording.random });
       }
 
       return softDropTetrisPiece(current);
     });
-  }, [updateCommittedGame]);
+  }, [replayRecordingRef, updateCommittedGame]);
 
   const hardDrop = useCallback(() => {
     updateCommittedGame((current) => {
       const recording = replayRecordingRef.current;
 
       if (recording !== null && current.status === "running") {
-        appendTetrisReplayEvent(recording, { type: "hardDrop" });
+        appendLiveGameReplayEvent(recording, { type: "hardDrop" });
 
         return hardDropTetrisPiece(current, { random: recording.random });
       }
 
       return hardDropTetrisPiece(current);
     });
-  }, [updateCommittedGame]);
+  }, [replayRecordingRef, updateCommittedGame]);
 
   const rotateClockwise = useCallback(() => {
     updateCommittedGame((current) => {
@@ -427,12 +412,12 @@ function TetrisLiveGame({
       const recording = replayRecordingRef.current;
 
       if (recording !== null && current.status === "running" && nextGame !== current) {
-        appendTetrisReplayEvent(recording, { type: "rotateClockwise" });
+        appendLiveGameReplayEvent(recording, { type: "rotateClockwise" });
       }
 
       return nextGame;
     });
-  }, [updateCommittedGame]);
+  }, [replayRecordingRef, updateCommittedGame]);
 
   const rotateCounterclockwise = useCallback(() => {
     updateCommittedGame((current) => {
@@ -440,71 +425,52 @@ function TetrisLiveGame({
       const recording = replayRecordingRef.current;
 
       if (recording !== null && current.status === "running" && nextGame !== current) {
-        appendTetrisReplayEvent(recording, { type: "rotateCounterclockwise" });
+        appendLiveGameReplayEvent(recording, { type: "rotateCounterclockwise" });
       }
 
       return nextGame;
     });
-  }, [updateCommittedGame]);
+  }, [replayRecordingRef, updateCommittedGame]);
 
   const advanceTetris = useCallback(() => {
     updateCommittedGame((current) => {
       const recording = replayRecordingRef.current;
 
       if (recording !== null && current.status === "running") {
-        appendTetrisReplayEvent(recording, { type: "advance" });
+        appendLiveGameReplayEvent(recording, { type: "advance" }, { advancesTick: true });
 
         return advanceTetrisGame(current, { random: recording.random });
       }
 
       return advanceTetrisGame(current);
     });
-  }, [updateCommittedGame]);
+  }, [replayRecordingRef, updateCommittedGame]);
 
   const pauseGameForHelp = useCallback(() => {
-    pauseGameReplayRecordingClock(replayRecordingRef.current);
+    pauseRecordingClock();
     updateCommittedGame((current) => pauseTetrisGame(current));
-  }, [updateCommittedGame]);
+  }, [pauseRecordingClock, updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
-    resumeGameReplayRecordingClock(replayRecordingRef.current);
+    resumeRecordingClock();
     updateCommittedGame((current) => startTetrisGame(current));
-  }, [updateCommittedGame]);
-
-  const saveFinishedReplay = useCallback(async () => {
-    if (finishedReplay === null || replaySaveStatus === "saving") {
-      return;
-    }
-
-    setReplaySaveStatus("saving");
-
-    try {
-      await saveTetrisReplay(finishedReplay);
-      setReplaySaveStatus("saved");
-    } catch {
-      setReplaySaveStatus("failed");
-    }
-  }, [finishedReplay, replaySaveStatus]);
+  }, [resumeRecordingClock, updateCommittedGame]);
 
   useEffect(() => {
     if (game.status !== "lost") {
       return;
     }
 
-    const recording = replayRecordingRef.current;
+    const finalStatus = game.status;
 
-    if (recording === null || finishedReplay !== null) {
-      return;
-    }
-
-    const replay: TetrisReplayPayload = {
+    captureFinishedReplay((recording) => ({
       boardHeight: game.boardHeight,
       boardWidth: game.boardWidth,
       events: [...recording.events],
       finalLevel: game.level,
       finalLines: game.lines,
       finalScore: game.score,
-      finalStatus: game.status,
+      finalStatus,
       finalTick: recording.tick,
       gameId: TETRIS_REPLAY_GAME_ID,
       leaderboardKey,
@@ -513,11 +479,9 @@ function TetrisLiveGame({
       seed: recording.run.seed,
       startLevel: game.startLevel,
       startedAt: recording.startedAt,
-    };
-
-    replayRecordingRef.current = null;
-    setFinishedReplay(replay);
+    }));
   }, [
+    captureFinishedReplay,
     finishedReplay,
     game.boardHeight,
     game.boardWidth,

@@ -30,15 +30,13 @@ import {
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
-  type ReplaySaveStatus,
 } from "@/components/game-layout";
 import {
-  createGameReplayRecordingClock,
-  getGameReplayRecordingElapsedMs,
-  pauseGameReplayRecordingClock,
-  resumeGameReplayRecordingClock,
-  type GameReplayClockedRecording,
-} from "@/components/game-replay-timing";
+  appendLiveGameReplayEvent,
+  createLiveGameReplayRecording,
+  useLiveGameReplayRecording,
+  type LiveGameReplayRecording,
+} from "@/components/game-replay-recording";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { TwentyFortyEightBoard } from "@/components/twenty-forty-eight-board";
@@ -76,13 +74,8 @@ type TwentyFortyEightGameProps = {
   replayMode?: "latest";
 };
 
-type TwentyFortyEightReplayRecording = GameReplayClockedRecording & {
-  events: TwentyFortyEightReplayEvent[];
-  nextSeq: number;
+type TwentyFortyEightReplayRecording = LiveGameReplayRecording<TwentyFortyEightReplayEvent, TwentyFortyEightReplayRun> & {
   random: () => number;
-  run: TwentyFortyEightReplayRun;
-  startedAt: string;
-  tick: number;
 };
 
 const statusLabels: Record<Exclude<TwentyFortyEightStatus, "won">, string> = {
@@ -175,17 +168,9 @@ function appendTwentyFortyEightReplayEvent(
   recording: TwentyFortyEightReplayRecording,
   event: TwentyFortyEightReplayEventInput,
 ) {
-  recording.events.push({
-    ...event,
-    elapsedMs: getGameReplayRecordingElapsedMs(recording),
-    seq: recording.nextSeq,
-    tick: recording.tick,
-  } as unknown as TwentyFortyEightReplayEvent);
-  recording.nextSeq += 1;
-
-  if (event.type === "move") {
-    recording.tick += 1;
-  }
+  appendLiveGameReplayEvent(recording, event, {
+    advancesTick: event.type === "move",
+  });
 }
 
 export function TwentyFortyEightGame({
@@ -226,14 +211,26 @@ function TwentyFortyEightLiveGame({
       winTile: initialWinTile,
     }),
   );
-  const [finishedReplay, setFinishedReplay] =
-    useState<TwentyFortyEightReplayPayload | null>(null);
-  const [isReplayRunPending, setIsReplayRunPending] = useState(false);
-  const [replaySaveStatus, setReplaySaveStatus] = useState<ReplaySaveStatus>("idle");
   const gameRef = useRef(game);
-  const isReplayRunPendingRef = useRef(false);
   const pendingInitialDirectionRef = useRef<TwentyFortyEightDirection | null>(null);
-  const replayRecordingRef = useRef<TwentyFortyEightReplayRecording | null>(null);
+  const {
+    beginReplayRecording,
+    captureFinishedReplay,
+    finishedReplay,
+    isReplayRunPending,
+    isReplayRunPendingRef,
+    pauseRecordingClock,
+    replayRecordingRef,
+    replaySaveStatus,
+    resetReplayRecording,
+    resumeRecordingClock,
+    saveFinishedReplay,
+  } = useLiveGameReplayRecording<
+    TwentyFortyEightReplayRecording,
+    TwentyFortyEightReplayPayload
+  >({
+    saveReplay: saveTwentyFortyEightReplay,
+  });
   const statusLabel = getTwentyFortyEightStatusLabel(game);
   const helpSections = useMemo(
     () => createTwentyFortyEightHelpSections(game.winTile),
@@ -304,55 +301,50 @@ function TwentyFortyEightLiveGame({
       return;
     }
 
-    isReplayRunPendingRef.current = true;
     pendingInitialDirectionRef.current = initialDirection ?? null;
-    replayRecordingRef.current = null;
-    setIsReplayRunPending(true);
     resetLeaderboardForm();
-    setFinishedReplay(null);
-    setReplaySaveStatus("idle");
-
-    try {
+    const recording = await beginReplayRecording(async () => {
       const run = await createTwentyFortyEightReplayRun();
       const random = createTwentyFortyEightReplayRandom(run.seed);
-      const recording: TwentyFortyEightReplayRecording = {
-        clock: createGameReplayRecordingClock(),
-        events: [],
-        nextSeq: 0,
+
+      return createLiveGameReplayRecording<
+        TwentyFortyEightReplayEvent,
+        TwentyFortyEightReplayRun,
+        { random: () => number }
+      >({
         random,
         run,
-        startedAt: new Date().toISOString(),
-        tick: 0,
-      };
-      let nextGame: TwentyFortyEightGameState = createRunningTwentyFortyEightGame(
-        gameRef.current,
-        random,
-      );
+      });
+    });
 
-      appendTwentyFortyEightReplayEvent(recording, { type: "start" });
-
-      const pendingInitialDirection = pendingInitialDirectionRef.current;
-
-      if (pendingInitialDirection !== null) {
-        appendTwentyFortyEightReplayEvent(recording, {
-          direction: pendingInitialDirection,
-          type: "move",
-        });
-        nextGame = moveTwentyFortyEightGame(nextGame, pendingInitialDirection, {
-          random,
-        });
-      }
-
-      replayRecordingRef.current = recording;
-      commitGame(nextGame);
-    } catch {
-      setReplaySaveStatus("failed");
-    } finally {
+    if (recording === null) {
       pendingInitialDirectionRef.current = null;
-      isReplayRunPendingRef.current = false;
-      setIsReplayRunPending(false);
+      return;
     }
-  }, [commitGame, resetLeaderboardForm]);
+
+    let nextGame: TwentyFortyEightGameState = createRunningTwentyFortyEightGame(
+      gameRef.current,
+      recording.random,
+    );
+
+    appendTwentyFortyEightReplayEvent(recording, { type: "start" });
+
+    const pendingInitialDirection = pendingInitialDirectionRef.current;
+
+    if (pendingInitialDirection !== null) {
+      appendTwentyFortyEightReplayEvent(recording, {
+        direction: pendingInitialDirection,
+        type: "move",
+      });
+      nextGame = moveTwentyFortyEightGame(nextGame, pendingInitialDirection, {
+        random: recording.random,
+      });
+    }
+
+    pendingInitialDirectionRef.current = null;
+    replayRecordingRef.current = recording;
+    commitGame(nextGame);
+  }, [beginReplayRecording, commitGame, isReplayRunPendingRef, resetLeaderboardForm, replayRecordingRef]);
 
   const startGame = useCallback(() => {
     void startNewGame();
@@ -363,15 +355,13 @@ function TwentyFortyEightLiveGame({
       return;
     }
 
-    replayRecordingRef.current = null;
+    resetReplayRecording();
     pendingInitialDirectionRef.current = null;
     resetLeaderboardForm();
-    setFinishedReplay(null);
-    setReplaySaveStatus("idle");
     updateCommittedGame((current) =>
       restartTwentyFortyEightGame(current, { random: Math.random }),
     );
-  }, [resetLeaderboardForm, updateCommittedGame]);
+  }, [isReplayRunPendingRef, resetLeaderboardForm, resetReplayRecording, updateCommittedGame]);
 
   const moveTiles = useCallback((direction: TwentyFortyEightDirection) => {
     updateCommittedGame((current) => {
@@ -396,22 +386,7 @@ function TwentyFortyEightLiveGame({
 
       return moveTwentyFortyEightGame(current, direction, { random: Math.random });
     });
-  }, [startNewGame, updateCommittedGame]);
-
-  const saveFinishedReplay = useCallback(async () => {
-    if (finishedReplay === null || replaySaveStatus === "saving") {
-      return;
-    }
-
-    setReplaySaveStatus("saving");
-
-    try {
-      await saveTwentyFortyEightReplay(finishedReplay);
-      setReplaySaveStatus("saved");
-    } catch {
-      setReplaySaveStatus("failed");
-    }
-  }, [finishedReplay, replaySaveStatus]);
+  }, [replayRecordingRef, startNewGame, updateCommittedGame]);
 
   useEffect(() => {
     if (game.status !== "running") {
@@ -419,29 +394,25 @@ function TwentyFortyEightLiveGame({
     }
 
     if (isHelpVisible) {
-      pauseGameReplayRecordingClock(replayRecordingRef.current);
+      pauseRecordingClock();
     } else {
-      resumeGameReplayRecordingClock(replayRecordingRef.current);
+      resumeRecordingClock();
     }
-  }, [game.status, isHelpVisible]);
+  }, [game.status, isHelpVisible, pauseRecordingClock, resumeRecordingClock]);
 
   useEffect(() => {
     if (game.status !== "lost" && game.status !== "won") {
       return;
     }
 
-    const recording = replayRecordingRef.current;
+    const finalStatus = game.status;
 
-    if (recording === null || finishedReplay !== null) {
-      return;
-    }
-
-    const replay: TwentyFortyEightReplayPayload = {
+    captureFinishedReplay((recording) => ({
       boardSize: game.boardSize,
       events: [...recording.events],
       finalMoveCount: game.moveCount,
       finalScore: game.score,
-      finalStatus: game.status,
+      finalStatus,
       finalTick: recording.tick,
       finalTopTile: topTile,
       gameId: TWENTY_FORTY_EIGHT_REPLAY_GAME_ID,
@@ -451,12 +422,9 @@ function TwentyFortyEightLiveGame({
       seed: recording.run.seed,
       startedAt: recording.startedAt,
       winTile: game.winTile,
-    };
-
-    replayRecordingRef.current = null;
-    setFinishedReplay(replay);
+    }));
   }, [
-    finishedReplay,
+    captureFinishedReplay,
     game.boardSize,
     game.moveCount,
     game.score,

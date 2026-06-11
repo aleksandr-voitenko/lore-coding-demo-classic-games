@@ -34,15 +34,13 @@ import {
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
-  type ReplaySaveStatus,
 } from "@/components/game-layout";
 import {
-  createGameReplayRecordingClock,
-  getGameReplayRecordingElapsedMs,
-  pauseGameReplayRecordingClock,
-  resumeGameReplayRecordingClock,
-  type GameReplayClockedRecording,
-} from "@/components/game-replay-timing";
+  appendLiveGameReplayEvent,
+  createLiveGameReplayRecording,
+  useLiveGameReplayRecording,
+  type LiveGameReplayRecording,
+} from "@/components/game-replay-recording";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import {
@@ -93,13 +91,7 @@ type PongGameProps = {
   replayMode?: "latest";
 };
 
-type PongReplayRecording = GameReplayClockedRecording & {
-  events: PongReplayEvent[];
-  nextSeq: number;
-  run: PongReplayRun;
-  startedAt: string;
-  tick: number;
-};
+type PongReplayRecording = LiveGameReplayRecording<PongReplayEvent, PongReplayRun>;
 
 const statusLabels: Record<PongStatus, string> = {
   lost: "Computer wins",
@@ -115,17 +107,9 @@ function appendPongReplayEvent(
   recording: PongReplayRecording,
   event: PongReplayEventInput,
 ) {
-  recording.events.push({
-    ...event,
-    elapsedMs: getGameReplayRecordingElapsedMs(recording),
-    seq: recording.nextSeq,
-    tick: recording.tick,
-  } as PongReplayEvent);
-  recording.nextSeq += 1;
-
-  if (event.type === "advance") {
-    recording.tick += 1;
-  }
+  appendLiveGameReplayEvent(recording, event, {
+    advancesTick: event.type === "advance",
+  });
 }
 
 function createPongHelpSections(
@@ -208,13 +192,23 @@ function PongLiveGame({
       targetScore: initialTargetScore,
     }),
   );
-  const [finishedReplay, setFinishedReplay] = useState<PongReplayPayload | null>(null);
-  const [isReplayRunPending, setIsReplayRunPending] = useState(false);
-  const [replaySaveStatus, setReplaySaveStatus] = useState<ReplaySaveStatus>("idle");
   const gameRef = useRef(game);
-  const isReplayRunPendingRef = useRef(false);
   const preStartReplayEventsRef = useRef<PongReplayEventInput[]>([]);
-  const replayRecordingRef = useRef<PongReplayRecording | null>(null);
+  const {
+    beginReplayRecording,
+    captureFinishedReplay,
+    finishedReplay,
+    isReplayRunPending,
+    isReplayRunPendingRef,
+    pauseRecordingClock,
+    replayRecordingRef,
+    replaySaveStatus,
+    resetReplayRecording,
+    resumeRecordingClock,
+    saveFinishedReplay,
+  } = useLiveGameReplayRecording<PongReplayRecording, PongReplayPayload>({
+    saveReplay: savePongReplay,
+  });
   const maximumScore = getPongMaximumScore(game.targetScore);
   const helpSections = useMemo(
     () => createPongHelpSections(maximumScore, game.targetScore),
@@ -281,45 +275,32 @@ function PongLiveGame({
       return;
     }
 
-    isReplayRunPendingRef.current = true;
-    replayRecordingRef.current = null;
-    setIsReplayRunPending(true);
     resetLeaderboardForm();
-    setFinishedReplay(null);
-    setReplaySaveStatus("idle");
-
-    try {
+    const recording = await beginReplayRecording(async () => {
       const run = await createPongReplayRun();
-      const recording: PongReplayRecording = {
-        clock: createGameReplayRecordingClock(),
-        events: [],
-        nextSeq: 0,
-        run,
-        startedAt: new Date().toISOString(),
-        tick: 0,
-      };
 
-      preStartReplayEventsRef.current.forEach((event) => {
-        appendPongReplayEvent(recording, event);
+      return createLiveGameReplayRecording<PongReplayEvent, PongReplayRun>({
+        run,
       });
-      appendPongReplayEvent(recording, { type: "start" });
-      preStartReplayEventsRef.current = [];
-      replayRecordingRef.current = recording;
-      commitGame(
-        restart ? restartPongGame(gameRef.current) : startPongGame(gameRef.current),
-      );
-    } catch {
-      setReplaySaveStatus("failed");
-    } finally {
-      isReplayRunPendingRef.current = false;
-      setIsReplayRunPending(false);
+    });
+
+    if (recording === null) {
+      return;
     }
-  }, [commitGame, resetLeaderboardForm]);
+
+    preStartReplayEventsRef.current.forEach((event) => {
+      appendPongReplayEvent(recording, event);
+    });
+    appendPongReplayEvent(recording, { type: "start" });
+    preStartReplayEventsRef.current = [];
+    replayRecordingRef.current = recording;
+    commitGame(
+      restart ? restartPongGame(gameRef.current) : startPongGame(gameRef.current),
+    );
+  }, [beginReplayRecording, commitGame, isReplayRunPendingRef, resetLeaderboardForm, replayRecordingRef]);
 
   const startGame = useCallback(() => {
     resetLeaderboardForm();
-    setFinishedReplay(null);
-    setReplaySaveStatus("idle");
 
     const recording = replayRecordingRef.current;
 
@@ -331,27 +312,27 @@ function PongLiveGame({
     }
 
     void startReplayRun();
-  }, [resetLeaderboardForm, startReplayRun, updateCommittedGame]);
+  }, [replayRecordingRef, resetLeaderboardForm, startReplayRun, updateCommittedGame]);
 
   const toggleRunState = useCallback(() => {
     const current = gameRef.current;
 
     if (current.status === "running") {
       resetLeaderboardForm();
-      pauseGameReplayRecordingClock(replayRecordingRef.current);
+      pauseRecordingClock();
       updateCommittedGame((gameState) => pausePongGame(gameState));
       return;
     }
 
     if (current.status === "paused") {
       resetLeaderboardForm();
-      resumeGameReplayRecordingClock(replayRecordingRef.current);
+      resumeRecordingClock();
       updateCommittedGame((gameState) => startPongGame(gameState));
       return;
     }
 
     startGame();
-  }, [resetLeaderboardForm, startGame, updateCommittedGame]);
+  }, [pauseRecordingClock, resetLeaderboardForm, resumeRecordingClock, startGame, updateCommittedGame]);
 
   const movePaddle = useCallback(
     (direction: PongPaddleMovementDirection) => {
@@ -376,7 +357,7 @@ function PongLiveGame({
         return nextGame;
       });
     },
-    [updateCommittedGame],
+    [isReplayRunPendingRef, replayRecordingRef, updateCommittedGame],
   );
 
   const advancePong = useCallback(() => {
@@ -389,7 +370,7 @@ function PongLiveGame({
 
       return advancePongGame(current);
     });
-  }, [updateCommittedGame]);
+  }, [replayRecordingRef, updateCommittedGame]);
 
   const decrementRemainingScore = useCallback(() => {
     updateCommittedGame((current) => {
@@ -401,52 +382,33 @@ function PongLiveGame({
 
       return decrementPongRemainingScore(current);
     });
-  }, [updateCommittedGame]);
+  }, [replayRecordingRef, updateCommittedGame]);
 
   const pauseGameForHelp = useCallback(() => {
-    pauseGameReplayRecordingClock(replayRecordingRef.current);
+    pauseRecordingClock();
     updateCommittedGame((current) => pausePongGame(current));
-  }, [updateCommittedGame]);
+  }, [pauseRecordingClock, updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
-    resumeGameReplayRecordingClock(replayRecordingRef.current);
+    resumeRecordingClock();
     updateCommittedGame((current) => startPongGame(current));
-  }, [updateCommittedGame]);
-
-  const saveFinishedReplay = useCallback(async () => {
-    if (finishedReplay === null || replaySaveStatus === "saving") {
-      return;
-    }
-
-    setReplaySaveStatus("saving");
-
-    try {
-      await savePongReplay(finishedReplay);
-      setReplaySaveStatus("saved");
-    } catch {
-      setReplaySaveStatus("failed");
-    }
-  }, [finishedReplay, replaySaveStatus]);
+  }, [resumeRecordingClock, updateCommittedGame]);
 
   useEffect(() => {
     if (game.status !== "lost" && game.status !== "won") {
       return;
     }
 
-    const recording = replayRecordingRef.current;
+    const finalStatus = game.status;
 
-    if (recording === null || finishedReplay !== null) {
-      return;
-    }
-
-    const replay: PongReplayPayload = {
+    captureFinishedReplay((recording) => ({
       boardHeight: game.boardHeight,
       boardWidth: game.boardWidth,
       events: [...recording.events],
       finalCpuScore: game.score.cpu,
       finalPlayerScore: game.score.player,
       finalScore: game.remainingScore,
-      finalStatus: game.status,
+      finalStatus,
       finalTick: recording.tick,
       gameId: PONG_REPLAY_GAME_ID,
       leaderboardKey,
@@ -455,13 +417,10 @@ function PongLiveGame({
       seed: recording.run.seed,
       startedAt: recording.startedAt,
       targetScore: game.targetScore,
-    };
-
-    replayRecordingRef.current = null;
+    }));
     preStartReplayEventsRef.current = [];
-    setFinishedReplay(replay);
   }, [
-    finishedReplay,
+    captureFinishedReplay,
     game.boardHeight,
     game.boardWidth,
     game.remainingScore,
@@ -511,9 +470,9 @@ function PongLiveGame({
 
     resetPaddleMovement();
     preStartReplayEventsRef.current = [];
-    replayRecordingRef.current = null;
+    resetReplayRecording();
     void startReplayRun({ restart: true });
-  }, [resetPaddleMovement, startReplayRun]);
+  }, [isReplayRunPendingRef, resetPaddleMovement, resetReplayRecording, startReplayRun]);
 
   useEffect(() => {
     if (tickDelay === null) {

@@ -24,15 +24,13 @@ import {
   useGameEscapeToMenu,
   useGameHelpScreen,
   type GameHelpSection,
-  type ReplaySaveStatus,
 } from "@/components/game-layout";
 import {
-  createGameReplayRecordingClock,
-  getGameReplayRecordingElapsedMs,
-  pauseGameReplayRecordingClock,
-  resumeGameReplayRecordingClock,
-  type GameReplayClockedRecording,
-} from "@/components/game-replay-timing";
+  appendLiveGameReplayEvent,
+  createLiveGameReplayRecording,
+  useLiveGameReplayRecording,
+  type LiveGameReplayRecording,
+} from "@/components/game-replay-recording";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import {
@@ -95,13 +93,8 @@ type SpaceInvadersGameProps = {
   replayMode?: "latest";
 };
 
-type SpaceInvadersReplayRecording = GameReplayClockedRecording & {
-  events: SpaceInvadersReplayEvent[];
-  nextSeq: number;
+type SpaceInvadersReplayRecording = LiveGameReplayRecording<SpaceInvadersReplayEvent, SpaceInvadersReplayRun> & {
   random: () => number;
-  run: SpaceInvadersReplayRun;
-  startedAt: string;
-  tick: number;
 };
 
 const statusLabels: Record<SpaceInvadersStatus, string> = {
@@ -193,17 +186,9 @@ function appendSpaceInvadersReplayEvent(
   recording: SpaceInvadersReplayRecording,
   event: SpaceInvadersReplayEventInput,
 ) {
-  recording.events.push({
-    ...event,
-    elapsedMs: getGameReplayRecordingElapsedMs(recording),
-    seq: recording.nextSeq,
-    tick: recording.tick,
-  } as unknown as SpaceInvadersReplayEvent);
-  recording.nextSeq += 1;
-
-  if (event.type === "advance") {
-    recording.tick += 1;
-  }
+  appendLiveGameReplayEvent(recording, event, {
+    advancesTick: event.type === "advance",
+  });
 }
 
 function SpaceInvadersLiveGame({
@@ -222,13 +207,25 @@ function SpaceInvadersLiveGame({
       boardWidth: initialBoardWidth,
     }),
   );
-  const [finishedReplay, setFinishedReplay] =
-    useState<SpaceInvadersReplayPayload | null>(null);
-  const [isReplayRunPending, setIsReplayRunPending] = useState(false);
-  const [replaySaveStatus, setReplaySaveStatus] = useState<ReplaySaveStatus>("idle");
   const gameRef = useRef(game);
-  const isReplayRunPendingRef = useRef(false);
-  const replayRecordingRef = useRef<SpaceInvadersReplayRecording | null>(null);
+  const {
+    beginReplayRecording,
+    captureFinishedReplay,
+    finishedReplay,
+    isReplayRunPending,
+    isReplayRunPendingRef,
+    pauseRecordingClock,
+    replayRecordingRef,
+    replaySaveStatus,
+    resetReplayRecording,
+    resumeRecordingClock,
+    saveFinishedReplay,
+  } = useLiveGameReplayRecording<
+    SpaceInvadersReplayRecording,
+    SpaceInvadersReplayPayload
+  >({
+    saveReplay: saveSpaceInvadersReplay,
+  });
   const tickDelay = game.status === "running" ? getSpaceInvadersTickDelay() : null;
   const canPauseGame = game.status === "running" || game.status === "paused";
   const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
@@ -285,43 +282,37 @@ function SpaceInvadersLiveGame({
       return;
     }
 
-    isReplayRunPendingRef.current = true;
-    replayRecordingRef.current = null;
-    setIsReplayRunPending(true);
     resetLeaderboardForm();
-    setFinishedReplay(null);
-    setReplaySaveStatus("idle");
-
-    try {
+    const recording = await beginReplayRecording(async () => {
       const run = await createSpaceInvadersReplayRun();
       const random = createSpaceInvadersReplayRandom(run.seed);
-      const current = gameRef.current;
-      const recording: SpaceInvadersReplayRecording = {
-        clock: createGameReplayRecordingClock(),
-        events: [],
-        nextSeq: 0,
+
+      return createLiveGameReplayRecording<
+        SpaceInvadersReplayEvent,
+        SpaceInvadersReplayRun,
+        { random: () => number }
+      >({
         random,
         run,
-        startedAt: new Date().toISOString(),
-        tick: 0,
-      };
-      const readyGame = createInitialSpaceInvadersGame({
-        alienCount: current.alienCount,
-        boardHeight: current.boardHeight,
-        boardWidth: current.boardWidth,
-        random,
       });
+    });
 
-      appendSpaceInvadersReplayEvent(recording, { type: "start" });
-      replayRecordingRef.current = recording;
-      commitGame(startSpaceInvadersGame(readyGame));
-    } catch {
-      setReplaySaveStatus("failed");
-    } finally {
-      isReplayRunPendingRef.current = false;
-      setIsReplayRunPending(false);
+    if (recording === null) {
+      return;
     }
-  }, [commitGame, resetLeaderboardForm]);
+
+    const current = gameRef.current;
+    const readyGame = createInitialSpaceInvadersGame({
+      alienCount: current.alienCount,
+      boardHeight: current.boardHeight,
+      boardWidth: current.boardWidth,
+      random: recording.random,
+    });
+
+    appendSpaceInvadersReplayEvent(recording, { type: "start" });
+    replayRecordingRef.current = recording;
+    commitGame(startSpaceInvadersGame(readyGame));
+  }, [beginReplayRecording, commitGame, isReplayRunPendingRef, resetLeaderboardForm, replayRecordingRef]);
 
   const startGame = useCallback(() => {
     void startReplayRun();
@@ -333,28 +324,28 @@ function SpaceInvadersLiveGame({
     resetLeaderboardForm();
 
     if (current.status === "running") {
-      pauseGameReplayRecordingClock(replayRecordingRef.current);
+      pauseRecordingClock();
       updateCommittedGame((gameState) => pauseSpaceInvadersGame(gameState));
       return;
     }
 
     if (current.status === "paused") {
-      resumeGameReplayRecordingClock(replayRecordingRef.current);
+      resumeRecordingClock();
       updateCommittedGame((gameState) => startSpaceInvadersGame(gameState));
       return;
     }
 
     startGame();
-  }, [resetLeaderboardForm, startGame, updateCommittedGame]);
+  }, [pauseRecordingClock, resetLeaderboardForm, resumeRecordingClock, startGame, updateCommittedGame]);
 
   const restartGame = useCallback(() => {
     if (isReplayRunPendingRef.current) {
       return;
     }
 
-    replayRecordingRef.current = null;
+    resetReplayRecording();
     void startReplayRun();
-  }, [startReplayRun]);
+  }, [isReplayRunPendingRef, resetReplayRecording, startReplayRun]);
 
   const movePlayer = useCallback((direction: SpaceInvadersPlayerMovementDirection) => {
     updateCommittedGame((current) => {
@@ -373,7 +364,7 @@ function SpaceInvadersLiveGame({
 
       return nextGame;
     });
-  }, [updateCommittedGame]);
+  }, [replayRecordingRef, updateCommittedGame]);
 
   const fireShot = useCallback(() => {
     updateCommittedGame((current) => {
@@ -389,7 +380,7 @@ function SpaceInvadersLiveGame({
 
       return nextGame;
     });
-  }, [updateCommittedGame]);
+  }, [replayRecordingRef, updateCommittedGame]);
 
   const advanceSpaceInvaders = useCallback(() => {
     updateCommittedGame((current) => {
@@ -403,45 +394,26 @@ function SpaceInvadersLiveGame({
 
       return advanceSpaceInvadersGame(current);
     });
-  }, [updateCommittedGame]);
+  }, [replayRecordingRef, updateCommittedGame]);
 
   const pauseGameForHelp = useCallback(() => {
-    pauseGameReplayRecordingClock(replayRecordingRef.current);
+    pauseRecordingClock();
     updateCommittedGame((current) => pauseSpaceInvadersGame(current));
-  }, [updateCommittedGame]);
+  }, [pauseRecordingClock, updateCommittedGame]);
 
   const resumeGameAfterHelp = useCallback(() => {
-    resumeGameReplayRecordingClock(replayRecordingRef.current);
+    resumeRecordingClock();
     updateCommittedGame((current) => startSpaceInvadersGame(current));
-  }, [updateCommittedGame]);
-
-  const saveFinishedReplay = useCallback(async () => {
-    if (finishedReplay === null || replaySaveStatus === "saving") {
-      return;
-    }
-
-    setReplaySaveStatus("saving");
-
-    try {
-      await saveSpaceInvadersReplay(finishedReplay);
-      setReplaySaveStatus("saved");
-    } catch {
-      setReplaySaveStatus("failed");
-    }
-  }, [finishedReplay, replaySaveStatus]);
+  }, [resumeRecordingClock, updateCommittedGame]);
 
   useEffect(() => {
     if (game.status !== "lost" && game.status !== "won") {
       return;
     }
 
-    const recording = replayRecordingRef.current;
+    const finalStatus = game.status;
 
-    if (recording === null || finishedReplay !== null) {
-      return;
-    }
-
-    const replay: SpaceInvadersReplayPayload = {
+    captureFinishedReplay((recording) => ({
       alienCount: game.alienCount,
       boardHeight: game.boardHeight,
       boardWidth: game.boardWidth,
@@ -449,7 +421,7 @@ function SpaceInvadersLiveGame({
       finalInvaderCount: game.invaders.filter((invader) => invader.isActive).length,
       finalLives: game.lives,
       finalScore: game.score,
-      finalStatus: game.status,
+      finalStatus,
       finalTick: recording.tick,
       gameId: SPACE_INVADERS_REPLAY_GAME_ID,
       leaderboardKey,
@@ -457,12 +429,9 @@ function SpaceInvadersLiveGame({
       schemaVersion: SPACE_INVADERS_REPLAY_SCHEMA_VERSION,
       seed: recording.run.seed,
       startedAt: recording.startedAt,
-    };
-
-    replayRecordingRef.current = null;
-    setFinishedReplay(replay);
+    }));
   }, [
-    finishedReplay,
+    captureFinishedReplay,
     game.alienCount,
     game.boardHeight,
     game.boardWidth,
@@ -581,6 +550,7 @@ function SpaceInvadersLiveGame({
     fireShot,
     game.status,
     isHelpVisible,
+    isReplayRunPendingRef,
     pendingLeaderboardEntry,
     startGame,
     toggleRunState,
