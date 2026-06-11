@@ -18,13 +18,13 @@ type TetrisBoardProps = {
 };
 
 export const tetrominoCellClassNames: Record<TetrominoKind, string> = {
-  I: "bg-[var(--tetris-cyan)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-cyan)_32%,transparent)]",
-  J: "bg-[var(--tetris-blue)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-blue)_32%,transparent)]",
-  L: "bg-[var(--tetris-orange)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-orange)_32%,transparent)]",
-  O: "bg-[var(--tetris-yellow)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-yellow)_32%,transparent)]",
-  S: "bg-[var(--tetris-green)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-green)_32%,transparent)]",
-  T: "bg-[var(--tetris-purple)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-purple)_32%,transparent)]",
-  Z: "bg-[var(--tetris-red)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-red)_32%,transparent)]",
+  I: "border border-[var(--tetris-piece-border)] bg-[var(--tetris-cyan)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-cyan)_32%,transparent)]",
+  J: "border border-[var(--tetris-piece-border)] bg-[var(--tetris-blue)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-blue)_32%,transparent)]",
+  L: "border border-[var(--tetris-piece-border)] bg-[var(--tetris-orange)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-orange)_32%,transparent)]",
+  O: "border border-[var(--tetris-piece-border)] bg-[var(--tetris-yellow)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-yellow)_32%,transparent)]",
+  S: "border border-[var(--tetris-piece-border)] bg-[var(--tetris-green)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-green)_32%,transparent)]",
+  T: "border border-[var(--tetris-piece-border)] bg-[var(--tetris-purple)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-purple)_32%,transparent)]",
+  Z: "border border-[var(--tetris-piece-border)] bg-[var(--tetris-red)] shadow-[inset_0_-2px_0_color-mix(in_oklch,black_18%,transparent),0_0_16px_color-mix(in_oklch,var(--tetris-red)_32%,transparent)]",
 };
 
 export function TetrisBoard({ children, game, statusLabel }: TetrisBoardProps) {

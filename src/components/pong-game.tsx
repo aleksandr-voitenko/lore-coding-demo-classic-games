@@ -622,54 +622,26 @@ function PongLiveGame({
           }
         >
           <PongBoard game={game} statusLabel={statusLabel}>
-          {showStartScreen ? (
-            <GameStartScreen testId="pong-start-screen">
-              <GameStartScreenHeader
-                preview={
-                  <div
-                    className="relative h-24 w-36 rounded-md border border-[#23415e] bg-[#06101f]"
-                    aria-hidden="true"
-                  >
-                    <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 border-l border-dashed border-[#e5f2ff]/60" />
-                    <span className="absolute left-4 top-7 h-10 w-1.5 rounded-full bg-[#38bdf8]" />
-                    <span className="absolute right-4 top-7 h-10 w-1.5 rounded-full bg-[#f472b6]" />
-                    <span className="absolute left-1/2 top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#f8fafc]" />
-                  </div>
-                }
-                status={`First to ${game.targetScore}`}
-                title="Pong"
-              />
-              <Button
-                className="min-w-32"
-                data-testid="pong-start-button"
-                disabled={isReplayRunPending}
-                onClick={startGame}
-                size="lg"
-                type="button"
-                variant="secondary"
-              >
-                <PlayIcon data-icon="inline-start" />
-                {isReplayRunPending ? "Starting" : "Start"}
-              </Button>
-              <GameLeaderboardPanel {...leaderboardPanelProps} />
-            </GameStartScreen>
-          ) : showRoundReadyScreen ? (
-            <div
-              className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[rgba(8,21,37,0.62)] px-4 py-5 text-center text-[#e5f2ff] backdrop-blur-[1px]"
-              data-testid="pong-round-ready-screen"
-            >
-              <div className="flex max-w-72 flex-col items-center gap-3 rounded-md border border-[#e5f2ff]/20 bg-[#081525]/92 p-5 shadow-[0_18px_48px_rgba(0,0,0,0.34)]">
-                <div className="flex flex-col items-center gap-1">
-                  <p className="text-2xl font-semibold tracking-normal text-balance">
-                    Rally complete
-                  </p>
-                  <p className="text-base font-medium text-[#9fb6c9]">
-                    Player {game.score.player} - {game.score.cpu} Computer
-                  </p>
-                </div>
+            {showStartScreen ? (
+              <GameStartScreen testId="pong-start-screen">
+                <GameStartScreenHeader
+                  preview={
+                    <div
+                      className="relative h-24 w-36 rounded-md border border-[var(--pong-board-border)] bg-[var(--pong-board-cell)] shadow-[0_0_18px_color-mix(in_oklch,var(--pong-ball)_12%,transparent)]"
+                      aria-hidden="true"
+                    >
+                      <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 border-l border-dashed border-[var(--pong-score-line)]" />
+                      <span className="absolute left-4 top-7 h-10 w-1.5 rounded-full bg-[var(--pong-blue)]" />
+                      <span className="absolute right-4 top-7 h-10 w-1.5 rounded-full bg-[var(--pong-pink)]" />
+                      <span className="absolute left-1/2 top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--pong-ball)]" />
+                    </div>
+                  }
+                  status={`First to ${game.targetScore}`}
+                  title="Pong"
+                />
                 <Button
                   className="min-w-32"
-                  data-testid="pong-next-rally-button"
+                  data-testid="pong-start-button"
                   disabled={isReplayRunPending}
                   onClick={startGame}
                   size="lg"
@@ -677,66 +649,94 @@ function PongLiveGame({
                   variant="secondary"
                 >
                   <PlayIcon data-icon="inline-start" />
-                  {isReplayRunPending ? "Starting" : "Serve"}
+                  {isReplayRunPending ? "Starting" : "Start"}
                 </Button>
-              </div>
-            </div>
-          ) : showEndScreen ? (
-            <GameEndScreen testId="pong-end-screen">
-              <GameEndLeaderboardContent
-                action={
-                  <div className="flex w-full max-w-xs flex-col items-center gap-2">
-                    <Button
-                      className="w-full"
-                      data-testid="pong-new-game-button"
-                      disabled={isReplayRunPending}
-                      onClick={restartGame}
-                      size="lg"
-                      type="button"
-                      variant="secondary"
-                    >
-                      <RotateCcwIcon data-icon="inline-start" />
-                      New game
-                    </Button>
+                <GameLeaderboardPanel {...leaderboardPanelProps} />
+              </GameStartScreen>
+            ) : showRoundReadyScreen ? (
+              <div
+                className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--pong-board)_58%,transparent)] px-4 py-5 text-center text-[var(--pong-ball)] backdrop-blur-[1px]"
+                data-testid="pong-round-ready-screen"
+              >
+                <div className="flex max-w-72 flex-col items-center gap-3 rounded-md border border-[color-mix(in_oklch,var(--pong-ball)_20%,transparent)] bg-[color-mix(in_oklch,var(--pong-board)_88%,white_12%)] p-5 shadow-[0_18px_48px_rgba(0,0,0,0.28)] dark:bg-[color-mix(in_oklch,var(--pong-board)_88%,black_12%)]">
+                  <div className="flex flex-col items-center gap-1">
+                    <p className="text-2xl font-semibold tracking-normal text-balance">
+                      Rally complete
+                    </p>
+                    <p className="text-base font-medium text-[color-mix(in_oklch,var(--pong-ball)_72%,transparent)]">
+                      Player {game.score.player} - {game.score.cpu} Computer
+                    </p>
                   </div>
-                }
-                leaderboard={finalLeaderboardProps}
-                pendingLeaderboardEntry={pendingLeaderboardEntry}
-                scoreForm={scoreFormProps}
-                summary={{
-                  metricLabel: "Remaining score",
-                  metricValue: game.remainingScore,
-                  metricValueTestId: "pong-final-score",
-                  title: game.status === "won" ? "Match won" : "Match lost",
-                }}
-              />
-              <GameReplaySaveAction
-                onSave={saveFinishedReplay}
-                replayReady={finishedReplay !== null}
-                status={replaySaveStatus}
-                testIdPrefix="pong"
-              />
-            </GameEndScreen>
-          ) : showPauseScreen ? (
-            <div
-              className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[rgba(8,21,37,0.76)] text-center text-[#e5f2ff] backdrop-blur-[2px]"
-              data-testid="pong-board-state"
-            >
-              <div className="flex flex-col items-center gap-3">
-                <p className="text-2xl font-semibold tracking-normal">Paused</p>
-                <Button
-                  className="min-w-32"
-                  onClick={toggleRunState}
-                  size="lg"
-                  type="button"
-                  variant="secondary"
-                >
-                  <PlayIcon data-icon="inline-start" />
-                  Resume
-                </Button>
+                  <Button
+                    className="min-w-32"
+                    data-testid="pong-next-rally-button"
+                    disabled={isReplayRunPending}
+                    onClick={startGame}
+                    size="lg"
+                    type="button"
+                    variant="secondary"
+                  >
+                    <PlayIcon data-icon="inline-start" />
+                    {isReplayRunPending ? "Starting" : "Serve"}
+                  </Button>
+                </div>
               </div>
-            </div>
-          ) : null}
+            ) : showEndScreen ? (
+              <GameEndScreen testId="pong-end-screen">
+                <GameEndLeaderboardContent
+                  action={
+                    <div className="flex w-full max-w-xs flex-col items-center gap-2">
+                      <Button
+                        className="w-full"
+                        data-testid="pong-new-game-button"
+                        disabled={isReplayRunPending}
+                        onClick={restartGame}
+                        size="lg"
+                        type="button"
+                        variant="secondary"
+                      >
+                        <RotateCcwIcon data-icon="inline-start" />
+                        New game
+                      </Button>
+                    </div>
+                  }
+                  leaderboard={finalLeaderboardProps}
+                  pendingLeaderboardEntry={pendingLeaderboardEntry}
+                  scoreForm={scoreFormProps}
+                  summary={{
+                    metricLabel: "Remaining score",
+                    metricValue: game.remainingScore,
+                    metricValueTestId: "pong-final-score",
+                    title: game.status === "won" ? "Match won" : "Match lost",
+                  }}
+                />
+                <GameReplaySaveAction
+                  onSave={saveFinishedReplay}
+                  replayReady={finishedReplay !== null}
+                  status={replaySaveStatus}
+                  testIdPrefix="pong"
+                />
+              </GameEndScreen>
+            ) : showPauseScreen ? (
+              <div
+                className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--pong-board)_76%,transparent)] text-center text-[var(--pong-ball)] backdrop-blur-[2px]"
+                data-testid="pong-board-state"
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <p className="text-2xl font-semibold tracking-normal">Paused</p>
+                  <Button
+                    className="min-w-32"
+                    onClick={toggleRunState}
+                    size="lg"
+                    type="button"
+                    variant="secondary"
+                  >
+                    <PlayIcon data-icon="inline-start" />
+                    Resume
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           {isHelpVisible ? (
             <GameHelpScreen
               onClose={closeHelp}

@@ -21,7 +21,7 @@ export function GameStartScreen({ children, className, testId }: GameStartScreen
   return (
     <div
       className={cn(
-        "absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-md border border-white/20 bg-[rgba(17,19,24,0.94)] px-4 py-5 text-center text-[#f8fafc] shadow-[0_20px_60px_rgba(0,0,0,0.38)] backdrop-blur-[3px]",
+        "game-start-screen absolute inset-2 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-md border border-[var(--game-start-border)] bg-[var(--game-start-bg)] px-4 py-5 text-center text-[var(--game-start-ink)] shadow-[0_20px_60px_var(--game-start-shadow)] backdrop-blur-[3px]",
         className,
       )}
       data-game-start-screen="true"
@@ -43,7 +43,10 @@ export function GameStartScreenHeader({
       {preview}
       <div className="flex flex-col items-center gap-1">
         <p className="text-3xl font-semibold tracking-normal text-balance">{title}</p>
-        <p className="text-sm font-medium text-[#d1d5db]" aria-live={statusAriaLive}>
+        <p
+          className="text-sm font-medium text-[color-mix(in_oklch,currentColor_72%,transparent)]"
+          aria-live={statusAriaLive}
+        >
           {status}
         </p>
       </div>

@@ -51,7 +51,7 @@ export function BreakoutBoard({ children, game, statusLabel }: BreakoutBoardProp
           <span
             aria-hidden="true"
             className={cn(
-              "absolute rounded-[0.2rem] border border-[color-mix(in_oklch,white_24%,transparent)] transition-opacity",
+              "absolute rounded-[0.2rem] border border-[var(--breakout-brick-border)] transition-opacity",
               breakoutBrickClassNames[brick.row],
               !brick.isActive && "opacity-0",
             )}
@@ -68,7 +68,7 @@ export function BreakoutBoard({ children, game, statusLabel }: BreakoutBoardProp
 
         <span
           aria-hidden="true"
-          className="absolute rounded-full bg-[var(--breakout-ball)] shadow-[0_0_22px_color-mix(in_oklch,var(--breakout-ball)_72%,transparent)]"
+          className="absolute rounded-full bg-[var(--breakout-ball)]"
           data-testid="breakout-ball"
           style={{
             height: `${((ballRadius * 2) / game.boardHeight) * 100}%`,
@@ -80,7 +80,7 @@ export function BreakoutBoard({ children, game, statusLabel }: BreakoutBoardProp
 
         <span
           aria-hidden="true"
-          className="absolute rounded-full bg-[var(--breakout-paddle)] shadow-[inset_0_-3px_0_color-mix(in_oklch,var(--breakout-board)_20%,transparent),0_0_24px_color-mix(in_oklch,var(--breakout-paddle)_42%,transparent)]"
+          className="absolute rounded-full bg-[var(--breakout-paddle)]"
           data-testid="breakout-paddle"
           style={{
             height: `${(game.paddle.height / game.boardHeight) * 100}%`,

@@ -18,6 +18,10 @@ const alignedEdgeTolerancePx = 1;
 const stackedGapPx = 16;
 const viewportFitTolerancePx = 1;
 const minimumStartScreenContrastRatio = 7;
+const minimumStartButtonBoundaryContrastRatio = 1.2;
+const minimumLightStartScreenLuminance = 0.55;
+const minimumLightPlayfieldLuminance = 0.55;
+const minimumBoardObjectContrastRatio = 3;
 
 const layoutCases = [
   {
@@ -112,6 +116,165 @@ const darkPlayfieldPalettePrefixes = new Set([
   "tetris",
 ]);
 
+const lightPlayfieldCases = [
+  {
+    boardTestId: "tetris-board",
+    contrastPairs: [
+      {
+        backgroundVariable: "--tetris-board-cell",
+        foregroundVariable: "--tetris-blue",
+        label: "J piece",
+      },
+      {
+        backgroundVariable: "--tetris-board-cell",
+        foregroundVariable: "--tetris-cyan",
+        label: "I piece",
+      },
+      {
+        backgroundVariable: "--tetris-board-cell",
+        foregroundVariable: "--tetris-green",
+        label: "S piece",
+      },
+      {
+        backgroundVariable: "--tetris-board-cell",
+        foregroundVariable: "--tetris-orange",
+        label: "L piece",
+      },
+      {
+        backgroundVariable: "--tetris-board-cell",
+        foregroundVariable: "--tetris-purple",
+        label: "T piece",
+      },
+      {
+        backgroundVariable: "--tetris-board-cell",
+        foregroundVariable: "--tetris-red",
+        label: "Z piece",
+      },
+      {
+        backgroundVariable: "--tetris-board-cell",
+        foregroundVariable: "--tetris-yellow",
+        label: "O piece",
+      },
+    ],
+    gameId: "tetris",
+    name: "Tetris",
+    palettePrefix: "tetris",
+    startScreenTestId: "tetris-start-screen",
+    statusTestId: "tetris-status",
+  },
+  {
+    boardTestId: "breakout-board",
+    contrastPairs: [
+      {
+        backgroundVariable: "--breakout-board-cell",
+        foregroundVariable: "--breakout-ball",
+        label: "ball",
+      },
+      {
+        backgroundVariable: "--breakout-board-cell",
+        foregroundVariable: "--breakout-blue",
+        label: "blue brick",
+      },
+      {
+        backgroundVariable: "--breakout-board-cell",
+        foregroundVariable: "--breakout-green",
+        label: "green brick",
+      },
+      {
+        backgroundVariable: "--breakout-board-cell",
+        foregroundVariable: "--breakout-orange",
+        label: "orange brick",
+      },
+      {
+        backgroundVariable: "--breakout-board-cell",
+        foregroundVariable: "--breakout-paddle",
+        label: "paddle",
+      },
+      {
+        backgroundVariable: "--breakout-board-cell",
+        foregroundVariable: "--breakout-red",
+        label: "red brick",
+      },
+      {
+        backgroundVariable: "--breakout-board-cell",
+        foregroundVariable: "--breakout-yellow",
+        label: "yellow brick",
+      },
+    ],
+    gameId: "breakout",
+    name: "Breakout",
+    palettePrefix: "breakout",
+    shadowlessTestIds: ["breakout-ball", "breakout-paddle"],
+    startScreenTestId: "breakout-start-screen",
+    statusTestId: "breakout-status",
+  },
+  {
+    boardTestId: "pong-board",
+    contrastPairs: [
+      {
+        backgroundVariable: "--pong-board-cell",
+        foregroundVariable: "--pong-ball",
+        label: "ball",
+      },
+      {
+        backgroundVariable: "--pong-board-cell",
+        foregroundVariable: "--pong-blue",
+        label: "player paddle",
+      },
+      {
+        backgroundVariable: "--pong-board-cell",
+        foregroundVariable: "--pong-pink",
+        label: "computer paddle",
+      },
+    ],
+    gameId: "pong",
+    name: "Pong",
+    palettePrefix: "pong",
+    shadowlessTestIds: [
+      "pong-ball",
+      "pong-player-paddle",
+      "pong-cpu-paddle",
+    ],
+    startScreenTestId: "pong-start-screen",
+    statusTestId: "pong-status",
+  },
+  {
+    boardTestId: "asteroids-board",
+    contrastPairs: [
+      {
+        backgroundVariable: "--asteroids-board",
+        foregroundVariable: "--asteroids-asteroid",
+        label: "asteroid",
+      },
+      {
+        backgroundVariable: "--asteroids-board",
+        foregroundVariable: "--asteroids-board-text",
+        label: "guide lines",
+      },
+      {
+        backgroundVariable: "--asteroids-board",
+        foregroundVariable: "--asteroids-bullet",
+        label: "bullet",
+      },
+      {
+        backgroundVariable: "--asteroids-board",
+        foregroundVariable: "--asteroids-ship",
+        label: "ship",
+      },
+      {
+        backgroundVariable: "--asteroids-board",
+        foregroundVariable: "--asteroids-thrust",
+        label: "thrust",
+      },
+    ],
+    gameId: "asteroids",
+    name: "Asteroids",
+    palettePrefix: "asteroids",
+    startScreenTestId: "asteroids-start-screen",
+    statusTestId: "asteroids-status",
+  },
+] as const;
+
 const replayMessageCases = [
   {
     gameId: "snake",
@@ -133,36 +296,6 @@ type RgbColor = {
   green: number;
   red: number;
 };
-
-function parseCssColor(value: string) {
-  const rgbMatch = value.match(
-    /^rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)$/,
-  );
-
-  if (rgbMatch) {
-    return {
-      alpha: rgbMatch[4] ? Number(rgbMatch[4]) : 1,
-      blue: Number(rgbMatch[3]),
-      green: Number(rgbMatch[2]),
-      red: Number(rgbMatch[1]),
-    };
-  }
-
-  const srgbMatch = value.match(
-    /^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)$/,
-  );
-
-  if (srgbMatch) {
-    return {
-      alpha: srgbMatch[4] ? Number(srgbMatch[4]) : 1,
-      blue: Number(srgbMatch[3]) * 255,
-      green: Number(srgbMatch[2]) * 255,
-      red: Number(srgbMatch[1]) * 255,
-    };
-  }
-
-  throw new Error(`Unsupported CSS color format: ${value}`);
-}
 
 function compositeOverWhite(color: RgbColor) {
   return {
@@ -192,6 +325,52 @@ function getContrastRatio(foreground: RgbColor, background: RgbColor) {
   const darker = Math.min(foregroundLuminance, backgroundLuminance);
 
   return (lighter + 0.05) / (darker + 0.05);
+}
+
+async function getResolvedCssColorRgb(page: Page, value: string) {
+  return page.evaluate((cssColor) => {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+
+    if (cssColor.length === 0) {
+      throw new Error("Unable to resolve empty CSS color.");
+    }
+
+    if (!context) {
+      throw new Error("Unable to resolve CSS color: canvas context unavailable.");
+    }
+
+    canvas.height = 1;
+    canvas.width = 1;
+    context.clearRect(0, 0, 1, 1);
+    context.fillStyle = cssColor;
+    context.fillRect(0, 0, 1, 1);
+
+    const [red, green, blue, alpha] = context.getImageData(0, 0, 1, 1).data;
+
+    return {
+      alpha: alpha / 255,
+      blue,
+      green,
+      red,
+    };
+  }, value);
+}
+
+async function getResolvedCssVariableRgb(page: Page, variableName: string) {
+  const value = await page.evaluate((cssVariable) => {
+    const resolvedValue = getComputedStyle(document.documentElement)
+      .getPropertyValue(cssVariable)
+      .trim();
+
+    if (resolvedValue.length === 0) {
+      throw new Error(`Unable to resolve ${cssVariable}: CSS variable is empty.`);
+    }
+
+    return resolvedValue;
+  }, variableName);
+
+  return getResolvedCssColorRgb(page, value);
 }
 
 async function seedDarkAppTheme(page: Page) {
@@ -356,6 +535,81 @@ async function expectDarkGameChrome(
   }
 }
 
+async function expectLightPlayfieldPalette(
+  page: Page,
+  playfieldCase: (typeof lightPlayfieldCases)[number],
+) {
+  const sample = await page.evaluate(({ boardTestId, startScreenTestId }) => {
+    const board = document.querySelector<HTMLElement>(
+      `[data-testid="${boardTestId}"]`,
+    );
+    const startScreen = document.querySelector<HTMLElement>(
+      `[data-testid="${startScreenTestId}"]`,
+    );
+
+    return {
+      boardFrameBackground: board?.parentElement
+        ? getComputedStyle(board.parentElement).backgroundColor
+        : "",
+      htmlHasDarkClass: document.documentElement.classList.contains("dark"),
+      startScreenBackground: startScreen
+        ? getComputedStyle(startScreen).backgroundColor
+        : "",
+    };
+  }, {
+    boardTestId: playfieldCase.boardTestId,
+    startScreenTestId: playfieldCase.startScreenTestId,
+  });
+
+  expect(sample.htmlHasDarkClass).toBe(false);
+  await expectResolvedThemeColor(
+    page,
+    sample.boardFrameBackground,
+    `--${playfieldCase.palettePrefix}-board`,
+    "backgroundColor",
+  );
+
+  const boardColor = await getResolvedCssVariableRgb(
+    page,
+    `--${playfieldCase.palettePrefix}-board`,
+  );
+
+  expect(getRelativeLuminance(boardColor)).toBeGreaterThanOrEqual(
+    minimumLightPlayfieldLuminance,
+  );
+
+  const startScreenColor = compositeOverWhite(
+    await getResolvedCssColorRgb(page, sample.startScreenBackground),
+  );
+
+  expect(getRelativeLuminance(startScreenColor)).toBeGreaterThanOrEqual(
+    minimumLightPlayfieldLuminance,
+  );
+
+  for (const {
+    backgroundVariable,
+    foregroundVariable,
+    label,
+  } of playfieldCase.contrastPairs) {
+    const [backgroundColor, foregroundColor] = await Promise.all([
+      getResolvedCssVariableRgb(page, backgroundVariable),
+      getResolvedCssVariableRgb(page, foregroundVariable),
+    ]);
+
+    expect(
+      getContrastRatio(foregroundColor, backgroundColor),
+      `${playfieldCase.name} ${label} contrast`,
+    ).toBeGreaterThanOrEqual(minimumBoardObjectContrastRatio);
+  }
+
+  const shadowlessTestIds =
+    "shadowlessTestIds" in playfieldCase ? playfieldCase.shadowlessTestIds : [];
+
+  for (const testId of shadowlessTestIds) {
+    await expect(page.getByTestId(testId)).toHaveCSS("box-shadow", "none");
+  }
+}
+
 async function expectDarkReplayMessagePanel(
   page: Page,
   {
@@ -408,19 +662,43 @@ async function expectSharedStartScreenTheme(page: Page, startScreenTestId: strin
     const screenStyle = window.getComputedStyle(element);
     const title = element.querySelector("p");
     const titleStyle = title ? window.getComputedStyle(title) : null;
+    const button = element.querySelector<HTMLElement>('[data-slot="button"]');
+    const buttonStyle = button ? window.getComputedStyle(button) : null;
 
     return {
       backgroundColor: screenStyle.backgroundColor,
+      buttonBackgroundColor: buttonStyle?.backgroundColor ?? "",
+      buttonBorderColor: buttonStyle?.borderColor ?? "",
       color: screenStyle.color,
       titleColor: titleStyle?.color ?? "",
     };
   });
-  const foreground = parseCssColor(styles.color);
-  const background = compositeOverWhite(parseCssColor(styles.backgroundColor));
+  const foreground = await getResolvedCssColorRgb(page, styles.color);
+  const background = compositeOverWhite(
+    await getResolvedCssColorRgb(page, styles.backgroundColor),
+  );
+  const startButtonBackground = compositeOverWhite(
+    await getResolvedCssColorRgb(page, styles.buttonBackgroundColor),
+  );
+  const startButtonBorder = compositeOverWhite(
+    await getResolvedCssColorRgb(page, styles.buttonBorderColor),
+  );
 
+  await expectResolvedThemeColor(
+    page,
+    styles.backgroundColor,
+    "--game-start-bg",
+    "backgroundColor",
+  );
   expect(styles.titleColor).toBe(styles.color);
+  expect(getRelativeLuminance(background)).toBeGreaterThanOrEqual(
+    minimumLightStartScreenLuminance,
+  );
   expect(getContrastRatio(foreground, background)).toBeGreaterThanOrEqual(
     minimumStartScreenContrastRatio,
+  );
+  expect(getContrastRatio(startButtonBorder, startButtonBackground)).toBeGreaterThanOrEqual(
+    minimumStartButtonBoundaryContrastRatio,
   );
 }
 
@@ -564,6 +842,20 @@ for (const layoutCase of layoutCases) {
     await expectGameLayout(page, layoutCase);
   });
 }
+
+test.describe("light app theme playfields", () => {
+  for (const playfieldCase of lightPlayfieldCases) {
+    test(`${playfieldCase.name} uses a light playfield with readable board objects`, async ({
+      page,
+    }) => {
+      await openLauncher(page);
+      await openGame(page, playfieldCase.gameId);
+
+      await expect(page.getByTestId(playfieldCase.statusTestId)).toHaveText("Ready");
+      await expectLightPlayfieldPalette(page, playfieldCase);
+    });
+  }
+});
 
 test.describe("dark app theme game palettes", () => {
   for (const layoutCase of layoutCases) {

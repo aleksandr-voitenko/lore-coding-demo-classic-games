@@ -47,7 +47,7 @@ export function PongBoard({ children, game, statusLabel }: PongBoardProps) {
 
         <span
           aria-hidden="true"
-          className="absolute rounded-full bg-[var(--pong-ball)] shadow-[0_0_22px_color-mix(in_oklch,var(--pong-ball)_64%,transparent)]"
+          className="absolute rounded-full bg-[var(--pong-ball)]"
           data-testid="pong-ball"
           style={{
             height: `${((ballRadius * 2) / game.boardHeight) * 100}%`,
@@ -59,7 +59,7 @@ export function PongBoard({ children, game, statusLabel }: PongBoardProps) {
 
         <span
           aria-hidden="true"
-          className="absolute rounded-full bg-[var(--pong-blue)] shadow-[0_0_24px_color-mix(in_oklch,var(--pong-blue)_46%,transparent)]"
+          className="absolute rounded-full bg-[var(--pong-blue)]"
           data-testid="pong-player-paddle"
           style={{
             height: `${(game.playerPaddle.height / game.boardHeight) * 100}%`,
@@ -71,7 +71,7 @@ export function PongBoard({ children, game, statusLabel }: PongBoardProps) {
 
         <span
           aria-hidden="true"
-          className="absolute rounded-full bg-[var(--pong-pink)] shadow-[0_0_24px_color-mix(in_oklch,var(--pong-pink)_42%,transparent)]"
+          className="absolute rounded-full bg-[var(--pong-pink)]"
           data-testid="pong-cpu-paddle"
           style={{
             height: `${(game.cpuPaddle.height / game.boardHeight) * 100}%`,

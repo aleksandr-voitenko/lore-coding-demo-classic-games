@@ -597,61 +597,32 @@ function BreakoutLiveGame({
           }
         >
           <BreakoutBoard game={game} statusLabel={statusLabels[game.status]}>
-          {showStartScreen ? (
-            <GameStartScreen testId="breakout-start-screen">
-              <GameStartScreenHeader
-                preview={
-                  <div className="grid grid-cols-10 gap-1" aria-hidden="true">
-                    {Array.from({ length: 30 }, (_, index) => {
-                      const row = Math.floor(index / 10);
+            {showStartScreen ? (
+              <GameStartScreen testId="breakout-start-screen">
+                <GameStartScreenHeader
+                  preview={
+                    <div className="grid grid-cols-10 gap-1" aria-hidden="true">
+                      {Array.from({ length: 30 }, (_, index) => {
+                        const row = Math.floor(index / 10);
 
-                      return (
-                        <span
-                          className={cn(
-                            "h-2.5 w-4 rounded-[0.16rem]",
-                            breakoutBrickClassNames[row],
-                          )}
-                          key={index}
-                        />
-                      );
-                    })}
-                  </div>
-                }
-                status={statusLabels[game.status]}
-                title="Breakout"
-              />
-              <Button
-                className="min-w-32"
-                data-testid="breakout-start-button"
-                disabled={isReplayRunPending}
-                onClick={startGame}
-                size="lg"
-                type="button"
-                variant="secondary"
-              >
-                <PlayIcon data-icon="inline-start" />
-                {isReplayRunPending ? "Starting" : "Start"}
-              </Button>
-              <GameLeaderboardPanel {...leaderboardPanelProps} />
-            </GameStartScreen>
-          ) : showLifeLostScreen ? (
-            <div
-              className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-transparent px-4 py-5 text-center text-[var(--breakout-board-text)]"
-              data-testid="breakout-life-lost-screen"
-            >
-              <div className="flex w-full max-w-[18rem] flex-col items-center gap-3 rounded-md border border-[color-mix(in_oklch,var(--breakout-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--breakout-board)_54%,transparent)] p-4 shadow-[0_18px_42px_rgba(0,0,0,0.28)] backdrop-blur-[1px]">
-                <div className="flex flex-col items-center gap-1">
-                  <p className="text-2xl font-semibold tracking-normal">Life lost</p>
-                  <p
-                    className="text-sm font-semibold text-[color-mix(in_oklch,var(--breakout-board-text)_80%,transparent)]"
-                    data-testid="breakout-lives-remaining"
-                  >
-                    {remainingLifeLabel}
-                  </p>
-                </div>
+                        return (
+                          <span
+                            className={cn(
+                              "h-2.5 w-4 rounded-[0.16rem]",
+                              breakoutBrickClassNames[row],
+                            )}
+                            key={index}
+                          />
+                        );
+                      })}
+                    </div>
+                  }
+                  status={statusLabels[game.status]}
+                  title="Breakout"
+                />
                 <Button
-                  className="min-w-36"
-                  data-testid="breakout-continue-button"
+                  className="min-w-32"
+                  data-testid="breakout-start-button"
                   disabled={isReplayRunPending}
                   onClick={startGame}
                   size="lg"
@@ -659,11 +630,40 @@ function BreakoutLiveGame({
                   variant="secondary"
                 >
                   <PlayIcon data-icon="inline-start" />
-                  {isReplayRunPending ? "Starting" : "Serve next ball"}
+                  {isReplayRunPending ? "Starting" : "Start"}
                 </Button>
+                <GameLeaderboardPanel {...leaderboardPanelProps} />
+              </GameStartScreen>
+            ) : showLifeLostScreen ? (
+              <div
+                className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-transparent px-4 py-5 text-center text-[var(--breakout-board-text)]"
+                data-testid="breakout-life-lost-screen"
+              >
+                <div className="flex w-full max-w-[18rem] flex-col items-center gap-3 rounded-md border border-[color-mix(in_oklch,var(--breakout-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--breakout-board)_54%,transparent)] p-4 shadow-[0_18px_42px_rgba(0,0,0,0.28)] backdrop-blur-[1px]">
+                  <div className="flex flex-col items-center gap-1">
+                    <p className="text-2xl font-semibold tracking-normal">Life lost</p>
+                    <p
+                      className="text-sm font-semibold text-[color-mix(in_oklch,var(--breakout-board-text)_80%,transparent)]"
+                      data-testid="breakout-lives-remaining"
+                    >
+                      {remainingLifeLabel}
+                    </p>
+                  </div>
+                  <Button
+                    className="min-w-36"
+                    data-testid="breakout-continue-button"
+                    disabled={isReplayRunPending}
+                    onClick={startGame}
+                    size="lg"
+                    type="button"
+                    variant="secondary"
+                  >
+                    <PlayIcon data-icon="inline-start" />
+                    {isReplayRunPending ? "Starting" : "Serve next ball"}
+                  </Button>
+                </div>
               </div>
-            </div>
-          ) : showEndScreen ? (
+            ) : showEndScreen ? (
             <GameEndScreen testId="breakout-end-screen">
               <GameEndLeaderboardContent
                 action={
