@@ -15,7 +15,9 @@ This file covers routes and App Router conventions under `src/app/`.
   and SQLite-backed session rows. Signed-out profile requests redirect to
   `/?auth=login` instead of rendering private profile content. It renders a
   tiny client shortcut component so Escape mirrors the visible Back to games
-  action and returns signed-in users to the launcher.
+  action and returns signed-in users to the launcher. The profile route consumes
+  the persisted app chrome theme but does not host its own theme toggle; theme
+  switching belongs to the launcher chrome.
 - `layout.tsx` owns the global HTML shell, Geist font variables, `globals.css`
   import, app metadata, and the small pre-hydration script that applies the
   persisted light/dark chrome theme class and `--chrome-*` variables to

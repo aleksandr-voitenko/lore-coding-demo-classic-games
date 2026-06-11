@@ -271,7 +271,7 @@ test("launcher renders game cards and configurable parameters", async ({ page })
   await expect(page.getByTestId("asteroids-rocks")).toHaveValue("6");
 });
 
-test("theme switching persists across launcher, auth dialog, profile, and account menu chrome", async ({
+test("theme switching persists from launcher controls into profile chrome", async ({
   page,
 }) => {
   await page.addInitScript(({ flagKey, storageKey }) => {
@@ -327,16 +327,15 @@ test("theme switching persists across launcher, auth dialog, profile, and accoun
   await page.getByTestId("launcher-theme-toggle").click();
   await openProfileFromLauncher(page);
   await expect(page.getByRole("heading", { name: "Theme Hero" })).toBeVisible();
-  await expect(page.getByTestId("profile-theme-toggle")).toHaveAccessibleName(
-    "Switch to light mode",
-  );
+  await expect(page.getByTestId("profile-theme-toggle")).toHaveCount(0);
   await expectChromeUsesAppTheme(page, "profile-page", "dark");
 
-  await page.getByTestId("profile-theme-toggle").click();
-  await expect(page.getByTestId("profile-theme-toggle")).toHaveAccessibleName(
-    "Switch to dark mode",
+  await page.getByRole("link", { name: "Back to games" }).click();
+  await expect(page.getByTestId("game-menu")).toBeVisible();
+  await expect(page.getByTestId("launcher-theme-toggle")).toHaveAccessibleName(
+    "Switch to light mode",
   );
-  await expectChromeUsesAppTheme(page, "profile-page", "light");
+  await expectChromeUsesAppTheme(page, "game-menu", "dark");
 });
 
 test("Snake opens in level progression mode at level one", async ({ page }) => {

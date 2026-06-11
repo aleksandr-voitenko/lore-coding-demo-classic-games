@@ -14,7 +14,6 @@ import { formatProfileLastPlayed } from "@/lib/profile-time";
 import { getUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
 import { USER_SESSION_COOKIE_NAME } from "@/lib/server/user-session-cookie";
 import type { UserProfileGameStat } from "@/lib/user-profile";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { ProfileEscapeToLauncher } from "./profile-escape-to-launcher";
 
 export const dynamic = "force-dynamic";
@@ -88,7 +87,6 @@ export default async function ProfilePage() {
             </h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <ThemeToggle testId="profile-theme-toggle" />
             <Link
               className="inline-flex h-9 w-fit items-center justify-center rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] px-3 text-sm font-medium text-[var(--chrome-ink)] shadow-sm transition hover:bg-[var(--chrome-accent-faint)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--chrome-focus-ring)]"
               href="/"
