@@ -126,7 +126,10 @@ This file covers React component ownership and shared game UI conventions under
 - Use `useGameEscapeToMenu` and `GameAbandonDialog` for Escape/back-to-menu
   behavior. Ready and terminal games return directly to the launcher; active
   unfinished games show the abandon confirmation. Keep this hook disabled while
-  Help is visible so Help owns Escape until it closes.
+  Help is visible so Help owns Escape until it closes. The shared abandon
+  confirmation owns a theme-aware modal palette through `--game-abandon-*`
+  tokens, so game components should pass behavior only rather than
+  board-specific dialog colors.
 - Completed UI surfaces that show a Back, Close, Done, or equivalent return
   action should let Escape trigger that same action. Keep this behavior
   consistent across game overlays, replay screens, and modal-like UI unless a

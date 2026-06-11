@@ -17,6 +17,16 @@ type SharedHelpThemeCase = {
   prefix: string;
 };
 
+type AbandonDialogThemeColors = {
+  cancelBackground: string;
+  cancelText: string;
+  confirmBackground: string;
+  confirmText: string;
+  dialogBackground: string;
+  dialogText: string;
+  htmlHasDarkClass: boolean;
+};
+
 const realtimeSharedFlowCases: RealtimeSharedFlowCase[] = [
   {
     activeStatus: "Running",
@@ -153,6 +163,32 @@ async function getHelpThemeColors(page: Page, helpScreenTestId: string) {
       htmlHasDarkClass: document.documentElement.classList.contains("dark"),
     };
   }, helpScreenTestId);
+}
+
+async function getAbandonDialogThemeColors(page: Page): Promise<AbandonDialogThemeColors> {
+  return page.evaluate(() => {
+    const dialog = document.querySelector('[data-testid="game-abandon-dialog"] > div');
+    const cancelButton = document.querySelector('[data-testid="game-abandon-cancel"]');
+    const confirmButton = document.querySelector('[data-testid="game-abandon-confirm"]');
+
+    if (!dialog || !cancelButton || !confirmButton) {
+      throw new Error("Missing abandon dialog theme target");
+    }
+
+    const dialogStyle = window.getComputedStyle(dialog);
+    const cancelButtonStyle = window.getComputedStyle(cancelButton);
+    const confirmButtonStyle = window.getComputedStyle(confirmButton);
+
+    return {
+      cancelBackground: cancelButtonStyle.backgroundColor,
+      cancelText: cancelButtonStyle.color,
+      confirmBackground: confirmButtonStyle.backgroundColor,
+      confirmText: confirmButtonStyle.color,
+      dialogBackground: dialogStyle.backgroundColor,
+      dialogText: dialogStyle.color,
+      htmlHasDarkClass: document.documentElement.classList.contains("dark"),
+    };
+  });
 }
 
 async function seedDarkAppTheme(page: Page) {
@@ -460,6 +496,48 @@ test("Breakout Help theme uses dark dialog when app theme is dark", async ({ pag
   expectLightColor(colors.dialogText);
   expectDarkColor(colors.closeBackground);
   expectLightColor(colors.closeText);
+});
+
+test("shared abandon confirmation honors light and dark app themes", async ({ page }) => {
+  await openLauncher(page);
+  await openGame(page, "tetris");
+  await page.getByTestId("tetris-start-button").click();
+  await expect(page.getByTestId("tetris-status")).toHaveText("Running");
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("game-abandon-dialog")).toBeVisible();
+
+  const lightColors = await getAbandonDialogThemeColors(page);
+
+  expect(lightColors.htmlHasDarkClass).toBe(false);
+  expectLightColor(lightColors.dialogBackground);
+  expectDarkColor(lightColors.dialogText);
+  expectLightColor(lightColors.cancelBackground);
+  expectDarkColor(lightColors.cancelText);
+  expectDarkColor(lightColors.confirmBackground);
+  expectLightColor(lightColors.confirmText);
+
+  await page.getByTestId("game-abandon-cancel").click();
+  await expectAbandonDialogHidden(page);
+
+  await seedDarkAppTheme(page);
+  await openLauncher(page);
+  await openGame(page, "tetris");
+  await page.getByTestId("tetris-start-button").click();
+  await expect(page.getByTestId("tetris-status")).toHaveText("Running");
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("game-abandon-dialog")).toBeVisible();
+
+  const darkColors = await getAbandonDialogThemeColors(page);
+
+  expect(darkColors.htmlHasDarkClass).toBe(true);
+  expectDarkColor(darkColors.dialogBackground);
+  expectLightColor(darkColors.dialogText);
+  expectDarkColor(darkColors.cancelBackground);
+  expectLightColor(darkColors.cancelText);
+  expectLightColor(darkColors.confirmBackground);
+  expectDarkColor(darkColors.confirmText);
 });
 
 test("shared Help keeps long Rules scrolling inside the rules list", async ({ page }) => {

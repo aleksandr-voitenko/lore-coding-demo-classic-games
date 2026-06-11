@@ -34,7 +34,7 @@ export function GameAbandonDialog({ onCancel, onConfirm }: GameAbandonDialogProp
       data-testid="game-abandon-dialog"
       role="alertdialog"
     >
-      <div className="flex w-full max-w-sm flex-col gap-4 rounded-md border border-white/25 bg-[#10151f] p-4 text-left text-white shadow-[0_24px_80px_rgba(0,0,0,0.42)]">
+      <div className="flex w-full max-w-sm flex-col gap-4 rounded-md border border-[var(--game-abandon-border)] bg-[var(--game-abandon-panel)] p-4 text-left text-[var(--game-abandon-ink)] shadow-[0_24px_80px_var(--game-abandon-shadow)]">
         <div className="flex flex-col gap-2">
           <h2
             className="text-xl font-semibold tracking-normal text-balance"
@@ -42,14 +42,17 @@ export function GameAbandonDialog({ onCancel, onConfirm }: GameAbandonDialogProp
           >
             Abandon game?
           </h2>
-          <p className="text-sm leading-6 text-white/78" id="game-abandon-dialog-description">
+          <p
+            className="text-sm leading-6 text-[var(--game-abandon-muted)]"
+            id="game-abandon-dialog-description"
+          >
             Your current game will be lost and you will return to the game menu.
           </p>
         </div>
         <div className="flex justify-end gap-2">
           <Button
             autoFocus
-            className="border-white/35 bg-white/10 text-white hover:bg-white/20 hover:text-white focus-visible:border-white/70 focus-visible:ring-white/40"
+            className="!border-[var(--game-abandon-border)] !bg-[var(--game-abandon-cancel-bg)] !text-[var(--game-abandon-cancel-ink)] hover:!bg-[var(--game-abandon-cancel-hover-bg)] hover:!text-[var(--game-abandon-cancel-ink)] focus-visible:!border-[var(--game-abandon-focus-border)] focus-visible:!ring-[var(--game-abandon-focus-ring)]"
             data-testid="game-abandon-cancel"
             onClick={onCancel}
             type="button"
@@ -58,7 +61,7 @@ export function GameAbandonDialog({ onCancel, onConfirm }: GameAbandonDialogProp
             Cancel
           </Button>
           <Button
-            className="bg-white text-[#10151f] hover:bg-white/86"
+            className="!bg-[var(--game-abandon-confirm-bg)] !text-[var(--game-abandon-confirm-ink)] hover:!bg-[var(--game-abandon-confirm-hover-bg)] hover:!text-[var(--game-abandon-confirm-ink)] focus-visible:!border-[var(--game-abandon-focus-border)] focus-visible:!ring-[var(--game-abandon-focus-ring)]"
             data-testid="game-abandon-confirm"
             onClick={onConfirm}
             type="button"
