@@ -1,0 +1,38 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "scripts/*.mjs",
+    "src/app/**/{layout,page,route}.tsx",
+    "src/app/**/route.ts",
+    "src/**/*.{test,spec}.{ts,tsx}",
+    "e2e/**/*.spec.ts",
+    "e2e/support/**/*.ts"
+  ],
+  "project": [
+    "*.{js,mjs,ts}",
+    "scripts/**/*.{mjs,ts}",
+    "src/**/*.{ts,tsx}",
+    "e2e/**/*.ts"
+  ],
+  "ignoreDependencies": ["shadcn", "tailwindcss", "tw-animate-css"],
+  "ignoreBinaries": ["scc"],
+  "ignoreExportsUsedInFile": true,
+  "ignoreIssues": {
+    "src/components/breakout-paddle-input.ts": ["exports"],
+    "src/components/minesweeper-board.tsx": ["exports"],
+    "src/components/pong-paddle-input.ts": ["exports"],
+    "src/components/space-invaders-player-input.ts": ["exports"],
+    "src/lib/asteroids-replay.ts": ["exports"],
+    "src/lib/breakout-replay.ts": ["exports"],
+    "src/lib/minesweeper-replay.ts": ["exports"],
+    "src/lib/pong-replay.ts": ["exports"],
+    "src/lib/simon-replay.ts": ["exports"],
+    "src/lib/snake-game-engine.ts": ["exports", "duplicates"],
+    "src/lib/snake-replay.ts": ["exports"],
+    "src/lib/space-invaders-replay.ts": ["exports"],
+    "src/lib/space-invaders/constants.ts": ["exports", "duplicates"],
+    "src/lib/tetris-replay.ts": ["exports"],
+    "src/lib/twenty-forty-eight-replay.ts": ["exports"],
+    "src/lib/user-profile.ts": ["types"]
+  }
+}

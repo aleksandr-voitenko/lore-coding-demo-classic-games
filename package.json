@@ -11,6 +11,7 @@
     "start": "next start",
     "prepare": "node scripts/install-lore-coding-hooks.mjs",
     "stats:loc": "scc . --exclude-ext md,json,svg,png,ico --no-gen",
+    "check:unused": "knip",
     "lint": "eslint",
     "lore-coding": "node scripts/lore-coding.mjs",
     "test": "vitest run",
@@ -47,6 +48,7 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
+    "knip": "^6.16.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.5"

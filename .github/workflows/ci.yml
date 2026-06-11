@@ -49,6 +49,9 @@ jobs:
       - name: Run typecheck
         run: npm run typecheck
 
+      - name: Run unused-code check
+        run: npm run check:unused
+
       - name: Run core tests
         run: npm run test:coverage:core
 

@@ -101,12 +101,13 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   final reporting so global core coverage regressions are caught locally.
 - `npm run test:e2e` runs the focused Chromium Playwright smoke suite. Browser
   flow details live in `e2e/MEMORY.md`.
-- `npm run typecheck`, `npm run lint`, and `npm run build` are the standard
-  TypeScript, ESLint, and Next build checks.
+- `npm run typecheck`, `npm run lint`, `npm run check:unused`, and
+  `npm run build` are the standard TypeScript, ESLint, unused-code, and Next
+  build checks.
 - `npm run lore-coding -- --file <path>` validates a Lore Coding commit message file.
   `npm install` runs `scripts/install-lore-coding-hooks.mjs` through the package
   `prepare` script to configure `core.hooksPath .githooks` for local clones;
   CI does not run Lore Coding validation yet.
-- CI repeats the build, static checks, core coverage gate, and Playwright suite
-  for code-affecting changes, then publishes the Docker image to Docker Hub
-  after successful `main` pushes. See `.github/MEMORY.md`.
+- CI repeats the build, static checks, Knip unused-code gate, core coverage gate,
+  and Playwright suite for code-affecting changes, then publishes the Docker
+  image to Docker Hub after successful `main` pushes. See `.github/MEMORY.md`.
