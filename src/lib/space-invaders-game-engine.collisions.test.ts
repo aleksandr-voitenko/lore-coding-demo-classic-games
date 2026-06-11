@@ -1211,6 +1211,9 @@ describe("space invaders collision engine", () => {
     );
 
     expect(revengeAlien.kind).toBe("revenge");
+    expect(adjacentInvaders.slice(0, 3).every((invader) => invader.kind === "diver")).toBe(
+      true,
+    );
     expect(
       advanced.invaders.find((invader) => invader.id === revengeAlien.id)?.isActive,
     ).toBe(false);
@@ -1246,24 +1249,24 @@ describe("space invaders collision engine", () => {
     ).toEqual([
       {
         id: "invader-shot-0",
-        kind: "standard",
+        kind: "commander",
         sourceColumn: 4,
         sourceRow: 0,
-        velocityX: 0,
+        velocityX: 0.14,
       },
       {
         id: "invader-shot-1",
-        kind: "standard",
+        kind: "commander",
         sourceColumn: 5,
         sourceRow: 0,
-        velocityX: 0,
+        velocityX: -0.14,
       },
       {
         id: "invader-shot-2",
-        kind: "standard",
+        kind: "commander",
         sourceColumn: 6,
         sourceRow: 0,
-        velocityX: 0,
+        velocityX: -0.14,
       },
       {
         id: "invader-shot-3",

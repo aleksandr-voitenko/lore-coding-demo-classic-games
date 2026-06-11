@@ -712,7 +712,7 @@ function getInvaderShotKind(
     return "splitter-fork";
   }
 
-  if (invader.kind !== "standard") {
+  if (invader.kind !== "standard" && invader.kind !== "diver") {
     return SPACE_INVADERS_SPECIAL_INVADER_SHOT_KIND;
   }
 

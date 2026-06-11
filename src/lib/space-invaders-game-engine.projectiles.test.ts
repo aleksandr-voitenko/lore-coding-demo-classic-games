@@ -293,19 +293,31 @@ describe("space invaders projectile engine", () => {
   });
 
 
-  it("keeps Diver and Shield Bearer normal shots on bottom-row lasers", () => {
-    const specialKinds = [
-      "diver",
-      "shield-bearer",
+  it("lets Diver shots use their original row variant", () => {
+    const rowShotCases = [
+      {
+        expectedKinds: ["commander"],
+        row: 0,
+      },
+      {
+        expectedKinds: ["burst"],
+        row: 1,
+      },
+      {
+        expectedKinds: ["scatter", "scatter", "scatter"],
+        row: 2,
+      },
+      {
+        expectedKinds: ["needle"],
+        row: 3,
+      },
     ] as const;
-    const bottomRowCooldown = fireFromOnlyInvader(SPACE_INVADERS_ROWS - 1).advanced
-      .invaderShotCooldownTicks;
 
-    for (const kind of specialKinds) {
+    for (const { expectedKinds, row } of rowShotCases) {
       const game = createInitialSpaceInvadersGame({ random: () => 0 });
       const shooter = {
-        ...getInvader(game, 1, 5),
-        kind,
+        ...getInvader(game, row, 5),
+        kind: "diver" as const,
       };
       const runningGame = withOnlyActiveInvader(
         createRunningGame({
@@ -316,20 +328,47 @@ describe("space invaders projectile engine", () => {
       );
       const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
 
-      expect(advanced.invaderShots).toHaveLength(1);
-      expect(advanced.invaderShots[0]).toMatchObject({
-        height: 20,
-        kind: "standard",
-        sourceInvaderId: shooter.id,
-        sourceRow: shooter.row,
-        velocityX: 0,
-        velocityY: 3.2,
-        width: 10,
-      });
-      expect(advanced.invaderBurst).toBeNull();
-      expect(advanced.nextInvaderShotId).toBe(1);
-      expect(advanced.invaderShotCooldownTicks).toBe(bottomRowCooldown);
+      expect(advanced.invaderShots.map((shot) => shot.kind)).toEqual(expectedKinds);
+      expect(
+        advanced.invaderShots.every(
+          (shot) => shot.sourceInvaderId === shooter.id && shot.sourceRow === row,
+        ),
+      ).toBe(true);
     }
+  });
+
+
+  it("keeps Shield Bearer normal shots on bottom-row lasers", () => {
+    const bottomRowCooldown = fireFromOnlyInvader(SPACE_INVADERS_ROWS - 1).advanced
+      .invaderShotCooldownTicks;
+
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const shooter = {
+      ...getInvader(game, 1, 5),
+      kind: "shield-bearer" as const,
+    };
+    const runningGame = withOnlyActiveInvader(
+      createRunningGame({
+        invaderShotCooldownTicks: 0,
+        player: centerPlayerUnderInvader(game, shooter),
+      }),
+      shooter,
+    );
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
+
+    expect(advanced.invaderShots).toHaveLength(1);
+    expect(advanced.invaderShots[0]).toMatchObject({
+      height: 20,
+      kind: "standard",
+      sourceInvaderId: shooter.id,
+      sourceRow: shooter.row,
+      velocityX: 0,
+      velocityY: 3.2,
+      width: 10,
+    });
+    expect(advanced.invaderBurst).toBeNull();
+    expect(advanced.nextInvaderShotId).toBe(1);
+    expect(advanced.invaderShotCooldownTicks).toBe(bottomRowCooldown);
   });
 
 
