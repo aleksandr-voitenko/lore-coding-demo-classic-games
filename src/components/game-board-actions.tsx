@@ -134,7 +134,7 @@ function GameBoardActionButton({
     <div className="relative flex justify-end">
       <span
         className={cn(
-          "pointer-events-none absolute right-[calc(100%+0.5rem)] top-1/2 z-40 -translate-y-1/2 rounded-md border border-white/35 bg-black/75 px-2 py-1 text-xs font-semibold text-white opacity-0 shadow-[0_10px_24px_rgba(0,0,0,0.28)] backdrop-blur-md transition-opacity",
+          "pointer-events-none absolute right-[calc(100%+0.5rem)] top-1/2 z-40 -translate-y-1/2 rounded-md border border-[var(--game-action-hint-border)] bg-[var(--game-action-hint-bg)] px-2 py-1 text-xs font-semibold text-[var(--game-action-hint-ink)] opacity-0 shadow-[0_10px_24px_var(--game-action-shadow)] backdrop-blur-md transition-opacity",
           isHintVisible && "opacity-100",
         )}
       >
@@ -142,7 +142,7 @@ function GameBoardActionButton({
       </span>
       <Button
         aria-label={label}
-        className="border-white/45 bg-black/55 text-white shadow-[0_10px_24px_rgba(0,0,0,0.24)] backdrop-blur-md hover:bg-black/70 hover:text-white focus-visible:border-white/70 focus-visible:ring-white/40"
+        className="!border-[var(--game-action-border)] !bg-[var(--game-action-bg)] !text-[var(--game-action-ink)] shadow-[0_10px_24px_var(--game-action-shadow)] backdrop-blur-md hover:!bg-[var(--game-action-hover-bg)] hover:!text-[var(--game-action-ink)] focus-visible:!border-[var(--game-action-focus-border)] focus-visible:!ring-[var(--game-action-focus-ring)] disabled:!opacity-70"
         data-testid={testId}
         disabled={disabled}
         onBlur={onHintClear}

@@ -75,6 +75,8 @@ const sharedHelpThemeCases: SharedHelpThemeCase[] = [
   { gameId: "asteroids", name: "Asteroids", prefix: "asteroids" },
 ];
 
+const appThemeStorageKey = "game-library-theme";
+
 function getColorLightness(color: string) {
   const rgbMatch = color.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
 
@@ -129,6 +131,34 @@ async function expectAbandonDialogHidden(page: Page) {
 
 async function expectGameMenuVisible(page: Page) {
   await expect(page.getByTestId("game-menu")).toBeVisible();
+}
+
+async function getHelpThemeColors(page: Page, helpScreenTestId: string) {
+  return page.evaluate((testId) => {
+    const dialog = document.querySelector(`[data-testid="${testId}"] > div`);
+    const closeButton = document.querySelector(`[data-testid="${testId}-close"]`);
+
+    if (!dialog || !closeButton) {
+      throw new Error(`Missing Help theme target for ${testId}`);
+    }
+
+    const dialogStyle = window.getComputedStyle(dialog);
+    const closeButtonStyle = window.getComputedStyle(closeButton);
+
+    return {
+      closeBackground: closeButtonStyle.backgroundColor,
+      closeText: closeButtonStyle.color,
+      dialogBackground: dialogStyle.backgroundColor,
+      dialogText: dialogStyle.color,
+      htmlHasDarkClass: document.documentElement.classList.contains("dark"),
+    };
+  }, helpScreenTestId);
+}
+
+async function seedDarkAppTheme(page: Page) {
+  await page.addInitScript((storageKey) => {
+    window.localStorage.setItem(storageKey, "dark");
+  }, appThemeStorageKey);
 }
 
 async function startRealtimeGame(page: Page, flowCase: RealtimeSharedFlowCase) {
@@ -301,7 +331,7 @@ test("shared Help layout keeps Rules adjacent to compact Controls", async ({ pag
   expect(rulesBox!.x - controlRightEdge).toBeLessThanOrEqual(24);
 });
 
-test("shared Help theme stays light for every game", async ({ page }) => {
+test("shared Help theme stays light in light mode for every game", async ({ page }) => {
   for (const helpCase of sharedHelpThemeCases) {
     await openLauncher(page);
     await openGame(page, helpCase.gameId);
@@ -313,25 +343,9 @@ test("shared Help theme stays light for every game", async ({ page }) => {
 
     await expect(helpScreen).toBeVisible();
 
-    const colors = await page.evaluate((testId) => {
-      const dialog = document.querySelector(`[data-testid="${testId}"] > div`);
-      const closeButton = document.querySelector(`[data-testid="${testId}-close"]`);
+    const colors = await getHelpThemeColors(page, helpScreenTestId);
 
-      if (!dialog || !closeButton) {
-        throw new Error(`Missing Help theme target for ${testId}`);
-      }
-
-      const dialogStyle = window.getComputedStyle(dialog);
-      const closeButtonStyle = window.getComputedStyle(closeButton);
-
-      return {
-        closeBackground: closeButtonStyle.backgroundColor,
-        closeText: closeButtonStyle.color,
-        dialogBackground: dialogStyle.backgroundColor,
-        dialogText: dialogStyle.color,
-      };
-    }, helpScreenTestId);
-
+    expect(colors.htmlHasDarkClass).toBe(false);
     expectLightColor(colors.dialogBackground);
     expectDarkColor(colors.dialogText);
     expectLightColor(colors.closeBackground);
@@ -340,6 +354,27 @@ test("shared Help theme stays light for every game", async ({ page }) => {
     await page.getByTestId(`${helpScreenTestId}-close`).click();
     await expect(helpScreen).toBeHidden();
   }
+});
+
+test("Breakout Help theme uses dark dialog when app theme is dark", async ({ page }) => {
+  await seedDarkAppTheme(page);
+  await openLauncher(page);
+  await openGame(page, "breakout");
+
+  await page.getByTestId("breakout-board-help").click();
+
+  const helpScreenTestId = "breakout-help-screen";
+  const helpScreen = page.getByTestId(helpScreenTestId);
+
+  await expect(helpScreen).toBeVisible();
+
+  const colors = await getHelpThemeColors(page, helpScreenTestId);
+
+  expect(colors.htmlHasDarkClass).toBe(true);
+  expectDarkColor(colors.dialogBackground);
+  expectLightColor(colors.dialogText);
+  expectDarkColor(colors.closeBackground);
+  expectLightColor(colors.closeText);
 });
 
 test("shared Help keeps long Rules scrolling inside the rules list", async ({ page }) => {

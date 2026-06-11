@@ -57,7 +57,7 @@ export function GameHelpScreen({
       role="dialog"
       aria-label={`${title} help`}
     >
-      <div className="flex max-h-[min(36rem,calc(100svh-2rem))] w-full max-w-2xl flex-col gap-4 overflow-hidden rounded-md border border-slate-200 bg-slate-50 p-4 text-left text-slate-900 shadow-[0_24px_80px_rgba(0,0,0,0.42)]">
+      <div className="flex max-h-[min(36rem,calc(100svh-2rem))] w-full max-w-2xl flex-col gap-4 overflow-hidden rounded-md border border-[var(--game-help-border)] bg-[var(--game-help-panel)] p-4 text-left text-[var(--game-help-ink)] shadow-[0_24px_80px_var(--game-help-shadow)]">
         <div className="flex shrink-0 items-start justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1">
             <p className="text-xs font-semibold uppercase tracking-normal opacity-70">Help</p>
@@ -66,7 +66,7 @@ export function GameHelpScreen({
           <Button
             aria-label="Close help"
             autoFocus
-            className="border-slate-300 bg-white text-slate-900 hover:bg-slate-100 hover:text-slate-900 focus-visible:border-slate-500 focus-visible:ring-slate-300"
+            className="!border-[var(--game-help-border)] !bg-[var(--game-help-close-bg)] !text-[var(--game-help-close-ink)] hover:!bg-[var(--game-help-close-hover-bg)] hover:!text-[var(--game-help-close-ink)] focus-visible:!border-[var(--game-help-focus-border)] focus-visible:!ring-[var(--game-help-focus-ring)]"
             data-testid={`${testId}-close`}
             onClick={onClose}
             size="icon"

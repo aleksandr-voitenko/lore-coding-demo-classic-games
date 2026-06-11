@@ -245,14 +245,28 @@ async function expectDarkGameChrome(
     const sidebar = document.querySelector<HTMLElement>('[data-testid="game-sidebar"]');
     const statCard = sidebar?.querySelector<HTMLElement>("dl > div") ?? null;
     const statLabel = sidebar?.querySelector<HTMLElement>("dt") ?? null;
+    const actionButton = document.querySelector<HTMLElement>(
+      '[data-testid$="-board-help"]',
+    );
+    const disabledActionButton = document.querySelector<HTMLElement>(
+      '[data-testid$="-board-pause"]:disabled, [data-testid$="-board-restart"]:disabled',
+    );
     const board = document.querySelector<HTMLElement>(
       `[data-testid="${boardTestId}"]`,
     );
+    const actionButtonStyles = actionButton ? getComputedStyle(actionButton) : null;
+    const disabledActionButtonStyles = disabledActionButton
+      ? getComputedStyle(disabledActionButton)
+      : null;
 
     return {
+      actionButtonBackground: actionButtonStyles?.backgroundColor ?? "",
+      actionButtonBorderColor: actionButtonStyles?.borderColor ?? "",
+      actionButtonColor: actionButtonStyles?.color ?? "",
       boardFrameBackground: board?.parentElement
         ? getComputedStyle(board.parentElement).backgroundColor
         : "",
+      disabledActionButtonOpacity: disabledActionButtonStyles?.opacity ?? "",
       htmlHasDarkClass: document.documentElement.classList.contains("dark"),
       shellBackground: shellStyles.backgroundColor,
       shellColor: shellStyles.color,
@@ -265,6 +279,29 @@ async function expectDarkGameChrome(
   const prefix = layoutCase.palettePrefix;
 
   expect(sample.htmlHasDarkClass).toBe(true);
+  await expectResolvedThemeColor(
+    page,
+    sample.actionButtonBackground,
+    "--game-action-bg",
+    "backgroundColor",
+  );
+  await expectResolvedThemeColor(
+    page,
+    sample.actionButtonBorderColor,
+    "--game-action-border",
+    "borderColor",
+  );
+  await expectResolvedThemeColor(
+    page,
+    sample.actionButtonColor,
+    "--game-action-ink",
+    "color",
+  );
+
+  if (layoutCase.gameId === "breakout") {
+    expect(Number(sample.disabledActionButtonOpacity)).toBeGreaterThanOrEqual(0.69);
+  }
+
   await expectResolvedThemeColor(
     page,
     sample.shellBackground,
