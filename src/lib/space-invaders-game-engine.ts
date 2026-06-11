@@ -67,6 +67,8 @@ export {
   SPACE_INVADERS_POWER_UP_SHIELD_TICKS,
   SPACE_INVADERS_POWER_UP_SIZE,
   SPACE_INVADERS_POWER_UP_SPEED,
+  SPACE_INVADERS_REVENGE_VOLLEY_TARGET_COUNT,
+  SPACE_INVADERS_REVENGE_VOLLEY_WINDUP_TICKS,
   SPACE_INVADERS_REVENGE_ALIEN_COUNT,
   SPACE_INVADERS_ROWS,
   SPACE_INVADERS_SCORE_POPUP_TICKS,
@@ -96,13 +98,14 @@ import {
 import { getInvaderCollisionBounds } from "./space-invaders/hitboxes";
 import {
   advanceInvaderShotPositions,
+  advanceSpaceInvadersRevengeVolleys,
   advancePlayerShotPosition,
   createInitialPlayerBurstState,
   createNextPlayerBurstShot,
   createPlayerShots,
   isInvaderShotDangerous,
   isPlayerShotActive,
-  maybeCreateSpaceInvadersRevengeShots,
+  maybePrimeSpaceInvadersRevengeVolley,
   maybeFireInvaderShot,
 } from "./space-invaders/projectiles";
 import { getRandomIndex, getRandomValue } from "./space-invaders/random";
@@ -248,6 +251,7 @@ export function createInitialSpaceInvadersGame({
     playerVolleyHasScored: false,
     playerVolleyHasUnscoredExit: false,
     powerUps: [],
+    revengeVolleys: [],
     score: 0,
     scorePopups: [],
     status: "ready",
@@ -400,8 +404,10 @@ export function advanceSpaceInvadersGame(
     return finalizeSpaceInvadersMultiKillCombo(gameAfterInvaderShots);
   }
 
+  const gameAfterRevengeVolleys =
+    advanceSpaceInvadersRevengeVolleys(gameAfterInvaderShots);
   const { game: gameAfterFreezeTick, isFrozen: areAliensFrozen } =
-    advanceAlienFreeze(gameAfterInvaderShots);
+    advanceAlienFreeze(gameAfterRevengeVolleys);
 
   if (areAliensFrozen) {
     return advancePlayerRecovery(gameAfterFreezeTick);
@@ -809,9 +815,10 @@ function applyPlayerShotInvaderDamage(
     );
   }
 
-  gameWithHits = maybeCreateSpaceInvadersRevengeShots(
+  gameWithHits = maybePrimeSpaceInvadersRevengeVolley(
     gameWithHits,
     damage.destroyedInvaders,
+    random,
   );
 
   const scoredWithHit = applyPlayerShotInvaderScore(

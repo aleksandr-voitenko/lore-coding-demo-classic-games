@@ -17,6 +17,8 @@ import {
   SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
   SPACE_INVADERS_PROJECTILE_EXPLOSION_HEIGHT,
   SPACE_INVADERS_PROJECTILE_EXPLOSION_WIDTH,
+  SPACE_INVADERS_REVENGE_VOLLEY_TARGET_COUNT,
+  SPACE_INVADERS_REVENGE_VOLLEY_WINDUP_TICKS,
   SPACE_INVADERS_ROWS,
   SPACE_INVADERS_SCORE_POPUP_TICKS,
   SPACE_INVADERS_STARTING_LIVES,
@@ -1181,181 +1183,91 @@ describe("space invaders collision engine", () => {
   });
 
 
-  it("fires immediate shots from every adjacent alien when a revenge alien is destroyed", () => {
+  it("marks five random formation aliens after a revenge alien is destroyed and fires after the aura", () => {
     const game = createInitialSpaceInvadersGame({ random: () => 0 });
     const revengeAlien = getInvader(game, 1, 5);
-    const adjacentInvaders = [
-      getInvader(game, 0, 4),
-      getInvader(game, 0, 5),
-      getInvader(game, 0, 6),
-      getInvader(game, 1, 4),
-      getInvader(game, 1, 6),
-      getInvader(game, 2, 4),
-      getInvader(game, 2, 5),
-      getInvader(game, 2, 6),
-    ];
-    const activeInvaderIds = new Set([
-      revengeAlien.id,
-      ...adjacentInvaders.map((invader) => invader.id),
-    ]);
-    const advanced = advanceSpaceInvadersGame(
+    const expectedSelectedIds = game.invaders
+      .filter(
+        (invader) =>
+          invader.isActive &&
+          invader.kind !== "splitter-fragment" &&
+          invader.id !== revengeAlien.id,
+      )
+      .slice(0, SPACE_INVADERS_REVENGE_VOLLEY_TARGET_COUNT)
+      .map((invader) => invader.id);
+    const primed = advanceSpaceInvadersGame(
       createRunningGame({
+        alienFreezeTicks: SPACE_INVADERS_REVENGE_VOLLEY_WINDUP_TICKS + 10,
         invaderShotCooldownTicks: 1_000,
-        invaders: game.invaders.map((invader) => ({
-          ...invader,
-          isActive: activeInvaderIds.has(invader.id),
-        })),
         playerShots: [createPlayerShotAlignedWith(revengeAlien)],
       }),
       () => 0,
     );
 
     expect(revengeAlien.kind).toBe("revenge");
-    expect(adjacentInvaders.slice(0, 3).every((invader) => invader.kind === "diver")).toBe(
-      true,
+    expect(
+      primed.invaders.find((invader) => invader.id === revengeAlien.id)?.isActive,
+    ).toBe(false);
+    expect(primed.invaderShots).toEqual([]);
+    expect(primed.revengeVolleys).toEqual([
+      {
+        invaderIds: expectedSelectedIds,
+        ticksRemaining: SPACE_INVADERS_REVENGE_VOLLEY_WINDUP_TICKS,
+      },
+    ]);
+
+    let ticking = primed;
+
+    for (let tick = 0; tick < SPACE_INVADERS_REVENGE_VOLLEY_WINDUP_TICKS - 1; tick += 1) {
+      ticking = advanceSpaceInvadersGame(ticking, () => 0);
+    }
+
+    expect(ticking.invaderShots).toEqual([]);
+    expect(ticking.revengeVolleys[0]).toMatchObject({
+      invaderIds: expectedSelectedIds,
+      ticksRemaining: 1,
+    });
+
+    const fired = advanceSpaceInvadersGame(ticking, () => 0);
+
+    expect(fired.revengeVolleys).toEqual([]);
+    expect(fired.invaderShots.map((shot) => shot.sourceInvaderId)).toEqual(
+      expectedSelectedIds,
     );
     expect(
-      advanced.invaders.find((invader) => invader.id === revengeAlien.id)?.isActive,
-    ).toBe(false);
-    expect(
-      advanced.invaders
-        .filter((invader) => adjacentInvaders.some((source) => source.id === invader.id))
-        .every((invader) => invader.isActive),
-    ).toBe(true);
-    expect(advanced.invaderShots.map((shot) => shot.sourceInvaderId)).toEqual([
-      adjacentInvaders[0]!.id,
-      adjacentInvaders[1]!.id,
-      adjacentInvaders[2]!.id,
-      adjacentInvaders[3]!.id,
-      adjacentInvaders[4]!.id,
-      adjacentInvaders[5]!.id,
-      adjacentInvaders[5]!.id,
-      adjacentInvaders[5]!.id,
-      adjacentInvaders[6]!.id,
-      adjacentInvaders[6]!.id,
-      adjacentInvaders[6]!.id,
-      adjacentInvaders[7]!.id,
-      adjacentInvaders[7]!.id,
-      adjacentInvaders[7]!.id,
-    ]);
-    expect(
-      advanced.invaderShots.map(({ id, kind, sourceColumn, sourceRow, velocityX }) => ({
+      fired.invaderShots.map(({ id, sourceColumn, sourceRow }) => ({
         id,
-        kind,
         sourceColumn,
         sourceRow,
-        velocityX,
       })),
-    ).toEqual([
-      {
-        id: "invader-shot-0",
-        kind: "commander",
-        sourceColumn: 4,
-        sourceRow: 0,
-        velocityX: 0.14,
-      },
-      {
-        id: "invader-shot-1",
-        kind: "commander",
-        sourceColumn: 5,
-        sourceRow: 0,
-        velocityX: -0.14,
-      },
-      {
-        id: "invader-shot-2",
-        kind: "commander",
-        sourceColumn: 6,
-        sourceRow: 0,
-        velocityX: -0.14,
-      },
-      {
-        id: "invader-shot-3",
-        kind: "standard",
-        sourceColumn: 4,
-        sourceRow: 1,
-        velocityX: 0,
-      },
-      {
-        id: "invader-shot-4",
-        kind: "standard",
-        sourceColumn: 6,
-        sourceRow: 1,
-        velocityX: 0,
-      },
-      {
-        id: "invader-shot-5",
-        kind: "scatter",
-        sourceColumn: 4,
-        sourceRow: 2,
-        velocityX: -1.25,
-      },
-      {
-        id: "invader-shot-6",
-        kind: "scatter",
-        sourceColumn: 4,
-        sourceRow: 2,
-        velocityX: 0,
-      },
-      {
-        id: "invader-shot-7",
-        kind: "scatter",
-        sourceColumn: 4,
-        sourceRow: 2,
-        velocityX: 1.25,
-      },
-      {
-        id: "invader-shot-8",
-        kind: "scatter",
-        sourceColumn: 5,
-        sourceRow: 2,
-        velocityX: -1.25,
-      },
-      {
-        id: "invader-shot-9",
-        kind: "scatter",
-        sourceColumn: 5,
-        sourceRow: 2,
-        velocityX: 0,
-      },
-      {
-        id: "invader-shot-10",
-        kind: "scatter",
-        sourceColumn: 5,
-        sourceRow: 2,
-        velocityX: 1.25,
-      },
-      {
-        id: "invader-shot-11",
-        kind: "scatter",
-        sourceColumn: 6,
-        sourceRow: 2,
-        velocityX: -1.25,
-      },
-      {
-        id: "invader-shot-12",
-        kind: "scatter",
-        sourceColumn: 6,
-        sourceRow: 2,
-        velocityX: 0,
-      },
-      {
-        id: "invader-shot-13",
-        kind: "scatter",
-        sourceColumn: 6,
-        sourceRow: 2,
-        velocityX: 1.25,
-      },
-    ]);
-    expect(advanced.nextInvaderShotId).toBe(14);
+    ).toEqual(
+      expectedSelectedIds.map((sourceInvaderId, index) => {
+        const invader = game.invaders.find(
+          (candidate) => candidate.id === sourceInvaderId,
+        )!;
+
+        return {
+          id: `invader-shot-${index}`,
+          sourceColumn: invader.column,
+          sourceRow: invader.row,
+        };
+      }),
+    );
+    expect(fired.nextInvaderShotId).toBe(SPACE_INVADERS_REVENGE_VOLLEY_TARGET_COUNT);
   });
 
 
-  it("forces revenge shots even when the active invader shot limit is full", () => {
+  it("fires delayed revenge shots below five targets even when frozen and the active shot limit is full", () => {
     const game = createInitialSpaceInvadersGame({ random: () => 0 });
     const revengeAlien = getInvader(game, 1, 5);
     const leftNeighbor = getInvader(game, 1, 4);
-    const advanced = advanceSpaceInvadersGame(
+    const scatterSource = {
+      ...getInvader(game, 2, 5),
+      kind: "standard" as const,
+    };
+    const primed = advanceSpaceInvadersGame(
       createRunningGame({
+        alienFreezeTicks: SPACE_INVADERS_REVENGE_VOLLEY_WINDUP_TICKS + 10,
         invaderShotCooldownTicks: 1_000,
         invaderShots: [
           createInvaderShotFixture({
@@ -1379,7 +1291,11 @@ describe("space invaders collision engine", () => {
         ],
         invaders: game.invaders.map((invader) => ({
           ...invader,
-          isActive: invader.id === revengeAlien.id || invader.id === leftNeighbor.id,
+          ...(invader.id === scatterSource.id ? scatterSource : {}),
+          isActive:
+            invader.id === revengeAlien.id ||
+            invader.id === leftNeighbor.id ||
+            invader.id === scatterSource.id,
         })),
         nextInvaderShotId: 5,
         playerShots: [createPlayerShotAlignedWith(revengeAlien)],
@@ -1387,19 +1303,41 @@ describe("space invaders collision engine", () => {
       () => 0,
     );
 
-    expect(advanced.invaderShots).toHaveLength(4);
-    expect(advanced.invaderShots.map((shot) => shot.sourceInvaderId)).toEqual([
+    expect(primed.invaderShots).toHaveLength(3);
+    expect(primed.revengeVolleys).toEqual([
+      {
+        invaderIds: [leftNeighbor.id, scatterSource.id],
+        ticksRemaining: SPACE_INVADERS_REVENGE_VOLLEY_WINDUP_TICKS,
+      },
+    ]);
+
+    let ticking = primed;
+
+    for (let tick = 0; tick < SPACE_INVADERS_REVENGE_VOLLEY_WINDUP_TICKS; tick += 1) {
+      ticking = advanceSpaceInvadersGame(ticking, () => 0);
+    }
+
+    expect(ticking.revengeVolleys).toEqual([]);
+    expect(ticking.invaderShots).toHaveLength(5);
+    expect(ticking.invaderShots.map((shot) => shot.sourceInvaderId)).toEqual([
       "4:0",
       "4:1",
       "4:2",
       leftNeighbor.id,
+      scatterSource.id,
     ]);
-    expect(advanced.invaderShots[3]).toMatchObject({
+    expect(ticking.invaderShots[3]).toMatchObject({
       id: "invader-shot-5",
-      kind: "standard",
+      kind: "splitter-fork",
       sourceInvaderId: leftNeighbor.id,
     });
-    expect(advanced.nextInvaderShotId).toBe(6);
+    expect(ticking.invaderShots[4]).toMatchObject({
+      id: "invader-shot-6",
+      kind: "scatter",
+      sourceInvaderId: scatterSource.id,
+      velocityX: 0,
+    });
+    expect(ticking.nextInvaderShotId).toBe(7);
   });
 
 });

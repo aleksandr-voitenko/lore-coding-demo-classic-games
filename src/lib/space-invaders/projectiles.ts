@@ -14,8 +14,11 @@ import {
   SHOT_WIDTH,
   SPACE_INVADERS_PLAYER_BURST_SHOT_DELAY_TICKS,
   SPACE_INVADERS_PLAYER_BURST_SHOT_COUNT,
+  SPACE_INVADERS_REVENGE_VOLLEY_TARGET_COUNT,
+  SPACE_INVADERS_REVENGE_VOLLEY_WINDUP_TICKS,
 } from "./constants";
 import { clamp, getEntityCenterX } from "./geometry";
+import { getRandomIndex } from "./random";
 import type {
   SpaceInvader,
   SpaceInvadersGameState,
@@ -25,6 +28,8 @@ import type {
   SpaceInvadersPlayer,
   SpaceInvadersPlayerShot,
   SpaceInvadersPlayerShotKind,
+  SpaceInvadersRandomSource,
+  SpaceInvadersRevengeVolley,
 } from "./types";
 
 type InvaderShotSpec = {
@@ -573,9 +578,10 @@ function createInvaderShots(
   ];
 }
 
-export function maybeCreateSpaceInvadersRevengeShots(
+export function maybePrimeSpaceInvadersRevengeVolley(
   game: SpaceInvadersGameState,
   destroyedInvaders: SpaceInvader[],
+  random: SpaceInvadersRandomSource,
 ): SpaceInvadersGameState {
   const destroyedRevengeInvaders = destroyedInvaders.filter(
     (invader) => invader.kind === "revenge",
@@ -585,57 +591,136 @@ export function maybeCreateSpaceInvadersRevengeShots(
     return game;
   }
 
-  const revengeSources = getRevengeShotSources(
-    destroyedRevengeInvaders,
-    game.invaders,
+  const invaderIds = selectRevengeVolleyInvaderIds(
+    getRevengeVolleyCandidates(destroyedRevengeInvaders, game.invaders),
+    random,
   );
-  const revengeShots: SpaceInvadersInvaderShot[] = [];
-  let nextInvaderShotId = game.nextInvaderShotId;
 
-  for (const source of revengeSources) {
-    const createdShots = createInvaderShots(source, nextInvaderShotId);
-
-    revengeShots.push(...createdShots);
-    nextInvaderShotId += createdShots.length;
-  }
-
-  if (revengeShots.length === 0) {
+  if (invaderIds.length === 0) {
     return game;
   }
 
   return {
     ...game,
-    invaderShots: [...game.invaderShots, ...revengeShots],
-    nextInvaderShotId,
+    revengeVolleys: [
+      ...game.revengeVolleys,
+      {
+        invaderIds,
+        // Player-shot damage resolves before pending revenge volleys advance in the same tick.
+        ticksRemaining: SPACE_INVADERS_REVENGE_VOLLEY_WINDUP_TICKS + 1,
+      },
+    ],
   };
 }
 
-function getRevengeShotSources(
-  destroyedRevengeInvaders: SpaceInvader[],
-  invaders: SpaceInvader[],
-) {
-  const sourceById = new Map<string, SpaceInvader>();
+export function advanceSpaceInvadersRevengeVolleys(
+  game: SpaceInvadersGameState,
+): SpaceInvadersGameState {
+  if (game.revengeVolleys.length === 0) {
+    return game;
+  }
 
-  for (const revengeInvader of destroyedRevengeInvaders) {
-    const adjacentInvaders = invaders
-      .filter(
-        (invader) =>
-          invader.isActive &&
-          Math.abs(invader.row - revengeInvader.row) <= 1 &&
-          Math.abs(invader.column - revengeInvader.column) <= 1,
-      )
-      .sort((first, second) =>
-        first.row === second.row
-          ? first.column - second.column
-          : first.row - second.row,
+  const activeInvaderById = new Map(
+    game.invaders
+      .filter((invader) => invader.isActive)
+      .map((invader) => [invader.id, invader]),
+  );
+  const pendingVolleys: SpaceInvadersRevengeVolley[] = [];
+  const revengeShots: SpaceInvadersInvaderShot[] = [];
+  let nextInvaderShotId = game.nextInvaderShotId;
+
+  for (const volley of game.revengeVolleys) {
+    const ticksRemaining = volley.ticksRemaining - 1;
+
+    if (ticksRemaining > 0) {
+      pendingVolleys.push({
+        ...volley,
+        ticksRemaining,
+      });
+      continue;
+    }
+
+    for (const invaderId of volley.invaderIds) {
+      const source = activeInvaderById.get(invaderId);
+
+      if (source === undefined) {
+        continue;
+      }
+
+      revengeShots.push(
+        createSingleInvaderShot(source, nextInvaderShotId, {
+          player: game.player,
+          useArmoredArmorWave: true,
+          useRevengeCounterfire: true,
+          useSplitterFork: true,
+        }),
       );
-
-    for (const adjacentInvader of adjacentInvaders) {
-      sourceById.set(adjacentInvader.id, adjacentInvader);
+      nextInvaderShotId += 1;
     }
   }
 
-  return [...sourceById.values()];
+  return {
+    ...game,
+    invaderShots:
+      revengeShots.length === 0
+        ? game.invaderShots
+        : [...game.invaderShots, ...revengeShots],
+    nextInvaderShotId,
+    revengeVolleys: pendingVolleys,
+  };
+}
+
+function getRevengeVolleyCandidates(
+  destroyedRevengeInvaders: SpaceInvader[],
+  invaders: SpaceInvader[],
+) {
+  const destroyedRevengeInvaderIds = new Set(
+    destroyedRevengeInvaders.map((invader) => invader.id),
+  );
+
+  return invaders.filter(
+    (invader) =>
+      invader.isActive &&
+      invader.kind !== "splitter-fragment" &&
+      !destroyedRevengeInvaderIds.has(invader.id),
+  );
+}
+
+function selectRevengeVolleyInvaderIds(
+  candidates: SpaceInvader[],
+  random: SpaceInvadersRandomSource,
+) {
+  const remainingCandidates = [...candidates];
+  const invaderIds: string[] = [];
+
+  while (
+    remainingCandidates.length > 0 &&
+    invaderIds.length < SPACE_INVADERS_REVENGE_VOLLEY_TARGET_COUNT
+  ) {
+    const candidateIndex = getRandomIndex(remainingCandidates.length, random);
+    const [selectedInvader] = remainingCandidates.splice(candidateIndex, 1);
+
+    if (selectedInvader !== undefined) {
+      invaderIds.push(selectedInvader.id);
+    }
+  }
+
+  return invaderIds;
+}
+
+function createSingleInvaderShot(
+  invader: SpaceInvader,
+  nextInvaderShotId: number,
+  options: CreateInvaderShotOptions = {},
+) {
+  const spec = getInvaderShotSpec(invader, options);
+
+  return createInvaderShot(
+    invader,
+    nextInvaderShotId,
+    spec,
+    getInitialInvaderShotVelocityX(invader, spec, options.player),
+  );
 }
 
 function createInvaderShot(

@@ -182,6 +182,11 @@ export type SpaceInvadersPlayerBurst = {
   remainingShots: number;
 };
 
+export type SpaceInvadersRevengeVolley = {
+  invaderIds: string[];
+  ticksRemaining: number;
+};
+
 export type SpaceInvadersGameState = {
   alienCount: number;
   alienFreezeTicks: number;
@@ -212,6 +217,7 @@ export type SpaceInvadersGameState = {
   playerVolleyHasScored: boolean;
   playerVolleyHasUnscoredExit: boolean;
   powerUps: SpaceInvadersPowerUp[];
+  revengeVolleys: SpaceInvadersRevengeVolley[];
   score: number;
   scorePopups: SpaceInvadersScorePopup[];
   status: SpaceInvadersStatus;

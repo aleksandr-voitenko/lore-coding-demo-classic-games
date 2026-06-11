@@ -83,6 +83,9 @@ export function SpaceInvadersBoard({
   const isPlayerShieldFlashing =
     isPlayerShieldVisible &&
     game.playerShieldTicks <= SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS;
+  const revengeAuraInvaderIds = new Set(
+    game.revengeVolleys.flatMap((volley) => volley.invaderIds),
+  );
   const shieldTethers = getShieldTethers(game.invaders);
 
   return (
@@ -168,6 +171,8 @@ export function SpaceInvadersBoard({
         {game.invaders.map((invader) => {
           const sprite = getSpaceInvaderRenderSprite(invader);
           const isShielded = isSpaceInvaderShielded(invader, game.invaders);
+          const hasRevengeAura =
+            invader.isActive && revengeAuraInvaderIds.has(invader.id);
 
           return (
             <span
@@ -180,6 +185,7 @@ export function SpaceInvadersBoard({
                 invader.kind === "armored" ? invader.hitPoints : undefined
               }
               data-invader-kind={invader.kind}
+              data-invader-revenge-aura={hasRevengeAura ? "true" : undefined}
               data-invader-shielded={isShielded ? "true" : undefined}
               data-testid={invader.isActive ? "space-invaders-invader" : undefined}
               key={invader.id}
@@ -192,6 +198,12 @@ export function SpaceInvadersBoard({
                 y: invader.y,
               })}
             >
+              {hasRevengeAura ? (
+                <span
+                  className="space-invaders-revenge-aura pointer-events-none absolute inset-[-26%] z-0 rounded-full border border-[color-mix(in_oklch,var(--invaders-red)_82%,transparent)] bg-[color-mix(in_oklch,var(--invaders-red)_13%,transparent)] shadow-[0_0_18px_color-mix(in_oklch,var(--invaders-red)_72%,transparent),inset_0_0_12px_color-mix(in_oklch,var(--invaders-red)_28%,transparent)]"
+                  data-testid="space-invaders-revenge-aura"
+                />
+              ) : null}
               {isShielded ? (
                 <span
                   className="space-invaders-invader-shield pointer-events-none absolute inset-[-24%] z-0 rounded-full border border-[color-mix(in_oklch,var(--invaders-cyan)_76%,transparent)] bg-[color-mix(in_oklch,var(--invaders-cyan)_14%,transparent)] shadow-[0_0_14px_color-mix(in_oklch,var(--invaders-cyan)_70%,transparent),inset_0_0_10px_color-mix(in_oklch,var(--invaders-cyan)_28%,transparent)]"

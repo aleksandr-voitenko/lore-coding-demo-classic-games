@@ -149,7 +149,7 @@ export const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
       `Consecutive UFO hits add ${SPACE_INVADERS_UFO_CHAIN_BONUS_STEP} more points per UFO after the first, up to ${SPACE_INVADERS_UFO_CHAIN_BONUS_CAP}; escaped UFOs reset the chain.`,
       "Clear columns carefully; exposed diver invaders move faster and drop harder than the rest.",
       "Shield Bearers glow cyan and protect nearby active aliens; destroy the bearer or use Piercing to punch through the shield.",
-      "Revenge Aliens glow red, fire fast counterfire shots toward your position, and make every active adjacent alien fire immediately when destroyed.",
+      "Revenge Aliens glow red, fire fast counterfire shots toward your position, and mark up to five random formation aliens with a red aura when destroyed; after two seconds, each marked alien fires one shot.",
       "Splitter Aliens fire magenta fork shots and split into two smaller fragments when destroyed; fragments dive like Divers, do not shoot, do not drop bonuses, and still count as invaders.",
       "Armored Aliens take three hits to destroy; non-lethal hits change their armor and keep clean streaks alive while their wide armor-wave shots move straight down.",
       `Destroyed diver invaders drop power-up icons: bonus score adds ${SPACE_INVADERS_BONUS_SCORE_POINTS} points, extra life rarely grants a life, Burst, Freeze, Piercing, Shield, and Shotgun grant their matching bonuses.`,

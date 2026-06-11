@@ -221,6 +221,7 @@ describe("game board renderers", () => {
 
   it("renders Space Invaders formation, player shot, and remaining count", () => {
     const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const revengeAuraTarget = game.invaders[1]!;
     const splitterAlien = game.invaders.find((invader) => invader.kind === "splitter")!;
     const armoredHitPointsById = new Map(
       game.invaders
@@ -487,6 +488,12 @@ describe("game board renderers", () => {
               y: 260,
             },
           ],
+          revengeVolleys: [
+            {
+              invaderIds: [revengeAuraTarget.id],
+              ticksRemaining: 18,
+            },
+          ],
           explosions: [
             {
               ageTicks: 0,
@@ -560,6 +567,7 @@ describe("game board renderers", () => {
       'data-invader-kind="diver"',
       'data-invader-kind="shield-bearer"',
       'data-invader-kind="revenge"',
+      'data-invader-revenge-aura="true"',
       'data-invader-kind="splitter"',
       'data-invader-kind="splitter-fragment"',
       'data-invader-kind="armored"',
@@ -569,6 +577,8 @@ describe("game board renderers", () => {
       'data-invader-shielded="true"',
       'data-testid="space-invaders-invader-shield"',
       "space-invaders-invader-shield",
+      'data-testid="space-invaders-revenge-aura"',
+      "space-invaders-revenge-aura",
       'data-testid="space-invaders-shield-bearer-blip"',
       'data-testid="space-invaders-player-shot"',
       'data-player-shot-kind="burst"',

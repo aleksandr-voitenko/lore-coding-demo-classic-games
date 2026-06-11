@@ -254,6 +254,12 @@ describe("space invaders lifecycle engine", () => {
         },
       ],
       powerUps: [createPowerUpFixture()],
+      revengeVolleys: [
+        {
+          invaderIds: ["0:0"],
+          ticksRemaining: 10,
+        },
+      ],
       score: 120,
       scorePopups: [createScorePopupFixture()],
       status: "lost" as const,
@@ -290,6 +296,7 @@ describe("space invaders lifecycle engine", () => {
     expect(restarted.playerVolleyHasScored).toBe(false);
     expect(restarted.playerVolleyHasUnscoredExit).toBe(false);
     expect(restarted.powerUps).toEqual([]);
+    expect(restarted.revengeVolleys).toEqual([]);
     expect(restarted.scorePopups).toEqual([]);
     expect(restarted.ufoHitStreak).toBe(0);
     expect(restarted.ufo).toMatchObject({

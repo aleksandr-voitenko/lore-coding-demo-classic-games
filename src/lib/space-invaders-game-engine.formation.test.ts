@@ -74,6 +74,7 @@ describe("space invaders formation engine", () => {
     expect(game.playerVolleyHasScored).toBe(false);
     expect(game.playerVolleyHasUnscoredExit).toBe(false);
     expect(game.powerUps).toEqual([]);
+    expect(game.revengeVolleys).toEqual([]);
     expect(game.scorePopups).toEqual([]);
     expect(game.marchDirection).toBe(1);
     expect(game.ufoHitStreak).toBe(0);
