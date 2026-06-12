@@ -5,6 +5,8 @@ import {
   ASTEROIDS_ASTEROID_COUNT_OPTIONS,
   ASTEROIDS_BOARD_HEIGHT,
   ASTEROIDS_BOARD_WIDTH,
+  ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
+  ASTEROIDS_SHIP_EXPLOSION_TICKS,
   ASTEROIDS_STARTING_ASTEROID_COUNT,
   ASTEROIDS_STARTING_LIVES,
   createInitialAsteroidsGame,
@@ -64,6 +66,16 @@ function createLoopingRandom(values: number[]) {
     index += 1;
     return value;
   };
+}
+
+function advanceAsteroidsTicks(game: AsteroidsGameState, ticks: number): AsteroidsGameState {
+  let advanced = game;
+
+  for (let tick = 0; tick < ticks; tick += 1) {
+    advanced = advanceAsteroidsGame(advanced);
+  }
+
+  return advanced;
 }
 
 describe("asteroids game engine", () => {
@@ -285,8 +297,12 @@ describe("asteroids game engine", () => {
     expect(cleared.asteroids.every((asteroid) => asteroid.size === "large")).toBe(true);
   });
 
-  it("ignores ship collisions during invulnerability, then loses lives and ends", () => {
-    const ship = createInitialAsteroidsGame().ship;
+  it("animates ship collisions before respawning a shielded ship or ending the run", () => {
+    const ship = {
+      ...createInitialAsteroidsGame().ship,
+      x: 180,
+      y: 160,
+    };
     const overlappingAsteroid = createAsteroid({
       radius: 42,
       x: ship.x,
@@ -302,6 +318,7 @@ describe("asteroids game engine", () => {
     const damagedGame = advanceAsteroidsGame(
       createRunningGame({
         asteroids: [overlappingAsteroid],
+        bullets: [createBullet()],
         lives: 2,
         ship,
       }),
@@ -316,11 +333,68 @@ describe("asteroids game engine", () => {
 
     expect(protectedGame.lives).toBe(ASTEROIDS_STARTING_LIVES);
     expect(protectedGame.status).toBe("running");
+    expect(protectedGame.shipExplosion).toBeNull();
+
     expect(damagedGame.lives).toBe(1);
-    expect(damagedGame.ship.x).toBe(ASTEROIDS_BOARD_WIDTH / 2);
-    expect(damagedGame.respawnInvulnerabilityTicks).toBeGreaterThan(0);
+    expect(damagedGame.bullets).toEqual([]);
+    expect(damagedGame.respawnInvulnerabilityTicks).toBe(0);
+    expect(damagedGame.ship.x).toBe(ship.x);
+    expect(damagedGame.ship.y).toBe(ship.y);
+    expect(damagedGame.shipExplosion).toMatchObject({
+      durationTicks: ASTEROIDS_SHIP_EXPLOSION_TICKS,
+      radius: ship.radius,
+      ticksRemaining: ASTEROIDS_SHIP_EXPLOSION_TICKS,
+      x: ship.x,
+      y: ship.y,
+    });
+    expect(fireAsteroidsBullet(damagedGame).bullets).toHaveLength(0);
+
+    const almostRespawned = advanceAsteroidsTicks(
+      damagedGame,
+      ASTEROIDS_SHIP_EXPLOSION_TICKS - 1,
+    );
+    const respawned = advanceAsteroidsGame(almostRespawned);
+
+    expect(almostRespawned.shipExplosion?.ticksRemaining).toBe(1);
+    expect(almostRespawned.ship.x).toBe(ship.x);
+    expect(respawned.shipExplosion).toBeNull();
+    expect(respawned.ship.x).toBe(ASTEROIDS_BOARD_WIDTH / 2);
+    expect(respawned.ship.y).toBe(ASTEROIDS_BOARD_HEIGHT / 2);
+    expect(respawned.respawnInvulnerabilityTicks).toBe(
+      ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
+    );
+
     expect(lostGame.lives).toBe(0);
-    expect(lostGame.status).toBe("lost");
+    expect(lostGame.status).toBe("running");
     expect(lostGame.bullets).toEqual([]);
+    expect(lostGame.shipExplosion).not.toBeNull();
+    expect(advanceAsteroidsTicks(lostGame, ASTEROIDS_SHIP_EXPLOSION_TICKS)).toMatchObject({
+      lives: 0,
+      shipExplosion: null,
+      status: "lost",
+    });
+  });
+
+  it("repeats the explosion cycle when a shield expires inside an asteroid", () => {
+    const ship = createInitialAsteroidsGame().ship;
+    const overlappingAsteroid = createAsteroid({
+      radius: 42,
+      x: ship.x,
+      y: ship.y,
+    });
+    const respawnedInsideAsteroid = createRunningGame({
+      asteroids: [overlappingAsteroid],
+      lives: 2,
+      respawnInvulnerabilityTicks: 1,
+      ship,
+    });
+    const nextExplosion = advanceAsteroidsGame(respawnedInsideAsteroid);
+
+    expect(nextExplosion.lives).toBe(1);
+    expect(nextExplosion.respawnInvulnerabilityTicks).toBe(0);
+    expect(nextExplosion.shipExplosion).toMatchObject({
+      x: ship.x,
+      y: ship.y,
+    });
   });
 });

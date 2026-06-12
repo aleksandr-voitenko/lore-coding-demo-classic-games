@@ -2,10 +2,12 @@
 
 import type { CSSProperties, ReactNode } from "react";
 
-import type {
-  Asteroid,
-  AsteroidsGameState,
-  AsteroidsShip,
+import {
+  ASTEROIDS_TICK_DELAY_MS,
+  type Asteroid,
+  type AsteroidsGameState,
+  type AsteroidsShip,
+  type AsteroidsShipExplosion,
 } from "@/lib/asteroids-game-engine";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +21,17 @@ type RenderPosition = {
   x: number;
   y: number;
 };
+
+const SHIP_EXPLOSION_RAYS = Array.from(
+  { length: 10 },
+  (_, index) => (index / 10) * Math.PI * 2,
+);
+const SHIP_SHIELD_BLINK_INTERVAL_TICKS = Math.ceil(120 / ASTEROIDS_TICK_DELAY_MS);
+const SHIP_SHIELD_WARNING_TICKS = Math.ceil(1_000 / ASTEROIDS_TICK_DELAY_MS);
+const SHIP_SHIELD_RADIUS_MULTIPLIER = 1.82;
+const SHIP_SHIELD_READY_OPACITY = 0.68;
+const SHIP_SHIELD_BLINK_DIM_OPACITY = 0.18;
+const SHIP_SHIELD_BLINK_BRIGHT_OPACITY = 0.82;
 
 const asteroidsBoardBackgroundStyle: CSSProperties = {
   background:
@@ -34,7 +47,7 @@ export function AsteroidsBoard({ children, game, statusLabel }: AsteroidsBoardPr
       style={{ aspectRatio: `${game.boardWidth} / ${game.boardHeight}` }}
     >
       <div
-        aria-label={`Asteroids board. Field ${game.boardWidth} by ${game.boardHeight}. Score ${game.score}. Lives ${game.lives}. Wave ${game.wave}. ${game.asteroids.length} asteroids remaining. ${statusLabel}.`}
+        aria-label={`Asteroids board. Field ${game.boardWidth} by ${game.boardHeight}. Score ${game.score}. Lives ${game.lives}. Wave ${game.wave}. ${game.asteroids.length} asteroids remaining. ${statusLabel}.${getShipStateLabel(game)}`}
         className="relative size-full overflow-hidden rounded-[0.375rem] bg-[var(--asteroids-board)] text-[var(--asteroids-board-text)]"
         data-testid="asteroids-board"
         role="img"
@@ -116,43 +129,136 @@ export function AsteroidsBoard({ children, game, statusLabel }: AsteroidsBoardPr
             )),
           )}
 
-          {getWrappedRenderPositions({
-            boardHeight: game.boardHeight,
-            boardWidth: game.boardWidth,
-            radius: game.ship.radius * 1.4,
-            x: game.ship.x,
-            y: game.ship.y,
-          }).map((position) => (
-            <g
-              className={cn(
-                "stroke-[var(--asteroids-ship)] drop-shadow-[0_0_12px_color-mix(in_oklch,var(--asteroids-ship)_62%,transparent)]",
-                game.respawnInvulnerabilityTicks > 0 && "opacity-70",
-              )}
-              data-testid={position.x === game.ship.x && position.y === game.ship.y ? "asteroids-ship" : undefined}
-              filter="url(#asteroids-glow)"
-              key={`ship:${position.x}:${position.y}`}
-            >
-              <polygon
-                className="fill-[color-mix(in_oklch,var(--asteroids-ship)_10%,transparent)]"
-                points={getShipPolygonPoints(game.ship, position)}
-                strokeLinejoin="round"
-                strokeWidth="2.5"
-              />
-              {game.ship.isThrusting ? (
-                <polygon
-                  className="fill-[var(--asteroids-thrust)] stroke-[var(--asteroids-thrust)]"
-                  points={getShipFlamePoints(game.ship, position)}
-                  strokeLinejoin="round"
-                  strokeWidth="1.5"
+          {game.shipExplosion === null
+            ? null
+            : getWrappedRenderPositions({
+                boardHeight: game.boardHeight,
+                boardWidth: game.boardWidth,
+                radius: game.shipExplosion.radius * 5,
+                x: game.shipExplosion.x,
+                y: game.shipExplosion.y,
+              }).map((position) => (
+                <ShipExplosion
+                  explosion={game.shipExplosion!}
+                  isPrimary={position.x === game.shipExplosion!.x && position.y === game.shipExplosion!.y}
+                  key={`ship-explosion:${position.x}:${position.y}`}
+                  position={position}
                 />
-              ) : null}
-            </g>
-          ))}
+              ))}
+
+          {game.shipExplosion !== null || game.status === "lost"
+            ? null
+            : getWrappedRenderPositions({
+                boardHeight: game.boardHeight,
+                boardWidth: game.boardWidth,
+                radius: game.ship.radius * 1.9,
+                x: game.ship.x,
+                y: game.ship.y,
+              }).map((position) => (
+                <g
+                  className={cn(
+                    "stroke-[var(--asteroids-ship)] drop-shadow-[0_0_12px_color-mix(in_oklch,var(--asteroids-ship)_62%,transparent)]",
+                    game.respawnInvulnerabilityTicks > 0 && "opacity-80",
+                  )}
+                  data-testid={position.x === game.ship.x && position.y === game.ship.y ? "asteroids-ship" : undefined}
+                  filter="url(#asteroids-glow)"
+                  key={`ship:${position.x}:${position.y}`}
+                >
+                  {game.respawnInvulnerabilityTicks > 0 ? (
+                    <circle
+                      className="fill-none stroke-[color-mix(in_oklch,var(--asteroids-bullet)_78%,var(--asteroids-ship))] drop-shadow-[0_0_16px_color-mix(in_oklch,var(--asteroids-bullet)_70%,transparent)]"
+                      cx={position.x}
+                      cy={position.y}
+                      data-testid={position.x === game.ship.x && position.y === game.ship.y ? "asteroids-ship-shield" : undefined}
+                      opacity={getShipShieldOpacity(game.respawnInvulnerabilityTicks)}
+                      r={getShipShieldRadius(game.ship)}
+                      strokeDasharray="6 8"
+                      strokeLinecap="round"
+                      strokeWidth="2.5"
+                    />
+                  ) : null}
+                  <polygon
+                    className="fill-[color-mix(in_oklch,var(--asteroids-ship)_10%,transparent)]"
+                    points={getShipPolygonPoints(game.ship, position)}
+                    strokeLinejoin="round"
+                    strokeWidth="2.5"
+                  />
+                  {game.ship.isThrusting ? (
+                    <polygon
+                      className="fill-[var(--asteroids-thrust)] stroke-[var(--asteroids-thrust)]"
+                      points={getShipFlamePoints(game.ship, position)}
+                      strokeLinejoin="round"
+                      strokeWidth="1.5"
+                    />
+                  ) : null}
+                </g>
+              ))}
         </svg>
 
         {children}
       </div>
     </div>
+  );
+}
+
+function ShipExplosion({
+  explosion,
+  isPrimary,
+  position,
+}: {
+  explosion: AsteroidsShipExplosion;
+  isPrimary: boolean;
+  position: RenderPosition;
+}) {
+  const progress = getShipExplosionProgress(explosion);
+  const opacity = Math.max(0.08, 1 - progress * 0.92);
+  const coreRadius = explosion.radius * (0.6 + progress * 1.5);
+  const shockwaveRadius = explosion.radius * (1.1 + progress * 4.2);
+  const rayStartRadius = explosion.radius * (0.7 + progress * 0.85);
+  const rayEndRadius = explosion.radius * (1.7 + progress * 4.1);
+
+  return (
+    <g
+      className="drop-shadow-[0_0_18px_color-mix(in_oklch,var(--asteroids-thrust)_78%,transparent)]"
+      data-testid={isPrimary ? "asteroids-ship-explosion" : undefined}
+    >
+      <circle
+        className="fill-[color-mix(in_oklch,var(--asteroids-thrust)_28%,transparent)] stroke-[var(--asteroids-thrust)]"
+        cx={position.x}
+        cy={position.y}
+        opacity={opacity}
+        r={coreRadius}
+        strokeWidth="2.5"
+      />
+      <circle
+        className="fill-none stroke-[color-mix(in_oklch,var(--asteroids-bullet)_78%,var(--asteroids-thrust))]"
+        cx={position.x}
+        cy={position.y}
+        opacity={Math.max(0.06, 0.72 - progress * 0.66)}
+        r={shockwaveRadius}
+        strokeDasharray="5 9"
+        strokeLinecap="round"
+        strokeWidth="2"
+      />
+      {SHIP_EXPLOSION_RAYS.map((angle, index) => {
+        const start = getPointAtAngle(position, angle, rayStartRadius);
+        const end = getPointAtAngle(position, angle, rayEndRadius);
+
+        return (
+          <line
+            className="stroke-[color-mix(in_oklch,var(--asteroids-thrust)_88%,var(--asteroids-bullet))]"
+            key={`ray:${index}`}
+            opacity={Math.max(0.05, 0.82 - progress * 0.76)}
+            strokeLinecap="round"
+            strokeWidth="2"
+            x1={start.x}
+            x2={end.x}
+            y1={start.y}
+            y2={end.y}
+          />
+        );
+      })}
+    </g>
   );
 }
 
@@ -189,6 +295,41 @@ function getWrappedRenderPositions({
       x: x + xOffset,
       y: y + yOffset,
     })),
+  );
+}
+
+function getShipStateLabel(game: AsteroidsGameState) {
+  if (game.shipExplosion !== null) {
+    return " Ship exploding.";
+  }
+
+  if (game.respawnInvulnerabilityTicks > 0 && game.status === "running") {
+    return " Shield active.";
+  }
+
+  return "";
+}
+
+function getShipShieldRadius(ship: AsteroidsShip) {
+  return ship.radius * SHIP_SHIELD_RADIUS_MULTIPLIER;
+}
+
+function getShipShieldOpacity(ticksRemaining: number) {
+  if (ticksRemaining > SHIP_SHIELD_WARNING_TICKS) {
+    return SHIP_SHIELD_READY_OPACITY;
+  }
+
+  const blinkPhase = Math.floor(ticksRemaining / SHIP_SHIELD_BLINK_INTERVAL_TICKS);
+
+  return blinkPhase % 2 === 0
+    ? SHIP_SHIELD_BLINK_DIM_OPACITY
+    : SHIP_SHIELD_BLINK_BRIGHT_OPACITY;
+}
+
+function getShipExplosionProgress(explosion: AsteroidsShipExplosion) {
+  return Math.min(
+    1,
+    Math.max(0, 1 - explosion.ticksRemaining / explosion.durationTicks),
   );
 }
 

@@ -11,7 +11,12 @@ import { SpaceInvadersBoard } from "./space-invaders-board";
 import { TetrisBoard } from "./tetris-board";
 import { TwentyFortyEightBoard } from "./twenty-forty-eight-board";
 import { createInitialBreakoutGame } from "@/lib/breakout-game-engine";
-import { createInitialAsteroidsGame } from "@/lib/asteroids-game-engine";
+import {
+  ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
+  ASTEROIDS_SHIP_EXPLOSION_TICKS,
+  ASTEROIDS_TICK_DELAY_MS,
+  createInitialAsteroidsGame,
+} from "@/lib/asteroids-game-engine";
 import { createInitialMinesweeperGame } from "@/lib/minesweeper-game-engine";
 import { createInitialPongGame } from "@/lib/pong-game-engine";
 import { createInitialSimonGame } from "@/lib/simon-game-engine";
@@ -29,6 +34,18 @@ function expectMarkup(markup: string, fragments: string[]) {
   fragments.forEach((fragment) => {
     expect(markup).toContain(fragment);
   });
+}
+
+function getMarkupAttribute(markup: string, testId: string, attribute: string) {
+  const elementMatch = markup.match(new RegExp(`<[^>]+data-testid="${testId}"[^>]*>`));
+
+  expect(elementMatch).not.toBeNull();
+
+  const attributeMatch = elementMatch![0].match(new RegExp(`${attribute}="([^"]+)"`));
+
+  expect(attributeMatch).not.toBeNull();
+
+  return attributeMatch![1]!;
 }
 
 describe("game board renderers", () => {
@@ -925,5 +942,91 @@ describe("game board renderers", () => {
       'data-testid="asteroids-ship"',
       "<polygon",
     ]);
+  });
+
+  it("renders Asteroids shield and ship explosion states", () => {
+    const game = createInitialAsteroidsGame();
+    const shieldWarningBlinkIntervalTicks = Math.ceil(120 / ASTEROIDS_TICK_DELAY_MS);
+    const shieldMarkup = renderToStaticMarkup(
+      <AsteroidsBoard
+        game={{
+          ...game,
+          respawnInvulnerabilityTicks: ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
+          status: "running",
+        }}
+        statusLabel="Running"
+      />,
+    );
+    const steadyShieldMarkup = renderToStaticMarkup(
+      <AsteroidsBoard
+        game={{
+          ...game,
+          respawnInvulnerabilityTicks: ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS - 1,
+          status: "running",
+        }}
+        statusLabel="Running"
+      />,
+    );
+    const dimWarningShieldMarkup = renderToStaticMarkup(
+      <AsteroidsBoard
+        game={{
+          ...game,
+          respawnInvulnerabilityTicks: 1,
+          status: "running",
+        }}
+        statusLabel="Running"
+      />,
+    );
+    const brightWarningShieldMarkup = renderToStaticMarkup(
+      <AsteroidsBoard
+        game={{
+          ...game,
+          respawnInvulnerabilityTicks: shieldWarningBlinkIntervalTicks + 1,
+          status: "running",
+        }}
+        statusLabel="Running"
+      />,
+    );
+    const explosionMarkup = renderToStaticMarkup(
+      <AsteroidsBoard
+        game={{
+          ...game,
+          shipExplosion: {
+            durationTicks: ASTEROIDS_SHIP_EXPLOSION_TICKS,
+            radius: game.ship.radius,
+            ticksRemaining: ASTEROIDS_SHIP_EXPLOSION_TICKS,
+            x: game.ship.x,
+            y: game.ship.y,
+          },
+          status: "running",
+        }}
+        statusLabel="Running"
+      />,
+    );
+
+    expectMarkup(shieldMarkup, [
+      "Shield active.",
+      'data-testid="asteroids-ship"',
+      'data-testid="asteroids-ship-shield"',
+    ]);
+    expect(getMarkupAttribute(steadyShieldMarkup, "asteroids-ship-shield", "r")).toBe(
+      getMarkupAttribute(shieldMarkup, "asteroids-ship-shield", "r"),
+    );
+    expect(getMarkupAttribute(steadyShieldMarkup, "asteroids-ship-shield", "opacity")).toBe(
+      getMarkupAttribute(shieldMarkup, "asteroids-ship-shield", "opacity"),
+    );
+    expect(
+      Number(getMarkupAttribute(dimWarningShieldMarkup, "asteroids-ship-shield", "opacity")),
+    ).toBeLessThan(
+      Number(getMarkupAttribute(brightWarningShieldMarkup, "asteroids-ship-shield", "opacity")),
+    );
+    expect(getMarkupAttribute(dimWarningShieldMarkup, "asteroids-ship-shield", "r")).toBe(
+      getMarkupAttribute(brightWarningShieldMarkup, "asteroids-ship-shield", "r"),
+    );
+    expectMarkup(explosionMarkup, [
+      "Ship exploding.",
+      'data-testid="asteroids-ship-explosion"',
+    ]);
+    expect(explosionMarkup).not.toContain('data-testid="asteroids-ship"');
   });
 });

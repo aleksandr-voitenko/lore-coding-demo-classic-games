@@ -24,6 +24,14 @@ export type AsteroidsShip = {
   y: number;
 };
 
+export type AsteroidsShipExplosion = {
+  durationTicks: number;
+  radius: number;
+  ticksRemaining: number;
+  x: number;
+  y: number;
+};
+
 export type AsteroidsBullet = {
   id: string;
   radius: number;
@@ -54,6 +62,7 @@ export type AsteroidsGameState = {
   respawnInvulnerabilityTicks: number;
   score: number;
   ship: AsteroidsShip;
+  shipExplosion: AsteroidsShipExplosion | null;
   shotCooldownTicks: number;
   startingAsteroidCount: number;
   status: AsteroidsStatus;
@@ -76,6 +85,10 @@ export const ASTEROIDS_BOARD_HEIGHT = 480;
 export const ASTEROIDS_STARTING_ASTEROID_COUNT = 6;
 export const ASTEROIDS_STARTING_LIVES = 3;
 export const ASTEROIDS_TICK_DELAY_MS = 16;
+export const ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS = Math.ceil(
+  3_000 / ASTEROIDS_TICK_DELAY_MS,
+);
+export const ASTEROIDS_SHIP_EXPLOSION_TICKS = Math.ceil(700 / ASTEROIDS_TICK_DELAY_MS);
 export const ASTEROIDS_BOARD_SIZE_OPTIONS = [
   { height: 360, label: "480 x 360", width: 480 },
   { height: 480, label: "640 x 480", width: 640 },
@@ -94,7 +107,6 @@ const BULLET_RADIUS = 2.5;
 const BULLET_SPEED = 8.6;
 const BULLET_TTL_TICKS = 58;
 const MAX_ACTIVE_BULLETS = 4;
-const RESPAWN_INVULNERABILITY_TICKS = 120;
 const ASTEROIDS_MOTION_SCALE = 0.8;
 const SHIP_FRICTION = 0.992;
 const SHIP_MAX_SPEED = 6.2 * ASTEROIDS_MOTION_SCALE;
@@ -140,6 +152,7 @@ export function createInitialAsteroidsGame({
     respawnInvulnerabilityTicks: 0,
     score: 0,
     ship: createCenteredShip(normalizedBoardWidth, normalizedBoardHeight),
+    shipExplosion: null,
     shotCooldownTicks: 0,
     startingAsteroidCount: normalizedAsteroidCount,
     status: "ready",
@@ -165,7 +178,7 @@ export function startAsteroidsGame(game: AsteroidsGameState): AsteroidsGameState
 
   return {
     ...game,
-    respawnInvulnerabilityTicks: RESPAWN_INVULNERABILITY_TICKS,
+    respawnInvulnerabilityTicks: ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
     status: "running" as const,
   };
 }
@@ -196,7 +209,7 @@ export function restartAsteroidsGame(
       boardWidth: game.boardWidth,
       random,
     }),
-    respawnInvulnerabilityTicks: RESPAWN_INVULNERABILITY_TICKS,
+    respawnInvulnerabilityTicks: ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
     status: "running" as const,
   };
 }
@@ -204,6 +217,7 @@ export function restartAsteroidsGame(
 export function fireAsteroidsBullet(game: AsteroidsGameState): AsteroidsGameState {
   if (
     game.status !== "running" ||
+    game.shipExplosion !== null ||
     game.shotCooldownTicks > 0 ||
     game.bullets.length >= MAX_ACTIVE_BULLETS
   ) {
@@ -248,46 +262,19 @@ export function advanceAsteroidsGame(
     return game;
   }
 
+  if (game.shipExplosion !== null) {
+    return advanceExplodingShipGame(game, { random });
+  }
+
   const ship = advanceShip(game, controls);
-  const bullets = advanceBullets(game);
-  const asteroids = game.asteroids.map((asteroid) =>
-    moveWrappedEntity(asteroid, game.boardWidth, game.boardHeight),
-  );
-  const collisionResult = resolveBulletAsteroidCollisions({
-    asteroids,
-    boardHeight: game.boardHeight,
-    boardWidth: game.boardWidth,
-    bullets,
-    nextAsteroidId: game.nextAsteroidId,
-    random,
-  });
-  const cooldownTicks = Math.max(0, game.shotCooldownTicks - 1);
+  const { scoreDelta, ...world } = advanceAsteroidsWorld(game, { random });
   const invulnerabilityTicks = Math.max(0, game.respawnInvulnerabilityTicks - 1);
-  const waveResult =
-    collisionResult.asteroids.length === 0
-      ? createNextWave({
-          boardHeight: game.boardHeight,
-          boardWidth: game.boardWidth,
-          nextAsteroidId: collisionResult.nextAsteroidId,
-          random,
-          startingAsteroidCount: game.startingAsteroidCount,
-          wave: game.wave + 1,
-        })
-      : {
-          asteroids: collisionResult.asteroids,
-          nextAsteroidId: collisionResult.nextAsteroidId,
-          wave: game.wave,
-        };
   const candidateGame = {
     ...game,
-    asteroids: waveResult.asteroids,
-    bullets: collisionResult.bullets,
-    nextAsteroidId: waveResult.nextAsteroidId,
+    ...world,
     respawnInvulnerabilityTicks: invulnerabilityTicks,
-    score: game.score + collisionResult.score,
+    score: game.score + scoreDelta,
     ship,
-    shotCooldownTicks: cooldownTicks,
-    wave: waveResult.wave,
   };
 
   return resolveShipAsteroidCollision(candidateGame);
@@ -349,6 +336,102 @@ function advanceBullets(
       y: wrapCoordinate(bullet.y + bullet.velocity.y, game.boardHeight),
     }))
     .filter((bullet) => bullet.ttl > 0);
+}
+
+function advanceAsteroidsWorld(
+  game: Pick<
+    AsteroidsGameState,
+    | "asteroids"
+    | "boardHeight"
+    | "boardWidth"
+    | "bullets"
+    | "nextAsteroidId"
+    | "shotCooldownTicks"
+    | "startingAsteroidCount"
+    | "wave"
+  >,
+  { random }: AdvanceAsteroidsGameOptions = {},
+) {
+  const bullets = advanceBullets(game);
+  const asteroids = game.asteroids.map((asteroid) =>
+    moveWrappedEntity(asteroid, game.boardWidth, game.boardHeight),
+  );
+  const collisionResult = resolveBulletAsteroidCollisions({
+    asteroids,
+    boardHeight: game.boardHeight,
+    boardWidth: game.boardWidth,
+    bullets,
+    nextAsteroidId: game.nextAsteroidId,
+    random,
+  });
+  const waveResult =
+    collisionResult.asteroids.length === 0
+      ? createNextWave({
+          boardHeight: game.boardHeight,
+          boardWidth: game.boardWidth,
+          nextAsteroidId: collisionResult.nextAsteroidId,
+          random,
+          startingAsteroidCount: game.startingAsteroidCount,
+          wave: game.wave + 1,
+        })
+      : {
+          asteroids: collisionResult.asteroids,
+          nextAsteroidId: collisionResult.nextAsteroidId,
+          wave: game.wave,
+        };
+
+  return {
+    asteroids: waveResult.asteroids,
+    bullets: collisionResult.bullets,
+    nextAsteroidId: waveResult.nextAsteroidId,
+    scoreDelta: collisionResult.score,
+    shotCooldownTicks: Math.max(0, game.shotCooldownTicks - 1),
+    wave: waveResult.wave,
+  };
+}
+
+function advanceExplodingShipGame(
+  game: AsteroidsGameState,
+  { random }: AdvanceAsteroidsGameOptions = {},
+): AsteroidsGameState {
+  const shipExplosion = game.shipExplosion;
+
+  if (shipExplosion === null) {
+    return game;
+  }
+
+  const { scoreDelta, ...world } = advanceAsteroidsWorld(game, { random });
+  const ticksRemaining = shipExplosion.ticksRemaining - 1;
+  const candidateGame: AsteroidsGameState = {
+    ...game,
+    ...world,
+    respawnInvulnerabilityTicks: 0,
+    score: game.score + scoreDelta,
+    shipExplosion: {
+      ...shipExplosion,
+      ticksRemaining,
+    },
+  };
+
+  if (ticksRemaining > 0) {
+    return candidateGame;
+  }
+
+  if (candidateGame.lives === 0) {
+    return {
+      ...candidateGame,
+      bullets: [],
+      shipExplosion: null,
+      status: "lost" as const,
+    };
+  }
+
+  return {
+    ...candidateGame,
+    respawnInvulnerabilityTicks: ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
+    ship: createCenteredShip(game.boardWidth, game.boardHeight),
+    shipExplosion: null,
+  };
 }
 
 function resolveBulletAsteroidCollisions({
@@ -418,7 +501,8 @@ function resolveShipAsteroidCollision(game: AsteroidsGameState): AsteroidsGameSt
       ...game,
       bullets: [],
       lives,
-      status: "lost" as const,
+      respawnInvulnerabilityTicks: 0,
+      shipExplosion: createShipExplosion(game.ship),
     };
   }
 
@@ -426,8 +510,18 @@ function resolveShipAsteroidCollision(game: AsteroidsGameState): AsteroidsGameSt
     ...game,
     bullets: [],
     lives,
-    respawnInvulnerabilityTicks: RESPAWN_INVULNERABILITY_TICKS,
-    ship: createCenteredShip(game.boardWidth, game.boardHeight),
+    respawnInvulnerabilityTicks: 0,
+    shipExplosion: createShipExplosion(game.ship),
+  };
+}
+
+function createShipExplosion(ship: AsteroidsShip): AsteroidsShipExplosion {
+  return {
+    durationTicks: ASTEROIDS_SHIP_EXPLOSION_TICKS,
+    radius: ship.radius,
+    ticksRemaining: ASTEROIDS_SHIP_EXPLOSION_TICKS,
+    x: ship.x,
+    y: ship.y,
   };
 }
 
