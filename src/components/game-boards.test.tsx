@@ -1052,4 +1052,51 @@ describe("game board renderers", () => {
     ]);
     expect(explosionMarkup).not.toContain('data-testid="asteroids-ship"');
   });
+
+  it("renders Asteroids hit sparks as fading small particles", () => {
+    const game = createInitialAsteroidsGame();
+    const markup = renderToStaticMarkup(
+      <AsteroidsBoard
+        game={game}
+        hitSparks={[
+          {
+            ageTicks: 4,
+            durationTicks: 20,
+            id: "spark-test",
+            particles: [
+              {
+                angle: 0,
+                color: "bullet",
+                length: 2.4,
+                radius: 0.9,
+                travelDistance: 12,
+              },
+              {
+                angle: Math.PI / 2,
+                color: "thrust",
+                length: 2.1,
+                radius: 0.74,
+                travelDistance: 10,
+              },
+            ],
+            x: 320,
+            y: 220,
+          },
+        ]}
+        statusLabel="Running"
+      />,
+    );
+
+    expectMarkup(markup, [
+      'data-testid="asteroids-hit-spark"',
+      'stroke="color-mix(in_oklch,var(--asteroids-bullet)_88%,var(--asteroids-board-text))"',
+      'stroke="var(--asteroids-thrust)"',
+      'stroke-linecap="round"',
+    ]);
+    expect(Number(getMarkupAttribute(markup, "asteroids-hit-spark", "opacity"))).toBeLessThan(
+      0.86,
+    );
+    expect(markup).toContain('stroke-width="0.8496"');
+    expect(markup).toContain('stroke-width="0.69856"');
+  });
 });

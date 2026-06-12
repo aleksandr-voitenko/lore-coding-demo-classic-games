@@ -2,6 +2,7 @@
 
 import type { CSSProperties, ReactNode } from "react";
 
+import type { AsteroidsHitSpark, AsteroidsHitSparkColor } from "@/components/asteroids-hit-sparks";
 import {
   ASTEROIDS_TICK_DELAY_MS,
   type Asteroid,
@@ -16,6 +17,7 @@ import { cn } from "@/lib/utils";
 type AsteroidsBoardProps = {
   children?: ReactNode;
   game: AsteroidsGameState;
+  hitSparks?: AsteroidsHitSpark[];
   statusLabel: string;
 };
 
@@ -42,7 +44,12 @@ const asteroidsBoardBackgroundStyle: CSSProperties = {
   containerType: "size",
 };
 
-export function AsteroidsBoard({ children, game, statusLabel }: AsteroidsBoardProps) {
+export function AsteroidsBoard({
+  children,
+  game,
+  hitSparks = [],
+  statusLabel,
+}: AsteroidsBoardProps) {
   return (
     <div
       className="relative overflow-hidden rounded-md border border-[var(--asteroids-board-border)] bg-[var(--asteroids-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--asteroids-board)_28%,transparent)]"
@@ -146,6 +153,23 @@ export function AsteroidsBoard({ children, game, statusLabel }: AsteroidsBoardPr
                 r={bullet.radius}
                 cx={position.x}
                 cy={position.y}
+              />
+            )),
+          )}
+
+          {hitSparks.flatMap((spark) =>
+            getWrappedRenderPositions({
+              boardHeight: game.boardHeight,
+              boardWidth: game.boardWidth,
+              radius: getHitSparkWrapRadius(spark),
+              x: spark.x,
+              y: spark.y,
+            }).map((position) => (
+              <HitSparkBurst
+                isPrimary={position.x === spark.x && position.y === spark.y}
+                key={`${spark.id}:${position.x}:${position.y}`}
+                position={position}
+                spark={spark}
               />
             )),
           )}
@@ -269,6 +293,51 @@ function Saucer({ saucer }: { saucer: AsteroidsSaucer }) {
         y1={rimY}
         y2={rimY}
       />
+    </g>
+  );
+}
+
+function HitSparkBurst({
+  isPrimary,
+  position,
+  spark,
+}: {
+  isPrimary: boolean;
+  position: RenderPosition;
+  spark: AsteroidsHitSpark;
+}) {
+  const progress = Math.min(1, spark.ageTicks / spark.durationTicks);
+  const easedProgress = 1 - (1 - progress) * (1 - progress);
+  const opacity = Math.max(0, 0.96 - progress * 0.96);
+
+  return (
+    <g
+      className="drop-shadow-[0_0_7px_color-mix(in_oklch,var(--asteroids-bullet)_58%,transparent)]"
+      data-testid={isPrimary ? "asteroids-hit-spark" : undefined}
+      opacity={opacity}
+    >
+      {spark.particles.map((particle, index) => {
+        const distance = particle.travelDistance * (0.16 + easedProgress * 0.84);
+        const end = getPointAtAngle(position, particle.angle, distance);
+        const start = getPointAtAngle(
+          position,
+          particle.angle,
+          Math.max(0, distance - particle.length * (1 - progress * 0.22)),
+        );
+
+        return (
+          <line
+            key={`${spark.id}:particle:${index}`}
+            stroke={getHitSparkStroke(particle.color)}
+            strokeLinecap="round"
+            strokeWidth={Math.max(0.35, particle.radius * (1 - progress * 0.28))}
+            x1={start.x}
+            x2={end.x}
+            y1={start.y}
+            y2={end.y}
+          />
+        );
+      })}
     </g>
   );
 }
@@ -411,6 +480,30 @@ function getShipExplosionProgress(explosion: AsteroidsShipExplosion) {
     1,
     Math.max(0, 1 - explosion.ticksRemaining / explosion.durationTicks),
   );
+}
+
+function getHitSparkWrapRadius(spark: AsteroidsHitSpark) {
+  return spark.particles.reduce(
+    (maxRadius, particle) =>
+      Math.max(maxRadius, particle.travelDistance + particle.length),
+    0,
+  );
+}
+
+function getHitSparkStroke(color: AsteroidsHitSparkColor) {
+  if (color === "saucerShot") {
+    return "var(--asteroids-saucer-shot)";
+  }
+
+  if (color === "thrust") {
+    return "var(--asteroids-thrust)";
+  }
+
+  if (color === "ship") {
+    return "var(--asteroids-ship)";
+  }
+
+  return "color-mix(in_oklch,var(--asteroids-bullet)_88%,var(--asteroids-board-text))";
 }
 
 function getAsteroidPolygonPoints(asteroid: Asteroid, position: RenderPosition) {

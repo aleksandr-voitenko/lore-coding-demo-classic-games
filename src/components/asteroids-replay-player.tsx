@@ -4,6 +4,11 @@ import { ArrowLeftIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AsteroidsBoard } from "@/components/asteroids-board";
+import {
+  advanceAsteroidsHitSparks,
+  createAsteroidsHitSparks,
+  type AsteroidsHitSpark,
+} from "@/components/asteroids-hit-sparks";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import {
   GameBoardActions,
@@ -25,7 +30,10 @@ import {
 } from "@/components/game-replay-playback";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { Button } from "@/components/ui/button";
-import { type AsteroidsGameState } from "@/lib/asteroids-game-engine";
+import {
+  ASTEROIDS_TICK_DELAY_MS,
+  type AsteroidsGameState,
+} from "@/lib/asteroids-game-engine";
 import {
   applyAsteroidsReplayEvent,
   createDefaultAsteroidsReplayLeaderboardKey,
@@ -86,11 +94,13 @@ function AsteroidsReplayMessage({
 
 export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayerProps) {
   const [game, setGame] = useState<AsteroidsGameState | null>(null);
+  const [hitSparks, setHitSparks] = useState<AsteroidsHitSpark[]>([]);
   const [isFinished, setIsFinished] = useState(false);
   const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">("loading");
   const [playbackStep, setPlaybackStep] = useState(0);
   const [replay, setReplay] = useState<AsteroidsReplayPayload | null>(null);
   const playbackRef = useRef<PlaybackState | null>(null);
+  const nextHitSparkIdRef = useRef(0);
   const leaderboardKey =
     replay?.leaderboardKey ?? createDefaultAsteroidsReplayLeaderboardKey();
   const { finalLeaderboardProps } = useGameLeaderboardPresenter({
@@ -102,6 +112,24 @@ export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayer
     isGameStarted: false,
     onBackToMenu: onBackToProfile,
   });
+
+  const queueHitSparks = useCallback(
+    (previousGame: AsteroidsGameState, nextGame: AsteroidsGameState) => {
+      const result = createAsteroidsHitSparks({
+        nextGame,
+        nextId: nextHitSparkIdRef.current,
+        previousGame,
+      });
+
+      if (result.sparks.length === 0) {
+        return;
+      }
+
+      nextHitSparkIdRef.current = result.nextId;
+      setHitSparks((current) => [...current, ...result.sparks]);
+    },
+    [],
+  );
 
   useEffect(() => {
     let isCurrent = true;
@@ -120,7 +148,9 @@ export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayer
           lastElapsedMs: 0,
           replayState: initialReplay,
         };
+        nextHitSparkIdRef.current = 0;
         setGame(initialReplay.game);
+        setHitSparks([]);
         setIsFinished(false);
         setLoadStatus("ready");
         setReplay(latestReplay);
@@ -136,6 +166,18 @@ export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayer
     };
   }, []);
 
+  useEffect(() => {
+    if (hitSparks.length === 0) {
+      return;
+    }
+
+    const tick = window.setInterval(() => {
+      setHitSparks((current) => advanceAsteroidsHitSparks(current));
+    }, ASTEROIDS_TICK_DELAY_MS);
+
+    return () => window.clearInterval(tick);
+  }, [hitSparks.length]);
+
   const advanceReplayFrame = useCallback(() => {
     const playback = playbackRef.current;
 
@@ -144,6 +186,7 @@ export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayer
     }
 
     let nextReplayState = playback.replayState;
+    const previousGame = playback.replayState.game;
     let lastElapsedMs: number | null = null;
     let processedFrame = false;
     const frameElapsedMs = getReplayEventElapsedMs(
@@ -166,6 +209,7 @@ export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayer
 
     playback.lastElapsedMs = lastElapsedMs ?? playback.lastElapsedMs;
     playback.replayState = nextReplayState;
+    queueHitSparks(previousGame, nextReplayState.game);
     setGame(nextReplayState.game);
     setPlaybackStep((current) => current + 1);
 
@@ -175,7 +219,7 @@ export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayer
     ) {
       setIsFinished(true);
     }
-  }, [isFinished]);
+  }, [isFinished, queueHitSparks]);
 
   useEffect(() => {
     if (loadStatus !== "ready" || isFinished) {
@@ -272,7 +316,11 @@ export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayer
             />
           }
         >
-          <AsteroidsBoard game={game} statusLabel={statusLabel}>
+          <AsteroidsBoard
+            game={game}
+            hitSparks={hitSparks}
+            statusLabel={statusLabel}
+          >
             {isFinished ? (
               <GameEndScreen
                 className="gap-3 px-3 py-4"

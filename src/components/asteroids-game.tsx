@@ -11,6 +11,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AsteroidsBoard } from "@/components/asteroids-board";
 import {
+  advanceAsteroidsHitSparks,
+  createAsteroidsHitSparks,
+  type AsteroidsHitSpark,
+} from "@/components/asteroids-hit-sparks";
+import {
   createAsteroidsControlState,
   getAsteroidsControlInput,
   getAsteroidsControlKey,
@@ -59,6 +64,7 @@ import { useGameSession } from "@/hooks/use-game-session";
 import {
   advanceAsteroidsGame,
   ASTEROIDS_BONUS_LIFE_SCORE,
+  ASTEROIDS_TICK_DELAY_MS,
   ASTEROIDS_STARTING_LIVES,
   createInitialAsteroidsGame,
   fireAsteroidsBullet,
@@ -220,7 +226,9 @@ function AsteroidsLiveGame({
       boardWidth: initialBoardWidth,
     }),
   );
+  const [hitSparks, setHitSparks] = useState<AsteroidsHitSpark[]>([]);
   const gameRef = useRef(game);
+  const nextHitSparkIdRef = useRef(0);
   const {
     beginReplayRecording,
     captureFinishedReplay,
@@ -291,6 +299,29 @@ function AsteroidsLiveGame({
     [commitGame],
   );
 
+  const clearHitSparks = useCallback(() => {
+    nextHitSparkIdRef.current = 0;
+    setHitSparks([]);
+  }, []);
+
+  const queueHitSparks = useCallback(
+    (previousGame: AsteroidsGameState, nextGame: AsteroidsGameState) => {
+      const result = createAsteroidsHitSparks({
+        nextGame,
+        nextId: nextHitSparkIdRef.current,
+        previousGame,
+      });
+
+      if (result.sparks.length === 0) {
+        return;
+      }
+
+      nextHitSparkIdRef.current = result.nextId;
+      setHitSparks((current) => [...current, ...result.sparks]);
+    },
+    [],
+  );
+
   const recordControlChange = useCallback(
     (previousControls: AsteroidsReplayControls) => {
       const recording = replayRecordingRef.current;
@@ -330,6 +361,7 @@ function AsteroidsLiveGame({
     }
 
     resetControls();
+    clearHitSparks();
     resetLeaderboardForm();
     const recording = await beginReplayRecording(async () => {
       const run = await createAsteroidsReplayRun();
@@ -360,7 +392,7 @@ function AsteroidsLiveGame({
     appendAsteroidsReplayEvent(recording, { type: "start" });
     replayRecordingRef.current = recording;
     commitGame(startAsteroidsGame(readyGame));
-  }, [beginReplayRecording, commitGame, isReplayRunPendingRef, resetControls, resetLeaderboardForm, replayRecordingRef]);
+  }, [beginReplayRecording, clearHitSparks, commitGame, isReplayRunPendingRef, resetControls, resetLeaderboardForm, replayRecordingRef]);
 
   const startGame = useCallback(() => {
     void startReplayRun();
@@ -415,16 +447,21 @@ function AsteroidsLiveGame({
     updateCommittedGame((current) => {
       const recording = replayRecordingRef.current;
       const controls = getAsteroidsControlInput(controlState);
+      let nextGame: AsteroidsGameState;
 
       if (recording !== null && current.status === "running") {
         appendAsteroidsReplayEvent(recording, { type: "advance" });
 
-        return advanceAsteroidsGame(current, controls, { random: recording.random });
+        nextGame = advanceAsteroidsGame(current, controls, { random: recording.random });
+      } else {
+        nextGame = advanceAsteroidsGame(current, controls);
       }
 
-      return advanceAsteroidsGame(current, controls);
+      queueHitSparks(current, nextGame);
+
+      return nextGame;
     });
-  }, [controlState, replayRecordingRef, updateCommittedGame]);
+  }, [controlState, queueHitSparks, replayRecordingRef, updateCommittedGame]);
 
   const pauseGameForHelp = useCallback(() => {
     resetControls({ record: true });
@@ -498,6 +535,18 @@ function AsteroidsLiveGame({
 
     return () => window.clearInterval(tick);
   }, [advanceAsteroids, tickDelay]);
+
+  useEffect(() => {
+    if (hitSparks.length === 0) {
+      return;
+    }
+
+    const tick = window.setInterval(() => {
+      setHitSparks((current) => advanceAsteroidsHitSparks(current));
+    }, ASTEROIDS_TICK_DELAY_MS);
+
+    return () => window.clearInterval(tick);
+  }, [hitSparks.length]);
 
   useEffect(() => {
     if (
@@ -687,7 +736,11 @@ function AsteroidsLiveGame({
             />
           }
         >
-          <AsteroidsBoard game={game} statusLabel={statusLabels[game.status]}>
+          <AsteroidsBoard
+            game={game}
+            hitSparks={hitSparks}
+            statusLabel={statusLabels[game.status]}
+          >
             {showStartScreen ? (
               <GameStartScreen testId="asteroids-start-screen">
                 <GameStartScreenHeader
