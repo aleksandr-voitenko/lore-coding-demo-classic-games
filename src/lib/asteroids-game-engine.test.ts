@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   advanceAsteroidsGame,
   ASTEROIDS_ASTEROID_COUNT_OPTIONS,
+  ASTEROIDS_BONUS_LIFE_SCORE,
   ASTEROIDS_BOARD_HEIGHT,
   ASTEROIDS_BOARD_WIDTH,
   ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
@@ -283,6 +284,43 @@ describe("asteroids game engine", () => {
     expect(advanced.asteroids).toHaveLength(ASTEROIDS_STARTING_ASTEROID_COUNT + 1);
   });
 
+  it("awards bonus lives when asteroid scoring crosses bonus thresholds", () => {
+    const targetAsteroid = createAsteroid({ radius: 14, size: "small" });
+    const bonusAwarded = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [targetAsteroid],
+        bullets: [createBullet()],
+        lives: 1,
+        score: ASTEROIDS_BONUS_LIFE_SCORE - getAsteroidsAsteroidScore("small"),
+      }),
+    );
+    const noDuplicateBonus = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [targetAsteroid],
+        bullets: [createBullet()],
+        lives: bonusAwarded.lives,
+        score: ASTEROIDS_BONUS_LIFE_SCORE,
+      }),
+    );
+    const secondThresholdBonus = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [targetAsteroid],
+        bullets: [createBullet()],
+        lives: 1,
+        score: ASTEROIDS_BONUS_LIFE_SCORE * 2 - getAsteroidsAsteroidScore("small"),
+      }),
+    );
+
+    expect(bonusAwarded.score).toBe(ASTEROIDS_BONUS_LIFE_SCORE);
+    expect(bonusAwarded.lives).toBe(2);
+    expect(noDuplicateBonus.score).toBe(
+      ASTEROIDS_BONUS_LIFE_SCORE + getAsteroidsAsteroidScore("small"),
+    );
+    expect(noDuplicateBonus.lives).toBe(2);
+    expect(secondThresholdBonus.score).toBe(ASTEROIDS_BONUS_LIFE_SCORE * 2);
+    expect(secondThresholdBonus.lives).toBe(2);
+  });
+
   it("spawns the next capped wave when the field is cleared", () => {
     const cleared = advanceAsteroidsGame(
       createRunningGame({
@@ -396,5 +434,40 @@ describe("asteroids game engine", () => {
       x: ship.x,
       y: ship.y,
     });
+  });
+
+  it("awards explosion-time bonus lives before resolving a final respawn", () => {
+    const ship = createInitialAsteroidsGame().ship;
+    const targetAsteroid = createAsteroid({
+      radius: 14,
+      size: "small",
+    });
+    const explodingGame = createRunningGame({
+      asteroids: [targetAsteroid],
+      bullets: [createBullet()],
+      lives: 0,
+      score: ASTEROIDS_BONUS_LIFE_SCORE - getAsteroidsAsteroidScore("small"),
+      ship,
+      shipExplosion: {
+        durationTicks: ASTEROIDS_SHIP_EXPLOSION_TICKS,
+        radius: ship.radius,
+        ticksRemaining: ASTEROIDS_SHIP_EXPLOSION_TICKS,
+        x: ship.x,
+        y: ship.y,
+      },
+    });
+    const bonusAwarded = advanceAsteroidsGame(explodingGame);
+    const respawned = advanceAsteroidsTicks(
+      bonusAwarded,
+      ASTEROIDS_SHIP_EXPLOSION_TICKS - 1,
+    );
+
+    expect(bonusAwarded.score).toBe(ASTEROIDS_BONUS_LIFE_SCORE);
+    expect(bonusAwarded.lives).toBe(1);
+    expect(respawned.status).toBe("running");
+    expect(respawned.shipExplosion).toBeNull();
+    expect(respawned.respawnInvulnerabilityTicks).toBe(
+      ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
+    );
   });
 });

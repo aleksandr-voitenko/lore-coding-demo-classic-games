@@ -58,6 +58,7 @@ import { Button } from "@/components/ui/button";
 import { useGameSession } from "@/hooks/use-game-session";
 import {
   advanceAsteroidsGame,
+  ASTEROIDS_BONUS_LIFE_SCORE,
   ASTEROIDS_STARTING_LIVES,
   createInitialAsteroidsGame,
   fireAsteroidsBullet,
@@ -136,6 +137,7 @@ const ASTEROIDS_HELP_SECTIONS: GameHelpSection[] = [
     items: [
       "Break large asteroids into medium rocks, then small rocks, then clear them.",
       "Wrap around the edges of the field to stay alive and line up shots.",
+      `Earn a bonus life every ${ASTEROIDS_BONUS_LIFE_SCORE.toLocaleString("en-US")} points.`,
       "Clearing a wave spawns a denser field; the run ends when all lives are lost.",
     ],
   },

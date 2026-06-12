@@ -11,7 +11,8 @@ All the code in this repository was created using AI agents and the Lore Coding 
 - Nine classic games with deterministic gameplay rules and polished browser
   controls.
 - Asteroids includes vector-style ship thrust, wraparound movement,
-  asteroid splitting, waves, lives, scoring, and parameter-scoped records.
+  asteroid splitting, waves, lives, bonus lives, scoring, and
+  parameter-scoped records.
 - Snake includes level progression through key-and-door exits, timed special
   foods, obstacle islands, and a full-board win state.
 - SQLite-backed, parameter-scoped top-three leaderboards for every game.

@@ -84,6 +84,7 @@ export const ASTEROIDS_BOARD_WIDTH = 640;
 export const ASTEROIDS_BOARD_HEIGHT = 480;
 export const ASTEROIDS_STARTING_ASTEROID_COUNT = 6;
 export const ASTEROIDS_STARTING_LIVES = 3;
+export const ASTEROIDS_BONUS_LIFE_SCORE = 10_000;
 export const ASTEROIDS_TICK_DELAY_MS = 16;
 export const ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS = Math.ceil(
   3_000 / ASTEROIDS_TICK_DELAY_MS,
@@ -269,11 +270,13 @@ export function advanceAsteroidsGame(
   const ship = advanceShip(game, controls);
   const { scoreDelta, ...world } = advanceAsteroidsWorld(game, { random });
   const invulnerabilityTicks = Math.max(0, game.respawnInvulnerabilityTicks - 1);
+  const score = game.score + scoreDelta;
   const candidateGame = {
     ...game,
     ...world,
+    lives: game.lives + getBonusLivesAwarded(game.score, score),
     respawnInvulnerabilityTicks: invulnerabilityTicks,
-    score: game.score + scoreDelta,
+    score,
     ship,
   };
 
@@ -402,11 +405,13 @@ function advanceExplodingShipGame(
 
   const { scoreDelta, ...world } = advanceAsteroidsWorld(game, { random });
   const ticksRemaining = shipExplosion.ticksRemaining - 1;
+  const score = game.score + scoreDelta;
   const candidateGame: AsteroidsGameState = {
     ...game,
     ...world,
+    lives: game.lives + getBonusLivesAwarded(game.score, score),
     respawnInvulnerabilityTicks: 0,
-    score: game.score + scoreDelta,
+    score,
     shipExplosion: {
       ...shipExplosion,
       ticksRemaining,
@@ -523,6 +528,17 @@ function createShipExplosion(ship: AsteroidsShip): AsteroidsShipExplosion {
     x: ship.x,
     y: ship.y,
   };
+}
+
+function getBonusLivesAwarded(previousScore: number, nextScore: number) {
+  if (nextScore <= previousScore) {
+    return 0;
+  }
+
+  return (
+    Math.floor(nextScore / ASTEROIDS_BONUS_LIFE_SCORE) -
+    Math.floor(previousScore / ASTEROIDS_BONUS_LIFE_SCORE)
+  );
 }
 
 function createNextWave({
