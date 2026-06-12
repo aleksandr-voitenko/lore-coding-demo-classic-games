@@ -24,8 +24,10 @@ import {
 } from "@/components/game-replay-playback";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { SnakeBoard } from "@/components/snake-board";
+import { SnakeLevelIntermissionScreen } from "@/components/snake-level-intermission-screen";
 import { Button } from "@/components/ui/button";
 import { getGameTickDelay, type GameState } from "@/lib/snake-game-engine";
+import { SNAKE_LEVEL_INTERMISSION_MS } from "@/lib/snake-level-intermission";
 import { createFoodFeedback, type FoodFeedback } from "@/lib/snake-food-feedback";
 import {
   applySnakeReplayEvent,
@@ -79,6 +81,7 @@ export function SnakeReplayPlayer({ onBackToProfile }: SnakeReplayPlayerProps) {
   const [foodFeedbacks, setFoodFeedbacks] = useState<FoodFeedback[]>([]);
   const [game, setGame] = useState<GameState | null>(null);
   const [isFinished, setIsFinished] = useState(false);
+  const [levelIntermissionLevel, setLevelIntermissionLevel] = useState<number | null>(null);
   const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">("loading");
   const [playbackStep, setPlaybackStep] = useState(0);
   const foodFeedbackIdRef = useRef(0);
@@ -122,6 +125,7 @@ export function SnakeReplayPlayer({ onBackToProfile }: SnakeReplayPlayerProps) {
         setFoodFeedbacks([]);
         setGame(initialReplay.game);
         setIsFinished(false);
+        setLevelIntermissionLevel(null);
         setLoadStatus("ready");
       })
       .catch(() => {
@@ -189,6 +193,10 @@ export function SnakeReplayPlayer({ onBackToProfile }: SnakeReplayPlayerProps) {
     setGame(nextGame);
     setPlaybackStep((current) => current + 1);
 
+    if (didChangeLevel) {
+      setLevelIntermissionLevel(nextGame.level);
+    }
+
     if (didChangeLevel || nextFoodFeedbacks.length > 0) {
       setFoodFeedbacks((current) =>
         didChangeLevel ? nextFoodFeedbacks : [...current, ...nextFoodFeedbacks].slice(-6),
@@ -205,7 +213,7 @@ export function SnakeReplayPlayer({ onBackToProfile }: SnakeReplayPlayerProps) {
   }, [isFinished]);
 
   useEffect(() => {
-    if (loadStatus !== "ready" || isFinished) {
+    if (loadStatus !== "ready" || isFinished || levelIntermissionLevel !== null) {
       return;
     }
 
@@ -231,7 +239,19 @@ export function SnakeReplayPlayer({ onBackToProfile }: SnakeReplayPlayerProps) {
     );
 
     return () => window.clearTimeout(timeout);
-  }, [advanceReplayFrame, game, isFinished, loadStatus, playbackStep]);
+  }, [advanceReplayFrame, game, isFinished, levelIntermissionLevel, loadStatus, playbackStep]);
+
+  useEffect(() => {
+    if (levelIntermissionLevel === null) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setLevelIntermissionLevel(null);
+    }, SNAKE_LEVEL_INTERMISSION_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [levelIntermissionLevel]);
 
   if (loadStatus === "loading") {
     return (
@@ -258,13 +278,19 @@ export function SnakeReplayPlayer({ onBackToProfile }: SnakeReplayPlayerProps) {
     speedBoosts: game.speedBoosts,
     status: game.status,
   });
+  const statusLabel =
+    levelIntermissionLevel === null
+      ? isFinished
+        ? "Replay finished"
+        : "Replay playing"
+      : `Level ${levelIntermissionLevel}`;
 
   return (
     <GameShell className="bg-[var(--snake-page)] text-[var(--snake-ink)]">
       <GameBoardColumn className="w-[min(92vw,41.25rem,calc(100svh_-_12rem))]">
         <GameSidebar className="border-[var(--snake-border)] bg-[var(--snake-panel)]">
           <GameHeader
-            status={isFinished ? "Replay finished" : statusLabels.playing}
+            status={statusLabel}
             statusTestId="snake-replay-status"
             title="Snake replay"
           />
@@ -313,9 +339,14 @@ export function SnakeReplayPlayer({ onBackToProfile }: SnakeReplayPlayerProps) {
             foodFeedbacks={foodFeedbacks}
             game={game}
             onFoodFeedbackAnimationEnd={removeFoodFeedback}
-            statusLabel={isFinished ? "Replay finished" : "Replay playing"}
+            statusLabel={statusLabel}
           >
-            {isFinished ? (
+            {levelIntermissionLevel !== null ? (
+              <SnakeLevelIntermissionScreen
+                level={levelIntermissionLevel}
+                testId="snake-replay-level-intermission"
+              />
+            ) : isFinished ? (
               <GameEndScreen
                 className="gap-3 px-3 py-4"
                 testId="snake-replay-finished-screen"

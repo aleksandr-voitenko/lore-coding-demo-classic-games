@@ -49,6 +49,7 @@ import {
 } from "@/components/game-input";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { SnakeBoard, snakeSpriteSources } from "@/components/snake-board";
+import { SnakeLevelIntermissionScreen } from "@/components/snake-level-intermission-screen";
 import { SnakeReplayPlayer } from "@/components/snake-replay-player";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,6 +67,10 @@ import {
   type TimedFoodKind,
 } from "@/lib/snake-game-engine";
 import { createFoodFeedback, type FoodFeedback } from "@/lib/snake-food-feedback";
+import {
+  getSnakeLevelIntermissionLevel,
+  SNAKE_LEVEL_INTERMISSION_MS,
+} from "@/lib/snake-level-intermission";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import {
   createSnakeReplayRandom,
@@ -261,6 +266,7 @@ export function SnakeGame({
 function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = {}) {
   const [game, setGame] = useState<GameState>(() => createInitialGame());
   const [foodFeedbacks, setFoodFeedbacks] = useState<FoodFeedback[]>([]);
+  const [levelIntermissionLevel, setLevelIntermissionLevel] = useState<number | null>(null);
   const foodFeedbackIdRef = useRef(0);
   const gameRef = useRef(game);
   const pendingInitialDirectionRef = useRef<Direction | null>(null);
@@ -284,8 +290,9 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
   ]);
   const pendingLeaderboardScore =
     game.status === "lost" || game.status === "won" ? game.score : null;
+  const isLevelIntermissionVisible = levelIntermissionLevel !== null;
   const { completedSessionId } = useGameSession({
-    active: game.status === "running",
+    active: game.status === "running" && !isLevelIntermissionVisible,
     finalResult:
       game.status === "lost" || game.status === "won" ? game.status : null,
     finalScore: game.score,
@@ -421,6 +428,7 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
     }
 
     pendingInitialDirectionRef.current = initialDirection ?? null;
+    setLevelIntermissionLevel(null);
     resetLeaderboardForm();
     const recording = await beginReplayRecording(async () => {
       const run = await createSnakeReplayRun();
@@ -526,6 +534,7 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
   }, [resumeRecordingClock, updateCommittedGame]);
 
   const canPauseGame = game.status === "running" || game.status === "paused";
+  const canUsePauseAction = canPauseGame && !isLevelIntermissionVisible;
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({
     isGameActive: game.status === "running",
     onPauseGame: pauseGameForHelp,
@@ -545,7 +554,15 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
     previousGameRef.current = game;
 
     if (previousGame.level !== game.level) {
+      const nextIntermissionLevel = getSnakeLevelIntermissionLevel(previousGame, game);
+
       setFoodFeedbacks([]);
+      setLevelIntermissionLevel(nextIntermissionLevel);
+
+      if (nextIntermissionLevel !== null) {
+        pauseRecordingClock();
+      }
+
       return;
     }
 
@@ -557,11 +574,28 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
 
     foodFeedbackIdRef.current += 1;
     setFoodFeedbacks((current) => [...current, feedback].slice(-6));
-  }, [game]);
+  }, [game, pauseRecordingClock]);
+
+  useEffect(() => {
+    if (levelIntermissionLevel === null) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setLevelIntermissionLevel(null);
+      if (gameRef.current.status === "running") {
+        resumeRecordingClock();
+      }
+    }, SNAKE_LEVEL_INTERMISSION_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [levelIntermissionLevel, resumeRecordingClock]);
+
+  const timedFoodGameStatus: GameStatus = isLevelIntermissionVisible ? "paused" : game.status;
 
   useTimedFoodLifecycle({
     expireTimedFoodInGame,
-    gameStatus: game.status,
+    gameStatus: timedFoodGameStatus,
     isIntroduced: isPickupIntroduced("bonusFood", game.pickedUpObjects, game.level),
     kind: "bonusFood",
     spawnTimedFoodInGame,
@@ -569,7 +603,7 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
   });
   useTimedFoodLifecycle({
     expireTimedFoodInGame,
-    gameStatus: game.status,
+    gameStatus: timedFoodGameStatus,
     isIntroduced: isPickupIntroduced("speedFood", game.pickedUpObjects, game.level),
     kind: "speedFood",
     spawnTimedFoodInGame,
@@ -577,7 +611,7 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
   });
   useTimedFoodLifecycle({
     expireTimedFoodInGame,
-    gameStatus: game.status,
+    gameStatus: timedFoodGameStatus,
     isIntroduced: isPickupIntroduced("slowFood", game.pickedUpObjects, game.level),
     kind: "slowFood",
     spawnTimedFoodInGame,
@@ -585,7 +619,7 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
   });
   useTimedFoodLifecycle({
     expireTimedFoodInGame,
-    gameStatus: game.status,
+    gameStatus: timedFoodGameStatus,
     isIntroduced: isPickupIntroduced("shrinkFood", game.pickedUpObjects, game.level),
     kind: "shrinkFood",
     spawnTimedFoodInGame,
@@ -593,14 +627,14 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
   });
 
   useEffect(() => {
-    if (speed === null) {
+    if (speed === null || isLevelIntermissionVisible) {
       return;
     }
 
     const tick = window.setInterval(advanceSnake, speed);
 
     return () => window.clearInterval(tick);
-  }, [advanceSnake, speed]);
+  }, [advanceSnake, isLevelIntermissionVisible, speed]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -628,7 +662,9 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
 
       if (isGamePauseKey(event.key)) {
         event.preventDefault();
-        toggleRunState();
+        if (!isLevelIntermissionVisible) {
+          toggleRunState();
+        }
         return;
       }
 
@@ -646,6 +682,7 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
     return registerGameKeyDown(handleKeyDown);
   }, [
     game.status,
+    isLevelIntermissionVisible,
     isHelpVisible,
     pendingLeaderboardEntry,
     queueDirection,
@@ -657,14 +694,17 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
   const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
   const showStartScreen = game.status === "ready";
   const showGameOverScreen = game.status === "lost" || game.status === "won";
+  const showLevelIntermission = levelIntermissionLevel !== null;
   const showBoardState = game.status !== "running";
+  const statusLabel =
+    levelIntermissionLevel === null ? statusLabels[game.status] : `Level ${levelIntermissionLevel}`;
 
   return (
     <GameShell className="bg-[var(--snake-page)] text-[var(--snake-ink)]">
       <GameBoardColumn className="w-[min(92vw,41.25rem,calc(100svh_-_12rem))]">
         <GameSidebar className="border-[var(--snake-border)] bg-[var(--snake-panel)]">
           <GameHeader
-            status={statusLabels[game.status]}
+            status={statusLabel}
             statusTestId="snake-status"
             title="Snake"
           />
@@ -717,7 +757,7 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
               onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{
-                disabled: isHelpVisible || isReplayRunPending || !canPauseGame,
+                disabled: isHelpVisible || isReplayRunPending || !canUsePauseAction,
                 isResume: game.status === "paused",
                 label: pauseActionLabel,
                 onClick: toggleRunState,
@@ -735,9 +775,11 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
             foodFeedbacks={foodFeedbacks}
             game={game}
             onFoodFeedbackAnimationEnd={removeFoodFeedback}
-            statusLabel={statusLabels[game.status]}
+            statusLabel={statusLabel}
           >
-            {showStartScreen ? (
+            {showLevelIntermission ? (
+              <SnakeLevelIntermissionScreen level={levelIntermissionLevel} />
+            ) : showStartScreen ? (
               <GameStartScreen testId="snake-start-screen">
                 <GameStartScreenHeader
                   preview={
