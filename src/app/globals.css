@@ -211,6 +211,8 @@
   --asteroids-muted: oklch(0.45 0.035 225);
   --asteroids-page: oklch(0.985 0.01 220);
   --asteroids-panel: oklch(1 0 0);
+  --asteroids-saucer: oklch(0.44 0.16 310);
+  --asteroids-saucer-shot: oklch(0.58 0.2 24);
   --asteroids-ship: oklch(0.42 0.15 220);
   --asteroids-star: oklch(0.5 0.05 220 / 42%);
   --asteroids-thrust: oklch(0.55 0.2 42);
@@ -407,6 +409,8 @@
   --asteroids-muted: oklch(0.73 0.035 220);
   --asteroids-page: oklch(0.12 0.024 235);
   --asteroids-panel: oklch(0.18 0.028 235);
+  --asteroids-saucer: oklch(0.78 0.18 315);
+  --asteroids-saucer-shot: oklch(0.72 0.2 28);
   --asteroids-ship: oklch(0.78 0.15 205);
   --asteroids-star: oklch(0.92 0.04 105 / 62%);
   --asteroids-thrust: oklch(0.75 0.18 42);

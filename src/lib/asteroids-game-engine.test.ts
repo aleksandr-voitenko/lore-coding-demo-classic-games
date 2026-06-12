@@ -7,12 +7,14 @@ import {
   ASTEROIDS_BOARD_HEIGHT,
   ASTEROIDS_BOARD_WIDTH,
   ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
+  ASTEROIDS_SAUCER_INITIAL_SPAWN_TICKS,
   ASTEROIDS_SHIP_EXPLOSION_TICKS,
   ASTEROIDS_STARTING_ASTEROID_COUNT,
   ASTEROIDS_STARTING_LIVES,
   createInitialAsteroidsGame,
   fireAsteroidsBullet,
   getAsteroidsAsteroidScore,
+  getAsteroidsSaucerScore,
   getAsteroidsTickDelay,
   pauseAsteroidsGame,
   restartAsteroidsGame,
@@ -20,6 +22,8 @@ import {
   type Asteroid,
   type AsteroidsBullet,
   type AsteroidsGameState,
+  type AsteroidsSaucer,
+  type AsteroidsSaucerShot,
 } from "./asteroids-game-engine";
 
 function createRunningGame(
@@ -51,6 +55,33 @@ function createBullet(overrides: Partial<AsteroidsBullet> = {}): AsteroidsBullet
     id: "bullet-test",
     radius: 2.5,
     ttl: 10,
+    velocity: { x: 0, y: 0 },
+    x: 120,
+    y: 120,
+    ...overrides,
+  };
+}
+
+function createSaucer(overrides: Partial<AsteroidsSaucer> = {}): AsteroidsSaucer {
+  return {
+    id: "saucer-test",
+    kind: "large",
+    radius: 18,
+    shotCooldownTicks: 40,
+    velocity: { x: 1.4, y: 0 },
+    x: 180,
+    y: 160,
+    ...overrides,
+  };
+}
+
+function createSaucerShot(
+  overrides: Partial<AsteroidsSaucerShot> = {},
+): AsteroidsSaucerShot {
+  return {
+    id: "saucer-shot-test",
+    radius: 2.5,
+    ttl: 40,
     velocity: { x: 0, y: 0 },
     x: 120,
     y: 120,
@@ -98,6 +129,9 @@ describe("asteroids game engine", () => {
     expect(game.asteroids[0]?.velocity.x).toBeCloseTo(0.872);
     expect(game.asteroids[0]?.velocity.y).toBeCloseTo(-0.12);
     expect(game.bullets).toEqual([]);
+    expect(game.saucer).toBeNull();
+    expect(game.saucerBullets).toEqual([]);
+    expect(game.saucerSpawnCooldownTicks).toBe(ASTEROIDS_SAUCER_INITIAL_SPAWN_TICKS);
     expect(getAsteroidsTickDelay()).toBe(16);
   });
 
@@ -333,6 +367,170 @@ describe("asteroids game engine", () => {
     expect(cleared.wave).toBe(8);
     expect(cleared.asteroids).toHaveLength(12);
     expect(cleared.asteroids.every((asteroid) => asteroid.size === "large")).toBe(true);
+  });
+
+  it("spawns, moves, and retires UFO saucers from alternating edges", () => {
+    const safeAsteroid = createAsteroid({ radius: 14, size: "small", x: 48, y: 48 });
+    const spawned = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [safeAsteroid],
+        saucerSpawnCooldownTicks: 0,
+        wave: 2,
+      }),
+    );
+    const spawnedSaucer = spawned.saucer;
+
+    if (spawnedSaucer === null) {
+      throw new Error("Expected saucer to spawn.");
+    }
+
+    const moved = advanceAsteroidsGame({
+      ...spawned,
+      asteroids: [safeAsteroid],
+      respawnInvulnerabilityTicks: 10,
+    });
+    const exited = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [safeAsteroid],
+        nextSaucerId: 1,
+        saucer: createSaucer({
+          x: ASTEROIDS_BOARD_WIDTH + 20,
+        }),
+        saucerSpawnCooldownTicks: 0,
+      }),
+    );
+    const respawnedFromRight = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [safeAsteroid],
+        nextSaucerId: exited.nextSaucerId,
+        saucerSpawnCooldownTicks: 0,
+      }),
+    );
+
+    expect(spawnedSaucer).toMatchObject({
+      id: "saucer-0",
+      kind: "large",
+      velocity: { x: expect.any(Number), y: 0 },
+      x: -spawnedSaucer.radius,
+    });
+    expect(spawned.nextSaucerId).toBe(1);
+    expect(spawnedSaucer.velocity.x).toBeGreaterThan(0);
+    expect(moved.saucer?.x).toBeCloseTo(spawnedSaucer.x + spawnedSaucer.velocity.x);
+    expect(exited.saucer).toBeNull();
+    expect(exited.saucerSpawnCooldownTicks).toBeGreaterThan(0);
+    expect(respawnedFromRight.saucer).toMatchObject({
+      id: "saucer-1",
+      x: ASTEROIDS_BOARD_WIDTH + spawnedSaucer.radius,
+    });
+    expect(respawnedFromRight.saucer?.velocity.x).toBeLessThan(0);
+  });
+
+  it("lets player bullets destroy saucers for size-based points", () => {
+    const safeAsteroid = createAsteroid({ radius: 14, size: "small", x: 48, y: 48 });
+    const targetSaucer = createSaucer({
+      kind: "small",
+      radius: 12,
+      x: 220,
+      y: 180,
+    });
+    const advanced = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [safeAsteroid],
+        bullets: [createBullet({ x: targetSaucer.x, y: targetSaucer.y })],
+        saucer: targetSaucer,
+      }),
+    );
+
+    expect(advanced.score).toBe(getAsteroidsSaucerScore("small"));
+    expect(advanced.bullets).toEqual([]);
+    expect(advanced.saucer).toBeNull();
+    expect(advanced.saucerSpawnCooldownTicks).toBeGreaterThan(0);
+    expect(advanced.asteroids).toEqual([safeAsteroid]);
+  });
+
+  it("fires saucer shots toward the ship and damages unshielded ships", () => {
+    const safeAsteroid = createAsteroid({ radius: 14, size: "small", x: 48, y: 48 });
+    const ship = {
+      ...createInitialAsteroidsGame().ship,
+      x: 240,
+      y: 160,
+    };
+    const firingSaucer = createSaucer({
+      shotCooldownTicks: 0,
+      x: 160,
+      y: 160,
+    });
+    const fired = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [safeAsteroid],
+        saucer: firingSaucer,
+        ship,
+      }),
+    );
+    const saucerShot = fired.saucerBullets[0];
+
+    if (saucerShot === undefined) {
+      throw new Error("Expected saucer shot to fire.");
+    }
+
+    const damaged = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [safeAsteroid],
+        lives: 2,
+        saucerBullets: [createSaucerShot({ x: ship.x, y: ship.y })],
+        ship,
+      }),
+    );
+
+    expect(saucerShot.id).toBe("saucer-shot-0");
+    expect(saucerShot.velocity.x).toBeGreaterThan(0);
+    expect(Math.abs(saucerShot.velocity.y)).toBeLessThan(0.001);
+    expect(fired.nextSaucerBulletId).toBe(1);
+    expect(fired.saucer?.shotCooldownTicks).toBeGreaterThan(0);
+    expect(damaged.lives).toBe(1);
+    expect(damaged.saucerBullets).toEqual([]);
+    expect(damaged.shipExplosion).toMatchObject({
+      x: ship.x,
+      y: ship.y,
+    });
+  });
+
+  it("lets respawn shields absorb saucer shots without losing a life", () => {
+    const ship = createInitialAsteroidsGame().ship;
+    const shielded = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [createAsteroid({ radius: 14, size: "small", x: 48, y: 48 })],
+        respawnInvulnerabilityTicks: 2,
+        saucerBullets: [createSaucerShot({ x: ship.x, y: ship.y })],
+        ship,
+      }),
+    );
+
+    expect(shielded.lives).toBe(ASTEROIDS_STARTING_LIVES);
+    expect(shielded.shipExplosion).toBeNull();
+    expect(shielded.saucerBullets).toEqual([]);
+  });
+
+  it("clears active saucers and saucer shots when the final ship explosion ends", () => {
+    const explodingGame = createRunningGame({
+      asteroids: [],
+      lives: 0,
+      saucer: createSaucer(),
+      saucerBullets: [createSaucerShot()],
+      shipExplosion: {
+        durationTicks: ASTEROIDS_SHIP_EXPLOSION_TICKS,
+        radius: 10,
+        ticksRemaining: 1,
+        x: 320,
+        y: 240,
+      },
+    });
+
+    const lostGame = advanceAsteroidsGame(explodingGame);
+
+    expect(lostGame.status).toBe("lost");
+    expect(lostGame.saucer).toBeNull();
+    expect(lostGame.saucerBullets).toEqual([]);
   });
 
   it("animates ship collisions before respawning a shielded ship or ending the run", () => {

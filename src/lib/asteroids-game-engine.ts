@@ -15,6 +15,8 @@ export type AsteroidsRandom = () => number;
 
 export type AsteroidSize = "large" | "medium" | "small";
 
+export type AsteroidsSaucerKind = "large" | "small";
+
 export type AsteroidsShip = {
   angle: number;
   isThrusting: boolean;
@@ -41,11 +43,23 @@ export type AsteroidsBullet = {
   y: number;
 };
 
+export type AsteroidsSaucerShot = AsteroidsBullet;
+
 export type Asteroid = {
   id: string;
   radius: number;
   shape: number[];
   size: AsteroidSize;
+  velocity: AsteroidsPoint;
+  x: number;
+  y: number;
+};
+
+export type AsteroidsSaucer = {
+  id: string;
+  kind: AsteroidsSaucerKind;
+  radius: number;
+  shotCooldownTicks: number;
   velocity: AsteroidsPoint;
   x: number;
   y: number;
@@ -59,7 +73,12 @@ export type AsteroidsGameState = {
   lives: number;
   nextAsteroidId: number;
   nextBulletId: number;
+  nextSaucerBulletId: number;
+  nextSaucerId: number;
   respawnInvulnerabilityTicks: number;
+  saucer: AsteroidsSaucer | null;
+  saucerBullets: AsteroidsSaucerShot[];
+  saucerSpawnCooldownTicks: number;
   score: number;
   ship: AsteroidsShip;
   shipExplosion: AsteroidsShipExplosion | null;
@@ -86,6 +105,9 @@ export const ASTEROIDS_STARTING_ASTEROID_COUNT = 6;
 export const ASTEROIDS_STARTING_LIVES = 3;
 export const ASTEROIDS_BONUS_LIFE_SCORE = 10_000;
 export const ASTEROIDS_TICK_DELAY_MS = 16;
+export const ASTEROIDS_SAUCER_INITIAL_SPAWN_TICKS = Math.ceil(
+  12_000 / ASTEROIDS_TICK_DELAY_MS,
+);
 export const ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS = Math.ceil(
   3_000 / ASTEROIDS_TICK_DELAY_MS,
 );
@@ -102,6 +124,10 @@ const ASTEROID_SCORE: Record<AsteroidSize, number> = {
   medium: 50,
   small: 100,
 };
+const ASTEROIDS_SAUCER_SCORE: Record<AsteroidsSaucerKind, number> = {
+  large: 200,
+  small: 1_000,
+};
 const ASTEROID_SPLIT_CHILDREN = 2;
 const ASTEROID_WAVE_CAP = 12;
 const BULLET_RADIUS = 2.5;
@@ -109,6 +135,29 @@ const BULLET_SPEED = 8.6;
 const BULLET_TTL_TICKS = 58;
 const MAX_ACTIVE_BULLETS = 4;
 const ASTEROIDS_MOTION_SCALE = 0.8;
+const SAUCER_RESPAWN_COOLDOWN_TICKS = Math.ceil(16_000 / ASTEROIDS_TICK_DELAY_MS);
+const SAUCER_RADIUS: Record<AsteroidsSaucerKind, number> = {
+  large: 18,
+  small: 12,
+};
+const SAUCER_SHOT_COOLDOWN_TICKS: Record<AsteroidsSaucerKind, number> = {
+  large: Math.ceil(1_300 / ASTEROIDS_TICK_DELAY_MS),
+  small: Math.ceil(900 / ASTEROIDS_TICK_DELAY_MS),
+};
+const SAUCER_SHOT_RADIUS = 2.5;
+const SAUCER_SHOT_SPEED: Record<AsteroidsSaucerKind, number> = {
+  large: 3.8,
+  small: 4.4,
+};
+const SAUCER_SHOT_SPREAD_RADIANS: Record<AsteroidsSaucerKind, number> = {
+  large: Math.PI / 4,
+  small: Math.PI / 10,
+};
+const SAUCER_SHOT_TTL_TICKS = 140;
+const SAUCER_SPEED: Record<AsteroidsSaucerKind, number> = {
+  large: 1.4,
+  small: 1.8,
+};
 const SHIP_FRICTION = 0.992;
 const SHIP_MAX_SPEED = 6.2 * ASTEROIDS_MOTION_SCALE;
 const SHIP_RADIUS = 14;
@@ -150,7 +199,12 @@ export function createInitialAsteroidsGame({
     lives: ASTEROIDS_STARTING_LIVES,
     nextAsteroidId: spawned.nextAsteroidId,
     nextBulletId: 0,
+    nextSaucerBulletId: 0,
+    nextSaucerId: 0,
     respawnInvulnerabilityTicks: 0,
+    saucer: null,
+    saucerBullets: [],
+    saucerSpawnCooldownTicks: ASTEROIDS_SAUCER_INITIAL_SPAWN_TICKS,
     score: 0,
     ship: createCenteredShip(normalizedBoardWidth, normalizedBoardHeight),
     shipExplosion: null,
@@ -280,7 +334,7 @@ export function advanceAsteroidsGame(
     ship,
   };
 
-  return resolveShipAsteroidCollision(candidateGame);
+  return resolveShipHazardCollision(candidateGame);
 }
 
 export function getAsteroidsTickDelay() {
@@ -289,6 +343,10 @@ export function getAsteroidsTickDelay() {
 
 export function getAsteroidsAsteroidScore(size: AsteroidSize) {
   return ASTEROID_SCORE[size];
+}
+
+export function getAsteroidsSaucerScore(kind: AsteroidsSaucerKind) {
+  return ASTEROIDS_SAUCER_SCORE[kind];
 }
 
 function advanceShip(
@@ -341,6 +399,19 @@ function advanceBullets(
     .filter((bullet) => bullet.ttl > 0);
 }
 
+function advanceSaucerBullets(
+  game: Pick<AsteroidsGameState, "boardHeight" | "boardWidth" | "saucerBullets">,
+) {
+  return game.saucerBullets
+    .map((bullet) => ({
+      ...bullet,
+      ttl: bullet.ttl - 1,
+      x: wrapCoordinate(bullet.x + bullet.velocity.x, game.boardWidth),
+      y: wrapCoordinate(bullet.y + bullet.velocity.y, game.boardHeight),
+    }))
+    .filter((bullet) => bullet.ttl > 0);
+}
+
 function advanceAsteroidsWorld(
   game: Pick<
     AsteroidsGameState,
@@ -349,23 +420,43 @@ function advanceAsteroidsWorld(
     | "boardWidth"
     | "bullets"
     | "nextAsteroidId"
+    | "nextSaucerBulletId"
+    | "nextSaucerId"
+    | "saucer"
+    | "saucerBullets"
+    | "saucerSpawnCooldownTicks"
     | "shotCooldownTicks"
+    | "ship"
+    | "shipExplosion"
     | "startingAsteroidCount"
     | "wave"
   >,
   { random }: AdvanceAsteroidsGameOptions = {},
 ) {
   const bullets = advanceBullets(game);
+  const saucerBullets = advanceSaucerBullets(game);
   const asteroids = game.asteroids.map((asteroid) =>
     moveWrappedEntity(asteroid, game.boardWidth, game.boardHeight),
   );
-  const collisionResult = resolveBulletAsteroidCollisions({
+  const movedSaucer = advanceSaucerMotionAndSpawn(game, random);
+  const collisionResult = resolvePlayerBulletCollisions({
     asteroids,
     boardHeight: game.boardHeight,
     boardWidth: game.boardWidth,
     bullets,
     nextAsteroidId: game.nextAsteroidId,
     random,
+    saucer: movedSaucer.saucer,
+  });
+  const saucerFireResult = fireSaucerShotIfReady({
+    boardHeight: game.boardHeight,
+    boardWidth: game.boardWidth,
+    nextSaucerBulletId: game.nextSaucerBulletId,
+    random,
+    saucer: collisionResult.saucer,
+    saucerBullets,
+    ship: game.ship,
+    shipExplosion: game.shipExplosion,
   });
   const waveResult =
     collisionResult.asteroids.length === 0
@@ -387,6 +478,12 @@ function advanceAsteroidsWorld(
     asteroids: waveResult.asteroids,
     bullets: collisionResult.bullets,
     nextAsteroidId: waveResult.nextAsteroidId,
+    nextSaucerBulletId: saucerFireResult.nextSaucerBulletId,
+    nextSaucerId: movedSaucer.nextSaucerId,
+    saucer: saucerFireResult.saucer,
+    saucerBullets: saucerFireResult.saucerBullets,
+    saucerSpawnCooldownTicks:
+      collisionResult.saucerSpawnCooldownTicks ?? movedSaucer.saucerSpawnCooldownTicks,
     scoreDelta: collisionResult.score,
     shotCooldownTicks: Math.max(0, game.shotCooldownTicks - 1),
     wave: waveResult.wave,
@@ -426,6 +523,8 @@ function advanceExplodingShipGame(
     return {
       ...candidateGame,
       bullets: [],
+      saucer: null,
+      saucerBullets: [],
       shipExplosion: null,
       status: "lost" as const,
     };
@@ -439,13 +538,14 @@ function advanceExplodingShipGame(
   };
 }
 
-function resolveBulletAsteroidCollisions({
+function resolvePlayerBulletCollisions({
   asteroids,
   boardHeight,
   boardWidth,
   bullets,
   nextAsteroidId,
   random,
+  saucer,
 }: {
   asteroids: Asteroid[];
   boardHeight: number;
@@ -453,13 +553,26 @@ function resolveBulletAsteroidCollisions({
   bullets: AsteroidsBullet[];
   nextAsteroidId: number;
   random?: AsteroidsRandom;
+  saucer: AsteroidsSaucer | null;
 }) {
   let remainingAsteroids = asteroids;
   let nextId = nextAsteroidId;
+  let remainingSaucer = saucer;
   let score = 0;
+  let saucerSpawnCooldownTicks: number | null = null;
   const remainingBullets: AsteroidsBullet[] = [];
 
   for (const bullet of bullets) {
+    if (
+      remainingSaucer !== null &&
+      entitiesCollide(bullet, remainingSaucer)
+    ) {
+      score += ASTEROIDS_SAUCER_SCORE[remainingSaucer.kind];
+      remainingSaucer = null;
+      saucerSpawnCooldownTicks = SAUCER_RESPAWN_COOLDOWN_TICKS;
+      continue;
+    }
+
     const hitAsteroid = remainingAsteroids.find((asteroid) =>
       entitiesCollideWrapped(bullet, asteroid, boardWidth, boardHeight),
     );
@@ -482,38 +595,46 @@ function resolveBulletAsteroidCollisions({
     asteroids: remainingAsteroids,
     bullets: remainingBullets,
     nextAsteroidId: nextId,
+    saucer: remainingSaucer,
+    saucerSpawnCooldownTicks,
     score,
   };
 }
 
-function resolveShipAsteroidCollision(game: AsteroidsGameState): AsteroidsGameState {
+function resolveShipHazardCollision(game: AsteroidsGameState): AsteroidsGameState {
+  const hittingSaucerShots = game.saucerBullets.filter((shot) =>
+    entitiesCollideWrapped(shot, game.ship, game.boardWidth, game.boardHeight),
+  );
+
   if (game.respawnInvulnerabilityTicks > 0) {
+    if (hittingSaucerShots.length > 0) {
+      return {
+        ...game,
+        saucerBullets: game.saucerBullets.filter(
+          (shot) => !hittingSaucerShots.includes(shot),
+        ),
+      };
+    }
+
     return game;
   }
 
   const hitAsteroid = game.asteroids.find((asteroid) =>
     entitiesCollideWrapped(game.ship, asteroid, game.boardWidth, game.boardHeight),
   );
+  const hitSaucer =
+    game.saucer !== null && entitiesCollide(game.ship, game.saucer);
 
-  if (hitAsteroid === undefined) {
+  if (hitAsteroid === undefined && !hitSaucer && hittingSaucerShots.length === 0) {
     return game;
   }
 
   const lives = Math.max(0, game.lives - 1);
 
-  if (lives === 0) {
-    return {
-      ...game,
-      bullets: [],
-      lives,
-      respawnInvulnerabilityTicks: 0,
-      shipExplosion: createShipExplosion(game.ship),
-    };
-  }
-
   return {
     ...game,
     bullets: [],
+    saucerBullets: [],
     lives,
     respawnInvulnerabilityTicks: 0,
     shipExplosion: createShipExplosion(game.ship),
@@ -538,6 +659,199 @@ function getBonusLivesAwarded(previousScore: number, nextScore: number) {
   return (
     Math.floor(nextScore / ASTEROIDS_BONUS_LIFE_SCORE) -
     Math.floor(previousScore / ASTEROIDS_BONUS_LIFE_SCORE)
+  );
+}
+
+function advanceSaucerMotionAndSpawn(
+  game: Pick<
+    AsteroidsGameState,
+    | "boardHeight"
+    | "boardWidth"
+    | "nextSaucerId"
+    | "saucer"
+    | "saucerSpawnCooldownTicks"
+    | "wave"
+  >,
+  random?: AsteroidsRandom,
+) {
+  if (game.saucer !== null) {
+    const saucer = {
+      ...game.saucer,
+      shotCooldownTicks: Math.max(0, game.saucer.shotCooldownTicks - 1),
+      x: game.saucer.x + game.saucer.velocity.x,
+      y: game.saucer.y + game.saucer.velocity.y,
+    };
+
+    if (hasSaucerExited(saucer, game.boardWidth)) {
+      return {
+        nextSaucerId: game.nextSaucerId,
+        saucer: null,
+        saucerSpawnCooldownTicks: SAUCER_RESPAWN_COOLDOWN_TICKS,
+      };
+    }
+
+    return {
+      nextSaucerId: game.nextSaucerId,
+      saucer,
+      saucerSpawnCooldownTicks: game.saucerSpawnCooldownTicks,
+    };
+  }
+
+  if (game.saucerSpawnCooldownTicks > 0) {
+    return {
+      nextSaucerId: game.nextSaucerId,
+      saucer: null,
+      saucerSpawnCooldownTicks: game.saucerSpawnCooldownTicks - 1,
+    };
+  }
+
+  return {
+    nextSaucerId: game.nextSaucerId + 1,
+    saucer: createSaucer({
+      boardHeight: game.boardHeight,
+      boardWidth: game.boardWidth,
+      idNumber: game.nextSaucerId,
+      random,
+      wave: game.wave,
+    }),
+    saucerSpawnCooldownTicks: 0,
+  };
+}
+
+function fireSaucerShotIfReady({
+  boardHeight,
+  boardWidth,
+  nextSaucerBulletId,
+  random,
+  saucer,
+  saucerBullets,
+  ship,
+  shipExplosion,
+}: {
+  boardHeight: number;
+  boardWidth: number;
+  nextSaucerBulletId: number;
+  random?: AsteroidsRandom;
+  saucer: AsteroidsSaucer | null;
+  saucerBullets: AsteroidsSaucerShot[];
+  ship: AsteroidsShip;
+  shipExplosion: AsteroidsShipExplosion | null;
+}) {
+  if (saucer === null || saucer.shotCooldownTicks > 0 || shipExplosion !== null) {
+    return {
+      nextSaucerBulletId,
+      saucer,
+      saucerBullets,
+    };
+  }
+
+  const shot: AsteroidsSaucerShot = {
+    id: `saucer-shot-${nextSaucerBulletId}`,
+    radius: SAUCER_SHOT_RADIUS,
+    ttl: SAUCER_SHOT_TTL_TICKS,
+    velocity: getSaucerShotVelocity(saucer, ship, boardWidth, boardHeight, random),
+    x: wrapCoordinate(saucer.x, boardWidth),
+    y: wrapCoordinate(saucer.y, boardHeight),
+  };
+
+  return {
+    nextSaucerBulletId: nextSaucerBulletId + 1,
+    saucer: {
+      ...saucer,
+      shotCooldownTicks: SAUCER_SHOT_COOLDOWN_TICKS[saucer.kind],
+    },
+    saucerBullets: [...saucerBullets, shot],
+  };
+}
+
+function createSaucer({
+  boardHeight,
+  boardWidth,
+  idNumber,
+  random,
+  wave,
+}: {
+  boardHeight: number;
+  boardWidth: number;
+  idNumber: number;
+  random?: AsteroidsRandom;
+  wave: number;
+}): AsteroidsSaucer {
+  const kind = getSaucerKind(wave, idNumber, random);
+  const radius = SAUCER_RADIUS[kind];
+  const direction = getSaucerDirection(idNumber, random);
+  const y =
+    random === undefined
+      ? boardHeight * (0.24 + (((idNumber * 37 + wave * 13) % 46) / 100))
+      : boardHeight * getRandomRange(random, 0.2, 0.74);
+
+  return {
+    id: `saucer-${idNumber}`,
+    kind,
+    radius,
+    shotCooldownTicks: SAUCER_SHOT_COOLDOWN_TICKS[kind],
+    velocity: {
+      x: direction * SAUCER_SPEED[kind],
+      y: 0,
+    },
+    x: direction === 1 ? -radius : boardWidth + radius,
+    y: Math.min(boardHeight - radius, Math.max(radius, y)),
+  };
+}
+
+function getSaucerKind(
+  wave: number,
+  idNumber: number,
+  random?: AsteroidsRandom,
+): AsteroidsSaucerKind {
+  if (wave < 3) {
+    return "large";
+  }
+
+  if (random === undefined) {
+    return idNumber % 3 === 2 ? "small" : "large";
+  }
+
+  return random() < Math.min(0.65, 0.22 + (wave - 3) * 0.08) ? "small" : "large";
+}
+
+function getSaucerDirection(idNumber: number, random?: AsteroidsRandom) {
+  if (random === undefined) {
+    return idNumber % 2 === 0 ? 1 : -1;
+  }
+
+  return random() < 0.5 ? 1 : -1;
+}
+
+function getSaucerShotVelocity(
+  saucer: AsteroidsSaucer,
+  ship: AsteroidsShip,
+  boardWidth: number,
+  boardHeight: number,
+  random?: AsteroidsRandom,
+) {
+  const aim = {
+    x: getWrappedDelta(saucer.x, ship.x, boardWidth),
+    y: getWrappedDelta(saucer.y, ship.y, boardHeight),
+  };
+  const baseAngle = Math.atan2(aim.y, aim.x);
+  const spread =
+    random === undefined
+      ? 0
+      : (random() * 2 - 1) * SAUCER_SHOT_SPREAD_RADIANS[saucer.kind];
+  const angle = baseAngle + spread;
+  const speed = SAUCER_SHOT_SPEED[saucer.kind];
+
+  return {
+    x: Math.cos(angle) * speed,
+    y: Math.sin(angle) * speed,
+  };
+}
+
+function hasSaucerExited(saucer: AsteroidsSaucer, boardWidth: number) {
+  return (
+    (saucer.velocity.x > 0 && saucer.x - saucer.radius > boardWidth) ||
+    (saucer.velocity.x < 0 && saucer.x + saucer.radius < 0)
   );
 }
 
@@ -815,10 +1129,31 @@ function entitiesCollideWrapped(
   return dx * dx + dy * dy <= radius * radius;
 }
 
+function entitiesCollide(
+  first: { radius: number; x: number; y: number },
+  second: { radius: number; x: number; y: number },
+) {
+  const dx = first.x - second.x;
+  const dy = first.y - second.y;
+  const radius = first.radius + second.radius;
+
+  return dx * dx + dy * dy <= radius * radius;
+}
+
 function getWrappedDistance(first: number, second: number, limit: number) {
   const directDistance = Math.abs(first - second);
 
   return Math.min(directDistance, limit - directDistance);
+}
+
+function getWrappedDelta(first: number, second: number, limit: number) {
+  const directDelta = second - first;
+
+  if (Math.abs(directDelta) <= limit / 2) {
+    return directDelta;
+  }
+
+  return directDelta - Math.sign(directDelta) * limit;
 }
 
 function getAsteroidChildSize(size: AsteroidSize): AsteroidSize | null {

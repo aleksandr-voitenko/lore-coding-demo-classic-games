@@ -63,6 +63,7 @@ import {
   createInitialAsteroidsGame,
   fireAsteroidsBullet,
   getAsteroidsTickDelay,
+  getAsteroidsSaucerScore,
   pauseAsteroidsGame,
   startAsteroidsGame,
   type AsteroidsGameState,
@@ -137,6 +138,7 @@ const ASTEROIDS_HELP_SECTIONS: GameHelpSection[] = [
     items: [
       "Break large asteroids into medium rocks, then small rocks, then clear them.",
       "Wrap around the edges of the field to stay alive and line up shots.",
+      `Shoot large saucers for ${getAsteroidsSaucerScore("large")} points and small saucers for ${getAsteroidsSaucerScore("small").toLocaleString("en-US")} points, but dodge their fire.`,
       `Earn a bonus life every ${ASTEROIDS_BONUS_LIFE_SCORE.toLocaleString("en-US")} points.`,
       "Clearing a wave spawns a denser field; the run ends when all lives are lost.",
     ],

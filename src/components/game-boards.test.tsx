@@ -922,6 +922,25 @@ describe("game board renderers", () => {
               y: 220,
             },
           ],
+          saucer: {
+            id: "saucer-test",
+            kind: "small",
+            radius: 12,
+            shotCooldownTicks: 20,
+            velocity: { x: -1.8, y: 0 },
+            x: 260,
+            y: 120,
+          },
+          saucerBullets: [
+            {
+              id: "saucer-shot-test",
+              radius: 2.5,
+              ttl: 20,
+              velocity: { x: 4.4, y: 0 },
+              x: 280,
+              y: 120,
+            },
+          ],
           score: 120,
           ship: {
             ...game.ship,
@@ -936,9 +955,13 @@ describe("game board renderers", () => {
 
     expectMarkup(markup, [
       'data-testid="asteroids-board"',
-      "Asteroids board. Field 640 by 480. Score 120. Lives 3. Wave 2. 6 asteroids remaining. Running.",
+      "Asteroids board. Field 640 by 480. Score 120. Lives 3. Wave 2. 6 asteroids remaining. Running. Small saucer active.",
       'data-testid="asteroids-asteroid"',
       'data-testid="asteroids-bullet"',
+      'data-testid="asteroids-saucer"',
+      'data-testid="asteroids-saucer-shot"',
+      'data-saucer-kind="small"',
+      'data-saucer-points="1000"',
       'data-testid="asteroids-ship"',
       "<polygon",
     ]);

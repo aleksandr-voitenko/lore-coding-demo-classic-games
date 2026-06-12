@@ -6,6 +6,8 @@ import {
   ASTEROIDS_TICK_DELAY_MS,
   type Asteroid,
   type AsteroidsGameState,
+  type AsteroidsSaucer,
+  getAsteroidsSaucerScore,
   type AsteroidsShip,
   type AsteroidsShipExplosion,
 } from "@/lib/asteroids-game-engine";
@@ -47,7 +49,7 @@ export function AsteroidsBoard({ children, game, statusLabel }: AsteroidsBoardPr
       style={{ aspectRatio: `${game.boardWidth} / ${game.boardHeight}` }}
     >
       <div
-        aria-label={`Asteroids board. Field ${game.boardWidth} by ${game.boardHeight}. Score ${game.score}. Lives ${game.lives}. Wave ${game.wave}. ${game.asteroids.length} asteroids remaining. ${statusLabel}.${getShipStateLabel(game)}`}
+        aria-label={`Asteroids board. Field ${game.boardWidth} by ${game.boardHeight}. Score ${game.score}. Lives ${game.lives}. Wave ${game.wave}. ${game.asteroids.length} asteroids remaining. ${statusLabel}.${getShipStateLabel(game)}${getSaucerStateLabel(game)}`}
         className="relative size-full overflow-hidden rounded-[0.375rem] bg-[var(--asteroids-board)] text-[var(--asteroids-board-text)]"
         data-testid="asteroids-board"
         role="img"
@@ -129,6 +131,27 @@ export function AsteroidsBoard({ children, game, statusLabel }: AsteroidsBoardPr
             )),
           )}
 
+          {game.saucerBullets.flatMap((bullet) =>
+            getWrappedRenderPositions({
+              boardHeight: game.boardHeight,
+              boardWidth: game.boardWidth,
+              radius: bullet.radius,
+              x: bullet.x,
+              y: bullet.y,
+            }).map((position) => (
+              <circle
+                className="fill-[var(--asteroids-saucer-shot)] drop-shadow-[0_0_8px_color-mix(in_oklch,var(--asteroids-saucer-shot)_72%,transparent)]"
+                data-testid={position.x === bullet.x && position.y === bullet.y ? "asteroids-saucer-shot" : undefined}
+                key={`${bullet.id}:${position.x}:${position.y}`}
+                r={bullet.radius}
+                cx={position.x}
+                cy={position.y}
+              />
+            )),
+          )}
+
+          {game.saucer === null ? null : <Saucer saucer={game.saucer} />}
+
           {game.shipExplosion === null
             ? null
             : getWrappedRenderPositions({
@@ -198,6 +221,55 @@ export function AsteroidsBoard({ children, game, statusLabel }: AsteroidsBoardPr
         {children}
       </div>
     </div>
+  );
+}
+
+function Saucer({ saucer }: { saucer: AsteroidsSaucer }) {
+  const bodyRadiusX = saucer.radius * 1.72;
+  const bodyRadiusY = saucer.radius * 0.46;
+  const domeRadiusX = saucer.radius * 0.82;
+  const domeHeight = saucer.radius * 0.72;
+  const rimY = saucer.y + bodyRadiusY * 0.18;
+
+  return (
+    <g
+      className="stroke-[var(--asteroids-saucer)] drop-shadow-[0_0_13px_color-mix(in_oklch,var(--asteroids-saucer)_58%,transparent)]"
+      data-saucer-kind={saucer.kind}
+      data-saucer-points={getAsteroidsSaucerScore(saucer.kind)}
+      data-testid="asteroids-saucer"
+      filter="url(#asteroids-glow)"
+    >
+      <path
+        className="fill-[color-mix(in_oklch,var(--asteroids-saucer)_16%,transparent)]"
+        d={[
+          `M ${saucer.x - domeRadiusX} ${saucer.y - bodyRadiusY * 0.28}`,
+          `Q ${saucer.x} ${saucer.y - domeHeight}`,
+          `${saucer.x + domeRadiusX} ${saucer.y - bodyRadiusY * 0.28}`,
+        ].join(" ")}
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2.2"
+      />
+      <ellipse
+        className="fill-[color-mix(in_oklch,var(--asteroids-saucer)_10%,transparent)]"
+        cx={saucer.x}
+        cy={saucer.y}
+        rx={bodyRadiusX}
+        ry={bodyRadiusY}
+        strokeLinejoin="round"
+        strokeWidth="2.4"
+      />
+      <line
+        className="stroke-[color-mix(in_oklch,var(--asteroids-saucer)_78%,var(--asteroids-board-text))]"
+        strokeLinecap="round"
+        strokeWidth="1.7"
+        x1={saucer.x - bodyRadiusX * 0.62}
+        x2={saucer.x + bodyRadiusX * 0.62}
+        y1={rimY}
+        y2={rimY}
+      />
+    </g>
   );
 }
 
@@ -308,6 +380,14 @@ function getShipStateLabel(game: AsteroidsGameState) {
   }
 
   return "";
+}
+
+function getSaucerStateLabel(game: AsteroidsGameState) {
+  if (game.saucer === null) {
+    return "";
+  }
+
+  return ` ${game.saucer.kind === "small" ? "Small" : "Large"} saucer active.`;
 }
 
 function getShipShieldRadius(ship: AsteroidsShip) {
