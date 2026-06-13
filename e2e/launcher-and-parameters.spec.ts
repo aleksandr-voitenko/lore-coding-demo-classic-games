@@ -336,10 +336,13 @@ test("theme switching persists from launcher controls into profile chrome", asyn
   await expectChromeUsesAppTheme(page, "game-menu", "dark");
 
   await openProfileMenu(page);
-  await expect(page.getByTestId("profile-menu-theme-toggle")).toHaveText("Light mode");
   await expectChromeUsesAppTheme(page, "profile-menu", "dark", "--chrome-panel");
-  await page.getByTestId("profile-menu-theme-toggle").click();
+  await expect(page.getByTestId("profile-menu-theme-toggle")).toHaveCount(0);
+  await expect(page.getByTestId("profile-menu")).not.toContainText(/Dark mode|Light mode/);
+  await page.keyboard.press("Escape");
   await expect(page.getByTestId("profile-menu")).toHaveCount(0);
+
+  await page.getByTestId("launcher-theme-toggle").click();
   await expectChromeUsesAppTheme(page, "game-menu", "light");
 
   await page.reload();
@@ -536,6 +539,8 @@ test("launcher renders signed-in account controls as one circular profile menu",
     property: "opacity, transform",
   });
   await expect(page.getByTestId("profile-link")).toHaveText("Profile");
+  await expect(page.getByTestId("profile-menu-theme-toggle")).toHaveCount(0);
+  await expect(page.getByTestId("profile-menu")).not.toContainText(/Dark mode|Light mode/);
   await expect(page.getByTestId("sign-out-button")).toHaveText("Log out");
 
   await page.mouse.move(16, 16);

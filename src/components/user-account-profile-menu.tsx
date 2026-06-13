@@ -1,12 +1,10 @@
 "use client";
 
 import { Menu } from "@base-ui/react/menu";
-import { LogOutIcon, MoonIcon, SunIcon, UserIcon } from "lucide-react";
+import { LogOutIcon, UserIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
-import { useAppTheme } from "@/hooks/use-app-theme";
-import { getOppositeAppTheme } from "@/lib/app-theme";
 import type { AuthenticatedUser } from "@/lib/user-profile";
 
 type UserAccountProfileMenuProps = {
@@ -33,7 +31,6 @@ export function UserAccountProfileMenu({
   user,
   userError,
 }: UserAccountProfileMenuProps) {
-  const { setTheme, theme } = useAppTheme();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isProfileTooltipVisible, setIsProfileTooltipVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -41,7 +38,6 @@ export function UserAccountProfileMenu({
   const isProfileTooltipAvailable = !isProfileMenuOpen && !isSubmitting;
   const shouldShowProfileTooltip =
     isProfileTooltipAvailable && isProfileTooltipVisible;
-  const nextTheme = getOppositeAppTheme(theme);
 
   function handleProfileMenuOpenChange(open: boolean) {
     setIsProfileMenuOpen(open);
@@ -136,18 +132,6 @@ export function UserAccountProfileMenu({
                 <UserIcon className="size-4 shrink-0" aria-hidden="true" />
                 Profile
               </Menu.LinkItem>
-              <Menu.Item
-                className="flex h-9 items-center gap-2 rounded-md px-2.5 transition hover:bg-[var(--chrome-accent-faint)] focus-visible:outline-none data-[highlighted]:bg-[var(--chrome-accent-faint)]"
-                data-testid="profile-menu-theme-toggle"
-                onClick={() => setTheme(nextTheme)}
-              >
-                {theme === "dark" ? (
-                  <SunIcon className="size-4 shrink-0" aria-hidden="true" />
-                ) : (
-                  <MoonIcon className="size-4 shrink-0" aria-hidden="true" />
-                )}
-                {nextTheme === "dark" ? "Dark mode" : "Light mode"}
-              </Menu.Item>
               <Menu.Item
                 className="flex h-9 items-center gap-2 rounded-md px-2.5 text-destructive transition hover:bg-destructive/10 focus-visible:outline-none data-[highlighted]:bg-destructive/10 data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
                 data-testid="sign-out-button"
