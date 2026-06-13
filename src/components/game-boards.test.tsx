@@ -971,7 +971,7 @@ describe("game board renderers", () => {
 
     expectMarkup(markup, [
       'data-testid="asteroids-board"',
-      "Asteroids board. Field 640 by 480. Score 120. Lives 3. Wave 2. 6 asteroids remaining. Running. Small saucer active.",
+      "Asteroids board. Field 800 by 600. Score 120. Lives 3. Wave 2. 4 asteroids remaining. Running. Small saucer active.",
       'data-testid="asteroids-asteroid"',
       'data-testid="asteroids-bullet"',
       'data-testid="asteroids-saucer"',

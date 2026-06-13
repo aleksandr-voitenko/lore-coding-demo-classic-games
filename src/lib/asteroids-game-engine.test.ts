@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   advanceAsteroidsGame,
-  ASTEROIDS_ASTEROID_COUNT_OPTIONS,
   ASTEROIDS_BONUS_LIFE_SCORE,
   ASTEROIDS_BONUS_SCORE_POWER_UP_POINTS,
   ASTEROIDS_BOARD_HEIGHT,
   ASTEROIDS_BOARD_WIDTH,
+  ASTEROIDS_DEFAULT_DIFFICULTY,
   ASTEROIDS_POWER_UP_MAX_SPAWN_TICKS,
   ASTEROIDS_POWER_UP_MIN_SPAWN_TICKS,
   ASTEROIDS_POWER_UP_SHIELD_TICKS,
@@ -18,6 +18,7 @@ import {
   createInitialAsteroidsGame,
   fireAsteroidsBullet,
   getAsteroidsAsteroidScore,
+  getAsteroidsDifficultySettings,
   getAsteroidsSaucerScore,
   getAsteroidsTickDelay,
   pauseAsteroidsGame,
@@ -133,6 +134,7 @@ describe("asteroids game engine", () => {
     expect(game.status).toBe("ready");
     expect(game.boardWidth).toBe(ASTEROIDS_BOARD_WIDTH);
     expect(game.boardHeight).toBe(ASTEROIDS_BOARD_HEIGHT);
+    expect(game.difficulty).toBe(ASTEROIDS_DEFAULT_DIFFICULTY);
     expect(game.score).toBe(0);
     expect(game.wave).toBe(1);
     expect(game.lives).toBe(ASTEROIDS_STARTING_LIVES);
@@ -156,31 +158,45 @@ describe("asteroids game engine", () => {
     expect(getAsteroidsTickDelay()).toBe(16);
   });
 
-  it("normalizes configurable board sizes and starting asteroid counts", () => {
-    const configured = createInitialAsteroidsGame({
-      asteroidCount: ASTEROIDS_ASTEROID_COUNT_OPTIONS[2],
-      boardHeight: 600,
-      boardWidth: 800,
-    });
+  it("uses difficulty presets for lives, starting asteroids, and saucer timing", () => {
+    const easy = createInitialAsteroidsGame({ difficulty: "easy" });
+    const hard = createInitialAsteroidsGame({ difficulty: "hard" });
     const fallback = createInitialAsteroidsGame({
-      asteroidCount: 99,
-      boardHeight: Number.NaN,
-      boardWidth: Number.NaN,
+      difficulty: "legendary",
     });
-    const restarted = restartAsteroidsGame(configured);
+    const restarted = restartAsteroidsGame(hard);
 
-    expect(configured.boardWidth).toBe(800);
-    expect(configured.boardHeight).toBe(600);
-    expect(configured.startingAsteroidCount).toBe(8);
-    expect(configured.asteroids).toHaveLength(8);
+    expect(easy).toMatchObject({
+      boardHeight: ASTEROIDS_BOARD_HEIGHT,
+      boardWidth: ASTEROIDS_BOARD_WIDTH,
+      difficulty: "easy",
+      lives: 4,
+      saucerSpawnCooldownTicks:
+        getAsteroidsDifficultySettings("easy").saucerInitialSpawnTicks,
+      startingAsteroidCount: 3,
+    });
+    expect(easy.asteroids).toHaveLength(3);
+    expect(hard).toMatchObject({
+      boardHeight: ASTEROIDS_BOARD_HEIGHT,
+      boardWidth: ASTEROIDS_BOARD_WIDTH,
+      difficulty: "hard",
+      lives: 2,
+      saucerSpawnCooldownTicks:
+        getAsteroidsDifficultySettings("hard").saucerInitialSpawnTicks,
+      startingAsteroidCount: 5,
+    });
+    expect(hard.asteroids).toHaveLength(5);
     expect(fallback.boardWidth).toBe(ASTEROIDS_BOARD_WIDTH);
     expect(fallback.boardHeight).toBe(ASTEROIDS_BOARD_HEIGHT);
+    expect(fallback.difficulty).toBe(ASTEROIDS_DEFAULT_DIFFICULTY);
     expect(fallback.startingAsteroidCount).toBe(ASTEROIDS_STARTING_ASTEROID_COUNT);
     expect(restarted.status).toBe("running");
-    expect(restarted.boardWidth).toBe(800);
-    expect(restarted.boardHeight).toBe(600);
-    expect(restarted.startingAsteroidCount).toBe(8);
-    expect(restarted.asteroids).toHaveLength(8);
+    expect(restarted.difficulty).toBe("hard");
+    expect(restarted.boardWidth).toBe(ASTEROIDS_BOARD_WIDTH);
+    expect(restarted.boardHeight).toBe(ASTEROIDS_BOARD_HEIGHT);
+    expect(restarted.startingAsteroidCount).toBe(5);
+    expect(restarted.lives).toBe(2);
+    expect(restarted.asteroids).toHaveLength(5);
   });
 
   it("uses optional injected randomness for deterministic recorded asteroid fields", () => {
@@ -564,17 +580,18 @@ describe("asteroids game engine", () => {
     expect(secondThresholdBonus.lives).toBe(2);
   });
 
-  it("spawns the next capped wave when the field is cleared", () => {
+  it("adds one big rock for each cleared wave", () => {
     const cleared = advanceAsteroidsGame(
       createRunningGame({
         asteroids: [],
-        startingAsteroidCount: 8,
-        wave: 7,
+        difficulty: "hard",
+        startingAsteroidCount: 5,
+        wave: 12,
       }),
     );
 
-    expect(cleared.wave).toBe(8);
-    expect(cleared.asteroids).toHaveLength(12);
+    expect(cleared.wave).toBe(13);
+    expect(cleared.asteroids).toHaveLength(17);
     expect(cleared.asteroids.every((asteroid) => asteroid.size === "large")).toBe(true);
   });
 
@@ -608,6 +625,17 @@ describe("asteroids game engine", () => {
         saucerSpawnCooldownTicks: 0,
       }),
     );
+    const hardExited = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [safeAsteroid],
+        difficulty: "hard",
+        nextSaucerId: 1,
+        saucer: createSaucer({
+          x: ASTEROIDS_BOARD_WIDTH + 20,
+        }),
+        saucerSpawnCooldownTicks: 0,
+      }),
+    );
     const respawnedFromRight = advanceAsteroidsGame(
       createRunningGame({
         asteroids: [safeAsteroid],
@@ -626,7 +654,12 @@ describe("asteroids game engine", () => {
     expect(spawnedSaucer.velocity.x).toBeGreaterThan(0);
     expect(moved.saucer?.x).toBeCloseTo(spawnedSaucer.x + spawnedSaucer.velocity.x);
     expect(exited.saucer).toBeNull();
-    expect(exited.saucerSpawnCooldownTicks).toBeGreaterThan(0);
+    expect(exited.saucerSpawnCooldownTicks).toBe(
+      getAsteroidsDifficultySettings("medium").saucerRespawnCooldownTicks,
+    );
+    expect(hardExited.saucerSpawnCooldownTicks).toBe(
+      getAsteroidsDifficultySettings("hard").saucerRespawnCooldownTicks,
+    );
     expect(respawnedFromRight.saucer).toMatchObject({
       id: "saucer-1",
       x: ASTEROIDS_BOARD_WIDTH + spawnedSaucer.radius,

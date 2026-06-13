@@ -156,18 +156,16 @@ const launcherParameterHandoffCases: LauncherParameterHandoffCase[] = [
   {
     assertGameSeeded: async (page) => {
       await expect(page.getByTestId("asteroids-status")).toHaveText("Ready");
-      await expect(page.getByTestId("asteroids-rocks")).toHaveText("8");
+      await expect(page.getByTestId("asteroids-lives")).toHaveText("2");
+      await expect(page.getByTestId("asteroids-rocks")).toHaveText("5");
       await expect(page.getByTestId("asteroids-board")).toHaveAttribute(
         "aria-label",
-        /Asteroids board\. Field 800 by 600\. Score 0\. Lives 3\. Wave 1\. 8 asteroids remaining\. Ready\./,
+        /Asteroids board\. Field 800 by 600\. Score 0\. Lives 2\. Wave 1\. 5 asteroids remaining\. Ready\./,
       );
     },
     gameId: "asteroids",
-    name: "Asteroids board and rock count",
-    parameters: [
-      { testId: "asteroids-board-size", value: "800x600" },
-      { testId: "asteroids-rocks", value: "8" },
-    ],
+    name: "Asteroids difficulty",
+    parameters: [{ testId: "asteroids-difficulty", value: "hard" }],
   },
 ];
 
@@ -276,7 +274,9 @@ test("launcher renders game cards and configurable parameters", async ({ page })
   await expect(page.getByTestId("tetris-board-size")).toHaveValue("10x20");
   await expect(page.getByTestId("tetris-start-level")).toHaveValue("1");
   await expect(page.getByTestId("minesweeper-mines")).toHaveValue("10");
-  await expect(page.getByTestId("asteroids-rocks")).toHaveValue("6");
+  await expect(page.getByTestId("asteroids-board-size")).toHaveCount(0);
+  await expect(page.getByTestId("asteroids-rocks")).toHaveCount(0);
+  await expect(page.getByTestId("asteroids-difficulty")).toHaveValue("medium");
 });
 
 test("theme switching persists from launcher controls into profile chrome", async ({

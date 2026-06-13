@@ -165,7 +165,7 @@ test("Asteroids keyboard input starts, thrusts, rotates, fires, pauses, and resu
   await expect(page.getByTestId("asteroids-bullet")).toBeVisible();
   await expect(page.getByTestId("asteroids-board")).toHaveAttribute(
     "aria-label",
-    /Asteroids board\. Field 640 by 480\..*Running\./,
+    /Asteroids board\. Field 800 by 600\..*Running\./,
   );
 
   await page.keyboard.press("p");

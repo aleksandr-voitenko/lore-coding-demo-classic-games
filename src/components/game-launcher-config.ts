@@ -1,9 +1,8 @@
 import {
-  ASTEROIDS_ASTEROID_COUNT_OPTIONS,
-  ASTEROIDS_BOARD_HEIGHT,
-  ASTEROIDS_BOARD_SIZE_OPTIONS,
-  ASTEROIDS_BOARD_WIDTH,
-  ASTEROIDS_STARTING_ASTEROID_COUNT,
+  ASTEROIDS_DEFAULT_DIFFICULTY,
+  ASTEROIDS_DIFFICULTY_OPTIONS,
+  normalizeAsteroidsDifficulty,
+  type AsteroidsDifficulty,
 } from "@/lib/asteroids-game-engine";
 import {
   BREAKOUT_BOARD_HEIGHT,
@@ -62,11 +61,11 @@ import {
 export type { GameId } from "@/lib/game-catalog";
 
 export type PlayableGameProps = {
-  initialAsteroidCount?: number;
   initialAlienCount?: number;
   initialBoardHeight?: number;
   initialBoardSize?: number;
   initialBoardWidth?: number;
+  initialDifficulty?: AsteroidsDifficulty;
   initialLives?: number;
   initialMineCount?: number;
   initialStartLevel?: number;
@@ -208,20 +207,16 @@ export const GAME_PARAMETER_CONFIG = defineGameParameterConfig({
       initialWinTarget: Number(value),
     }),
   },
-  "asteroids-board-size": createBoardSizeParameter({
-    defaultSize: {
-      height: ASTEROIDS_BOARD_HEIGHT,
-      width: ASTEROIDS_BOARD_WIDTH,
-    },
-    label: "Board",
-    options: ASTEROIDS_BOARD_SIZE_OPTIONS,
-  }),
-  "asteroids-rocks": {
-    defaultValue: String(ASTEROIDS_STARTING_ASTEROID_COUNT),
-    label: "Rocks",
-    options: createNumberSelectOptions(ASTEROIDS_ASTEROID_COUNT_OPTIONS),
+  "asteroids-difficulty": {
+    defaultValue: ASTEROIDS_DEFAULT_DIFFICULTY,
+    label: "Difficulty",
+    normalizeValue: normalizeAsteroidsDifficulty,
+    options: ASTEROIDS_DIFFICULTY_OPTIONS.map((option) => ({
+      label: option.label,
+      value: option.value,
+    })),
     toInitialProps: (value) => ({
-      initialAsteroidCount: Number(value),
+      initialDifficulty: normalizeAsteroidsDifficulty(value),
     }),
   },
 });
@@ -357,7 +352,7 @@ export const GAME_CARDS: readonly GameCard[] = [
     description: "A vector space survival game with thrust, wraparound, rocks, and waves.",
     id: asteroidsCatalogEntry.id,
     label: asteroidsCatalogEntry.label,
-    parameters: ["asteroids-board-size", "asteroids-rocks"],
+    parameters: ["asteroids-difficulty"],
   },
 ];
 

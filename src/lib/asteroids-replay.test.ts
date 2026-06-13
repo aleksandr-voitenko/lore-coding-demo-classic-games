@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import { withReplayElapsed } from "./game-replay.test-helpers";
 import {
+  ASTEROIDS_BOARD_HEIGHT,
+  ASTEROIDS_BOARD_WIDTH,
+  ASTEROIDS_DEFAULT_DIFFICULTY,
+  getAsteroidsDifficultySettings,
+} from "./asteroids-game-engine";
+import {
   applyAsteroidsReplayEvent,
   createAsteroidsReplayLeaderboardKey,
   createInitialAsteroidsReplayGame,
@@ -15,9 +21,12 @@ import {
 function createReplayPayload(
   overrides: Partial<AsteroidsReplayPayload> = {},
 ): AsteroidsReplayPayload {
-  const boardHeight = overrides.boardHeight ?? 480;
-  const boardWidth = overrides.boardWidth ?? 640;
-  const startingAsteroidCount = overrides.startingAsteroidCount ?? 6;
+  const boardHeight = overrides.boardHeight ?? ASTEROIDS_BOARD_HEIGHT;
+  const boardWidth = overrides.boardWidth ?? ASTEROIDS_BOARD_WIDTH;
+  const difficulty = overrides.difficulty ?? ASTEROIDS_DEFAULT_DIFFICULTY;
+  const startingAsteroidCount =
+    overrides.startingAsteroidCount ??
+    getAsteroidsDifficultySettings(difficulty).asteroidCount;
 
   const payload = {
     boardHeight,
@@ -49,6 +58,7 @@ function createReplayPayload(
         type: "advance",
       },
     ],
+    difficulty,
     finalAsteroidCount: 5,
     finalLives: 0,
     finalScore: 120,
@@ -57,9 +67,7 @@ function createReplayPayload(
     finalWave: 2,
     gameId: "asteroids",
     leaderboardKey: createAsteroidsReplayLeaderboardKey({
-      boardHeight,
-      boardWidth,
-      startingAsteroidCount,
+      difficulty,
     }),
     runId: "run-1",
     schemaVersion: ASTEROIDS_REPLAY_SCHEMA_VERSION,
@@ -83,15 +91,15 @@ function applyReplayEvents(replay: AsteroidsReplayPayload) {
 }
 
 function createTerminalReplay(seed: number) {
-  const boardHeight = 480;
-  const boardWidth = 640;
-  const startingAsteroidCount = 6;
+  const boardHeight = ASTEROIDS_BOARD_HEIGHT;
+  const boardWidth = ASTEROIDS_BOARD_WIDTH;
+  const difficulty = ASTEROIDS_DEFAULT_DIFFICULTY;
+  const startingAsteroidCount =
+    getAsteroidsDifficultySettings(difficulty).asteroidCount;
   const replaySeed = {
-    boardHeight,
-    boardWidth,
+    difficulty,
     seed,
-    startingAsteroidCount,
-  };
+  } satisfies Pick<AsteroidsReplayPayload, "difficulty" | "seed">;
   const events: AsteroidsReplayEvent[] = [
     {
       elapsedMs: 0,
@@ -147,9 +155,7 @@ function createTerminalReplay(seed: number) {
     finalTick: tick,
     finalWave: replayState.game.wave,
     leaderboardKey: createAsteroidsReplayLeaderboardKey({
-      boardHeight,
-      boardWidth,
-      startingAsteroidCount,
+      difficulty,
     }),
     seed,
     startingAsteroidCount,
@@ -166,8 +172,9 @@ describe("asteroids replay", () => {
 
     expect(parsedReplay).toMatchObject({
       payload: {
-        boardHeight: 480,
-        boardWidth: 640,
+        boardHeight: ASTEROIDS_BOARD_HEIGHT,
+        boardWidth: ASTEROIDS_BOARD_WIDTH,
+        difficulty: ASTEROIDS_DEFAULT_DIFFICULTY,
         events: expect.arrayContaining([
           expect.objectContaining({ type: "control" }),
           expect.objectContaining({ type: "fire" }),
@@ -176,7 +183,8 @@ describe("asteroids replay", () => {
         finalAsteroidCount: 5,
         finalLives: 0,
         gameId: "asteroids",
-        startingAsteroidCount: 6,
+        startingAsteroidCount:
+          getAsteroidsDifficultySettings(ASTEROIDS_DEFAULT_DIFFICULTY).asteroidCount,
       },
       success: true,
     });
@@ -184,7 +192,7 @@ describe("asteroids replay", () => {
     expect(
       parseAsteroidsReplayPayload(
         createReplayPayload({
-          leaderboardKey: "asteroids|board=640x480|rocks=4",
+          leaderboardKey: "asteroids|difficulty=hard",
         }),
       ),
     ).toEqual({
@@ -194,7 +202,19 @@ describe("asteroids replay", () => {
     expect(
       parseAsteroidsReplayPayload(
         createReplayPayload({
-          startingAsteroidCount: 5,
+          boardWidth: 640,
+        }),
+      ),
+    ).toEqual({
+      error: "Asteroids replay parameters are not supported.",
+      success: false,
+    });
+    expect(
+      parseAsteroidsReplayPayload(
+        createReplayPayload({
+          difficulty: "easy",
+          startingAsteroidCount:
+            getAsteroidsDifficultySettings(ASTEROIDS_DEFAULT_DIFFICULTY).asteroidCount,
         }),
       ),
     ).toEqual({
@@ -271,6 +291,7 @@ describe("asteroids replay", () => {
     expect(firstResult.game).toMatchObject({
       boardHeight: replay.boardHeight,
       boardWidth: replay.boardWidth,
+      difficulty: replay.difficulty,
       lives: replay.finalLives,
       score: replay.finalScore,
       startingAsteroidCount: replay.startingAsteroidCount,

@@ -1,13 +1,14 @@
 import {
   advanceAsteroidsGame,
-  ASTEROIDS_ASTEROID_COUNT_OPTIONS,
   ASTEROIDS_BOARD_HEIGHT,
   ASTEROIDS_BOARD_WIDTH,
-  ASTEROIDS_STARTING_ASTEROID_COUNT,
-  ASTEROIDS_STARTING_LIVES,
+  ASTEROIDS_DEFAULT_DIFFICULTY,
   createInitialAsteroidsGame,
   fireAsteroidsBullet,
+  getAsteroidsDifficultySettings,
+  normalizeAsteroidsDifficulty,
   startAsteroidsGame,
+  type AsteroidsDifficulty,
   type AsteroidsControlInput,
   type AsteroidsGameState,
 } from "@/lib/asteroids-game-engine";
@@ -69,6 +70,7 @@ export type AsteroidsReplayPayload = BaseGameReplayPayload<
 > & {
   boardHeight: number;
   boardWidth: number;
+  difficulty: AsteroidsDifficulty;
   events: AsteroidsReplayEvent[];
   finalAsteroidCount: number;
   finalLives: number;
@@ -85,7 +87,7 @@ export type AsteroidsReplayPlaybackState = {
 export type ParseAsteroidsReplayPayloadResult =
   ParseGameReplayPayloadResult<AsteroidsReplayPayload>;
 
-export const ASTEROIDS_REPLAY_SCHEMA_VERSION = 2;
+export const ASTEROIDS_REPLAY_SCHEMA_VERSION = 3;
 export const ASTEROIDS_REPLAY_GAME_ID = "asteroids";
 export const ASTEROIDS_REPLAY_API_PATH = getGameReplayApiPath(ASTEROIDS_REPLAY_GAME_ID);
 export const ASTEROIDS_REPLAY_RUN_API_PATH = getGameReplayRunApiPath(
@@ -108,15 +110,6 @@ export const createAsteroidsReplayRandom = createGameReplayRandom;
 
 function isMinimumInteger(value: unknown, minimum: number): value is number {
   return isNonNegativeInteger(value) && value >= minimum;
-}
-
-function isSupportedAsteroidCount(value: unknown): value is number {
-  return (
-    isNonNegativeInteger(value) &&
-    ASTEROIDS_ASTEROID_COUNT_OPTIONS.includes(
-      value as (typeof ASTEROIDS_ASTEROID_COUNT_OPTIONS)[number],
-    )
-  );
 }
 
 function createDefaultAsteroidsReplayControls(): AsteroidsReplayControls {
@@ -148,13 +141,10 @@ function parseAsteroidsReplayControls(value: unknown): AsteroidsReplayControls |
 }
 
 export function createAsteroidsReplayLeaderboardKey({
-  boardHeight,
-  boardWidth,
-  startingAsteroidCount,
-}: Pick<AsteroidsReplayPayload, "boardHeight" | "boardWidth" | "startingAsteroidCount">) {
+  difficulty,
+}: Pick<AsteroidsReplayPayload, "difficulty">) {
   return createGameLeaderboardKey(ASTEROIDS_REPLAY_GAME_ID, [
-    { name: "board", value: `${boardWidth}x${boardHeight}` },
-    { name: "rocks", value: startingAsteroidCount },
+    { name: "difficulty", value: difficulty },
   ]);
 }
 
@@ -205,7 +195,8 @@ export function parseAsteroidsReplayPayload(
   if (
     !isMinimumInteger(value.boardWidth, ASTEROIDS_MIN_BOARD_WIDTH) ||
     !isMinimumInteger(value.boardHeight, ASTEROIDS_MIN_BOARD_HEIGHT) ||
-    !isSupportedAsteroidCount(value.startingAsteroidCount)
+    typeof value.difficulty !== "string" ||
+    !isNonNegativeInteger(value.startingAsteroidCount)
   ) {
     return {
       error: "Asteroids replay parameters are not supported.",
@@ -215,14 +206,26 @@ export function parseAsteroidsReplayPayload(
 
   const boardHeight = value.boardHeight;
   const boardWidth = value.boardWidth;
+  const difficulty = normalizeAsteroidsDifficulty(value.difficulty);
   const startingAsteroidCount = value.startingAsteroidCount;
+  const difficultySettings = getAsteroidsDifficultySettings(difficulty);
+
+  if (
+    difficulty !== value.difficulty ||
+    boardHeight !== ASTEROIDS_BOARD_HEIGHT ||
+    boardWidth !== ASTEROIDS_BOARD_WIDTH ||
+    startingAsteroidCount !== difficultySettings.asteroidCount
+  ) {
+    return {
+      error: "Asteroids replay parameters are not supported.",
+      success: false,
+    };
+  }
 
   if (
     baseReplay.payload.leaderboardKey !==
     createAsteroidsReplayLeaderboardKey({
-      boardHeight,
-      boardWidth,
-      startingAsteroidCount,
+      difficulty,
     })
   ) {
     return {
@@ -235,7 +238,6 @@ export function parseAsteroidsReplayPayload(
     baseReplay.payload.finalStatus !== "lost" ||
     !isNonNegativeInteger(value.finalLives) ||
     value.finalLives !== 0 ||
-    value.finalLives > ASTEROIDS_STARTING_LIVES ||
     !isMinimumInteger(value.finalWave, 1) ||
     !isNonNegativeInteger(value.finalAsteroidCount)
   ) {
@@ -261,6 +263,7 @@ export function parseAsteroidsReplayPayload(
       ...baseReplay.payload,
       boardHeight,
       boardWidth,
+      difficulty,
       events: events.payload,
       finalAsteroidCount: value.finalAsteroidCount,
       finalLives: value.finalLives,
@@ -274,14 +277,12 @@ export function parseAsteroidsReplayPayload(
 export function createInitialAsteroidsReplayGame(
   payload: Pick<
     AsteroidsReplayPayload,
-    "boardHeight" | "boardWidth" | "seed" | "startingAsteroidCount"
+    "difficulty" | "seed"
   >,
 ): AsteroidsReplayPlaybackState {
   const random = createAsteroidsReplayRandom(payload.seed);
   const game = createInitialAsteroidsGame({
-    asteroidCount: payload.startingAsteroidCount,
-    boardHeight: payload.boardHeight,
-    boardWidth: payload.boardWidth,
+    difficulty: payload.difficulty,
     random,
   });
 
@@ -342,8 +343,6 @@ export async function fetchAsteroidsReplay() {
 
 export function createDefaultAsteroidsReplayLeaderboardKey() {
   return createAsteroidsReplayLeaderboardKey({
-    boardHeight: ASTEROIDS_BOARD_HEIGHT,
-    boardWidth: ASTEROIDS_BOARD_WIDTH,
-    startingAsteroidCount: ASTEROIDS_STARTING_ASTEROID_COUNT,
+    difficulty: ASTEROIDS_DEFAULT_DIFFICULTY,
   });
 }

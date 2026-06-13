@@ -13,6 +13,8 @@ export type AsteroidsControlInput = {
 
 export type AsteroidsRandom = () => number;
 
+export type AsteroidsDifficulty = "easy" | "medium" | "hard";
+
 export type AsteroidSize = "large" | "medium" | "small";
 
 export type AsteroidsSaucerKind = "large" | "small";
@@ -86,6 +88,7 @@ export type AsteroidsGameState = {
   boardWidth: number;
   bulletSpeedMultiplier: number;
   bullets: AsteroidsBullet[];
+  difficulty: AsteroidsDifficulty;
   engineSpeedMultiplier: number;
   lives: number;
   nextAsteroidId: number;
@@ -110,9 +113,7 @@ export type AsteroidsGameState = {
 };
 
 export type CreateAsteroidsGameOptions = {
-  asteroidCount?: number;
-  boardHeight?: number;
-  boardWidth?: number;
+  difficulty?: AsteroidsDifficulty | string;
   random?: AsteroidsRandom;
 };
 
@@ -120,15 +121,13 @@ export type AdvanceAsteroidsGameOptions = {
   random?: AsteroidsRandom;
 };
 
-export const ASTEROIDS_BOARD_WIDTH = 640;
-export const ASTEROIDS_BOARD_HEIGHT = 480;
-export const ASTEROIDS_STARTING_ASTEROID_COUNT = 6;
+export const ASTEROIDS_BOARD_WIDTH = 800;
+export const ASTEROIDS_BOARD_HEIGHT = 600;
+export const ASTEROIDS_DEFAULT_DIFFICULTY = "medium" satisfies AsteroidsDifficulty;
+export const ASTEROIDS_STARTING_ASTEROID_COUNT = 4;
 export const ASTEROIDS_STARTING_LIVES = 3;
 export const ASTEROIDS_BONUS_LIFE_SCORE = 10_000;
 export const ASTEROIDS_TICK_DELAY_MS = 16;
-export const ASTEROIDS_SAUCER_INITIAL_SPAWN_TICKS = Math.ceil(
-  12_000 / ASTEROIDS_TICK_DELAY_MS,
-);
 export const ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS = Math.ceil(
   3_000 / ASTEROIDS_TICK_DELAY_MS,
 );
@@ -143,12 +142,41 @@ export const ASTEROIDS_POWER_UP_MAX_SPAWN_TICKS = Math.ceil(
 );
 export const ASTEROIDS_BONUS_SCORE_POWER_UP_POINTS = 1_000;
 export const ASTEROIDS_SHIP_EXPLOSION_TICKS = Math.ceil(700 / ASTEROIDS_TICK_DELAY_MS);
-export const ASTEROIDS_BOARD_SIZE_OPTIONS = [
-  { height: 360, label: "480 x 360", width: 480 },
-  { height: 480, label: "640 x 480", width: 640 },
-  { height: 600, label: "800 x 600", width: 800 },
-] as const;
-export const ASTEROIDS_ASTEROID_COUNT_OPTIONS = [4, 6, 8] as const;
+export const ASTEROIDS_DIFFICULTY_OPTIONS = [
+  {
+    asteroidCount: 3,
+    label: "Easy",
+    lives: 4,
+    saucerInitialSpawnTicks: Math.ceil(24_000 / ASTEROIDS_TICK_DELAY_MS),
+    saucerRespawnCooldownTicks: Math.ceil(32_000 / ASTEROIDS_TICK_DELAY_MS),
+    value: "easy",
+  },
+  {
+    asteroidCount: ASTEROIDS_STARTING_ASTEROID_COUNT,
+    label: "Medium",
+    lives: ASTEROIDS_STARTING_LIVES,
+    saucerInitialSpawnTicks: Math.ceil(12_000 / ASTEROIDS_TICK_DELAY_MS),
+    saucerRespawnCooldownTicks: Math.ceil(16_000 / ASTEROIDS_TICK_DELAY_MS),
+    value: ASTEROIDS_DEFAULT_DIFFICULTY,
+  },
+  {
+    asteroidCount: 5,
+    label: "Hard",
+    lives: 2,
+    saucerInitialSpawnTicks: Math.ceil(6_000 / ASTEROIDS_TICK_DELAY_MS),
+    saucerRespawnCooldownTicks: Math.ceil(8_000 / ASTEROIDS_TICK_DELAY_MS),
+    value: "hard",
+  },
+] as const satisfies readonly {
+  asteroidCount: number;
+  label: string;
+  lives: number;
+  saucerInitialSpawnTicks: number;
+  saucerRespawnCooldownTicks: number;
+  value: AsteroidsDifficulty;
+}[];
+export const ASTEROIDS_SAUCER_INITIAL_SPAWN_TICKS =
+  ASTEROIDS_DIFFICULTY_OPTIONS[1].saucerInitialSpawnTicks;
 
 const ASTEROID_SCORE: Record<AsteroidSize, number> = {
   large: 20,
@@ -160,7 +188,6 @@ const ASTEROIDS_SAUCER_SCORE: Record<AsteroidsSaucerKind, number> = {
   small: 1_000,
 };
 const ASTEROID_SPLIT_CHILDREN = 2;
-const ASTEROID_WAVE_CAP = 12;
 const BULLET_RADIUS = 2.5;
 const ASTEROIDS_INITIAL_PLAYER_SPEED_MULTIPLIER = 0.5;
 const ASTEROIDS_POWER_UP_SPEED_MULTIPLIER = 1.2;
@@ -169,7 +196,6 @@ const BULLET_SPEED = 8.6 * ASTEROIDS_INITIAL_PLAYER_SPEED_MULTIPLIER;
 const BULLET_TTL_TICKS = 58;
 const MAX_ACTIVE_BULLETS = 4;
 const ASTEROIDS_MOTION_SCALE = 0.8;
-const SAUCER_RESPAWN_COOLDOWN_TICKS = Math.ceil(16_000 / ASTEROIDS_TICK_DELAY_MS);
 const SAUCER_RADIUS: Record<AsteroidsSaucerKind, number> = {
   large: 18,
   small: 12,
@@ -218,26 +244,15 @@ const ASTEROIDS_POWER_UP_KINDS: AsteroidsPowerUpKind[] = [
 ];
 
 export function createInitialAsteroidsGame({
-  asteroidCount = ASTEROIDS_STARTING_ASTEROID_COUNT,
-  boardHeight = ASTEROIDS_BOARD_HEIGHT,
-  boardWidth = ASTEROIDS_BOARD_WIDTH,
+  difficulty = ASTEROIDS_DEFAULT_DIFFICULTY,
   random,
 }: CreateAsteroidsGameOptions = {}): AsteroidsGameState {
-  const normalizedBoardWidth = normalizeAsteroidsDimension(
-    boardWidth,
-    ASTEROIDS_BOARD_WIDTH,
-    320,
-  );
-  const normalizedBoardHeight = normalizeAsteroidsDimension(
-    boardHeight,
-    ASTEROIDS_BOARD_HEIGHT,
-    240,
-  );
-  const normalizedAsteroidCount = normalizeAsteroidCount(asteroidCount);
+  const normalizedDifficulty = normalizeAsteroidsDifficulty(difficulty);
+  const difficultySettings = getAsteroidsDifficultySettings(normalizedDifficulty);
   const spawned = createWaveAsteroids({
-    boardHeight: normalizedBoardHeight,
-    boardWidth: normalizedBoardWidth,
-    count: normalizedAsteroidCount,
+    boardHeight: ASTEROIDS_BOARD_HEIGHT,
+    boardWidth: ASTEROIDS_BOARD_WIDTH,
+    count: difficultySettings.asteroidCount,
     nextAsteroidId: 0,
     random,
     wave: 1,
@@ -245,12 +260,13 @@ export function createInitialAsteroidsGame({
 
   return {
     asteroids: spawned.asteroids,
-    boardHeight: normalizedBoardHeight,
-    boardWidth: normalizedBoardWidth,
+    boardHeight: ASTEROIDS_BOARD_HEIGHT,
+    boardWidth: ASTEROIDS_BOARD_WIDTH,
     bulletSpeedMultiplier: 1,
     bullets: [],
+    difficulty: normalizedDifficulty,
     engineSpeedMultiplier: 1,
-    lives: ASTEROIDS_STARTING_LIVES,
+    lives: difficultySettings.lives,
     nextAsteroidId: spawned.nextAsteroidId,
     nextBulletId: 0,
     nextPowerUpId: 0,
@@ -261,13 +277,13 @@ export function createInitialAsteroidsGame({
     respawnInvulnerabilityTicks: 0,
     saucer: null,
     saucerBullets: [],
-    saucerSpawnCooldownTicks: ASTEROIDS_SAUCER_INITIAL_SPAWN_TICKS,
+    saucerSpawnCooldownTicks: difficultySettings.saucerInitialSpawnTicks,
     score: 0,
-    ship: createCenteredShip(normalizedBoardWidth, normalizedBoardHeight),
+    ship: createCenteredShip(ASTEROIDS_BOARD_WIDTH, ASTEROIDS_BOARD_HEIGHT),
     shipExplosion: null,
     shotCooldownTicks: 0,
     shotIntervalMultiplier: 1,
-    startingAsteroidCount: normalizedAsteroidCount,
+    startingAsteroidCount: difficultySettings.asteroidCount,
     status: "ready",
     wave: 1,
   };
@@ -308,18 +324,14 @@ export function pauseAsteroidsGame(game: AsteroidsGameState): AsteroidsGameState
 }
 
 export function restartAsteroidsGame(
-  game: Pick<AsteroidsGameState, "boardHeight" | "boardWidth" | "startingAsteroidCount"> = {
-    boardHeight: ASTEROIDS_BOARD_HEIGHT,
-    boardWidth: ASTEROIDS_BOARD_WIDTH,
-    startingAsteroidCount: ASTEROIDS_STARTING_ASTEROID_COUNT,
+  game: Pick<AsteroidsGameState, "difficulty"> = {
+    difficulty: ASTEROIDS_DEFAULT_DIFFICULTY,
   },
   { random }: AdvanceAsteroidsGameOptions = {},
 ): AsteroidsGameState {
   return {
     ...createInitialAsteroidsGame({
-      asteroidCount: game.startingAsteroidCount,
-      boardHeight: game.boardHeight,
-      boardWidth: game.boardWidth,
+      difficulty: game.difficulty,
       random,
     }),
     respawnInvulnerabilityTicks: ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
@@ -502,6 +514,7 @@ function advanceAsteroidsWorld(
     | "boardHeight"
     | "boardWidth"
     | "bullets"
+    | "difficulty"
     | "nextAsteroidId"
     | "nextSaucerBulletId"
     | "nextSaucerId"
@@ -527,6 +540,7 @@ function advanceAsteroidsWorld(
     boardHeight: game.boardHeight,
     boardWidth: game.boardWidth,
     bullets,
+    difficulty: game.difficulty,
     nextAsteroidId: game.nextAsteroidId,
     random,
     saucer: movedSaucer.saucer,
@@ -627,6 +641,7 @@ function resolvePlayerBulletCollisions({
   boardHeight,
   boardWidth,
   bullets,
+  difficulty,
   nextAsteroidId,
   random,
   saucer,
@@ -635,6 +650,7 @@ function resolvePlayerBulletCollisions({
   boardHeight: number;
   boardWidth: number;
   bullets: AsteroidsBullet[];
+  difficulty: AsteroidsDifficulty;
   nextAsteroidId: number;
   random?: AsteroidsRandom;
   saucer: AsteroidsSaucer | null;
@@ -653,7 +669,8 @@ function resolvePlayerBulletCollisions({
     ) {
       score += ASTEROIDS_SAUCER_SCORE[remainingSaucer.kind];
       remainingSaucer = null;
-      saucerSpawnCooldownTicks = SAUCER_RESPAWN_COOLDOWN_TICKS;
+      saucerSpawnCooldownTicks =
+        getAsteroidsDifficultySettings(difficulty).saucerRespawnCooldownTicks;
       continue;
     }
 
@@ -1063,6 +1080,7 @@ function advanceSaucerMotionAndSpawn(
     AsteroidsGameState,
     | "boardHeight"
     | "boardWidth"
+    | "difficulty"
     | "nextSaucerId"
     | "saucer"
     | "saucerSpawnCooldownTicks"
@@ -1082,7 +1100,8 @@ function advanceSaucerMotionAndSpawn(
       return {
         nextSaucerId: game.nextSaucerId,
         saucer: null,
-        saucerSpawnCooldownTicks: SAUCER_RESPAWN_COOLDOWN_TICKS,
+        saucerSpawnCooldownTicks:
+          getAsteroidsDifficultySettings(game.difficulty).saucerRespawnCooldownTicks,
       };
     }
 
@@ -1270,7 +1289,7 @@ function createNextWave({
     ...createWaveAsteroids({
       boardHeight,
       boardWidth,
-      count: Math.min(ASTEROID_WAVE_CAP, startingAsteroidCount + wave - 1),
+      count: startingAsteroidCount + wave - 1,
       nextAsteroidId,
       random,
       wave,
@@ -1627,20 +1646,20 @@ function wrapCoordinate(value: number, limit: number) {
   return value;
 }
 
-function normalizeAsteroidsDimension(value: number, fallback: number, minimum: number) {
-  if (!Number.isFinite(value)) {
-    return fallback;
-  }
-
-  return Math.max(minimum, Math.floor(value));
+export function normalizeAsteroidsDifficulty(
+  value: string | null | undefined,
+): AsteroidsDifficulty {
+  return ASTEROIDS_DIFFICULTY_OPTIONS.find((option) => option.value === value)?.value ??
+    ASTEROIDS_DEFAULT_DIFFICULTY;
 }
 
-function normalizeAsteroidCount(value: number) {
-  const normalizedValue = Number.isFinite(value) ? Math.floor(value) : NaN;
+export function getAsteroidsDifficultySettings(difficulty: AsteroidsDifficulty) {
+  return (
+    ASTEROIDS_DIFFICULTY_OPTIONS.find((option) => option.value === difficulty) ??
+    ASTEROIDS_DIFFICULTY_OPTIONS[1]
+  );
+}
 
-  return ASTEROIDS_ASTEROID_COUNT_OPTIONS.includes(
-    normalizedValue as (typeof ASTEROIDS_ASTEROID_COUNT_OPTIONS)[number],
-  )
-    ? normalizedValue
-    : ASTEROIDS_STARTING_ASTEROID_COUNT;
+export function getAsteroidsDifficultyLabel(difficulty: AsteroidsDifficulty) {
+  return getAsteroidsDifficultySettings(difficulty).label;
 }

@@ -18,8 +18,8 @@ This file covers deterministic game engines and shared source logic under
   can move it without obscuring cross-system behavior.
 - Engines that expose launcher presets keep those values in game state so
   restart, terminal replay, board rendering, accessibility labels, and leaderboard
-  keys preserve the selected board size, target, lives, mines, alien count, or
-  start level.
+  keys preserve the selected board size, difficulty, target, lives, mines, alien
+  count, or start level.
 - Inject randomness, time, and explicit state fixtures into engine helpers when
   needed for deterministic behavior and tests.
 - Keep browser events, timers, audio/visual effects, and DOM concerns outside

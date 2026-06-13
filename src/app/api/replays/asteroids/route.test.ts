@@ -5,6 +5,12 @@ import {
   ASTEROIDS_REPLAY_SCHEMA_VERSION,
   type AsteroidsReplayPayload,
 } from "@/lib/asteroids-replay";
+import {
+  ASTEROIDS_BOARD_HEIGHT,
+  ASTEROIDS_BOARD_WIDTH,
+  ASTEROIDS_DEFAULT_DIFFICULTY,
+  getAsteroidsDifficultySettings,
+} from "@/lib/asteroids-game-engine";
 import type { SqliteReplayStore } from "@/lib/server/sqlite-replay-store";
 import type { SqliteUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
 
@@ -13,13 +19,17 @@ import { createAsteroidsReplayRouteHandlers } from "./route";
 function createReplayPayload(
   overrides: Partial<AsteroidsReplayPayload> = {},
 ): AsteroidsReplayPayload {
-  const boardHeight = overrides.boardHeight ?? 480;
-  const boardWidth = overrides.boardWidth ?? 640;
-  const startingAsteroidCount = overrides.startingAsteroidCount ?? 6;
+  const boardHeight = overrides.boardHeight ?? ASTEROIDS_BOARD_HEIGHT;
+  const boardWidth = overrides.boardWidth ?? ASTEROIDS_BOARD_WIDTH;
+  const difficulty = overrides.difficulty ?? ASTEROIDS_DEFAULT_DIFFICULTY;
+  const startingAsteroidCount =
+    overrides.startingAsteroidCount ??
+    getAsteroidsDifficultySettings(difficulty).asteroidCount;
 
   return {
     boardHeight,
     boardWidth,
+    difficulty,
     events: [
       {
         elapsedMs: 0,
@@ -53,9 +63,7 @@ function createReplayPayload(
     finalWave: 2,
     gameId: "asteroids",
     leaderboardKey: createAsteroidsReplayLeaderboardKey({
-      boardHeight,
-      boardWidth,
-      startingAsteroidCount,
+      difficulty,
     }),
     runId: "run-1",
     schemaVersion: ASTEROIDS_REPLAY_SCHEMA_VERSION,

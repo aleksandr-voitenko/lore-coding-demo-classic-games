@@ -72,13 +72,15 @@ import {
   ASTEROIDS_BONUS_SCORE_POWER_UP_POINTS,
   ASTEROIDS_POWER_UP_SHIELD_TICKS,
   ASTEROIDS_TICK_DELAY_MS,
-  ASTEROIDS_STARTING_LIVES,
   createInitialAsteroidsGame,
   fireAsteroidsBullet,
+  getAsteroidsDifficultyLabel,
+  getAsteroidsDifficultySettings,
   getAsteroidsTickDelay,
   getAsteroidsSaucerScore,
   pauseAsteroidsGame,
   startAsteroidsGame,
+  type AsteroidsDifficulty,
   type AsteroidsGameState,
   type AsteroidsStatus,
 } from "@/lib/asteroids-game-engine";
@@ -97,9 +99,7 @@ import {
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 
 type AsteroidsGameProps = {
-  initialAsteroidCount?: number;
-  initialBoardHeight?: number;
-  initialBoardWidth?: number;
+  initialDifficulty?: AsteroidsDifficulty;
   onBackToMenu?: () => void;
   onReplayBackToProfile?: () => void;
   replayMode?: "latest";
@@ -154,7 +154,7 @@ const ASTEROIDS_HELP_SECTIONS: GameHelpSection[] = [
       `Shoot large saucers for ${getAsteroidsSaucerScore("large")} points and small saucers for ${getAsteroidsSaucerScore("small").toLocaleString("en-US")} points, but dodge their fire.`,
       `Power-ups appear one at a time and stay until collected: shields last ${Math.round((ASTEROIDS_POWER_UP_SHIELD_TICKS * ASTEROIDS_TICK_DELAY_MS) / 1_000)} seconds, speed bonuses stack by 20%, shot interval bonuses shorten firing cooldown by 20%, and score stars award ${ASTEROIDS_BONUS_SCORE_POWER_UP_POINTS.toLocaleString("en-US")} points.`,
       `Earn a bonus life every ${ASTEROIDS_BONUS_LIFE_SCORE.toLocaleString("en-US")} points.`,
-      "Clearing a wave spawns a denser field; the run ends when all lives are lost.",
+      "Clearing a wave adds one more big rock; the run ends when all lives are lost.",
     ],
   },
 ];
@@ -192,9 +192,7 @@ function appendAsteroidsReplayEvent(
 }
 
 export function AsteroidsGame({
-  initialAsteroidCount,
-  initialBoardHeight,
-  initialBoardWidth,
+  initialDifficulty,
   onBackToMenu,
   onReplayBackToProfile,
   replayMode,
@@ -209,29 +207,23 @@ export function AsteroidsGame({
 
   return (
     <AsteroidsLiveGame
-      initialAsteroidCount={initialAsteroidCount}
-      initialBoardHeight={initialBoardHeight}
-      initialBoardWidth={initialBoardWidth}
+      initialDifficulty={initialDifficulty}
       onBackToMenu={onBackToMenu}
     />
   );
 }
 
 function AsteroidsLiveGame({
-  initialAsteroidCount,
-  initialBoardHeight,
-  initialBoardWidth,
+  initialDifficulty,
   onBackToMenu,
 }: Pick<
   AsteroidsGameProps,
-  "initialAsteroidCount" | "initialBoardHeight" | "initialBoardWidth" | "onBackToMenu"
+  "initialDifficulty" | "onBackToMenu"
 > = {}) {
   const [controlState] = useState(() => createAsteroidsControlState());
   const [game, setGame] = useState<AsteroidsGameState>(() =>
     createInitialAsteroidsGame({
-      asteroidCount: initialAsteroidCount,
-      boardHeight: initialBoardHeight,
-      boardWidth: initialBoardWidth,
+      difficulty: initialDifficulty,
     }),
   );
   const [hitSparks, setHitSparks] = useState<AsteroidsHitSpark[]>([]);
@@ -261,14 +253,14 @@ function AsteroidsLiveGame({
   const showEndScreen = game.status === "lost";
   const showPauseScreen = game.status === "paused";
   const leaderboardKey = createGameLeaderboardKey("asteroids", [
-    { name: "board", value: `${game.boardWidth}x${game.boardHeight}` },
-    { name: "rocks", value: game.startingAsteroidCount },
+    { name: "difficulty", value: game.difficulty },
   ]);
+  const startingLives = getAsteroidsDifficultySettings(game.difficulty).lives;
   const isAsteroidsStarted =
     game.status !== "ready" ||
     game.score > 0 ||
     game.wave > 1 ||
-    game.lives < ASTEROIDS_STARTING_LIVES;
+    game.lives < startingLives;
   const { completedSessionId } = useGameSession({
     active: game.status === "running",
     finalResult: game.status === "lost" ? "lost" : null,
@@ -417,9 +409,7 @@ function AsteroidsLiveGame({
 
     const current = gameRef.current;
     const readyGame = createInitialAsteroidsGame({
-      asteroidCount: current.startingAsteroidCount,
-      boardHeight: current.boardHeight,
-      boardWidth: current.boardWidth,
+      difficulty: current.difficulty,
       random: recording.random,
     });
 
@@ -519,6 +509,7 @@ function AsteroidsLiveGame({
     captureFinishedReplay((recording) => ({
       boardHeight: game.boardHeight,
       boardWidth: game.boardWidth,
+      difficulty: game.difficulty,
       events: [...recording.events],
       finalAsteroidCount: game.asteroids.length,
       finalLives: game.lives,
@@ -539,6 +530,7 @@ function AsteroidsLiveGame({
     game.asteroids.length,
     game.boardHeight,
     game.boardWidth,
+    game.difficulty,
     game.lives,
     game.score,
     game.startingAsteroidCount,
@@ -808,7 +800,7 @@ function AsteroidsLiveGame({
                       </svg>
                     </div>
                   }
-                  status={`${game.startingAsteroidCount} rocks. Endless waves.`}
+                  status={`${getAsteroidsDifficultyLabel(game.difficulty)}. ${startingLives} lives. ${game.startingAsteroidCount} rocks.`}
                   title="Asteroids"
                 />
                 <Button

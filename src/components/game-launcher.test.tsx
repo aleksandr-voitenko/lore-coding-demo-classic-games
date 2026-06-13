@@ -87,16 +87,10 @@ const EXPECTED_PARAMETER_SELECTS = [
     testId: "simon-target",
   },
   {
-    defaultLabel: "640 x 480",
-    defaultValue: "640x480",
-    label: "Board",
-    testId: "asteroids-board-size",
-  },
-  {
-    defaultLabel: "6",
-    defaultValue: "6",
-    label: "Rocks",
-    testId: "asteroids-rocks",
+    defaultLabel: "Medium",
+    defaultValue: "medium",
+    label: "Difficulty",
+    testId: "asteroids-difficulty",
   },
 ] as const;
 
