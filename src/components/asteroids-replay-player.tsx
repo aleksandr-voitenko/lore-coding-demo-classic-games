@@ -9,6 +9,11 @@ import {
   createAsteroidsHitSparks,
   type AsteroidsHitSpark,
 } from "@/components/asteroids-hit-sparks";
+import {
+  advanceAsteroidsPickupFeedbacks,
+  createAsteroidsPickupFeedbacks,
+  type AsteroidsPickupFeedback,
+} from "@/components/asteroids-pickup-feedback";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import {
   GameBoardActions,
@@ -95,12 +100,14 @@ function AsteroidsReplayMessage({
 export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayerProps) {
   const [game, setGame] = useState<AsteroidsGameState | null>(null);
   const [hitSparks, setHitSparks] = useState<AsteroidsHitSpark[]>([]);
+  const [pickupFeedbacks, setPickupFeedbacks] = useState<AsteroidsPickupFeedback[]>([]);
   const [isFinished, setIsFinished] = useState(false);
   const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">("loading");
   const [playbackStep, setPlaybackStep] = useState(0);
   const [replay, setReplay] = useState<AsteroidsReplayPayload | null>(null);
   const playbackRef = useRef<PlaybackState | null>(null);
   const nextHitSparkIdRef = useRef(0);
+  const nextPickupFeedbackIdRef = useRef(0);
   const leaderboardKey =
     replay?.leaderboardKey ?? createDefaultAsteroidsReplayLeaderboardKey();
   const { finalLeaderboardProps } = useGameLeaderboardPresenter({
@@ -131,6 +138,24 @@ export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayer
     [],
   );
 
+  const queuePickupFeedbacks = useCallback(
+    (previousGame: AsteroidsGameState, nextGame: AsteroidsGameState) => {
+      const result = createAsteroidsPickupFeedbacks({
+        nextGame,
+        nextId: nextPickupFeedbackIdRef.current,
+        previousGame,
+      });
+
+      if (result.feedbacks.length === 0) {
+        return;
+      }
+
+      nextPickupFeedbackIdRef.current = result.nextId;
+      setPickupFeedbacks((current) => [...current, ...result.feedbacks]);
+    },
+    [],
+  );
+
   useEffect(() => {
     let isCurrent = true;
 
@@ -149,8 +174,10 @@ export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayer
           replayState: initialReplay,
         };
         nextHitSparkIdRef.current = 0;
+        nextPickupFeedbackIdRef.current = 0;
         setGame(initialReplay.game);
         setHitSparks([]);
+        setPickupFeedbacks([]);
         setIsFinished(false);
         setLoadStatus("ready");
         setReplay(latestReplay);
@@ -177,6 +204,18 @@ export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayer
 
     return () => window.clearInterval(tick);
   }, [hitSparks.length]);
+
+  useEffect(() => {
+    if (pickupFeedbacks.length === 0) {
+      return;
+    }
+
+    const tick = window.setInterval(() => {
+      setPickupFeedbacks((current) => advanceAsteroidsPickupFeedbacks(current));
+    }, ASTEROIDS_TICK_DELAY_MS);
+
+    return () => window.clearInterval(tick);
+  }, [pickupFeedbacks.length]);
 
   const advanceReplayFrame = useCallback(() => {
     const playback = playbackRef.current;
@@ -210,6 +249,7 @@ export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayer
     playback.lastElapsedMs = lastElapsedMs ?? playback.lastElapsedMs;
     playback.replayState = nextReplayState;
     queueHitSparks(previousGame, nextReplayState.game);
+    queuePickupFeedbacks(previousGame, nextReplayState.game);
     setGame(nextReplayState.game);
     setPlaybackStep((current) => current + 1);
 
@@ -219,7 +259,7 @@ export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayer
     ) {
       setIsFinished(true);
     }
-  }, [isFinished, queueHitSparks]);
+  }, [isFinished, queueHitSparks, queuePickupFeedbacks]);
 
   useEffect(() => {
     if (loadStatus !== "ready" || isFinished) {
@@ -319,6 +359,7 @@ export function AsteroidsReplayPlayer({ onBackToProfile }: AsteroidsReplayPlayer
           <AsteroidsBoard
             game={game}
             hitSparks={hitSparks}
+            pickupFeedbacks={pickupFeedbacks}
             statusLabel={statusLabel}
           >
             {isFinished ? (

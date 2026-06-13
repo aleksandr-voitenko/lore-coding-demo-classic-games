@@ -3,10 +3,13 @@
 import type { CSSProperties, ReactNode } from "react";
 
 import type { AsteroidsHitSpark, AsteroidsHitSparkColor } from "@/components/asteroids-hit-sparks";
+import type { AsteroidsPickupFeedback } from "@/components/asteroids-pickup-feedback";
 import {
   ASTEROIDS_TICK_DELAY_MS,
   type Asteroid,
   type AsteroidsGameState,
+  type AsteroidsPowerUp,
+  type AsteroidsPowerUpKind,
   type AsteroidsSaucer,
   getAsteroidsSaucerScore,
   type AsteroidsShip,
@@ -18,6 +21,7 @@ type AsteroidsBoardProps = {
   children?: ReactNode;
   game: AsteroidsGameState;
   hitSparks?: AsteroidsHitSpark[];
+  pickupFeedbacks?: AsteroidsPickupFeedback[];
   statusLabel: string;
 };
 
@@ -48,6 +52,7 @@ export function AsteroidsBoard({
   children,
   game,
   hitSparks = [],
+  pickupFeedbacks = [],
   statusLabel,
 }: AsteroidsBoardProps) {
   return (
@@ -56,7 +61,7 @@ export function AsteroidsBoard({
       style={{ aspectRatio: `${game.boardWidth} / ${game.boardHeight}` }}
     >
       <div
-        aria-label={`Asteroids board. Field ${game.boardWidth} by ${game.boardHeight}. Score ${game.score}. Lives ${game.lives}. Wave ${game.wave}. ${game.asteroids.length} asteroids remaining. ${statusLabel}.${getShipStateLabel(game)}${getSaucerStateLabel(game)}`}
+        aria-label={`Asteroids board. Field ${game.boardWidth} by ${game.boardHeight}. Score ${game.score}. Lives ${game.lives}. Wave ${game.wave}. ${game.asteroids.length} asteroids remaining. ${statusLabel}.${getShipStateLabel(game)}${getSaucerStateLabel(game)}${getPowerUpStateLabel(game)}`}
         className="relative size-full overflow-hidden rounded-[0.375rem] bg-[var(--asteroids-board)] text-[var(--asteroids-board-text)]"
         data-testid="asteroids-board"
         role="img"
@@ -157,6 +162,23 @@ export function AsteroidsBoard({
             )),
           )}
 
+          {game.powerUp === null
+            ? null
+            : getWrappedRenderPositions({
+                boardHeight: game.boardHeight,
+                boardWidth: game.boardWidth,
+                radius: game.powerUp.radius,
+                x: game.powerUp.x,
+                y: game.powerUp.y,
+              }).map((position) => (
+                <PowerUp
+                  isPrimary={position.x === game.powerUp!.x && position.y === game.powerUp!.y}
+                  key={`${game.powerUp!.id}:${position.x}:${position.y}`}
+                  position={position}
+                  powerUp={game.powerUp!}
+                />
+              ))}
+
           {hitSparks.flatMap((spark) =>
             getWrappedRenderPositions({
               boardHeight: game.boardHeight,
@@ -170,6 +192,23 @@ export function AsteroidsBoard({
                 key={`${spark.id}:${position.x}:${position.y}`}
                 position={position}
                 spark={spark}
+              />
+            )),
+          )}
+
+          {pickupFeedbacks.flatMap((feedback) =>
+            getWrappedRenderPositions({
+              boardHeight: game.boardHeight,
+              boardWidth: game.boardWidth,
+              radius: getPickupFeedbackWrapRadius(feedback),
+              x: feedback.x,
+              y: feedback.y,
+            }).map((position) => (
+              <PickupFeedback
+                feedback={feedback}
+                isPrimary={position.x === feedback.x && position.y === feedback.y}
+                key={`${feedback.id}:${position.x}:${position.y}`}
+                position={position}
               />
             )),
           )}
@@ -297,6 +336,213 @@ function Saucer({ saucer }: { saucer: AsteroidsSaucer }) {
   );
 }
 
+function PowerUp({
+  isPrimary,
+  position,
+  powerUp,
+}: {
+  isPrimary: boolean;
+  position: RenderPosition;
+  powerUp: AsteroidsPowerUp;
+}) {
+  const color = getPowerUpColor(powerUp.kind);
+
+  return (
+    <g
+      data-power-up-kind={powerUp.kind}
+      data-power-up-label={getAsteroidsPowerUpLabel(powerUp.kind)}
+      data-testid={isPrimary ? "asteroids-power-up" : undefined}
+      filter="url(#asteroids-glow)"
+    >
+      <circle
+        cx={position.x}
+        cy={position.y}
+        fill={`color-mix(in_oklch,${color}_14%,transparent)`}
+        r={powerUp.radius}
+        stroke={color}
+        strokeDasharray="3 5"
+        strokeLinecap="round"
+        strokeWidth="2.2"
+      />
+      <circle
+        cx={position.x}
+        cy={position.y}
+        fill="none"
+        opacity="0.48"
+        r={powerUp.radius * 1.28}
+        stroke={color}
+        strokeWidth="1"
+      />
+      <g data-testid={isPrimary ? "asteroids-power-up-icon" : undefined}>
+        <PowerUpIcon color={color} kind={powerUp.kind} position={position} radius={powerUp.radius} />
+      </g>
+    </g>
+  );
+}
+
+function PowerUpIcon({
+  color,
+  kind,
+  position,
+  radius,
+}: {
+  color: string;
+  kind: AsteroidsPowerUpKind;
+  position: RenderPosition;
+  radius: number;
+}) {
+  switch (kind) {
+    case "bonus-score":
+      return (
+        <>
+          <polygon
+            fill={`color-mix(in_oklch,${color}_22%,transparent)`}
+            points={getPowerUpStarPoints(position, radius * 0.62, radius * 0.27)}
+            stroke={color}
+            strokeLinejoin="round"
+            strokeWidth="1.8"
+          />
+          <line
+            stroke={color}
+            strokeLinecap="round"
+            strokeWidth="1.8"
+            x1={position.x - radius * 0.23}
+            x2={position.x + radius * 0.23}
+            y1={position.y}
+            y2={position.y}
+          />
+          <line
+            stroke={color}
+            strokeLinecap="round"
+            strokeWidth="1.8"
+            x1={position.x}
+            x2={position.x}
+            y1={position.y - radius * 0.23}
+            y2={position.y + radius * 0.23}
+          />
+        </>
+      );
+    case "bullet-speed":
+      return (
+        <>
+          <line
+            stroke={color}
+            strokeLinecap="round"
+            strokeWidth="2.2"
+            x1={position.x - radius * 0.52}
+            x2={position.x + radius * 0.46}
+            y1={position.y}
+            y2={position.y}
+          />
+          <polyline
+            fill="none"
+            points={`${position.x + radius * 0.08},${position.y - radius * 0.46} ${position.x + radius * 0.54},${position.y} ${position.x + radius * 0.08},${position.y + radius * 0.46}`}
+            stroke={color}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2.2"
+          />
+          <polyline
+            fill="none"
+            opacity="0.7"
+            points={`${position.x - radius * 0.36},${position.y - radius * 0.36} ${position.x + radius * 0.02},${position.y} ${position.x - radius * 0.36},${position.y + radius * 0.36}`}
+            stroke={color}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.7"
+          />
+        </>
+      );
+    case "engine-speed":
+      return (
+        <>
+          <path
+            d={[
+              `M ${position.x} ${position.y - radius * 0.7}`,
+              `C ${position.x + radius * 0.5} ${position.y - radius * 0.16}`,
+              `${position.x + radius * 0.32} ${position.y + radius * 0.48}`,
+              `${position.x} ${position.y + radius * 0.7}`,
+              `C ${position.x - radius * 0.34} ${position.y + radius * 0.4}`,
+              `${position.x - radius * 0.48} ${position.y - radius * 0.14}`,
+              `${position.x} ${position.y - radius * 0.7}`,
+            ].join(" ")}
+            fill={`color-mix(in_oklch,${color}_28%,transparent)`}
+            stroke={color}
+            strokeLinejoin="round"
+            strokeWidth="1.9"
+          />
+          <path
+            d={[
+              `M ${position.x} ${position.y - radius * 0.24}`,
+              `C ${position.x + radius * 0.22} ${position.y + radius * 0.1}`,
+              `${position.x + radius * 0.12} ${position.y + radius * 0.42}`,
+              `${position.x} ${position.y + radius * 0.54}`,
+              `C ${position.x - radius * 0.14} ${position.y + radius * 0.3}`,
+              `${position.x - radius * 0.15} ${position.y + radius * 0.02}`,
+              `${position.x} ${position.y - radius * 0.24}`,
+            ].join(" ")}
+            fill={color}
+            opacity="0.82"
+          />
+        </>
+      );
+    case "shield":
+      return (
+        <path
+          d={[
+            `M ${position.x} ${position.y - radius * 0.68}`,
+            `L ${position.x + radius * 0.52} ${position.y - radius * 0.42}`,
+            `L ${position.x + radius * 0.42} ${position.y + radius * 0.18}`,
+            `Q ${position.x} ${position.y + radius * 0.68}`,
+            `${position.x - radius * 0.42} ${position.y + radius * 0.18}`,
+            `L ${position.x - radius * 0.52} ${position.y - radius * 0.42}`,
+            "Z",
+          ].join(" ")}
+          fill={`color-mix(in_oklch,${color}_18%,transparent)`}
+          stroke={color}
+          strokeLinejoin="round"
+          strokeWidth="2"
+        />
+      );
+    case "shot-interval":
+      return (
+        <>
+          <circle
+            cx={position.x}
+            cy={position.y}
+            fill="none"
+            r={radius * 0.56}
+            stroke={color}
+            strokeWidth="1.8"
+          />
+          <path
+            d={[
+              `M ${position.x} ${position.y}`,
+              `L ${position.x} ${position.y - radius * 0.34}`,
+              `M ${position.x} ${position.y}`,
+              `L ${position.x + radius * 0.34} ${position.y}`,
+            ].join(" ")}
+            fill="none"
+            stroke={color}
+            strokeLinecap="round"
+            strokeWidth="2"
+          />
+          <path
+            d={[
+              `M ${position.x + radius * 0.2} ${position.y - radius * 0.66}`,
+              `Q ${position.x + radius * 0.68} ${position.y - radius * 0.48}`,
+              `${position.x + radius * 0.62} ${position.y + radius * 0.02}`,
+            ].join(" ")}
+            fill="none"
+            stroke={color}
+            strokeLinecap="round"
+            strokeWidth="1.8"
+          />
+        </>
+      );
+  }
+}
+
 function HitSparkBurst({
   isPrimary,
   position,
@@ -338,6 +584,46 @@ function HitSparkBurst({
           />
         );
       })}
+    </g>
+  );
+}
+
+function PickupFeedback({
+  feedback,
+  isPrimary,
+  position,
+}: {
+  feedback: AsteroidsPickupFeedback;
+  isPrimary: boolean;
+  position: RenderPosition;
+}) {
+  const progress = Math.min(1, feedback.ageTicks / feedback.durationTicks);
+  const yOffset = -18 - progress * 16;
+  const opacity = Math.max(0, 1 - progress);
+
+  return (
+    <g
+      data-pickup-feedback-kind={feedback.kind}
+      data-testid={isPrimary ? "asteroids-pickup-feedback" : undefined}
+      opacity={opacity}
+      transform={`translate(0 ${yOffset})`}
+    >
+      <text
+        dominantBaseline="middle"
+        fill={getPowerUpColor(feedback.kind)}
+        fontFamily="var(--font-geist-mono), monospace"
+        fontSize="15"
+        fontWeight="700"
+        paintOrder="stroke"
+        stroke="var(--asteroids-board)"
+        strokeLinejoin="round"
+        strokeWidth="4"
+        textAnchor="middle"
+        x={position.x}
+        y={position.y}
+      >
+        {feedback.label}
+      </text>
     </g>
   );
 }
@@ -459,6 +745,57 @@ function getSaucerStateLabel(game: AsteroidsGameState) {
   return ` ${game.saucer.kind === "small" ? "Small" : "Large"} saucer active.`;
 }
 
+function getPowerUpStateLabel(game: AsteroidsGameState) {
+  if (game.powerUp === null) {
+    return "";
+  }
+
+  return ` ${getAsteroidsPowerUpLabel(game.powerUp.kind)} power-up active.`;
+}
+
+function getAsteroidsPowerUpLabel(kind: AsteroidsPowerUpKind) {
+  switch (kind) {
+    case "bonus-score":
+      return "Bonus score";
+    case "bullet-speed":
+      return "Bullet speed";
+    case "engine-speed":
+      return "Engine speed";
+    case "shield":
+      return "Shield";
+    case "shot-interval":
+      return "Shot interval";
+  }
+}
+
+function getPowerUpColor(kind: AsteroidsPowerUpKind) {
+  switch (kind) {
+    case "bonus-score":
+      return "var(--asteroids-saucer-shot)";
+    case "bullet-speed":
+      return "var(--asteroids-bullet)";
+    case "engine-speed":
+      return "var(--asteroids-thrust)";
+    case "shield":
+      return "var(--asteroids-ship)";
+    case "shot-interval":
+      return "var(--asteroids-saucer)";
+  }
+}
+
+function getPowerUpStarPoints(
+  position: RenderPosition,
+  outerRadius: number,
+  innerRadius: number,
+) {
+  return Array.from({ length: 10 }, (_, index) => {
+    const angle = -Math.PI / 2 + (index / 10) * Math.PI * 2;
+    const radius = index % 2 === 0 ? outerRadius : innerRadius;
+
+    return `${position.x + Math.cos(angle) * radius},${position.y + Math.sin(angle) * radius}`;
+  }).join(" ");
+}
+
 function getShipShieldRadius(ship: AsteroidsShip) {
   return ship.radius * SHIP_SHIELD_RADIUS_MULTIPLIER;
 }
@@ -488,6 +825,10 @@ function getHitSparkWrapRadius(spark: AsteroidsHitSpark) {
       Math.max(maxRadius, particle.travelDistance + particle.length),
     0,
   );
+}
+
+function getPickupFeedbackWrapRadius(feedback: AsteroidsPickupFeedback) {
+  return Math.max(46, feedback.label.length * 5.8);
 }
 
 function getHitSparkStroke(color: AsteroidsHitSparkColor) {

@@ -17,6 +17,13 @@ export type AsteroidSize = "large" | "medium" | "small";
 
 export type AsteroidsSaucerKind = "large" | "small";
 
+export type AsteroidsPowerUpKind =
+  | "bonus-score"
+  | "bullet-speed"
+  | "engine-speed"
+  | "shield"
+  | "shot-interval";
+
 export type AsteroidsShip = {
   angle: number;
   isThrusting: boolean;
@@ -65,16 +72,29 @@ export type AsteroidsSaucer = {
   y: number;
 };
 
+export type AsteroidsPowerUp = {
+  id: string;
+  kind: AsteroidsPowerUpKind;
+  radius: number;
+  x: number;
+  y: number;
+};
+
 export type AsteroidsGameState = {
   asteroids: Asteroid[];
   boardHeight: number;
   boardWidth: number;
+  bulletSpeedMultiplier: number;
   bullets: AsteroidsBullet[];
+  engineSpeedMultiplier: number;
   lives: number;
   nextAsteroidId: number;
   nextBulletId: number;
+  nextPowerUpId: number;
   nextSaucerBulletId: number;
   nextSaucerId: number;
+  powerUp: AsteroidsPowerUp | null;
+  powerUpSpawnCooldownTicks: number;
   respawnInvulnerabilityTicks: number;
   saucer: AsteroidsSaucer | null;
   saucerBullets: AsteroidsSaucerShot[];
@@ -83,6 +103,7 @@ export type AsteroidsGameState = {
   ship: AsteroidsShip;
   shipExplosion: AsteroidsShipExplosion | null;
   shotCooldownTicks: number;
+  shotIntervalMultiplier: number;
   startingAsteroidCount: number;
   status: AsteroidsStatus;
   wave: number;
@@ -111,6 +132,16 @@ export const ASTEROIDS_SAUCER_INITIAL_SPAWN_TICKS = Math.ceil(
 export const ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS = Math.ceil(
   3_000 / ASTEROIDS_TICK_DELAY_MS,
 );
+export const ASTEROIDS_POWER_UP_SHIELD_TICKS = Math.ceil(
+  20_000 / ASTEROIDS_TICK_DELAY_MS,
+);
+export const ASTEROIDS_POWER_UP_MIN_SPAWN_TICKS = Math.ceil(
+  15_000 / ASTEROIDS_TICK_DELAY_MS,
+);
+export const ASTEROIDS_POWER_UP_MAX_SPAWN_TICKS = Math.ceil(
+  30_000 / ASTEROIDS_TICK_DELAY_MS,
+);
+export const ASTEROIDS_BONUS_SCORE_POWER_UP_POINTS = 1_000;
 export const ASTEROIDS_SHIP_EXPLOSION_TICKS = Math.ceil(700 / ASTEROIDS_TICK_DELAY_MS);
 export const ASTEROIDS_BOARD_SIZE_OPTIONS = [
   { height: 360, label: "480 x 360", width: 480 },
@@ -131,7 +162,10 @@ const ASTEROIDS_SAUCER_SCORE: Record<AsteroidsSaucerKind, number> = {
 const ASTEROID_SPLIT_CHILDREN = 2;
 const ASTEROID_WAVE_CAP = 12;
 const BULLET_RADIUS = 2.5;
-const BULLET_SPEED = 8.6;
+const ASTEROIDS_INITIAL_PLAYER_SPEED_MULTIPLIER = 0.5;
+const ASTEROIDS_POWER_UP_SPEED_MULTIPLIER = 1.2;
+const ASTEROIDS_POWER_UP_SHOT_INTERVAL_MULTIPLIER = 0.8;
+const BULLET_SPEED = 8.6 * ASTEROIDS_INITIAL_PLAYER_SPEED_MULTIPLIER;
 const BULLET_TTL_TICKS = 58;
 const MAX_ACTIVE_BULLETS = 4;
 const ASTEROIDS_MOTION_SCALE = 0.8;
@@ -159,11 +193,29 @@ const SAUCER_SPEED: Record<AsteroidsSaucerKind, number> = {
   small: 1.8,
 };
 const SHIP_FRICTION = 0.992;
-const SHIP_MAX_SPEED = 6.2 * ASTEROIDS_MOTION_SCALE;
+const SHIP_MAX_SPEED =
+  6.2 * ASTEROIDS_MOTION_SCALE * ASTEROIDS_INITIAL_PLAYER_SPEED_MULTIPLIER;
+const SHIP_PICKUP_NOSE_RADIUS_MULTIPLIER = 1.42;
+const SHIP_PICKUP_WING_RADIUS_MULTIPLIER = 1.06;
+const SHIP_PICKUP_REAR_RADIUS_MULTIPLIER = 0.42;
 const SHIP_RADIUS = 14;
-const SHIP_THRUST = 0.23 * ASTEROIDS_MOTION_SCALE;
+const SHIP_THRUST =
+  0.23 * ASTEROIDS_MOTION_SCALE * ASTEROIDS_INITIAL_PLAYER_SPEED_MULTIPLIER;
 const SHIP_TURN_DEGREES = 7;
-const SHOT_COOLDOWN_TICKS = 10;
+const SHOT_COOLDOWN_TICKS = Math.ceil(10 * 1.5 * 1.25);
+const POWER_UP_RADIUS = 12;
+const POWER_UP_PICKUP_RING_RADIUS_MULTIPLIER = 1.28;
+const POWER_UP_SPAWN_MARGIN = POWER_UP_RADIUS + 18;
+const POWER_UP_SPAWN_ATTEMPTS = 8;
+const POWER_UP_SHIP_SPAWN_PADDING = 72;
+const POWER_UP_ENTITY_SPAWN_PADDING = 8;
+const ASTEROIDS_POWER_UP_KINDS: AsteroidsPowerUpKind[] = [
+  "shield",
+  "bullet-speed",
+  "shot-interval",
+  "bonus-score",
+  "engine-speed",
+];
 
 export function createInitialAsteroidsGame({
   asteroidCount = ASTEROIDS_STARTING_ASTEROID_COUNT,
@@ -195,12 +247,17 @@ export function createInitialAsteroidsGame({
     asteroids: spawned.asteroids,
     boardHeight: normalizedBoardHeight,
     boardWidth: normalizedBoardWidth,
+    bulletSpeedMultiplier: 1,
     bullets: [],
+    engineSpeedMultiplier: 1,
     lives: ASTEROIDS_STARTING_LIVES,
     nextAsteroidId: spawned.nextAsteroidId,
     nextBulletId: 0,
+    nextPowerUpId: 0,
     nextSaucerBulletId: 0,
     nextSaucerId: 0,
+    powerUp: null,
+    powerUpSpawnCooldownTicks: ASTEROIDS_POWER_UP_MIN_SPAWN_TICKS,
     respawnInvulnerabilityTicks: 0,
     saucer: null,
     saucerBullets: [],
@@ -209,6 +266,7 @@ export function createInitialAsteroidsGame({
     ship: createCenteredShip(normalizedBoardWidth, normalizedBoardHeight),
     shipExplosion: null,
     shotCooldownTicks: 0,
+    shotIntervalMultiplier: 1,
     startingAsteroidCount: normalizedAsteroidCount,
     status: "ready",
     wave: 1,
@@ -293,8 +351,8 @@ export function fireAsteroidsBullet(game: AsteroidsGameState): AsteroidsGameStat
     radius: BULLET_RADIUS,
     ttl: BULLET_TTL_TICKS,
     velocity: {
-      x: game.ship.velocity.x + heading.x * BULLET_SPEED,
-      y: game.ship.velocity.y + heading.y * BULLET_SPEED,
+      x: game.ship.velocity.x + heading.x * getBulletSpeed(game),
+      y: game.ship.velocity.y + heading.y * getBulletSpeed(game),
     },
     x: bulletX,
     y: bulletY,
@@ -304,7 +362,7 @@ export function fireAsteroidsBullet(game: AsteroidsGameState): AsteroidsGameStat
     ...game,
     bullets: [...game.bullets, bullet],
     nextBulletId: game.nextBulletId + 1,
-    shotCooldownTicks: SHOT_COOLDOWN_TICKS,
+    shotCooldownTicks: getShotCooldownTicks(game),
   };
 }
 
@@ -333,8 +391,12 @@ export function advanceAsteroidsGame(
     score,
     ship,
   };
+  const gameWithPowerUp = applyAsteroidsPowerUpPickup(
+    advanceAsteroidsPowerUpAvailability(candidateGame, { random }),
+    { random },
+  );
 
-  return resolveShipHazardCollision(candidateGame);
+  return resolveShipHazardCollision(gameWithPowerUp);
 }
 
 export function getAsteroidsTickDelay() {
@@ -350,7 +412,10 @@ export function getAsteroidsSaucerScore(kind: AsteroidsSaucerKind) {
 }
 
 function advanceShip(
-  game: Pick<AsteroidsGameState, "boardHeight" | "boardWidth" | "ship">,
+  game: Pick<
+    AsteroidsGameState,
+    "boardHeight" | "boardWidth" | "engineSpeedMultiplier" | "ship"
+  >,
   controls: AsteroidsControlInput,
 ): AsteroidsShip {
   const shouldRotateLeft = controls.rotateLeft === true && controls.rotateRight !== true;
@@ -367,14 +432,16 @@ function advanceShip(
   const acceleratedVelocity =
     controls.thrust === true
       ? {
-          x: game.ship.velocity.x + heading.x * SHIP_THRUST,
-          y: game.ship.velocity.y + heading.y * SHIP_THRUST,
+          x: game.ship.velocity.x + heading.x * getShipThrust(game),
+          y: game.ship.velocity.y + heading.y * getShipThrust(game),
         }
       : game.ship.velocity;
   const velocity = limitVelocity({
-    x: acceleratedVelocity.x * SHIP_FRICTION,
-    y: acceleratedVelocity.y * SHIP_FRICTION,
-  });
+      x: acceleratedVelocity.x * SHIP_FRICTION,
+      y: acceleratedVelocity.y * SHIP_FRICTION,
+    },
+    getShipMaxSpeed(game),
+  );
 
   return {
     ...game.ship,
@@ -384,6 +451,22 @@ function advanceShip(
     x: wrapCoordinate(game.ship.x + velocity.x, game.boardWidth),
     y: wrapCoordinate(game.ship.y + velocity.y, game.boardHeight),
   };
+}
+
+function getBulletSpeed(game: Pick<AsteroidsGameState, "bulletSpeedMultiplier">) {
+  return BULLET_SPEED * game.bulletSpeedMultiplier;
+}
+
+function getShipMaxSpeed(game: Pick<AsteroidsGameState, "engineSpeedMultiplier">) {
+  return SHIP_MAX_SPEED * game.engineSpeedMultiplier;
+}
+
+function getShipThrust(game: Pick<AsteroidsGameState, "engineSpeedMultiplier">) {
+  return SHIP_THRUST * game.engineSpeedMultiplier;
+}
+
+function getShotCooldownTicks(game: Pick<AsteroidsGameState, "shotIntervalMultiplier">) {
+  return Math.max(1, Math.round(SHOT_COOLDOWN_TICKS * game.shotIntervalMultiplier));
 }
 
 function advanceBullets(
@@ -503,7 +586,7 @@ function advanceExplodingShipGame(
   const { scoreDelta, ...world } = advanceAsteroidsWorld(game, { random });
   const ticksRemaining = shipExplosion.ticksRemaining - 1;
   const score = game.score + scoreDelta;
-  const candidateGame: AsteroidsGameState = {
+  const candidateGame: AsteroidsGameState = advanceAsteroidsPowerUpAvailability({
     ...game,
     ...world,
     lives: game.lives + getBonusLivesAwarded(game.score, score),
@@ -513,7 +596,7 @@ function advanceExplodingShipGame(
       ...shipExplosion,
       ticksRemaining,
     },
-  };
+  }, { random });
 
   if (ticksRemaining > 0) {
     return candidateGame;
@@ -523,6 +606,7 @@ function advanceExplodingShipGame(
     return {
       ...candidateGame,
       bullets: [],
+      powerUp: null,
       saucer: null,
       saucerBullets: [],
       shipExplosion: null,
@@ -659,6 +743,318 @@ function getBonusLivesAwarded(previousScore: number, nextScore: number) {
   return (
     Math.floor(nextScore / ASTEROIDS_BONUS_LIFE_SCORE) -
     Math.floor(previousScore / ASTEROIDS_BONUS_LIFE_SCORE)
+  );
+}
+
+function advanceAsteroidsPowerUpAvailability(
+  game: AsteroidsGameState,
+  { random }: AdvanceAsteroidsGameOptions = {},
+): AsteroidsGameState {
+  if (game.powerUp !== null) {
+    return game;
+  }
+
+  if (game.powerUpSpawnCooldownTicks > 0) {
+    return {
+      ...game,
+      powerUpSpawnCooldownTicks: game.powerUpSpawnCooldownTicks - 1,
+    };
+  }
+
+  return {
+    ...game,
+    nextPowerUpId: game.nextPowerUpId + 1,
+    powerUp: createAsteroidsPowerUp(game, random),
+    powerUpSpawnCooldownTicks: 0,
+  };
+}
+
+function applyAsteroidsPowerUpPickup(
+  game: AsteroidsGameState,
+  { random }: AdvanceAsteroidsGameOptions = {},
+): AsteroidsGameState {
+  if (
+    game.powerUp === null ||
+    game.shipExplosion !== null ||
+    !shipTouchesPowerUp(game)
+  ) {
+    return game;
+  }
+
+  const pickedUpGame = applyAsteroidsPowerUpEffect(game, game.powerUp);
+
+  return {
+    ...pickedUpGame,
+    powerUp: null,
+    powerUpSpawnCooldownTicks: createPowerUpSpawnCooldown(game.nextPowerUpId, random),
+  };
+}
+
+function applyAsteroidsPowerUpEffect(
+  game: AsteroidsGameState,
+  powerUp: AsteroidsPowerUp,
+): AsteroidsGameState {
+  switch (powerUp.kind) {
+    case "bonus-score": {
+      const score = game.score + ASTEROIDS_BONUS_SCORE_POWER_UP_POINTS;
+
+      return {
+        ...game,
+        lives: game.lives + getBonusLivesAwarded(game.score, score),
+        score,
+      };
+    }
+    case "bullet-speed":
+      return {
+        ...game,
+        bulletSpeedMultiplier:
+          game.bulletSpeedMultiplier * ASTEROIDS_POWER_UP_SPEED_MULTIPLIER,
+      };
+    case "engine-speed":
+      return {
+        ...game,
+        engineSpeedMultiplier:
+          game.engineSpeedMultiplier * ASTEROIDS_POWER_UP_SPEED_MULTIPLIER,
+      };
+    case "shield":
+      return {
+        ...game,
+        respawnInvulnerabilityTicks: Math.max(
+          game.respawnInvulnerabilityTicks,
+          ASTEROIDS_POWER_UP_SHIELD_TICKS,
+        ),
+      };
+    case "shot-interval":
+      return {
+        ...game,
+        shotIntervalMultiplier:
+          game.shotIntervalMultiplier * ASTEROIDS_POWER_UP_SHOT_INTERVAL_MULTIPLIER,
+      };
+  }
+}
+
+function shipTouchesPowerUp(
+  game: Pick<AsteroidsGameState, "boardHeight" | "boardWidth" | "powerUp" | "ship">,
+) {
+  if (game.powerUp === null) {
+    return false;
+  }
+
+  const nearestPowerUp = {
+    ...game.powerUp,
+    radius: game.powerUp.radius * POWER_UP_PICKUP_RING_RADIUS_MULTIPLIER,
+    x: game.ship.x + getWrappedDelta(game.ship.x, game.powerUp.x, game.boardWidth),
+    y: game.ship.y + getWrappedDelta(game.ship.y, game.powerUp.y, game.boardHeight),
+  };
+
+  return circleIntersectsPolygon(nearestPowerUp, getShipPickupPolygon(game.ship));
+}
+
+function getShipPickupPolygon(ship: AsteroidsShip): AsteroidsPoint[] {
+  const angle = (ship.angle * Math.PI) / 180;
+
+  return [
+    getPointAtAngle(ship, angle, ship.radius * SHIP_PICKUP_NOSE_RADIUS_MULTIPLIER),
+    getPointAtAngle(ship, angle + 2.44, ship.radius * SHIP_PICKUP_WING_RADIUS_MULTIPLIER),
+    getPointAtAngle(ship, angle + Math.PI, ship.radius * SHIP_PICKUP_REAR_RADIUS_MULTIPLIER),
+    getPointAtAngle(ship, angle - 2.44, ship.radius * SHIP_PICKUP_WING_RADIUS_MULTIPLIER),
+  ];
+}
+
+function circleIntersectsPolygon(
+  circle: { radius: number; x: number; y: number },
+  polygon: AsteroidsPoint[],
+) {
+  if (pointIsInsidePolygon(circle, polygon)) {
+    return true;
+  }
+
+  return polygon.some((point, index) =>
+    circleIntersectsSegment(
+      circle,
+      point,
+      polygon[(index + 1) % polygon.length] ?? polygon[0]!,
+    ),
+  );
+}
+
+function pointIsInsidePolygon(point: AsteroidsPoint, polygon: AsteroidsPoint[]) {
+  let isInside = false;
+
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index, index += 1) {
+    const currentPoint = polygon[index]!;
+    const previousPoint = polygon[previous]!;
+    const crossesY =
+      currentPoint.y > point.y !== previousPoint.y > point.y;
+    const crossingX =
+      ((previousPoint.x - currentPoint.x) * (point.y - currentPoint.y)) /
+        (previousPoint.y - currentPoint.y) +
+      currentPoint.x;
+
+    if (crossesY && point.x < crossingX) {
+      isInside = !isInside;
+    }
+  }
+
+  return isInside;
+}
+
+function circleIntersectsSegment(
+  circle: { radius: number; x: number; y: number },
+  start: AsteroidsPoint,
+  end: AsteroidsPoint,
+) {
+  const segmentX = end.x - start.x;
+  const segmentY = end.y - start.y;
+  const segmentLengthSquared = segmentX * segmentX + segmentY * segmentY;
+  const projectedRatio =
+    segmentLengthSquared === 0
+      ? 0
+      : ((circle.x - start.x) * segmentX + (circle.y - start.y) * segmentY) /
+        segmentLengthSquared;
+  const clampedRatio = Math.max(0, Math.min(1, projectedRatio));
+  const closestX = start.x + segmentX * clampedRatio;
+  const closestY = start.y + segmentY * clampedRatio;
+  const dx = circle.x - closestX;
+  const dy = circle.y - closestY;
+
+  return dx * dx + dy * dy <= circle.radius * circle.radius;
+}
+
+function createAsteroidsPowerUp(
+  game: Pick<
+    AsteroidsGameState,
+    | "asteroids"
+    | "boardHeight"
+    | "boardWidth"
+    | "nextPowerUpId"
+    | "saucer"
+    | "ship"
+  >,
+  random?: AsteroidsRandom,
+): AsteroidsPowerUp {
+  const kind = getPowerUpKind(game.nextPowerUpId, random);
+  let fallbackPosition = getPowerUpSpawnPosition(game, 0, random);
+
+  for (let attempt = 0; attempt < POWER_UP_SPAWN_ATTEMPTS; attempt += 1) {
+    const position =
+      attempt === 0 ? fallbackPosition : getPowerUpSpawnPosition(game, attempt, random);
+    fallbackPosition = position;
+
+    if (!isPowerUpSpawnBlocked(position, game)) {
+      return {
+        ...position,
+        id: `power-up-${game.nextPowerUpId}`,
+        kind,
+        radius: POWER_UP_RADIUS,
+      };
+    }
+  }
+
+  return {
+    ...fallbackPosition,
+    id: `power-up-${game.nextPowerUpId}`,
+    kind,
+    radius: POWER_UP_RADIUS,
+  };
+}
+
+function createPowerUpSpawnCooldown(idNumber: number, random?: AsteroidsRandom) {
+  const spawnRange =
+    ASTEROIDS_POWER_UP_MAX_SPAWN_TICKS - ASTEROIDS_POWER_UP_MIN_SPAWN_TICKS;
+
+  if (random === undefined) {
+    return ASTEROIDS_POWER_UP_MIN_SPAWN_TICKS + ((idNumber * 97) % (spawnRange + 1));
+  }
+
+  return ASTEROIDS_POWER_UP_MIN_SPAWN_TICKS + Math.floor(random() * (spawnRange + 1));
+}
+
+function getPowerUpKind(idNumber: number, random?: AsteroidsRandom): AsteroidsPowerUpKind {
+  const index =
+    random === undefined
+      ? idNumber % ASTEROIDS_POWER_UP_KINDS.length
+      : Math.min(
+          ASTEROIDS_POWER_UP_KINDS.length - 1,
+          Math.floor(random() * ASTEROIDS_POWER_UP_KINDS.length),
+        );
+
+  return ASTEROIDS_POWER_UP_KINDS[index] ?? "shield";
+}
+
+function getPowerUpSpawnPosition(
+  game: Pick<AsteroidsGameState, "boardHeight" | "boardWidth" | "nextPowerUpId">,
+  attempt: number,
+  random?: AsteroidsRandom,
+): AsteroidsPoint {
+  if (random !== undefined) {
+    return {
+      x: getRandomPowerUpCoordinate(game.boardWidth, random),
+      y: getRandomPowerUpCoordinate(game.boardHeight, random),
+    };
+  }
+
+  return {
+    x: getDeterministicPowerUpCoordinate(game.boardWidth, game.nextPowerUpId, attempt, 17),
+    y: getDeterministicPowerUpCoordinate(game.boardHeight, game.nextPowerUpId, attempt, 61),
+  };
+}
+
+function getRandomPowerUpCoordinate(limit: number, random: AsteroidsRandom) {
+  return POWER_UP_SPAWN_MARGIN + random() * (limit - POWER_UP_SPAWN_MARGIN * 2);
+}
+
+function getDeterministicPowerUpCoordinate(
+  limit: number,
+  idNumber: number,
+  attempt: number,
+  seed: number,
+) {
+  const usableSize = limit - POWER_UP_SPAWN_MARGIN * 2;
+  const ratio = ((idNumber * 53 + attempt * 29 + seed) % 100) / 100;
+
+  return POWER_UP_SPAWN_MARGIN + ratio * usableSize;
+}
+
+function isPowerUpSpawnBlocked(
+  powerUp: AsteroidsPoint,
+  game: Pick<AsteroidsGameState, "asteroids" | "boardHeight" | "boardWidth" | "saucer" | "ship">,
+) {
+  const candidate = {
+    ...powerUp,
+    radius: POWER_UP_RADIUS,
+  };
+
+  if (
+    entitiesCollideWrapped(
+      { ...candidate, radius: candidate.radius + POWER_UP_SHIP_SPAWN_PADDING },
+      game.ship,
+      game.boardWidth,
+      game.boardHeight,
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    game.asteroids.some((asteroid) =>
+      entitiesCollideWrapped(
+        { ...candidate, radius: candidate.radius + POWER_UP_ENTITY_SPAWN_PADDING },
+        asteroid,
+        game.boardWidth,
+        game.boardHeight,
+      ),
+    )
+  ) {
+    return true;
+  }
+
+  return (
+    game.saucer !== null &&
+    entitiesCollide(
+      { ...candidate, radius: candidate.radius + POWER_UP_ENTITY_SPAWN_PADDING },
+      game.saucer,
+    )
   );
 }
 
@@ -1189,14 +1585,25 @@ function getAngleVector(angle: number): AsteroidsPoint {
   };
 }
 
-function limitVelocity(velocity: AsteroidsPoint): AsteroidsPoint {
+function getPointAtAngle(
+  origin: { x: number; y: number },
+  angle: number,
+  distance: number,
+): AsteroidsPoint {
+  return {
+    x: origin.x + Math.cos(angle) * distance,
+    y: origin.y + Math.sin(angle) * distance,
+  };
+}
+
+function limitVelocity(velocity: AsteroidsPoint, maxSpeed: number): AsteroidsPoint {
   const speed = Math.hypot(velocity.x, velocity.y);
 
-  if (speed <= SHIP_MAX_SPEED) {
+  if (speed <= maxSpeed) {
     return velocity;
   }
 
-  const scale = SHIP_MAX_SPEED / speed;
+  const scale = maxSpeed / speed;
 
   return {
     x: velocity.x * scale,

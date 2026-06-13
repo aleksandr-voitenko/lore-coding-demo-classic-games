@@ -16,6 +16,11 @@ import {
   type AsteroidsHitSpark,
 } from "@/components/asteroids-hit-sparks";
 import {
+  advanceAsteroidsPickupFeedbacks,
+  createAsteroidsPickupFeedbacks,
+  type AsteroidsPickupFeedback,
+} from "@/components/asteroids-pickup-feedback";
+import {
   createAsteroidsControlState,
   getAsteroidsControlInput,
   getAsteroidsControlKey,
@@ -64,6 +69,8 @@ import { useGameSession } from "@/hooks/use-game-session";
 import {
   advanceAsteroidsGame,
   ASTEROIDS_BONUS_LIFE_SCORE,
+  ASTEROIDS_BONUS_SCORE_POWER_UP_POINTS,
+  ASTEROIDS_POWER_UP_SHIELD_TICKS,
   ASTEROIDS_TICK_DELAY_MS,
   ASTEROIDS_STARTING_LIVES,
   createInitialAsteroidsGame,
@@ -145,6 +152,7 @@ const ASTEROIDS_HELP_SECTIONS: GameHelpSection[] = [
       "Break large asteroids into medium rocks, then small rocks, then clear them.",
       "Wrap around the edges of the field to stay alive and line up shots.",
       `Shoot large saucers for ${getAsteroidsSaucerScore("large")} points and small saucers for ${getAsteroidsSaucerScore("small").toLocaleString("en-US")} points, but dodge their fire.`,
+      `Power-ups appear one at a time and stay until collected: shields last ${Math.round((ASTEROIDS_POWER_UP_SHIELD_TICKS * ASTEROIDS_TICK_DELAY_MS) / 1_000)} seconds, speed bonuses stack by 20%, shot interval bonuses shorten firing cooldown by 20%, and score stars award ${ASTEROIDS_BONUS_SCORE_POWER_UP_POINTS.toLocaleString("en-US")} points.`,
       `Earn a bonus life every ${ASTEROIDS_BONUS_LIFE_SCORE.toLocaleString("en-US")} points.`,
       "Clearing a wave spawns a denser field; the run ends when all lives are lost.",
     ],
@@ -227,8 +235,10 @@ function AsteroidsLiveGame({
     }),
   );
   const [hitSparks, setHitSparks] = useState<AsteroidsHitSpark[]>([]);
+  const [pickupFeedbacks, setPickupFeedbacks] = useState<AsteroidsPickupFeedback[]>([]);
   const gameRef = useRef(game);
   const nextHitSparkIdRef = useRef(0);
+  const nextPickupFeedbackIdRef = useRef(0);
   const {
     beginReplayRecording,
     captureFinishedReplay,
@@ -304,6 +314,11 @@ function AsteroidsLiveGame({
     setHitSparks([]);
   }, []);
 
+  const clearPickupFeedbacks = useCallback(() => {
+    nextPickupFeedbackIdRef.current = 0;
+    setPickupFeedbacks([]);
+  }, []);
+
   const queueHitSparks = useCallback(
     (previousGame: AsteroidsGameState, nextGame: AsteroidsGameState) => {
       const result = createAsteroidsHitSparks({
@@ -318,6 +333,24 @@ function AsteroidsLiveGame({
 
       nextHitSparkIdRef.current = result.nextId;
       setHitSparks((current) => [...current, ...result.sparks]);
+    },
+    [],
+  );
+
+  const queuePickupFeedbacks = useCallback(
+    (previousGame: AsteroidsGameState, nextGame: AsteroidsGameState) => {
+      const result = createAsteroidsPickupFeedbacks({
+        nextGame,
+        nextId: nextPickupFeedbackIdRef.current,
+        previousGame,
+      });
+
+      if (result.feedbacks.length === 0) {
+        return;
+      }
+
+      nextPickupFeedbackIdRef.current = result.nextId;
+      setPickupFeedbacks((current) => [...current, ...result.feedbacks]);
     },
     [],
   );
@@ -362,6 +395,7 @@ function AsteroidsLiveGame({
 
     resetControls();
     clearHitSparks();
+    clearPickupFeedbacks();
     resetLeaderboardForm();
     const recording = await beginReplayRecording(async () => {
       const run = await createAsteroidsReplayRun();
@@ -392,7 +426,7 @@ function AsteroidsLiveGame({
     appendAsteroidsReplayEvent(recording, { type: "start" });
     replayRecordingRef.current = recording;
     commitGame(startAsteroidsGame(readyGame));
-  }, [beginReplayRecording, clearHitSparks, commitGame, isReplayRunPendingRef, resetControls, resetLeaderboardForm, replayRecordingRef]);
+  }, [beginReplayRecording, clearHitSparks, clearPickupFeedbacks, commitGame, isReplayRunPendingRef, resetControls, resetLeaderboardForm, replayRecordingRef]);
 
   const startGame = useCallback(() => {
     void startReplayRun();
@@ -458,10 +492,11 @@ function AsteroidsLiveGame({
       }
 
       queueHitSparks(current, nextGame);
+      queuePickupFeedbacks(current, nextGame);
 
       return nextGame;
     });
-  }, [controlState, queueHitSparks, replayRecordingRef, updateCommittedGame]);
+  }, [controlState, queueHitSparks, queuePickupFeedbacks, replayRecordingRef, updateCommittedGame]);
 
   const pauseGameForHelp = useCallback(() => {
     resetControls({ record: true });
@@ -547,6 +582,18 @@ function AsteroidsLiveGame({
 
     return () => window.clearInterval(tick);
   }, [hitSparks.length]);
+
+  useEffect(() => {
+    if (pickupFeedbacks.length === 0) {
+      return;
+    }
+
+    const tick = window.setInterval(() => {
+      setPickupFeedbacks((current) => advanceAsteroidsPickupFeedbacks(current));
+    }, ASTEROIDS_TICK_DELAY_MS);
+
+    return () => window.clearInterval(tick);
+  }, [pickupFeedbacks.length]);
 
   useEffect(() => {
     if (
@@ -739,6 +786,7 @@ function AsteroidsLiveGame({
           <AsteroidsBoard
             game={game}
             hitSparks={hitSparks}
+            pickupFeedbacks={pickupFeedbacks}
             statusLabel={statusLabels[game.status]}
           >
             {showStartScreen ? (

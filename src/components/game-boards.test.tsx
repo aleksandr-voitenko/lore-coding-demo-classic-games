@@ -16,6 +16,7 @@ import {
   ASTEROIDS_SHIP_EXPLOSION_TICKS,
   ASTEROIDS_TICK_DELAY_MS,
   createInitialAsteroidsGame,
+  type AsteroidsPowerUpKind,
 } from "@/lib/asteroids-game-engine";
 import { createInitialMinesweeperGame } from "@/lib/minesweeper-game-engine";
 import { createInitialPongGame } from "@/lib/pong-game-engine";
@@ -46,6 +47,21 @@ function getMarkupAttribute(markup: string, testId: string, attribute: string) {
   expect(attributeMatch).not.toBeNull();
 
   return attributeMatch![1]!;
+}
+
+function getExpectedAsteroidsPowerUpLabel(kind: AsteroidsPowerUpKind) {
+  switch (kind) {
+    case "bonus-score":
+      return "Bonus score";
+    case "bullet-speed":
+      return "Bullet speed";
+    case "engine-speed":
+      return "Engine speed";
+    case "shield":
+      return "Shield";
+    case "shot-interval":
+      return "Shot interval";
+  }
 }
 
 describe("game board renderers", () => {
@@ -965,6 +981,75 @@ describe("game board renderers", () => {
       'data-testid="asteroids-ship"',
       "<polygon",
     ]);
+  });
+
+  it("renders Asteroids power-up vector icons and board labels", () => {
+    const game = createInitialAsteroidsGame();
+    const powerUpKinds: AsteroidsPowerUpKind[] = [
+      "shield",
+      "bullet-speed",
+      "shot-interval",
+      "bonus-score",
+      "engine-speed",
+    ];
+
+    for (const kind of powerUpKinds) {
+      const markup = renderToStaticMarkup(
+        <AsteroidsBoard
+          game={{
+            ...game,
+            powerUp: {
+              id: `power-up-${kind}`,
+              kind,
+              radius: 12,
+              x: 320,
+              y: 220,
+            },
+            status: "running",
+          }}
+          statusLabel="Running"
+        />,
+      );
+
+      expectMarkup(markup, [
+        'data-testid="asteroids-power-up"',
+        `data-power-up-kind="${kind}"`,
+        'data-testid="asteroids-power-up-icon"',
+        `${getExpectedAsteroidsPowerUpLabel(kind)} power-up active.`,
+      ]);
+    }
+  });
+
+  it("renders Asteroids pickup feedback text", () => {
+    const game = createInitialAsteroidsGame();
+    const markup = renderToStaticMarkup(
+      <AsteroidsBoard
+        game={game}
+        pickupFeedbacks={[
+          {
+            ageTicks: 3,
+            durationTicks: 45,
+            id: "pickup-feedback-test",
+            kind: "engine-speed",
+            label: "+engine speed",
+            x: 320,
+            y: 220,
+          },
+        ]}
+        statusLabel="Running"
+      />,
+    );
+
+    expectMarkup(markup, [
+      'data-testid="asteroids-pickup-feedback"',
+      'data-pickup-feedback-kind="engine-speed"',
+      "+engine speed",
+      'font-size="15"',
+      'paint-order="stroke"',
+    ]);
+    expect(Number(getMarkupAttribute(markup, "asteroids-pickup-feedback", "opacity"))).toBeLessThan(
+      1,
+    );
   });
 
   it("renders Asteroids shield and ship explosion states", () => {

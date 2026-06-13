@@ -85,7 +85,7 @@ export type AsteroidsReplayPlaybackState = {
 export type ParseAsteroidsReplayPayloadResult =
   ParseGameReplayPayloadResult<AsteroidsReplayPayload>;
 
-export const ASTEROIDS_REPLAY_SCHEMA_VERSION = 1;
+export const ASTEROIDS_REPLAY_SCHEMA_VERSION = 2;
 export const ASTEROIDS_REPLAY_GAME_ID = "asteroids";
 export const ASTEROIDS_REPLAY_API_PATH = getGameReplayApiPath(ASTEROIDS_REPLAY_GAME_ID);
 export const ASTEROIDS_REPLAY_RUN_API_PATH = getGameReplayRunApiPath(

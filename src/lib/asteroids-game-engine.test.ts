@@ -4,8 +4,12 @@ import {
   advanceAsteroidsGame,
   ASTEROIDS_ASTEROID_COUNT_OPTIONS,
   ASTEROIDS_BONUS_LIFE_SCORE,
+  ASTEROIDS_BONUS_SCORE_POWER_UP_POINTS,
   ASTEROIDS_BOARD_HEIGHT,
   ASTEROIDS_BOARD_WIDTH,
+  ASTEROIDS_POWER_UP_MAX_SPAWN_TICKS,
+  ASTEROIDS_POWER_UP_MIN_SPAWN_TICKS,
+  ASTEROIDS_POWER_UP_SHIELD_TICKS,
   ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
   ASTEROIDS_SAUCER_INITIAL_SPAWN_TICKS,
   ASTEROIDS_SHIP_EXPLOSION_TICKS,
@@ -22,6 +26,7 @@ import {
   type Asteroid,
   type AsteroidsBullet,
   type AsteroidsGameState,
+  type AsteroidsPowerUp,
   type AsteroidsSaucer,
   type AsteroidsSaucerShot,
 } from "./asteroids-game-engine";
@@ -89,6 +94,17 @@ function createSaucerShot(
   };
 }
 
+function createPowerUp(overrides: Partial<AsteroidsPowerUp> = {}): AsteroidsPowerUp {
+  return {
+    id: "power-up-test",
+    kind: "shield",
+    radius: 12,
+    x: ASTEROIDS_BOARD_WIDTH / 2,
+    y: ASTEROIDS_BOARD_HEIGHT / 2,
+    ...overrides,
+  };
+}
+
 function createLoopingRandom(values: number[]) {
   let index = 0;
 
@@ -128,7 +144,12 @@ describe("asteroids game engine", () => {
     expect(game.asteroids.every((asteroid) => asteroid.size === "large")).toBe(true);
     expect(game.asteroids[0]?.velocity.x).toBeCloseTo(0.872);
     expect(game.asteroids[0]?.velocity.y).toBeCloseTo(-0.12);
+    expect(game.bulletSpeedMultiplier).toBe(1);
+    expect(game.engineSpeedMultiplier).toBe(1);
+    expect(game.shotIntervalMultiplier).toBe(1);
     expect(game.bullets).toEqual([]);
+    expect(game.powerUp).toBeNull();
+    expect(game.powerUpSpawnCooldownTicks).toBe(ASTEROIDS_POWER_UP_MIN_SPAWN_TICKS);
     expect(game.saucer).toBeNull();
     expect(game.saucerBullets).toEqual([]);
     expect(game.saucerSpawnCooldownTicks).toBe(ASTEROIDS_SAUCER_INITIAL_SPAWN_TICKS);
@@ -210,7 +231,7 @@ describe("asteroids game engine", () => {
       game = advanceAsteroidsGame(game, { thrust: true });
     }
 
-    expect(Math.hypot(game.ship.velocity.x, game.ship.velocity.y)).toBeCloseTo(4.96);
+    expect(Math.hypot(game.ship.velocity.x, game.ship.velocity.y)).toBeCloseTo(2.48);
   });
 
   it("wraps moving ships and bullets across board edges", () => {
@@ -242,7 +263,7 @@ describe("asteroids game engine", () => {
     const blockedByCooldown = fireAsteroidsBullet(firstShot);
     let cooledDown = firstShot;
 
-    for (let tick = 0; tick < 10; tick += 1) {
+    for (let tick = 0; tick < 19; tick += 1) {
       cooledDown = advanceAsteroidsGame(cooledDown);
     }
 
@@ -264,9 +285,197 @@ describe("asteroids game engine", () => {
       id: "bullet-0",
       ttl: expect.any(Number),
     });
+    expect(Math.hypot(firstShot.bullets[0]!.velocity.x, firstShot.bullets[0]!.velocity.y)).toBeCloseTo(
+      4.3,
+    );
+    expect(firstShot.shotCooldownTicks).toBe(19);
     expect(blockedByCooldown.bullets).toBe(firstShot.bullets);
     expect(secondShot.bullets).toHaveLength(2);
     expect(saturated.bullets).toHaveLength(4);
+  });
+
+  it("spawns one persistent power-up after a fifteen-to-thirty second cooldown", () => {
+    const waiting = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [],
+        powerUpSpawnCooldownTicks: 1,
+      }),
+    );
+    const spawned = advanceAsteroidsGame(waiting);
+    const stillActive = advanceAsteroidsTicks(spawned, 40);
+
+    expect(waiting.powerUp).toBeNull();
+    expect(waiting.powerUpSpawnCooldownTicks).toBe(0);
+    expect(spawned.powerUp).toMatchObject({
+      id: "power-up-0",
+      kind: "shield",
+      radius: 12,
+    });
+    expect(spawned.nextPowerUpId).toBe(1);
+    expect(spawned.powerUpSpawnCooldownTicks).toBe(0);
+    expect(stillActive.powerUp).toEqual(spawned.powerUp);
+    expect(stillActive.nextPowerUpId).toBe(1);
+    expect(ASTEROIDS_POWER_UP_MIN_SPAWN_TICKS).toBe(
+      Math.ceil(15_000 / getAsteroidsTickDelay()),
+    );
+    expect(ASTEROIDS_POWER_UP_MAX_SPAWN_TICKS).toBe(
+      Math.ceil(30_000 / getAsteroidsTickDelay()),
+    );
+    expect(ASTEROIDS_POWER_UP_SHIELD_TICKS).toBe(
+      Math.ceil(20_000 / getAsteroidsTickDelay()),
+    );
+  });
+
+  it("schedules the next power-up only after the active one is picked up", () => {
+    const ship = createInitialAsteroidsGame().ship;
+    const pickedUp = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [],
+        powerUp: createPowerUp({
+          kind: "bonus-score",
+          x: ship.x,
+          y: ship.y,
+        }),
+        ship,
+      }),
+      {},
+      { random: () => 0.999 },
+    );
+
+    expect(pickedUp.powerUp).toBeNull();
+    expect(pickedUp.powerUpSpawnCooldownTicks).toBe(ASTEROIDS_POWER_UP_MAX_SPAWN_TICKS);
+    expect(pickedUp.nextPowerUpId).toBe(0);
+  });
+
+  it("picks up a power-up when the visible ship nose touches the visible bonus ring", () => {
+    const ship = {
+      ...createInitialAsteroidsGame().ship,
+      angle: 0,
+      x: 100,
+      y: 100,
+    };
+    const powerUp = createPowerUp({
+      kind: "bonus-score",
+      x: ship.x + ship.radius * 1.42 + 12 * 1.28 - 0.1,
+      y: ship.y,
+    });
+    const pickedUp = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [],
+        powerUp,
+        ship,
+      }),
+    );
+
+    expect(pickedUp.powerUp).toBeNull();
+    expect(pickedUp.score).toBe(ASTEROIDS_BONUS_SCORE_POWER_UP_POINTS);
+  });
+
+  it("applies shield power-ups before resolving same-tick hazards", () => {
+    const ship = createInitialAsteroidsGame().ship;
+    const overlappingAsteroid = createAsteroid({
+      x: ship.x,
+      y: ship.y,
+    });
+    const shielded = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [overlappingAsteroid],
+        powerUp: createPowerUp({
+          kind: "shield",
+          x: ship.x,
+          y: ship.y,
+        }),
+        ship,
+      }),
+    );
+
+    expect(shielded.powerUp).toBeNull();
+    expect(shielded.respawnInvulnerabilityTicks).toBe(
+      ASTEROIDS_POWER_UP_SHIELD_TICKS,
+    );
+    expect(shielded.lives).toBe(ASTEROIDS_STARTING_LIVES);
+    expect(shielded.shipExplosion).toBeNull();
+  });
+
+  it("applies stacked shot and engine upgrade power-ups", () => {
+    const ship = createInitialAsteroidsGame().ship;
+    const bulletUpgrade = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [],
+        powerUp: createPowerUp({
+          kind: "bullet-speed",
+          x: ship.x,
+          y: ship.y,
+        }),
+        ship,
+      }),
+    );
+    const fasterBullet = fireAsteroidsBullet(bulletUpgrade);
+    const shotIntervalUpgrade = advanceAsteroidsGame({
+      ...createRunningGame({
+        asteroids: [],
+        powerUp: createPowerUp({
+          kind: "shot-interval",
+          x: ship.x,
+          y: ship.y,
+        }),
+        ship,
+      }),
+      shotIntervalMultiplier: bulletUpgrade.shotIntervalMultiplier,
+    });
+    const shorterIntervalShot = fireAsteroidsBullet(shotIntervalUpgrade);
+    const engineUpgrade = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [],
+        powerUp: createPowerUp({
+          kind: "engine-speed",
+          x: ship.x,
+          y: ship.y,
+        }),
+        ship,
+      }),
+    );
+    const accelerated = advanceAsteroidsGame(engineUpgrade, { thrust: true });
+    const baseline = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [],
+        ship,
+      }),
+      { thrust: true },
+    );
+
+    expect(bulletUpgrade.bulletSpeedMultiplier).toBeCloseTo(1.2);
+    expect(Math.hypot(
+      fasterBullet.bullets[0]!.velocity.x,
+      fasterBullet.bullets[0]!.velocity.y,
+    )).toBeCloseTo(5.16);
+    expect(shotIntervalUpgrade.shotIntervalMultiplier).toBeCloseTo(0.8);
+    expect(shorterIntervalShot.shotCooldownTicks).toBe(15);
+    expect(engineUpgrade.engineSpeedMultiplier).toBeCloseTo(1.2);
+    expect(Math.hypot(accelerated.ship.velocity.x, accelerated.ship.velocity.y)).toBeGreaterThan(
+      Math.hypot(baseline.ship.velocity.x, baseline.ship.velocity.y),
+    );
+  });
+
+  it("awards bonus-score power-ups through the shared bonus-life score path", () => {
+    const ship = createInitialAsteroidsGame().ship;
+    const scored = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [],
+        lives: 1,
+        powerUp: createPowerUp({
+          kind: "bonus-score",
+          x: ship.x,
+          y: ship.y,
+        }),
+        score: ASTEROIDS_BONUS_LIFE_SCORE - ASTEROIDS_BONUS_SCORE_POWER_UP_POINTS,
+        ship,
+      }),
+    );
+
+    expect(scored.score).toBe(ASTEROIDS_BONUS_LIFE_SCORE);
+    expect(scored.lives).toBe(2);
+    expect(scored.powerUp).toBeNull();
   });
 
   it("expires bullets after their time to live reaches zero", () => {
