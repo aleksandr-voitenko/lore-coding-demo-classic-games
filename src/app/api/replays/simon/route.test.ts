@@ -5,6 +5,7 @@ import {
   SIMON_REPLAY_SCHEMA_VERSION,
   type SimonReplayPayload,
 } from "@/lib/simon-replay";
+import { getSimonDifficultySettings } from "@/lib/simon-game-engine";
 import type { SqliteReplayStore } from "@/lib/server/sqlite-replay-store";
 import type { SqliteUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
 
@@ -13,9 +14,11 @@ import { createSimonReplayRouteHandlers } from "./route";
 function createReplayPayload(
   overrides: Partial<SimonReplayPayload> = {},
 ): SimonReplayPayload {
-  const winTarget = overrides.winTarget ?? 3;
+  const difficulty = overrides.difficulty ?? "easy";
+  const winTarget = overrides.winTarget ?? getSimonDifficultySettings(difficulty).winTarget;
 
   return {
+    difficulty,
     events: [
       {
         elapsedMs: 0,
@@ -37,7 +40,7 @@ function createReplayPayload(
     finalStatus: "lost",
     finalTick: 2,
     gameId: "simon",
-    leaderboardKey: createSimonReplayLeaderboardKey({ winTarget }),
+    leaderboardKey: createSimonReplayLeaderboardKey({ difficulty }),
     runId: "run-1",
     schemaVersion: SIMON_REPLAY_SCHEMA_VERSION,
     seed: 1234,

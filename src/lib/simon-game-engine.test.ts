@@ -6,9 +6,11 @@ import {
   advanceSimonRound,
   clearSimonActivePad,
   createInitialSimonGame,
+  getSimonDifficultySettings,
   getSimonMissFeedbackDelay,
   getSimonRoundCompleteDelay,
   getRandomSimonPad,
+  normalizeSimonDifficulty,
   pauseSimonGame,
   playSimonPad,
   restartSimonGame,
@@ -44,19 +46,22 @@ function finishShowing(game: SimonGameState) {
 }
 
 describe("simon game engine", () => {
-  it("creates a ready game with a normalized win target", () => {
-    const game = createInitialSimonGame({ winTarget: 3.7 });
+  it("creates a ready game with difficulty-derived target settings", () => {
+    const game = createInitialSimonGame({ difficulty: "hard" });
 
     expect(game).toMatchObject({
       activePad: null,
+      difficulty: "hard",
       inputIndex: 0,
       playbackIndex: 0,
       round: 0,
       score: 0,
       sequence: [],
       status: "ready",
-      winTarget: 3,
+      winTarget: 16,
     });
+    expect(getSimonDifficultySettings("easy").winTarget).toBe(8);
+    expect(normalizeSimonDifficulty("expert")).toBe("medium");
   });
 
   it("maps deterministic random values to the four classic pads", () => {
@@ -303,9 +308,15 @@ describe("simon game engine", () => {
   });
 
   it("plays a deterministic two-round game from start to win", () => {
-    const startedGame = startSimonGame(createInitialSimonGame({ winTarget: 2 }), {
-      random: createRandomSource([0, 0.75]),
-    });
+    const startedGame = startSimonGame(
+      {
+        ...createInitialSimonGame(),
+        winTarget: 2,
+      },
+      {
+        random: createRandomSource([0, 0.75]),
+      },
+    );
     const firstInput = finishShowing(startedGame);
     const firstCorrect = playSimonPad(firstInput, "green");
     const secondShowing = advanceSimonRound(firstCorrect, {

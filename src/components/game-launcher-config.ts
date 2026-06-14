@@ -26,8 +26,10 @@ import {
   PONG_TARGET_SCORE_OPTIONS,
 } from "@/lib/pong-game-engine";
 import {
-  SIMON_DEFAULT_WIN_TARGET,
-  SIMON_WIN_TARGET_OPTIONS,
+  SIMON_DEFAULT_DIFFICULTY,
+  SIMON_DIFFICULTY_OPTIONS,
+  normalizeSimonDifficulty,
+  type SimonDifficulty,
 } from "@/lib/simon-game-engine";
 import {
   SPACE_INVADERS_ALIEN_COUNT_OPTIONS,
@@ -60,17 +62,18 @@ import {
 
 export type { GameId } from "@/lib/game-catalog";
 
+type GameDifficulty = AsteroidsDifficulty | SimonDifficulty;
+
 export type PlayableGameProps = {
   initialAlienCount?: number;
   initialBoardHeight?: number;
   initialBoardSize?: number;
   initialBoardWidth?: number;
-  initialDifficulty?: AsteroidsDifficulty;
+  initialDifficulty?: GameDifficulty;
   initialLives?: number;
   initialMineCount?: number;
   initialStartLevel?: number;
   initialTargetScore?: number;
-  initialWinTarget?: number;
   initialWinTile?: number;
   onBackToMenu: () => void;
   onReplayBackToProfile?: () => void;
@@ -199,12 +202,16 @@ export const GAME_PARAMETER_CONFIG = defineGameParameterConfig({
       initialTargetScore: Number(value),
     }),
   },
-  "simon-target": {
-    defaultValue: String(SIMON_DEFAULT_WIN_TARGET),
-    label: "Target",
-    options: createNumberSelectOptions(SIMON_WIN_TARGET_OPTIONS),
+  "simon-difficulty": {
+    defaultValue: SIMON_DEFAULT_DIFFICULTY,
+    label: "Difficulty",
+    normalizeValue: normalizeSimonDifficulty,
+    options: SIMON_DIFFICULTY_OPTIONS.map((option) => ({
+      label: option.label,
+      value: option.value,
+    })),
     toInitialProps: (value) => ({
-      initialWinTarget: Number(value),
+      initialDifficulty: normalizeSimonDifficulty(value),
     }),
   },
   "asteroids-difficulty": {
@@ -340,7 +347,7 @@ export const GAME_CARDS: readonly GameCard[] = [
     description: "A memory pattern game with four pads, growing sequences, and strict misses.",
     id: simonCatalogEntry.id,
     label: simonCatalogEntry.label,
-    parameters: ["simon-target"],
+    parameters: ["simon-difficulty"],
   },
   {
     accentClassName:

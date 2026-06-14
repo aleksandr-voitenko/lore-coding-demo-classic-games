@@ -81,10 +81,10 @@ const EXPECTED_PARAMETER_SELECTS = [
     testId: "pong-target",
   },
   {
-    defaultLabel: "12",
-    defaultValue: "12",
-    label: "Target",
-    testId: "simon-target",
+    defaultLabel: "Medium",
+    defaultValue: "medium",
+    label: "Difficulty",
+    testId: "simon-difficulty",
   },
   {
     defaultLabel: "Medium",
@@ -120,6 +120,7 @@ describe("game launcher", () => {
     expect(markup).not.toContain(">Top 3<");
     expect(markup).not.toContain(">Pieces<");
     expect(markup).not.toContain(">Pads<");
+    expect(markup).not.toContain('data-testid="simon-target"');
   });
 
   it("preserves launcher parameter labels and defaults", () => {

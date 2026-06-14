@@ -13,6 +13,8 @@ All the code in this repository was created using AI agents and the Lore Coding 
 - Asteroids includes vector-style ship thrust, wraparound movement,
   asteroid splitting, UFO saucers, waves, lives, bonus lives, scoring, and
   persistent board power-ups, and difficulty-scoped records.
+- Simon uses Easy, Medium, and Hard difficulty presets for target sequence
+  length while keeping records scoped to the selected difficulty.
 - Snake includes level progression through key-and-door exits, timed special
   foods, obstacle islands, and a full-board win state.
 - SQLite-backed, parameter-scoped top-three leaderboards for every game.

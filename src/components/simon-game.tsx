@@ -45,6 +45,7 @@ import {
   advanceSimonPlayback,
   clearSimonActivePad,
   createInitialSimonGame,
+  getSimonDifficultySettings,
   getSimonInputFlashDelay,
   getSimonMissFeedbackDelay,
   getSimonPlaybackDelay,
@@ -54,6 +55,7 @@ import {
   restartSimonGame,
   startSimonGame,
   type SimonGameState,
+  type SimonDifficulty,
   type SimonPadId,
   type SimonStatus,
 } from "@/lib/simon-game-engine";
@@ -72,7 +74,7 @@ import {
 import { useGameSession } from "@/hooks/use-game-session";
 
 type SimonGameProps = {
-  initialWinTarget?: number;
+  initialDifficulty?: SimonDifficulty;
   onBackToMenu?: () => void;
   onReplayBackToProfile?: () => void;
   replayMode?: "latest";
@@ -148,8 +150,8 @@ const keyToSimonPad: Record<string, SimonPadId> = {
   W: "red",
 };
 
-function createReadySimonGame(winTarget?: number) {
-  return createInitialSimonGame({ winTarget });
+function createReadySimonGame(difficulty?: SimonDifficulty) {
+  return createInitialSimonGame({ difficulty });
 }
 
 function appendSimonReplayEvent(
@@ -160,7 +162,7 @@ function appendSimonReplayEvent(
 }
 
 export function SimonGame({
-  initialWinTarget,
+  initialDifficulty,
   onBackToMenu,
   onReplayBackToProfile,
   replayMode,
@@ -174,16 +176,16 @@ export function SimonGame({
   }
 
   return (
-    <SimonLiveGame initialWinTarget={initialWinTarget} onBackToMenu={onBackToMenu} />
+    <SimonLiveGame initialDifficulty={initialDifficulty} onBackToMenu={onBackToMenu} />
   );
 }
 
 function SimonLiveGame({
-  initialWinTarget,
+  initialDifficulty,
   onBackToMenu,
-}: Pick<SimonGameProps, "initialWinTarget" | "onBackToMenu"> = {}) {
+}: Pick<SimonGameProps, "initialDifficulty" | "onBackToMenu"> = {}) {
   const [game, setGame] = useState<SimonGameState>(() =>
-    createReadySimonGame(initialWinTarget),
+    createReadySimonGame(initialDifficulty),
   );
   const gameRef = useRef(game);
   const {
@@ -237,7 +239,7 @@ function SimonLiveGame({
   const showPauseScreen = game.status === "paused";
   const showEndScreen = game.status === "lost" || game.status === "won";
   const leaderboardKey = createGameLeaderboardKey("simon", [
-    { name: "target", value: game.winTarget },
+    { name: "difficulty", value: game.difficulty },
   ]);
   const isSimonActive =
     game.status === "showing" ||
@@ -403,6 +405,7 @@ function SimonLiveGame({
 
     captureFinishedReplay((recording) => ({
       events: [...recording.events],
+      difficulty: game.difficulty,
       finalInputIndex: game.inputIndex,
       finalRound: game.round,
       finalScore: game.score,
@@ -419,6 +422,7 @@ function SimonLiveGame({
     }));
   }, [
     captureFinishedReplay,
+    game.difficulty,
     game.inputIndex,
     game.round,
     game.score,
@@ -612,10 +616,10 @@ function SimonLiveGame({
             />
             <GameStatCard
               className="simon-chrome-border"
-              label="Speed"
+              label="Difficulty"
               labelClassName="text-[var(--simon-muted)]"
-              value={playbackDelay === null ? "0" : Math.round(1000 / playbackDelay)}
-              valueTestId="simon-speed"
+              value={getSimonDifficultySettings(game.difficulty).label}
+              valueTestId="simon-difficulty"
             />
           </GameStatsBar>
         </GameSidebar>
@@ -658,7 +662,7 @@ function SimonLiveGame({
                     <span className="rounded-br-full bg-[#1d7ed0]" />
                   </div>
                 }
-                status={statusLabels[game.status]}
+                status={`${getSimonDifficultySettings(game.difficulty).label}. Target ${game.winTarget}.`}
                 title="Simon"
               />
               <Button

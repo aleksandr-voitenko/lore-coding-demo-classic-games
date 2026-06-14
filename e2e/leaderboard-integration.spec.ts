@@ -109,14 +109,14 @@ const startLeaderboardIsolationCases: StartLeaderboardIsolationCase[] = [
     ],
   },
   {
-    alternateKey: "simon|target=12",
-    alternateParameters: [{ testId: "simon-target", value: "12" }],
+    alternateKey: "simon|difficulty=medium",
+    alternateParameters: [{ testId: "simon-difficulty", value: "medium" }],
     gameId: "simon",
     leaderboardTestId: "simon-start-leaderboard",
     name: "Simon",
     playerSuffix: "SM",
-    selectedKey: "simon|target=16",
-    selectedParameters: [{ testId: "simon-target", value: "16" }],
+    selectedKey: "simon|difficulty=hard",
+    selectedParameters: [{ testId: "simon-difficulty", value: "hard" }],
   },
 ];
 

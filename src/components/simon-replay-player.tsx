@@ -24,7 +24,11 @@ import {
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { SimonBoard } from "@/components/simon-board";
 import { Button } from "@/components/ui/button";
-import { type SimonGameState, type SimonStatus } from "@/lib/simon-game-engine";
+import {
+  getSimonDifficultySettings,
+  type SimonGameState,
+  type SimonStatus,
+} from "@/lib/simon-game-engine";
 import {
   applySimonReplayEvent,
   createDefaultSimonReplayLeaderboardKey,
@@ -316,6 +320,13 @@ export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
               labelClassName="text-[var(--simon-muted)]"
               value={game.winTarget}
               valueTestId="simon-replay-target"
+            />
+            <GameStatCard
+              className="simon-chrome-border"
+              label="Difficulty"
+              labelClassName="text-[var(--simon-muted)]"
+              value={getSimonDifficultySettings(game.difficulty).label}
+              valueTestId="simon-replay-difficulty"
             />
           </GameStatsBar>
         </GameSidebar>

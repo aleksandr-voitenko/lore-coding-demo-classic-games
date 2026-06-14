@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 
 import {
+  getSimonDifficultySettings,
   SIMON_PADS,
   type SimonGameState,
   type SimonPadId,
@@ -61,11 +62,12 @@ export function SimonBoard({
   statusLabel,
 }: SimonBoardProps) {
   const isInputReady = game.status === "input";
+  const difficultyLabel = getSimonDifficultySettings(game.difficulty).label;
 
   return (
     <div className="simon-board-shell-border relative aspect-square overflow-hidden rounded-md border bg-[var(--simon-board-shell)] p-3 shadow-[0_24px_70px_var(--simon-board-shell-shadow)]">
       <div
-        aria-label={`Simon board. Round ${game.round}. Score ${game.score}. Target ${game.winTarget}. ${statusLabel}.`}
+        aria-label={`Simon board. Round ${game.round}. Score ${game.score}. Difficulty ${difficultyLabel}. Target ${game.winTarget}. ${statusLabel}.`}
         className="simon-board-ring-border relative grid size-full grid-cols-2 gap-3 rounded-full border-[12px] bg-[var(--simon-board-ring)] p-2"
         data-testid="simon-board"
       >

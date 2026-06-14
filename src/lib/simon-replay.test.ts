@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getSimonDifficultySettings,
   SIMON_PADS,
+  type SimonDifficulty,
   type SimonGameState,
   type SimonPadId,
 } from "./simon-game-engine";
@@ -26,9 +28,11 @@ type ReplayRecording = {
 function createReplayPayload(
   overrides: Partial<SimonReplayPayload> = {},
 ): SimonReplayPayload {
-  const winTarget = overrides.winTarget ?? 3;
+  const difficulty = overrides.difficulty ?? "easy";
+  const winTarget = overrides.winTarget ?? getSimonDifficultySettings(difficulty).winTarget;
 
   const payload = {
+    difficulty,
     events: [
       {
         seq: 0,
@@ -59,7 +63,7 @@ function createReplayPayload(
     finalStatus: "lost",
     finalTick: 4,
     gameId: "simon",
-    leaderboardKey: createSimonReplayLeaderboardKey({ winTarget }),
+    leaderboardKey: createSimonReplayLeaderboardKey({ difficulty }),
     runId: "run-1",
     schemaVersion: SIMON_REPLAY_SCHEMA_VERSION,
     seed: 1234,
@@ -119,8 +123,10 @@ function getWrongPad(expectedPad: SimonPadId) {
 
 function createTerminalReplay(finalStatus: "lost" | "won") {
   const seed = 5678;
-  const winTarget = finalStatus === "won" ? 3 : 4;
+  const difficulty = (finalStatus === "won" ? "easy" : "medium") satisfies SimonDifficulty;
+  const winTarget = getSimonDifficultySettings(difficulty).winTarget;
   const initialReplay = createInitialSimonReplayGame({
+    difficulty,
     seed,
     winTarget,
   });
@@ -208,7 +214,8 @@ function createTerminalReplay(finalStatus: "lost" | "won") {
     finalSequenceLength: game.sequence.length,
     finalStatus: game.status,
     finalTick: recording.tick,
-    leaderboardKey: createSimonReplayLeaderboardKey({ winTarget }),
+    difficulty,
+    leaderboardKey: createSimonReplayLeaderboardKey({ difficulty }),
     seed,
     winTarget,
   });
@@ -243,7 +250,8 @@ describe("simon replay", () => {
         finalRound: 2,
         finalScore: 1,
         gameId: "simon",
-        winTarget: 3,
+        difficulty: "easy",
+        winTarget: 8,
       },
       success: true,
     });
@@ -262,6 +270,17 @@ describe("simon replay", () => {
       parseSimonReplayPayload(
         createReplayPayload({
           winTarget: 0,
+        }),
+      ),
+    ).toEqual({
+      error: "Simon replay parameters are not supported.",
+      success: false,
+    });
+    expect(
+      parseSimonReplayPayload(
+        createReplayPayload({
+          difficulty: "expert" as SimonDifficulty,
+          winTarget: 8,
         }),
       ),
     ).toEqual({
@@ -299,19 +318,20 @@ describe("simon replay", () => {
 
   it("accepts terminal won replay payloads at the target round", () => {
     const payload = createReplayPayload({
-      finalInputIndex: 3,
-      finalRound: 3,
-      finalScore: 3,
-      finalSequenceLength: 3,
+      finalInputIndex: 8,
+      finalRound: 8,
+      finalScore: 8,
+      finalSequenceLength: 8,
       finalStatus: "won",
     });
 
     expect(parseSimonReplayPayload(payload)).toMatchObject({
       payload: {
-        finalInputIndex: 3,
-        finalRound: 3,
+        difficulty: "easy",
+        finalInputIndex: 8,
+        finalRound: 8,
         finalStatus: "won",
-        winTarget: 3,
+        winTarget: 8,
       },
       success: true,
     });
@@ -320,12 +340,11 @@ describe("simon replay", () => {
   it("applies display, pad selection, flash, and round-advance events in order", () => {
     const payload = createReplayPayload({
       events: [],
-      finalInputIndex: 1,
-      finalRound: 1,
+      finalInputIndex: 0,
+      finalRound: 2,
       finalScore: 1,
-      finalSequenceLength: 1,
+      finalSequenceLength: 2,
       finalStatus: "lost",
-      winTarget: 2,
     });
     const initialReplay = createInitialSimonReplayGame(payload);
     const started = applySimonReplayEvent(
@@ -397,6 +416,7 @@ describe("simon replay", () => {
         event.type === "pad" ? [event.pad] : [],
       )),
       status: "won",
+      difficulty: replay.difficulty,
       winTarget: replay.winTarget,
     });
     expect(firstResult.sequence).toHaveLength(replay.finalSequenceLength);
@@ -414,6 +434,7 @@ describe("simon replay", () => {
       round: replay.finalRound,
       score: replay.finalScore,
       status: "lost",
+      difficulty: replay.difficulty,
       winTarget: replay.winTarget,
     });
     expect(firstResult.sequence).toHaveLength(replay.finalSequenceLength);

@@ -4,10 +4,13 @@ import {
   advanceSimonRound,
   clearSimonActivePad,
   createInitialSimonGame,
+  getSimonDifficultySettings,
+  normalizeSimonDifficulty,
   playSimonPad,
-  SIMON_DEFAULT_WIN_TARGET,
+  SIMON_DEFAULT_DIFFICULTY,
   SIMON_PADS,
   startSimonGame,
+  type SimonDifficulty,
   type SimonGameState,
   type SimonPadId,
 } from "@/lib/simon-game-engine";
@@ -75,6 +78,7 @@ export type SimonReplayPayload = BaseGameReplayPayload<
   typeof SIMON_REPLAY_GAME_ID,
   typeof SIMON_REPLAY_SCHEMA_VERSION
 > & {
+  difficulty: SimonDifficulty;
   events: SimonReplayEvent[];
   finalInputIndex: number;
   finalRound: number;
@@ -85,7 +89,7 @@ export type SimonReplayPayload = BaseGameReplayPayload<
 export type ParseSimonReplayPayloadResult =
   ParseGameReplayPayloadResult<SimonReplayPayload>;
 
-export const SIMON_REPLAY_SCHEMA_VERSION = 1;
+export const SIMON_REPLAY_SCHEMA_VERSION = 2;
 export const SIMON_REPLAY_GAME_ID = "simon";
 export const SIMON_REPLAY_API_PATH = getGameReplayApiPath(SIMON_REPLAY_GAME_ID);
 export const SIMON_REPLAY_RUN_API_PATH = getGameReplayRunApiPath(SIMON_REPLAY_GAME_ID);
@@ -114,10 +118,10 @@ function isSimonPadId(value: unknown): value is SimonPadId {
 }
 
 export function createSimonReplayLeaderboardKey({
-  winTarget,
-}: Pick<SimonReplayPayload, "winTarget">) {
+  difficulty,
+}: Pick<SimonReplayPayload, "difficulty">) {
   return createGameLeaderboardKey(SIMON_REPLAY_GAME_ID, [
-    { name: "target", value: winTarget },
+    { name: "difficulty", value: difficulty },
   ]);
 }
 
@@ -162,16 +166,32 @@ export function parseSimonReplayPayload(value: unknown): ParseSimonReplayPayload
     };
   }
 
-  if (!isPositiveInteger(value.winTarget) || value.winTarget < SIMON_MIN_WIN_TARGET) {
+  if (
+    typeof value.difficulty !== "string" ||
+    !isPositiveInteger(value.winTarget) ||
+    value.winTarget < SIMON_MIN_WIN_TARGET
+  ) {
     return {
       error: "Simon replay parameters are not supported.",
       success: false,
     };
   }
 
+  const difficulty = normalizeSimonDifficulty(value.difficulty);
+  const difficultySettings = getSimonDifficultySettings(difficulty);
   const winTarget = value.winTarget;
 
-  if (baseReplay.payload.leaderboardKey !== createSimonReplayLeaderboardKey({ winTarget })) {
+  if (
+    difficulty !== value.difficulty ||
+    winTarget !== difficultySettings.winTarget
+  ) {
+    return {
+      error: "Simon replay parameters are not supported.",
+      success: false,
+    };
+  }
+
+  if (baseReplay.payload.leaderboardKey !== createSimonReplayLeaderboardKey({ difficulty })) {
     return {
       error: "Simon replay leaderboard key is not supported.",
       success: false,
@@ -212,6 +232,7 @@ export function parseSimonReplayPayload(value: unknown): ParseSimonReplayPayload
   return {
     payload: {
       ...baseReplay.payload,
+      difficulty,
       events: events.payload,
       finalInputIndex: value.finalInputIndex,
       finalRound: value.finalRound,
@@ -223,15 +244,18 @@ export function parseSimonReplayPayload(value: unknown): ParseSimonReplayPayload
 }
 
 export function createInitialSimonReplayGame(
-  payload: Pick<SimonReplayPayload, "seed" | "winTarget">,
+  payload: Pick<SimonReplayPayload, "difficulty" | "seed" | "winTarget">,
 ) {
   const random = createSimonReplayRandom(payload.seed);
   const game: SimonGameState = createInitialSimonGame({
-    winTarget: payload.winTarget,
+    difficulty: payload.difficulty,
   });
 
   return {
-    game,
+    game: {
+      ...game,
+      winTarget: payload.winTarget,
+    },
     random,
   };
 }
@@ -277,6 +301,6 @@ export async function fetchSimonReplay() {
 
 export function createDefaultSimonReplayLeaderboardKey() {
   return createSimonReplayLeaderboardKey({
-    winTarget: SIMON_DEFAULT_WIN_TARGET,
+    difficulty: SIMON_DEFAULT_DIFFICULTY,
   });
 }

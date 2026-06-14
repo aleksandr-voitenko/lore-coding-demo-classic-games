@@ -10,9 +10,11 @@ export type SimonStatus =
   | "won";
 
 export type SimonPlayableStatus = Exclude<SimonStatus, "ready" | "paused" | "lost" | "won">;
+export type SimonDifficulty = "easy" | "medium" | "hard";
 
 export type SimonGameState = {
   activePad: SimonPadId | null;
+  difficulty: SimonDifficulty;
   inputIndex: number;
   pausedFrom: SimonPlayableStatus | null;
   playbackIndex: number;
@@ -24,7 +26,7 @@ export type SimonGameState = {
 };
 
 export type CreateSimonGameOptions = {
-  winTarget?: number;
+  difficulty?: SimonDifficulty | string;
 };
 
 export type SimonRandomOptions = {
@@ -34,18 +36,39 @@ export type SimonRandomOptions = {
 type RandomSource = () => number;
 
 export const SIMON_PADS = ["green", "red", "yellow", "blue"] as const;
-export const SIMON_DEFAULT_WIN_TARGET = 12;
+export const SIMON_DEFAULT_DIFFICULTY = "medium" satisfies SimonDifficulty;
 export const SIMON_PLAYBACK_DELAY_MS = 520;
 export const SIMON_INPUT_FLASH_MS = 180;
 export const SIMON_ROUND_COMPLETE_DELAY_MS = 1_000;
 export const SIMON_MISS_FEEDBACK_DELAY_MS = 1_000;
-export const SIMON_WIN_TARGET_OPTIONS = [8, 12, 16] as const;
+export const SIMON_DIFFICULTY_SETTINGS = {
+  easy: {
+    label: "Easy",
+    winTarget: 8,
+  },
+  hard: {
+    label: "Hard",
+    winTarget: 16,
+  },
+  medium: {
+    label: "Medium",
+    winTarget: 12,
+  },
+} as const satisfies Record<SimonDifficulty, { label: string; winTarget: number }>;
+export const SIMON_DIFFICULTY_OPTIONS = [
+  { label: SIMON_DIFFICULTY_SETTINGS.easy.label, value: "easy" },
+  { label: SIMON_DIFFICULTY_SETTINGS.medium.label, value: "medium" },
+  { label: SIMON_DIFFICULTY_SETTINGS.hard.label, value: "hard" },
+] as const satisfies readonly { label: string; value: SimonDifficulty }[];
 
 export function createInitialSimonGame({
-  winTarget = SIMON_DEFAULT_WIN_TARGET,
+  difficulty = SIMON_DEFAULT_DIFFICULTY,
 }: CreateSimonGameOptions = {}): SimonGameState {
+  const normalizedDifficulty = normalizeSimonDifficulty(difficulty);
+
   return {
     activePad: null,
+    difficulty: normalizedDifficulty,
     inputIndex: 0,
     pausedFrom: null,
     playbackIndex: 0,
@@ -53,7 +76,7 @@ export function createInitialSimonGame({
     score: 0,
     sequence: [],
     status: "ready",
-    winTarget: normalizeWinTarget(winTarget),
+    winTarget: getSimonDifficultySettings(normalizedDifficulty).winTarget,
   };
 }
 
@@ -79,7 +102,7 @@ export function startSimonGame(
     };
   }
 
-  return createFirstRound(game.winTarget, random);
+  return createFirstRound(game, random);
 }
 
 export function pauseSimonGame(game: SimonGameState): SimonGameState {
@@ -101,10 +124,13 @@ export function pauseSimonGame(game: SimonGameState): SimonGameState {
 }
 
 export function restartSimonGame(
-  game: Pick<SimonGameState, "winTarget"> = { winTarget: SIMON_DEFAULT_WIN_TARGET },
+  game: Pick<SimonGameState, "difficulty" | "winTarget"> = {
+    difficulty: SIMON_DEFAULT_DIFFICULTY,
+    winTarget: getSimonDifficultySettings(SIMON_DEFAULT_DIFFICULTY).winTarget,
+  },
   { random = Math.random }: SimonRandomOptions = {},
 ): SimonGameState {
-  return createFirstRound(game.winTarget, random);
+  return createFirstRound(game, random);
 }
 
 export function advanceSimonPlayback(game: SimonGameState): SimonGameState {
@@ -264,15 +290,31 @@ export function getRandomSimonPad(random: RandomSource = Math.random): SimonPadI
   return SIMON_PADS[index] ?? SIMON_PADS[0];
 }
 
-function createFirstRound(winTarget: number, random: RandomSource): SimonGameState {
+export function normalizeSimonDifficulty(value: unknown): SimonDifficulty {
+  return (
+    SIMON_DIFFICULTY_OPTIONS.find((option) => option.value === value)?.value ??
+    SIMON_DEFAULT_DIFFICULTY
+  );
+}
+
+export function getSimonDifficultySettings(difficulty: SimonDifficulty) {
+  return SIMON_DIFFICULTY_SETTINGS[difficulty];
+}
+
+function createFirstRound(
+  game: Pick<SimonGameState, "difficulty" | "winTarget">,
+  random: RandomSource,
+): SimonGameState {
+  const difficulty = normalizeSimonDifficulty(game.difficulty);
   const sequence = [getRandomSimonPad(random)];
 
   return {
-    ...createInitialSimonGame({ winTarget }),
+    ...createInitialSimonGame({ difficulty }),
     activePad: sequence[0] ?? null,
     round: 1,
     sequence,
     status: "showing",
+    winTarget: normalizeWinTarget(game.winTarget),
   };
 }
 
