@@ -168,14 +168,11 @@ export function restartBreakoutGame(
     startingLives: BREAKOUT_STARTING_LIVES,
   },
 ): BreakoutGameState {
-  return {
-    ...createInitialBreakoutGame({
-      boardHeight: game.boardHeight,
-      boardWidth: game.boardWidth,
-      lives: game.startingLives,
-    }),
-    status: "running" as const,
-  };
+  return createInitialBreakoutGame({
+    boardHeight: game.boardHeight,
+    boardWidth: game.boardWidth,
+    lives: game.startingLives,
+  });
 }
 
 export function moveBreakoutPaddle(

@@ -78,7 +78,8 @@ describe("breakout game engine", () => {
     expect(restarted.boardWidth).toBe(480);
     expect(restarted.lives).toBe(5);
     expect(restarted.startingLives).toBe(5);
-    expect(restarted.status).toBe("running");
+    expect(restarted.status).toBe("ready");
+    expect(startBreakoutGame(restarted).status).toBe("running");
   });
 
   it("starts, pauses, and resumes without replacing the active board", () => {
@@ -295,10 +296,11 @@ describe("breakout game engine", () => {
       PREVIOUS_INITIAL_BALL_SPEED * STARTING_SPEED_MULTIPLIER,
     );
     expect(lostGame.status).toBe("lost");
-    expect(restartedGame.status).toBe("running");
+    expect(restartedGame.status).toBe("ready");
     expect(restartedGame.lives).toBe(BREAKOUT_STARTING_LIVES);
     expect(restartedGame.score).toBe(0);
     expect(restartedGame.bricks).toHaveLength(game.bricks.length);
     expect(restartedGame.bricks.every((brick) => brick.isActive)).toBe(true);
+    expect(startBreakoutGame(restartedGame).status).toBe("running");
   });
 });

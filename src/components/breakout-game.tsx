@@ -185,6 +185,7 @@ function BreakoutLiveGame({
       lives: initialLives,
     }),
   );
+  const [hasPreparedRun, setHasPreparedRun] = useState(false);
   const gameRef = useRef(game);
   const preStartReplayEventsRef = useRef<BreakoutReplayEventInput[]>([]);
   const {
@@ -208,10 +209,21 @@ function BreakoutLiveGame({
   const canPauseGame = game.status === "running" || game.status === "paused";
   const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
   const showLifeLostScreen = game.status === "ready" && game.lives < game.startingLives;
-  const showStartScreen = game.status === "ready" && !showLifeLostScreen;
+  const showFirstServeScreen = game.status === "ready" && hasPreparedRun && !showLifeLostScreen;
+  const showStartScreen = game.status === "ready" && !showLifeLostScreen && !showFirstServeScreen;
+  const showServeScreen = showLifeLostScreen || showFirstServeScreen;
   const showEndScreen = game.status === "lost" || game.status === "won";
   const showPauseScreen = game.status === "paused";
   const remainingLifeLabel = game.lives === 1 ? "1 life left" : `${game.lives} lives left`;
+  const serveTitle = showLifeLostScreen ? "Life lost" : "Ready to serve";
+  const serveDetail = showLifeLostScreen ? remainingLifeLabel : `${game.lives} lives ready`;
+  const serveButtonLabel = showLifeLostScreen ? "Serve next ball" : "Serve ball";
+  const serveScreenTestId = showLifeLostScreen
+    ? "breakout-life-lost-screen"
+    : "breakout-first-serve-screen";
+  const serveButtonTestId = showLifeLostScreen
+    ? "breakout-continue-button"
+    : "breakout-serve-button";
   const leaderboardKey = createGameLeaderboardKey("breakout", [
     { name: "board", value: `${game.boardWidth}x${game.boardHeight}` },
     { name: "lives", value: game.startingLives },
@@ -259,7 +271,10 @@ function BreakoutLiveGame({
     [commitGame],
   );
 
-  const startReplayRun = useCallback(async ({ restart = false }: { restart?: boolean } = {}) => {
+  const prepareReplayRun = useCallback(async ({
+    restart = false,
+    serveImmediately = false,
+  }: { restart?: boolean; serveImmediately?: boolean } = {}) => {
     if (isReplayRunPendingRef.current) {
       return;
     }
@@ -283,31 +298,48 @@ function BreakoutLiveGame({
       return;
     }
 
-    preStartReplayEventsRef.current.forEach((event) => {
-      appendBreakoutReplayEvent(recording, event);
-    });
-    appendBreakoutReplayEvent(recording, { type: "start" });
+    if (!restart) {
+      preStartReplayEventsRef.current.forEach((event) => {
+        appendBreakoutReplayEvent(recording, event);
+      });
+    }
+
     preStartReplayEventsRef.current = [];
     replayRecordingRef.current = recording;
-    commitGame(
-      restart ? restartBreakoutGame(gameRef.current) : startBreakoutGame(gameRef.current),
-    );
+
+    let nextGame = restart ? restartBreakoutGame(gameRef.current) : gameRef.current;
+
+    if (serveImmediately) {
+      appendBreakoutReplayEvent(recording, { type: "start" });
+      nextGame = startBreakoutGame(nextGame);
+    }
+
+    setHasPreparedRun(!serveImmediately);
+
+    if (nextGame !== gameRef.current) {
+      commitGame(nextGame);
+    }
   }, [beginReplayRecording, commitGame, isReplayRunPendingRef, resetLeaderboardForm, replayRecordingRef]);
 
-  const startGame = useCallback(() => {
+  const prepareGame = useCallback(() => {
     resetLeaderboardForm();
+    void prepareReplayRun();
+  }, [prepareReplayRun, resetLeaderboardForm]);
 
+  const serveBall = useCallback(() => {
+    resetLeaderboardForm();
     const recording = replayRecordingRef.current;
 
     if (recording !== null) {
       appendBreakoutReplayEvent(recording, { type: "start" });
+      setHasPreparedRun(false);
       updateCommittedGame((current) => startBreakoutGame(current));
 
       return;
     }
 
-    void startReplayRun();
-  }, [replayRecordingRef, resetLeaderboardForm, startReplayRun, updateCommittedGame]);
+    void prepareReplayRun({ serveImmediately: true });
+  }, [prepareReplayRun, replayRecordingRef, resetLeaderboardForm, updateCommittedGame]);
 
   const toggleRunState = useCallback(() => {
     const current = gameRef.current;
@@ -326,8 +358,25 @@ function BreakoutLiveGame({
       return;
     }
 
-    startGame();
-  }, [pauseRecordingClock, resetLeaderboardForm, resumeRecordingClock, startGame, updateCommittedGame]);
+    if (current.status !== "ready") {
+      return;
+    }
+
+    if (!hasPreparedRun && current.lives === current.startingLives && current.score === 0) {
+      prepareGame();
+      return;
+    }
+
+    serveBall();
+  }, [
+    hasPreparedRun,
+    pauseRecordingClock,
+    prepareGame,
+    resetLeaderboardForm,
+    resumeRecordingClock,
+    serveBall,
+    updateCommittedGame,
+  ]);
 
   const restartGame = useCallback(() => {
     if (isReplayRunPendingRef.current) {
@@ -335,9 +384,10 @@ function BreakoutLiveGame({
     }
 
     preStartReplayEventsRef.current = [];
+    setHasPreparedRun(false);
     resetReplayRecording();
-    void startReplayRun({ restart: true });
-  }, [isReplayRunPendingRef, resetReplayRecording, startReplayRun]);
+    void prepareReplayRun({ restart: true });
+  }, [isReplayRunPendingRef, prepareReplayRun, resetReplayRecording]);
 
   const movePaddle = useCallback(
     (direction: BreakoutPaddleMovementDirection) => {
@@ -490,9 +540,13 @@ function BreakoutLiveGame({
         return;
       }
 
-      if (event.key === "Enter" && game.status !== "running" && game.status !== "paused") {
+      if (event.key === "Enter" && game.status === "ready") {
         event.preventDefault();
-        startGame();
+        if (showStartScreen) {
+          prepareGame();
+        } else {
+          serveBall();
+        }
         return;
       }
 
@@ -527,7 +581,9 @@ function BreakoutLiveGame({
     game.status,
     isHelpVisible,
     pendingLeaderboardEntry,
-    startGame,
+    prepareGame,
+    serveBall,
+    showStartScreen,
     toggleRunState,
   ]);
 
@@ -624,7 +680,7 @@ function BreakoutLiveGame({
                   className="min-w-32"
                   data-testid="breakout-start-button"
                   disabled={isReplayRunPending}
-                  onClick={startGame}
+                  onClick={prepareGame}
                   size="lg"
                   type="button"
                   variant="secondary"
@@ -634,32 +690,32 @@ function BreakoutLiveGame({
                 </Button>
                 <GameLeaderboardPanel {...leaderboardPanelProps} />
               </GameStartScreen>
-            ) : showLifeLostScreen ? (
+            ) : showServeScreen ? (
               <div
                 className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-transparent px-4 py-5 text-center text-[var(--breakout-board-text)]"
-                data-testid="breakout-life-lost-screen"
+                data-testid={serveScreenTestId}
               >
                 <div className="flex w-full max-w-[18rem] flex-col items-center gap-3 rounded-md border border-[color-mix(in_oklch,var(--breakout-board-text)_24%,transparent)] bg-[color-mix(in_oklch,var(--breakout-board)_54%,transparent)] p-4 shadow-[0_18px_42px_rgba(0,0,0,0.28)] backdrop-blur-[1px]">
                   <div className="flex flex-col items-center gap-1">
-                    <p className="text-2xl font-semibold tracking-normal">Life lost</p>
+                    <p className="text-2xl font-semibold tracking-normal">{serveTitle}</p>
                     <p
                       className="text-sm font-semibold text-[color-mix(in_oklch,var(--breakout-board-text)_80%,transparent)]"
                       data-testid="breakout-lives-remaining"
                     >
-                      {remainingLifeLabel}
+                      {serveDetail}
                     </p>
                   </div>
                   <Button
                     className="min-w-36"
-                    data-testid="breakout-continue-button"
+                    data-testid={serveButtonTestId}
                     disabled={isReplayRunPending}
-                    onClick={startGame}
+                    onClick={serveBall}
                     size="lg"
                     type="button"
                     variant="secondary"
                   >
                     <PlayIcon data-icon="inline-start" />
-                    {isReplayRunPending ? "Starting" : "Serve next ball"}
+                    {isReplayRunPending ? "Starting" : serveButtonLabel}
                   </Button>
                 </div>
               </div>

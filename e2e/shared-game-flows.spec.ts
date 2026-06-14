@@ -8,6 +8,8 @@ type RealtimeSharedFlowCase = {
   gameId: string;
   name: string;
   prefix: string;
+  serveButtonTestId?: string;
+  serveScreenTestId?: string;
   startButtonTestId: string;
 };
 
@@ -40,6 +42,8 @@ const realtimeSharedFlowCases: RealtimeSharedFlowCase[] = [
     gameId: "breakout",
     name: "Breakout",
     prefix: "breakout",
+    serveButtonTestId: "breakout-serve-button",
+    serveScreenTestId: "breakout-first-serve-screen",
     startButtonTestId: "breakout-start-button",
   },
   {
@@ -199,6 +203,17 @@ async function seedDarkAppTheme(page: Page) {
 
 async function startRealtimeGame(page: Page, flowCase: RealtimeSharedFlowCase) {
   await page.getByTestId(flowCase.startButtonTestId).click();
+
+  if (flowCase.serveButtonTestId) {
+    await expect(page.getByTestId(`${flowCase.prefix}-status`)).toHaveText("Ready");
+
+    if (flowCase.serveScreenTestId) {
+      await expect(page.getByTestId(flowCase.serveScreenTestId)).toBeVisible();
+    }
+
+    await page.getByTestId(flowCase.serveButtonTestId).click();
+  }
+
   await expect(page.getByTestId(`${flowCase.prefix}-status`)).toHaveText(
     flowCase.activeStatus,
   );
@@ -398,6 +413,15 @@ for (const flowCase of realtimeSharedFlowCases) {
     await expect(pauseButton).toHaveAccessibleName("Pause");
 
     await restartButton.click();
+    if (flowCase.serveButtonTestId) {
+      await expect(status).toHaveText("Ready");
+
+      if (flowCase.serveScreenTestId) {
+        await expect(page.getByTestId(flowCase.serveScreenTestId)).toBeVisible();
+      }
+
+      await page.getByTestId(flowCase.serveButtonTestId).click();
+    }
     await expect(status).toHaveText(flowCase.activeStatus);
 
     await backButton.click();

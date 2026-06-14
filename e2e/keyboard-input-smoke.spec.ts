@@ -6,6 +6,8 @@ type KeyboardPauseCase = {
   gameId: string;
   name: string;
   prefix: string;
+  serveButtonTestId?: string;
+  serveScreenTestId?: string;
   startButtonTestId: string;
 };
 
@@ -22,6 +24,8 @@ const keyboardPauseCases: KeyboardPauseCase[] = [
     gameId: "breakout",
     name: "Breakout",
     prefix: "breakout",
+    serveButtonTestId: "breakout-serve-button",
+    serveScreenTestId: "breakout-first-serve-screen",
     startButtonTestId: "breakout-start-button",
   },
   {
@@ -184,6 +188,17 @@ for (const keyboardPauseCase of keyboardPauseCases) {
 
     await expect(status).toHaveText("Ready");
     await page.getByTestId(keyboardPauseCase.startButtonTestId).click();
+
+    if (keyboardPauseCase.serveButtonTestId) {
+      await expect(status).toHaveText("Ready");
+
+      if (keyboardPauseCase.serveScreenTestId) {
+        await expect(page.getByTestId(keyboardPauseCase.serveScreenTestId)).toBeVisible();
+      }
+
+      await page.getByTestId(keyboardPauseCase.serveButtonTestId).click();
+    }
+
     await expect(status).toHaveText(keyboardPauseCase.activeStatus);
 
     await page.locator("body").click({ position: { x: 1, y: 1 } });
