@@ -140,6 +140,7 @@ export const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
       `Clean hit streaks add ${SPACE_INVADERS_HIT_STREAK_BONUS_STEP} more points per hit after the first, up to ${SPACE_INVADERS_HIT_STREAK_BONUS_CAP}; missed shots and player hits reset the streak.`,
       `Destroying multiple invaders in one volley adds ${SPACE_INVADERS_MULTI_KILL_BONUSES[2]}, ${SPACE_INVADERS_MULTI_KILL_BONUSES[3]}, or ${SPACE_INVADERS_MULTI_KILL_BONUSES[4]} bonus points.`,
       `Consecutive UFO hits add ${SPACE_INVADERS_UFO_CHAIN_BONUS_STEP} more points per UFO after the first, up to ${SPACE_INVADERS_UFO_CHAIN_BONUS_CAP}; escaped UFOs reset the chain.`,
+      "When fewer than half the aliens remain, the marching formation speeds up gradually until the final formation alien moves at 1.5x speed.",
       "Clear columns carefully; exposed diver invaders move faster and drop harder than the rest.",
       "Shield Bearers glow cyan and protect nearby active aliens; destroy the bearer or use Piercing to punch through the shield.",
       "Revenge Aliens glow red, fire fast counterfire shots toward your position, and mark up to five random formation aliens with a red aura when destroyed; after two seconds, each marked alien fires one shot.",

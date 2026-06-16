@@ -3,6 +3,8 @@ import {
   DIVER_STEP_MULTIPLIER,
   EXPLOSION_PADDING_BY_KIND,
   EXPLOSION_TTL_TICKS,
+  FORMATION_MAX_SPEED_MULTIPLIER,
+  FORMATION_SPEEDUP_START_RATIO,
   INVADER_DROP_Y,
   INVADER_FIRE_COOLDOWN_TICKS,
   INVADER_HIT_RECOVERY_TICKS,
@@ -1465,12 +1467,18 @@ function marchInvaders(game: SpaceInvadersGameState): SpaceInvadersGameState {
   }
 
   const exposedDiverIds = getExposedDiverIds(activeInvaders);
+  const formationSpeedMultiplier = getFormationSpeedMultiplier(
+    game,
+    activeInvaders.length,
+  );
   const formationInvaders = activeInvaders.filter(
     (invader) => !isExposedDiver(invader, exposedDiverIds),
   );
   const wouldFormationHitWall = formationInvaders.some((invader) => {
     const nextX =
-      invader.x + game.marchDirection * getInvaderStepX(invader, exposedDiverIds);
+      invader.x +
+      game.marchDirection *
+        getInvaderStepX(invader, exposedDiverIds, formationSpeedMultiplier);
 
     return nextX < 0 || nextX + invader.width > game.boardWidth;
   });
@@ -1514,7 +1522,10 @@ function marchInvaders(game: SpaceInvadersGameState): SpaceInvadersGameState {
       return {
         ...invader,
         direction: game.marchDirection,
-        x: invader.x + game.marchDirection * getInvaderStepX(invader, exposedDiverIds),
+        x:
+          invader.x +
+          game.marchDirection *
+            getInvaderStepX(invader, exposedDiverIds, formationSpeedMultiplier),
         isDiving: getNextDiverState(invader, exposedDiverIds),
       };
     }),
@@ -1564,15 +1575,45 @@ function invadersOverlapX(first: SpaceInvader, second: SpaceInvader) {
   return first.x < second.x + second.width && second.x < first.x + first.width;
 }
 
-function getInvaderStepX(invader: SpaceInvader, exposedDiverIds: Set<string>) {
-  return INVADER_STEP_X * getInvaderMovementMultiplier(invader, exposedDiverIds);
+function getFormationSpeedMultiplier(
+  game: Pick<SpaceInvadersGameState, "alienCount">,
+  activeInvaderCount: number,
+) {
+  const speedupStartCount = game.alienCount * FORMATION_SPEEDUP_START_RATIO;
+
+  if (activeInvaderCount <= 1) {
+    return FORMATION_MAX_SPEED_MULTIPLIER;
+  }
+
+  if (activeInvaderCount >= speedupStartCount) {
+    return 1;
+  }
+
+  const interpolationSpan = speedupStartCount - 1;
+  const depletionProgress = (speedupStartCount - activeInvaderCount) / interpolationSpan;
+
+  return 1 + depletionProgress * (FORMATION_MAX_SPEED_MULTIPLIER - 1);
+}
+
+function getInvaderStepX(
+  invader: SpaceInvader,
+  exposedDiverIds: Set<string>,
+  formationSpeedMultiplier: number,
+) {
+  return (
+    INVADER_STEP_X *
+    getInvaderMovementMultiplier(invader, exposedDiverIds, formationSpeedMultiplier)
+  );
 }
 
 function getInvaderMovementMultiplier(
   invader: SpaceInvader,
   exposedDiverIds: Set<string>,
+  formationSpeedMultiplier: number,
 ) {
-  return isExposedDiver(invader, exposedDiverIds) ? DIVER_STEP_MULTIPLIER : 1;
+  return isExposedDiver(invader, exposedDiverIds)
+    ? DIVER_STEP_MULTIPLIER
+    : formationSpeedMultiplier;
 }
 
 function getNextDiverState(invader: SpaceInvader, exposedDiverIds: Set<string>) {

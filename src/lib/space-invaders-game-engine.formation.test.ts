@@ -25,9 +25,12 @@ import {
   SPACE_INVADERS_SPLITTER_ALIEN_COUNT,
   SPACE_INVADERS_STARTING_LIVES,
   withOnlyActiveInvader,
+  type SpaceInvader,
 } from "./space-invaders-game-engine.test-helpers";
 
 describe("space invaders formation engine", () => {
+  const twoAlienFormationStepX = 1.1833333333333333;
+
   it("creates a ready formation with a centered player cannon", () => {
     const game = createInitialSpaceInvadersGame({ random: () => 0 });
     const diverInvaders = game.invaders.filter((invader) => invader.kind === "diver");
@@ -509,7 +512,9 @@ describe("space invaders formation engine", () => {
     expect(shiftedLowerInvader.x).toBeGreaterThan(laneDiver.x + laneDiver.width);
     expect(movedDiver?.x).toBeCloseTo(laneDiver.x + 3.5);
     expect(movedDiver?.isDiving).toBe(true);
-    expect(movedLowerInvader?.x).toBeCloseTo(shiftedLowerInvader.x + 0.8);
+    expect(movedLowerInvader?.x).toBeCloseTo(
+      shiftedLowerInvader.x + twoAlienFormationStepX,
+    );
     expect(movedLowerInvader?.isDiving).toBe(false);
   });
 
@@ -525,7 +530,7 @@ describe("space invaders formation engine", () => {
     };
     const lowerInvader = {
       ...getInvader(game, SPACE_INVADERS_ROWS - 1, releasedDiver.column),
-      x: SPACE_INVADERS_BOARD_WIDTH - game.invaders[0]!.width - 1,
+      x: SPACE_INVADERS_BOARD_WIDTH - game.invaders[0]!.width - 2,
     };
     const advanced = advanceSpaceInvadersGame(
       createRunningGame({
@@ -555,7 +560,9 @@ describe("space invaders formation engine", () => {
     expect(droppedDiver?.y).toBeCloseTo(releasedDiver.y + 16);
     expect(droppedDiver?.direction).toBe(-1);
     expect(droppedDiver?.isDiving).toBe(true);
-    expect(droppedLowerInvader?.x).toBeCloseTo(lowerInvader.x + 0.8);
+    expect(droppedLowerInvader?.x).toBeCloseTo(
+      lowerInvader.x + twoAlienFormationStepX,
+    );
     expect(droppedLowerInvader?.y).toBeCloseTo(lowerInvader.y);
     expect(advanced.marchDirection).toBe(1);
   });
@@ -613,7 +620,7 @@ describe("space invaders formation engine", () => {
   });
 
 
-  it("moves exposed divers twice as fast as the previous tuning and hard-drops them on their own edge bounce", () => {
+  it("keeps exposed divers faster than accelerated formation aliens and hard-drops them on their own edge bounce", () => {
     const game = createInitialSpaceInvadersGame({ random: () => 0 });
     const standardInvader = getInvader(game, SPACE_INVADERS_ROWS - 1, 3);
     const diverInvader = {
@@ -671,14 +678,116 @@ describe("space invaders formation engine", () => {
 
     expect(standardInvader.kind).toBe("standard");
     expect(diverInvader.kind).toBe("diver");
-    expect(movedStandard.x - standardInvader.x).toBeCloseTo(0.8);
+    expect(movedStandard.x - standardInvader.x).toBeCloseTo(twoAlienFormationStepX);
     expect(movedDiver.x - diverInvader.x).toBeCloseTo(3.5);
     expect(movedDiver.x - diverInvader.x).toBeGreaterThan(1.75);
-    expect(droppedStandard.x - standardInvader.x).toBeCloseTo(0.8);
+    expect(droppedStandard.x - standardInvader.x).toBeCloseTo(twoAlienFormationStepX);
     expect(droppedStandard.y - standardInvader.y).toBeCloseTo(0);
     expect(droppedDiver.y - diverInvader.y).toBeCloseTo(16);
     expect(droppedDiver.direction).toBe(-1);
     expect(afterDrop.marchDirection).toBe(1);
+  });
+
+
+  it("keeps formation speed at 1x while at least half of the aliens remain", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const halfFormation = game.invaders.slice(0, game.alienCount / 2);
+    const targetInvader = halfFormation.find(
+      (invader) => invader.kind === "standard",
+    )!;
+    const advanced = advanceSpaceInvadersGame(
+      createRunningGame({
+        invaderShotCooldownTicks: 1_000,
+        invaders: activateInvaders(game.invaders, halfFormation.map((invader) => invader.id)),
+      }),
+    );
+    const movedInvader = advanced.invaders.find(
+      (invader) => invader.id === targetInvader.id,
+    )!;
+
+    expect(halfFormation).toHaveLength(game.alienCount / 2);
+    expect(targetInvader.kind).toBe("standard");
+    expect(movedInvader.x - targetInvader.x).toBeCloseTo(0.8);
+  });
+
+
+  it("interpolates formation speed below half of the starting alien count", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const targetInvader = game.invaders.find(
+      (invader) => invader.kind === "standard" && invader.row === SPACE_INVADERS_ROWS - 1,
+    )!;
+    const remainingFormation = [
+      targetInvader,
+      ...game.invaders.filter((invader) => invader.id !== targetInvader.id).slice(0, 12),
+    ];
+    const advanced = advanceSpaceInvadersGame(
+      createRunningGame({
+        invaderShotCooldownTicks: 1_000,
+        invaders: activateInvaders(
+          game.invaders,
+          remainingFormation.map((invader) => invader.id),
+        ),
+      }),
+    );
+    const movedInvader = advanced.invaders.find(
+      (invader) => invader.id === targetInvader.id,
+    )!;
+
+    expect(remainingFormation).toHaveLength(13);
+    expect(game.alienCount).toBe(50);
+    expect(movedInvader.x - targetInvader.x).toBeCloseTo(1);
+  });
+
+
+  it("caps the final formation alien at 1.5x speed", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const targetInvader = game.invaders.find((invader) => invader.kind === "standard")!;
+    const advanced = advanceSpaceInvadersGame(
+      withOnlyActiveInvader(
+        createRunningGame({
+          invaderShotCooldownTicks: 1_000,
+          invaders: game.invaders,
+        }),
+        targetInvader,
+      ),
+    );
+    const movedInvader = advanced.invaders.find(
+      (invader) => invader.id === targetInvader.id,
+    )!;
+
+    expect(movedInvader.x - targetInvader.x).toBeCloseTo(1.2);
+  });
+
+
+  it("uses accelerated formation speed when checking edge drops", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const standardInvader = game.invaders.find(
+      (invader) => invader.kind === "standard",
+    )!;
+    const targetInvader = {
+      ...standardInvader,
+      x: SPACE_INVADERS_BOARD_WIDTH - standardInvader.width - 1,
+      y: 100,
+    };
+    const advanced = advanceSpaceInvadersGame(
+      withOnlyActiveInvader(
+        createRunningGame({
+          invaderShotCooldownTicks: 1_000,
+          invaders: game.invaders.map((invader) =>
+            invader.id === targetInvader.id ? targetInvader : invader,
+          ),
+          marchDirection: 1,
+        }),
+        targetInvader,
+      ),
+    );
+    const droppedInvader = advanced.invaders.find(
+      (invader) => invader.id === targetInvader.id,
+    )!;
+
+    expect(droppedInvader.x).toBe(targetInvader.x);
+    expect(droppedInvader.y).toBeCloseTo(targetInvader.y + 4);
+    expect(advanced.marchDirection).toBe(-1);
   });
 
 
@@ -754,3 +863,12 @@ describe("space invaders formation engine", () => {
   });
 
 });
+
+function activateInvaders(invaders: SpaceInvader[], activeInvaderIds: string[]) {
+  const activeIds = new Set(activeInvaderIds);
+
+  return invaders.map((invader) => ({
+    ...invader,
+    isActive: activeIds.has(invader.id),
+  }));
+}
