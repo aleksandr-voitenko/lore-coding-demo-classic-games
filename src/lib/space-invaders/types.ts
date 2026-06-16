@@ -16,6 +16,7 @@ export type SpaceInvadersRandomSource = () => number;
 export type SpaceInvadersInvaderShotKind =
   | "armor-wave"
   | "commander"
+  | "commander-shard"
   | "burst"
   | "counterfire"
   | "standard"
@@ -109,6 +110,7 @@ export type SpaceInvadersInvaderShot = SpaceInvadersShot & {
   sourceColumn: number;
   sourceInvaderId: string;
   sourceRow: number;
+  targetOffsetX?: number;
   ttlTicks: number | null;
   velocityX: number;
 };

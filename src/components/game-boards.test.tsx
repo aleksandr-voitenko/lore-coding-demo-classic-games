@@ -418,6 +418,21 @@ describe("game board renderers", () => {
             {
               ageTicks: 0,
               height: 12,
+              id: "invader-shot-commander-shard",
+              kind: "commander-shard",
+              sourceColumn: 6,
+              sourceInvaderId: "0:6",
+              sourceRow: 0,
+              ttlTicks: null,
+              velocityX: -0.45,
+              velocityY: 2.35 * 0.8,
+              width: 4,
+              x: 200,
+              y: 248,
+            },
+            {
+              ageTicks: 0,
+              height: 12,
               id: "invader-shot-scatter",
               kind: "scatter",
               sourceColumn: 2,
@@ -620,6 +635,7 @@ describe("game board renderers", () => {
       'data-shot-kind="needle"',
       'data-shot-kind="standard"',
       'data-shot-kind="commander"',
+      'data-shot-kind="commander-shard"',
       'data-shot-kind="scatter"',
       'data-shot-kind="burst"',
       'data-shot-kind="counterfire"',
@@ -691,6 +707,9 @@ describe("game board renderers", () => {
       "/images/space-invaders/player-ship.png?v=sprite-art-v2",
       "transform:translate3d(",
     ]);
+    expect(markup.match(/invader-shot-commander\.png\?v=sprite-art-v2/g)).toHaveLength(
+      2,
+    );
     expect(markup.match(/scaleX\(-1\)/g)).toHaveLength(1);
   });
 

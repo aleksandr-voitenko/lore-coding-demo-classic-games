@@ -79,6 +79,25 @@ const REVENGE_COUNTERFIRE_VELOCITY_Y = 5.3 * 1.15;
 const REVENGE_COUNTERFIRE_WINDUP_TICKS = 2;
 const SPLITTER_FORK_SPLIT_DISTANCE_RATIO = 0.5;
 const ARMOR_WAVE_VELOCITY_Y = 2.15 * 0.85;
+const COMMANDER_SHOT_HEIGHT = 24;
+const COMMANDER_SHOT_VELOCITY_Y = 2.35;
+const COMMANDER_SHOT_WIDTH = 8;
+const COMMANDER_SHARD_SCALE = 0.5;
+const COMMANDER_SHARD_STEER_X = COMMANDER_SHOT_STEER_X * 0.5;
+const COMMANDER_SHARD_MAX_SPEED_X = COMMANDER_SHOT_MAX_SPEED_X * 0.5;
+const COMMANDER_SHARD_SPEED_RATIO = 0.8;
+const COMMANDER_SHARD_SPLIT_PROFILES = [
+  {
+    offsetX: -3,
+    targetOffsetX: -24,
+    velocityX: -0.45,
+  },
+  {
+    offsetX: 3,
+    targetOffsetX: 24,
+    velocityX: 0.45,
+  },
+] as const;
 const SPLITTER_FRAGMENT_SHOT_VELOCITIES_X = [-1.35, 1.35] as const;
 
 const INVADER_SHOT_SPECS: Record<SpaceInvadersInvaderShotKind, InvaderShotSpec> = {
@@ -93,12 +112,21 @@ const INVADER_SHOT_SPECS: Record<SpaceInvadersInvaderShotKind, InvaderShotSpec> 
   },
   commander: {
     cooldownTicks: 132,
-    height: 24,
+    height: COMMANDER_SHOT_HEIGHT,
     kind: "commander",
     ttlTicks: null,
     velocityX: 0,
-    velocityY: 2.35,
-    width: 8,
+    velocityY: COMMANDER_SHOT_VELOCITY_Y,
+    width: COMMANDER_SHOT_WIDTH,
+  },
+  "commander-shard": {
+    cooldownTicks: 132,
+    height: COMMANDER_SHOT_HEIGHT * COMMANDER_SHARD_SCALE,
+    kind: "commander-shard",
+    ttlTicks: null,
+    velocityX: 0,
+    velocityY: COMMANDER_SHOT_VELOCITY_Y * COMMANDER_SHARD_SPEED_RATIO,
+    width: COMMANDER_SHOT_WIDTH * COMMANDER_SHARD_SCALE,
   },
   burst: {
     cooldownTicks: 92,
@@ -508,21 +536,57 @@ function createSplitterFragmentShots(
   }));
 }
 
+export function createCommanderShardShots(
+  commanderShot: SpaceInvadersInvaderShot,
+  nextInvaderShotId: number,
+) {
+  const spec = INVADER_SHOT_SPECS["commander-shard"];
+  const shotCenterX = getEntityCenterX(commanderShot);
+  const shotCenterY = commanderShot.y + commanderShot.height / 2;
+
+  return COMMANDER_SHARD_SPLIT_PROFILES.map((profile, index) => ({
+    ageTicks: 0,
+    height: spec.height,
+    id: `invader-shot-${nextInvaderShotId + index}`,
+    kind: spec.kind,
+    sourceColumn: commanderShot.sourceColumn,
+    sourceInvaderId: commanderShot.sourceInvaderId,
+    sourceRow: commanderShot.sourceRow,
+    targetOffsetX: profile.targetOffsetX,
+    ttlTicks: spec.ttlTicks,
+    velocityX: profile.velocityX,
+    velocityY: spec.velocityY,
+    width: spec.width,
+    x: shotCenterX + profile.offsetX - spec.width / 2,
+    y: shotCenterY - spec.height / 2,
+  }));
+}
+
 function getNextInvaderShotVelocityX(
   shot: SpaceInvadersInvaderShot,
   player: SpaceInvadersPlayer,
 ) {
-  if (shot.kind === "commander") {
-    const deltaX = getEntityCenterX(player) - getEntityCenterX(shot);
+  if (shot.kind === "commander" || shot.kind === "commander-shard") {
+    const targetCenterX =
+      getEntityCenterX(player) +
+      (shot.kind === "commander-shard" ? (shot.targetOffsetX ?? 0) : 0);
+    const deltaX = targetCenterX - getEntityCenterX(shot);
 
     if (Math.abs(deltaX) < 1) {
       return shot.velocityX;
     }
 
+    const steerX =
+      shot.kind === "commander" ? COMMANDER_SHOT_STEER_X : COMMANDER_SHARD_STEER_X;
+    const maxSpeedX =
+      shot.kind === "commander"
+        ? COMMANDER_SHOT_MAX_SPEED_X
+        : COMMANDER_SHARD_MAX_SPEED_X;
+
     return clamp(
-      shot.velocityX + Math.sign(deltaX) * COMMANDER_SHOT_STEER_X,
-      -COMMANDER_SHOT_MAX_SPEED_X,
-      COMMANDER_SHOT_MAX_SPEED_X,
+      shot.velocityX + Math.sign(deltaX) * steerX,
+      -maxSpeedX,
+      maxSpeedX,
     );
   }
 

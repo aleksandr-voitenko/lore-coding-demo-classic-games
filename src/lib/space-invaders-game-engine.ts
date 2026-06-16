@@ -101,6 +101,7 @@ import { getInvaderCollisionBounds } from "./space-invaders/hitboxes";
 import {
   advanceInvaderShotPositions,
   advanceSpaceInvadersRevengeVolleys,
+  createCommanderShardShots,
   advancePlayerShotPosition,
   createInitialPlayerBurstState,
   createNextPlayerBurstShot,
@@ -1116,6 +1117,7 @@ function resolveOpposingShotCollisions(
 
   const collidedPlayerShotIds = new Set<string>();
   const collidedInvaderShotIds = new Set<string>();
+  const splitCommanderShotIds = new Set<string>();
   let didCollide = false;
   let nextGame = game;
 
@@ -1128,6 +1130,9 @@ function resolveOpposingShotCollisions(
         }
         if (!isInvaderShotInvulnerable(invaderShot)) {
           collidedInvaderShotIds.add(invaderShot.id);
+          if (shouldSplitCommanderShotOnCollision(invaderShot)) {
+            splitCommanderShotIds.add(invaderShot.id);
+          }
         }
         nextGame = createSpaceInvadersExplosion(
           nextGame,
@@ -1147,12 +1152,26 @@ function resolveOpposingShotCollisions(
     (shot) => !collidedPlayerShotIds.has(shot.id),
   );
   const isPlayerVolleyFinished = playerShots.length === 0 && game.playerBurst === null;
+  const splitCommanderShots: SpaceInvadersInvaderShot[] = [];
+  let nextInvaderShotId = game.nextInvaderShotId;
+
+  for (const invaderShot of game.invaderShots) {
+    if (!splitCommanderShotIds.has(invaderShot.id)) {
+      continue;
+    }
+
+    const shards = createCommanderShardShots(invaderShot, nextInvaderShotId);
+    splitCommanderShots.push(...shards);
+    nextInvaderShotId += shards.length;
+  }
 
   return {
     ...nextGame,
-    invaderShots: game.invaderShots.filter(
-      (shot) => !collidedInvaderShotIds.has(shot.id),
-    ),
+    invaderShots: [
+      ...game.invaderShots.filter((shot) => !collidedInvaderShotIds.has(shot.id)),
+      ...splitCommanderShots,
+    ],
+    nextInvaderShotId,
     playerShots,
     playerVolleyHasArmoredHit: isPlayerVolleyFinished
       ? false
@@ -1162,6 +1181,12 @@ function resolveOpposingShotCollisions(
       ? false
       : game.playerVolleyHasUnscoredExit,
   };
+}
+
+function shouldSplitCommanderShotOnCollision(
+  shot: Pick<SpaceInvadersInvaderShot, "kind">,
+) {
+  return shot.kind === "commander";
 }
 
 function isPlayerShotInvulnerable(

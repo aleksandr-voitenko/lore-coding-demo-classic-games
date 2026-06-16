@@ -32,6 +32,7 @@ const invaderShotSpriteSrcByKind: Partial<Record<SpaceInvadersInvaderShotKind, s
   "armor-wave": getSpaceInvadersAssetSrc("invader-shot-armor-wave"),
   burst: getSpaceInvadersAssetSrc("invader-shot-burst"),
   commander: getSpaceInvadersAssetSrc("invader-shot-commander"),
+  "commander-shard": getSpaceInvadersAssetSrc("invader-shot-commander"),
   counterfire: getSpaceInvadersAssetSrc("invader-shot-counterfire"),
   needle: getSpaceInvadersAssetSrc("invader-shot-needle"),
   scatter: getSpaceInvadersAssetSrc("invader-shot-scatter"),

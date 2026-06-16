@@ -164,6 +164,147 @@ describe("space invaders collision engine", () => {
   });
 
 
+  it("splits commander shots into smaller chasing shards when intercepted", () => {
+    const game = createInitialSpaceInvadersGame();
+    const playerShot = fireSpaceInvadersShot(createRunningGame()).playerShots[0]!;
+    const commanderShot = createInvaderShotFixture({
+      height: 24,
+      id: "commander-shot-test",
+      kind: "commander",
+      sourceColumn: 6,
+      sourceInvaderId: "0:6",
+      sourceRow: 0,
+      velocityY: 2.35,
+      width: 8,
+      x: 180,
+    });
+    const collisionY = 300;
+    const runningGame = createRunningGame({
+      hitStreak: 4,
+      invaderShotCooldownTicks: 1_000,
+      invaderShots: [
+        {
+          ...commanderShot,
+          y: collisionY - commanderShot.velocityY,
+        },
+      ],
+      nextInvaderShotId: 9,
+      player: {
+        ...game.player,
+        x: commanderShot.x + commanderShot.width / 2 - game.player.width / 2,
+      },
+      playerShots: [
+        {
+          ...playerShot,
+          x: commanderShot.x + commanderShot.width / 2 - playerShot.width / 2,
+          y: collisionY - playerShot.velocityY,
+        },
+      ],
+      playerVolleyHasArmoredHit: true,
+      playerVolleyHasScored: true,
+      playerVolleyHasUnscoredExit: true,
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
+    const [leftShard, rightShard] = advanced.invaderShots;
+
+    expect(advanced.playerShots).toEqual([]);
+    expect(advanced.invaderShots.map((shot) => shot.kind)).toEqual([
+      "commander-shard",
+      "commander-shard",
+    ]);
+    expect(advanced.invaderShots.map((shot) => shot.id)).toEqual([
+      "invader-shot-9",
+      "invader-shot-10",
+    ]);
+    expect(advanced.invaderShots).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ageTicks: 0,
+          height: 12,
+          sourceColumn: commanderShot.sourceColumn,
+          sourceInvaderId: commanderShot.sourceInvaderId,
+          sourceRow: commanderShot.sourceRow,
+          ttlTicks: null,
+          velocityY: 2.35 * 0.8,
+          width: 4,
+        }),
+      ]),
+    );
+    expect(leftShard?.velocityX).toBeLessThan(0);
+    expect(rightShard?.velocityX).toBeGreaterThan(0);
+    expect(leftShard?.targetOffsetX).toBeLessThan(0);
+    expect(rightShard?.targetOffsetX).toBeGreaterThan(0);
+    expect(leftShard?.x).toBeLessThan(commanderShot.x);
+    expect(rightShard?.x).toBeGreaterThan(commanderShot.x + commanderShot.width / 2);
+    expect((leftShard?.x ?? 0) + (leftShard?.width ?? 0)).toBeLessThan(
+      rightShard?.x ?? 0,
+    );
+    expect(leftShard?.y).toBeCloseTo(collisionY + commanderShot.height / 2 - 6);
+    expect(rightShard?.y).toBeCloseTo(leftShard?.y ?? 0);
+    expect(advanced.nextInvaderShotId).toBe(11);
+    expect(advanced.explosions).toEqual([
+      expect.objectContaining({
+        kind: "projectile",
+        height: SPACE_INVADERS_PROJECTILE_EXPLOSION_HEIGHT,
+        width: SPACE_INVADERS_PROJECTILE_EXPLOSION_WIDTH,
+      }),
+    ]);
+    expect(advanced.hitStreak).toBe(4);
+    expect(advanced.playerVolleyHasArmoredHit).toBe(false);
+    expect(advanced.playerVolleyHasScored).toBe(false);
+    expect(advanced.playerVolleyHasUnscoredExit).toBe(false);
+  });
+
+
+  it("destroys intercepted commander shards without splitting them again", () => {
+    const playerShot = fireSpaceInvadersShot(createRunningGame()).playerShots[0]!;
+    const commanderShard = createInvaderShotFixture({
+      height: 12,
+      id: "commander-shard-test",
+      kind: "commander-shard",
+      sourceColumn: 6,
+      sourceInvaderId: "0:6",
+      sourceRow: 0,
+      velocityX: -0.45,
+      velocityY: 2.35 * 0.8,
+      width: 4,
+      x: 180,
+    });
+    const collisionY = 300;
+    const runningGame = createRunningGame({
+      hitStreak: 4,
+      invaderShotCooldownTicks: 1_000,
+      invaderShots: [
+        {
+          ...commanderShard,
+          y: collisionY - commanderShard.velocityY,
+        },
+      ],
+      nextInvaderShotId: 9,
+      playerShots: [
+        {
+          ...playerShot,
+          x: commanderShard.x + commanderShard.width / 2 - playerShot.width / 2,
+          y: collisionY - playerShot.velocityY,
+        },
+      ],
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
+
+    expect(advanced.playerShots).toEqual([]);
+    expect(advanced.invaderShots).toEqual([]);
+    expect(advanced.nextInvaderShotId).toBe(9);
+    expect(advanced.explosions).toEqual([
+      expect.objectContaining({
+        kind: "projectile",
+        height: SPACE_INVADERS_PROJECTILE_EXPLOSION_HEIGHT,
+        width: SPACE_INVADERS_PROJECTILE_EXPLOSION_WIDTH,
+      }),
+    ]);
+    expect(advanced.hitStreak).toBe(4);
+  });
+
+
   it("keeps piercing shots active when they collide with invader shots", () => {
     const piercingShot = fireSpaceInvadersShot(
       createRunningGame({

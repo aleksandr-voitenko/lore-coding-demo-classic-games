@@ -747,7 +747,7 @@ describe("space invaders projectile engine", () => {
   });
 
 
-  it("moves commander, burst, and scatter shots with their row behavior", () => {
+  it("moves commander, commander shard, burst, and scatter shots with their row behavior", () => {
     const game = createInitialSpaceInvadersGame();
     const commander = createInvaderShotFixture({
       height: 24,
@@ -758,6 +758,30 @@ describe("space invaders projectile engine", () => {
       velocityY: 2.35,
       width: 8,
       x: 120,
+      y: 120,
+    });
+    const leftCommanderShard = createInvaderShotFixture({
+      height: 12,
+      id: "left-commander-shard-shot",
+      kind: "commander-shard",
+      sourceRow: 0,
+      velocityX: 0,
+      velocityY: 2.35 * 0.8,
+      width: 4,
+      targetOffsetX: -24,
+      x: 179,
+      y: 120,
+    });
+    const rightCommanderShard = createInvaderShotFixture({
+      height: 12,
+      id: "right-commander-shard-shot",
+      kind: "commander-shard",
+      sourceRow: 0,
+      velocityX: 0,
+      velocityY: 2.35 * 0.8,
+      width: 4,
+      targetOffsetX: 24,
+      x: 185,
       y: 120,
     });
     const burst = createInvaderShotFixture({
@@ -782,21 +806,53 @@ describe("space invaders projectile engine", () => {
     const advanced = advanceSpaceInvadersGame(
       createRunningGame({
         invaderShotCooldownTicks: 100,
-        invaderShots: [commander, burst, expiredScatter],
+        invaderShots: [
+          commander,
+          leftCommanderShard,
+          rightCommanderShard,
+          burst,
+          expiredScatter,
+        ],
         player: {
           ...game.player,
-          x: 260,
+          x: 184 - game.player.width / 2,
         },
       }),
     );
     const movedCommander = advanced.invaderShots.find(
       (shot) => shot.id === commander.id,
     );
+    const movedLeftCommanderShard = advanced.invaderShots.find(
+      (shot) => shot.id === leftCommanderShard.id,
+    );
+    const movedRightCommanderShard = advanced.invaderShots.find(
+      (shot) => shot.id === rightCommanderShard.id,
+    );
     const movedBurst = advanced.invaderShots.find((shot) => shot.id === burst.id);
 
-    expect(movedCommander?.velocityX).toBeGreaterThan(0);
+    expect(movedCommander?.velocityX).toBeCloseTo(0.14);
     expect(movedCommander?.x).toBeGreaterThan(commander.x);
     expect(movedCommander?.y).toBeCloseTo(commander.y + commander.velocityY);
+    expect(movedLeftCommanderShard?.velocityX).toBeCloseTo(-0.07);
+    expect(movedLeftCommanderShard?.velocityX).toBeLessThan(0);
+    expect(Math.abs(movedLeftCommanderShard?.velocityX ?? 0)).toBeLessThan(
+      movedCommander?.velocityX ?? 0,
+    );
+    expect(movedLeftCommanderShard?.x).toBeLessThan(leftCommanderShard.x);
+    expect(movedLeftCommanderShard?.y).toBeCloseTo(
+      leftCommanderShard.y + leftCommanderShard.velocityY,
+    );
+    expect(movedLeftCommanderShard?.velocityY).toBeLessThan(commander.velocityY);
+    expect(movedRightCommanderShard?.velocityX).toBeCloseTo(0.07);
+    expect(movedRightCommanderShard?.velocityX).toBeGreaterThan(0);
+    expect(Math.abs(movedRightCommanderShard?.velocityX ?? 0)).toBeLessThan(
+      movedCommander?.velocityX ?? 0,
+    );
+    expect(movedRightCommanderShard?.x).toBeGreaterThan(rightCommanderShard.x);
+    expect(movedRightCommanderShard?.y).toBeCloseTo(
+      rightCommanderShard.y + rightCommanderShard.velocityY,
+    );
+    expect(movedRightCommanderShard?.velocityY).toBeLessThan(commander.velocityY);
     expect(movedBurst?.x).toBeCloseTo(burst.x);
     expect(movedBurst?.y).toBeCloseTo(burst.y + burst.velocityY);
     expect(advanced.invaderShots.find((shot) => shot.id === expiredScatter.id)).toBe(

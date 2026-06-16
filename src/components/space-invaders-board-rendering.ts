@@ -58,6 +58,8 @@ export const invaderShotClassNames: Record<SpaceInvadersInvaderShotKind, string>
     "drop-shadow-[0_0_20px_color-mix(in_oklch,var(--invaders-yellow)_84%,transparent)]",
   commander:
     "drop-shadow-[0_0_14px_color-mix(in_oklch,var(--invaders-yellow)_72%,transparent)]",
+  "commander-shard":
+    "drop-shadow-[0_0_10px_color-mix(in_oklch,var(--invaders-yellow)_62%,transparent)]",
   counterfire:
     "drop-shadow-[0_0_16px_color-mix(in_oklch,var(--invaders-red)_82%,transparent)]",
   needle:
