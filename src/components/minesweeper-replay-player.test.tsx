@@ -1,9 +1,7 @@
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import {
   advanceMinesweeperReplayFrame,
-  MinesweeperReplayCursor,
   shouldAdvanceMinesweeperReplayCursorBeforeAction,
 } from "./minesweeper-replay-player";
 import {
@@ -197,23 +195,5 @@ describe("shouldAdvanceMinesweeperReplayCursorBeforeAction", () => {
         },
       }),
     ).toBe(false);
-  });
-});
-
-describe("MinesweeperReplayCursor", () => {
-  it("renders the replay cursor at board-local percentages", () => {
-    const markup = renderToStaticMarkup(
-      <MinesweeperReplayCursor position={{ x: 0.25, y: 0.75 }} />,
-    );
-
-    expect(markup).toContain('data-testid="minesweeper-replay-cursor"');
-    expect(markup).toContain("left:25%");
-    expect(markup).toContain("top:75%");
-  });
-
-  it("does not render before the first cursor replay event", () => {
-    const markup = renderToStaticMarkup(<MinesweeperReplayCursor position={null} />);
-
-    expect(markup).not.toContain("minesweeper-replay-cursor");
   });
 });

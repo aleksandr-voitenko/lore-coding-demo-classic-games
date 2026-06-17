@@ -98,7 +98,9 @@ This file covers React component ownership and shared game UI conventions under
   Minesweeper and Simon live recordings also sample mouse movement over the
   board into a separate cursor event stream every 50ms, and their replay
   playback draws that stream as a schematic board-local cursor without moving
-  the system mouse.
+  the system mouse. `game-replay-cursor.tsx` owns the shared schematic cursor
+  appearance for cursor-enabled replay players; future games should reuse it
+  instead of adding game-specific cursor icon styles.
 - Use `GameReplaySaveAction` for replay-enabled terminal Save replay footers.
   Keep finished replay payload creation and save handlers local to each game,
   and pass a game-specific `testIdPrefix` so existing replay save button and

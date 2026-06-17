@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowLeftIcon, MousePointer2Icon } from "lucide-react";
+import { ArrowLeftIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
+import { GameReplayCursor } from "@/components/game-replay-cursor";
 import {
   GameBoardActions,
   GameBoardColumn,
@@ -144,33 +145,6 @@ export function SimonReplayTurnFeedback({
   }
 
   return null;
-}
-
-export function SimonReplayCursor({
-  position,
-}: {
-  position: SimonReplayCursorPosition | null;
-}) {
-  if (position === null) {
-    return null;
-  }
-
-  return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute size-5 -translate-x-[12.5%] -translate-y-[12.5%] text-white drop-shadow-[0_2px_5px_rgba(0,0,0,0.72)] sm:size-6"
-      data-testid="simon-replay-cursor"
-      style={{
-        left: `${position.x * 100}%`,
-        top: `${position.y * 100}%`,
-      }}
-    >
-      <MousePointer2Icon
-        className="size-full fill-[rgba(15,23,42,0.18)]"
-        strokeWidth={2.6}
-      />
-    </div>
-  );
 }
 
 function SimonReplayMessage({
@@ -441,7 +415,10 @@ export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
             onPadPress={ignorePadPress}
             statusLabel={statusLabel}
           >
-            <SimonReplayCursor position={cursorPosition} />
+            <GameReplayCursor
+              position={cursorPosition}
+              testId="simon-replay-cursor"
+            />
             <SimonReplayTurnFeedback game={game} />
             {isFinished ? (
               <GameEndScreen

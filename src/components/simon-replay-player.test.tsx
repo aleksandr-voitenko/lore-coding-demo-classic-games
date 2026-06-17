@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   shouldAdvanceSimonReplayCursorBeforeAction,
-  SimonReplayCursor,
   SimonReplayTurnFeedback,
 } from "./simon-replay-player";
 import {
@@ -105,23 +104,5 @@ describe("shouldAdvanceSimonReplayCursorBeforeAction", () => {
         },
       }),
     ).toBe(false);
-  });
-});
-
-describe("SimonReplayCursor", () => {
-  it("renders the replay cursor at board-local percentages", () => {
-    const markup = renderToStaticMarkup(
-      <SimonReplayCursor position={{ x: 0.25, y: 0.75 }} />,
-    );
-
-    expect(markup).toContain('data-testid="simon-replay-cursor"');
-    expect(markup).toContain("left:25%");
-    expect(markup).toContain("top:75%");
-  });
-
-  it("does not render before the first cursor replay event", () => {
-    const markup = renderToStaticMarkup(<SimonReplayCursor position={null} />);
-
-    expect(markup).not.toContain("simon-replay-cursor");
   });
 });
