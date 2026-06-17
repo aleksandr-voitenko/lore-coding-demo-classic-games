@@ -407,6 +407,12 @@
   );
 }
 
+.space-invaders-explosion--mine {
+  filter: drop-shadow(
+    0 0 18px color-mix(in oklch, var(--invaders-yellow) 78%, transparent)
+  );
+}
+
 .space-invaders-explosion--player {
   filter: drop-shadow(
     0 0 12px color-mix(in oklch, var(--invaders-cyan) 60%, transparent)

@@ -28,7 +28,9 @@ This file covers public image assets under `public/images/`.
   row-colored `alien-<color>.png` sprites. Sprite-backed invader shots use
   `invader-shot-<kind>.png` filenames matching the engine's invader shot kind
   strings, except commander shards reuse `invader-shot-commander.png` at smaller
-  engine dimensions. Shield-absorbed player shots use `explosion-shield.png`
+  engine dimensions. Mine Layer aliens use the dedicated
+  `alien-mine-layer.png` sprite, and their slow lane-denial projectile uses
+  `invader-shot-mine.png`. Shield-absorbed player shots use `explosion-shield.png`
   while keeping the existing explosion animation timing.
   The in-board HUD uses
   `hud-health.png` and `hud-score.png` for the top-corner health and score

@@ -8,6 +8,7 @@ import {
   getArmoredAlienIds,
   getDiverIds,
   getInvader,
+  getMineLayerAlienIds,
   getRevengeAlienIds,
   getShieldBearerIds,
   getSpaceInvadersTickDelay,
@@ -19,6 +20,7 @@ import {
   SPACE_INVADERS_BASE_Y,
   SPACE_INVADERS_BOARD_WIDTH,
   SPACE_INVADERS_COLUMNS,
+  SPACE_INVADERS_MINE_LAYER_ALIEN_COUNT,
   SPACE_INVADERS_REVENGE_ALIEN_COUNT,
   SPACE_INVADERS_ROWS,
   SPACE_INVADERS_SHIELD_BEARER_COUNT,
@@ -45,6 +47,9 @@ describe("space invaders formation engine", () => {
     );
     const armoredAlienInvaders = game.invaders.filter(
       (invader) => invader.kind === "armored",
+    );
+    const mineLayerAlienInvaders = game.invaders.filter(
+      (invader) => invader.kind === "mine-layer",
     );
     const bottomRowInvaders = game.invaders.filter(
       (invader) => invader.row === SPACE_INVADERS_ROWS - 1,
@@ -103,6 +108,7 @@ describe("space invaders formation engine", () => {
     expect(revengeAlienInvaders).toHaveLength(SPACE_INVADERS_REVENGE_ALIEN_COUNT);
     expect(splitterAlienInvaders).toHaveLength(SPACE_INVADERS_SPLITTER_ALIEN_COUNT);
     expect(armoredAlienInvaders).toHaveLength(SPACE_INVADERS_ARMORED_ALIEN_COUNT);
+    expect(mineLayerAlienInvaders).toHaveLength(SPACE_INVADERS_MINE_LAYER_ALIEN_COUNT);
     expect(
       armoredAlienInvaders.every(
         (invader) =>
@@ -133,6 +139,11 @@ describe("space invaders formation engine", () => {
     ).toBe(true);
     expect(
       armoredAlienInvaders.every(
+        (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
+      ),
+    ).toBe(true);
+    expect(
+      mineLayerAlienInvaders.every(
         (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
       ),
     ).toBe(true);
@@ -181,6 +192,24 @@ describe("space invaders formation engine", () => {
           ),
       ),
     ).toBe(true);
+    expect(
+      mineLayerAlienInvaders.every(
+        (invader) =>
+          !diverInvaders.some((diverInvader) => diverInvader.id === invader.id) &&
+          !shieldBearerInvaders.some(
+            (shieldBearerInvader) => shieldBearerInvader.id === invader.id,
+          ) &&
+          !revengeAlienInvaders.some(
+            (revengeAlienInvader) => revengeAlienInvader.id === invader.id,
+          ) &&
+          !splitterAlienInvaders.some(
+            (splitterAlienInvader) => splitterAlienInvader.id === invader.id,
+          ) &&
+          !armoredAlienInvaders.some(
+            (armoredAlienInvader) => armoredAlienInvader.id === invader.id,
+          ),
+      ),
+    ).toBe(true);
     expect(bottomRowInvaders.every((invader) => invader.kind === "standard")).toBe(true);
     expect(game.invaders[0]).toMatchObject({
       column: 0,
@@ -210,6 +239,10 @@ describe("space invaders formation engine", () => {
       kind: "armored",
       points: 20,
     });
+    expect(mineLayerAlienInvaders[0]).toMatchObject({
+      kind: "mine-layer",
+      points: 20,
+    });
     expect(game.invaders.at(-1)).toMatchObject({
       column: SPACE_INVADERS_COLUMNS - 1,
       kind: "standard",
@@ -232,6 +265,8 @@ describe("space invaders formation engine", () => {
     const lastSplitterAlienIds = getSplitterAlienIds(lastSelection);
     const firstArmoredAlienIds = getArmoredAlienIds(firstSelection);
     const lastArmoredAlienIds = getArmoredAlienIds(lastSelection);
+    const firstMineLayerAlienIds = getMineLayerAlienIds(firstSelection);
+    const lastMineLayerAlienIds = getMineLayerAlienIds(lastSelection);
     const firstDivers = firstSelection.invaders.filter((invader) => invader.kind === "diver");
     const lastDivers = lastSelection.invaders.filter((invader) => invader.kind === "diver");
     const firstShieldBearers = firstSelection.invaders.filter(
@@ -258,6 +293,12 @@ describe("space invaders formation engine", () => {
     const lastArmoredAliens = lastSelection.invaders.filter(
       (invader) => invader.kind === "armored",
     );
+    const firstMineLayerAliens = firstSelection.invaders.filter(
+      (invader) => invader.kind === "mine-layer",
+    );
+    const lastMineLayerAliens = lastSelection.invaders.filter(
+      (invader) => invader.kind === "mine-layer",
+    );
     const firstBottomRowInvaders = firstSelection.invaders.filter(
       (invader) => invader.row === SPACE_INVADERS_ROWS - 1,
     );
@@ -275,11 +316,14 @@ describe("space invaders formation engine", () => {
     expect(lastSplitterAlienIds).toHaveLength(SPACE_INVADERS_SPLITTER_ALIEN_COUNT);
     expect(firstArmoredAlienIds).toHaveLength(SPACE_INVADERS_ARMORED_ALIEN_COUNT);
     expect(lastArmoredAlienIds).toHaveLength(SPACE_INVADERS_ARMORED_ALIEN_COUNT);
+    expect(firstMineLayerAlienIds).toHaveLength(SPACE_INVADERS_MINE_LAYER_ALIEN_COUNT);
+    expect(lastMineLayerAlienIds).toHaveLength(SPACE_INVADERS_MINE_LAYER_ALIEN_COUNT);
     expect(firstDiverIds).not.toEqual(lastDiverIds);
     expect(firstShieldBearerIds).not.toEqual(lastShieldBearerIds);
     expect(firstRevengeAlienIds).not.toEqual(lastRevengeAlienIds);
     expect(firstSplitterAlienIds).not.toEqual(lastSplitterAlienIds);
     expect(firstArmoredAlienIds).not.toEqual(lastArmoredAlienIds);
+    expect(firstMineLayerAlienIds).not.toEqual(lastMineLayerAlienIds);
     expect(firstDivers.every((invader) => invader.row < SPACE_INVADERS_ROWS - 1)).toBe(true);
     expect(lastDivers.every((invader) => invader.row < SPACE_INVADERS_ROWS - 1)).toBe(true);
     expect(
@@ -319,6 +363,16 @@ describe("space invaders formation engine", () => {
     ).toBe(true);
     expect(
       lastArmoredAliens.every(
+        (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
+      ),
+    ).toBe(true);
+    expect(
+      firstMineLayerAliens.every(
+        (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
+      ),
+    ).toBe(true);
+    expect(
+      lastMineLayerAliens.every(
         (invader) => invader.row > 0 && invader.row < SPACE_INVADERS_ROWS - 1,
       ),
     ).toBe(true);
@@ -368,6 +422,26 @@ describe("space invaders formation engine", () => {
           !lastSplitterAlienIds.includes(id),
       ),
     ).toBe(true);
+    expect(
+      firstMineLayerAlienIds.every(
+        (id) =>
+          !firstDiverIds.includes(id) &&
+          !firstShieldBearerIds.includes(id) &&
+          !firstRevengeAlienIds.includes(id) &&
+          !firstSplitterAlienIds.includes(id) &&
+          !firstArmoredAlienIds.includes(id),
+      ),
+    ).toBe(true);
+    expect(
+      lastMineLayerAlienIds.every(
+        (id) =>
+          !lastDiverIds.includes(id) &&
+          !lastShieldBearerIds.includes(id) &&
+          !lastRevengeAlienIds.includes(id) &&
+          !lastSplitterAlienIds.includes(id) &&
+          !lastArmoredAlienIds.includes(id),
+      ),
+    ).toBe(true);
     expect(firstBottomRowInvaders.every((invader) => invader.kind === "standard")).toBe(true);
     expect(lastBottomRowInvaders.every((invader) => invader.kind === "standard")).toBe(true);
   });
@@ -383,6 +457,7 @@ describe("space invaders formation engine", () => {
     const expectedSmallPresetRevengeAlienCount = 2;
     const expectedSmallPresetSplitterAlienCount = 0;
     const expectedSmallPresetArmoredAlienCount = 0;
+    const expectedSmallPresetMineLayerAlienCount = 0;
 
     expect(game.alienCount).toBe(24);
     expect(game.boardHeight).toBe(640);
@@ -402,6 +477,9 @@ describe("space invaders formation engine", () => {
     expect(game.invaders.filter((invader) => invader.kind === "armored")).toHaveLength(
       expectedSmallPresetArmoredAlienCount,
     );
+    expect(game.invaders.filter((invader) => invader.kind === "mine-layer")).toHaveLength(
+      expectedSmallPresetMineLayerAlienCount,
+    );
     expect(game.player.x + game.player.width / 2).toBe(240);
     expect(restarted.alienCount).toBe(24);
     expect(restarted.boardHeight).toBe(640);
@@ -419,6 +497,9 @@ describe("space invaders formation engine", () => {
     );
     expect(restarted.invaders.filter((invader) => invader.kind === "armored")).toHaveLength(
       expectedSmallPresetArmoredAlienCount,
+    );
+    expect(restarted.invaders.filter((invader) => invader.kind === "mine-layer")).toHaveLength(
+      expectedSmallPresetMineLayerAlienCount,
     );
     expect(restarted.status).toBe("running");
   });
@@ -691,10 +772,13 @@ describe("space invaders formation engine", () => {
 
   it("keeps formation speed at 1x while at least half of the aliens remain", () => {
     const game = createInitialSpaceInvadersGame({ random: () => 0 });
-    const halfFormation = game.invaders.slice(0, game.alienCount / 2);
-    const targetInvader = halfFormation.find(
-      (invader) => invader.kind === "standard",
-    )!;
+    const targetInvader = getInvader(game, SPACE_INVADERS_ROWS - 1, 0);
+    const halfFormation = [
+      targetInvader,
+      ...game.invaders
+        .filter((invader) => invader.id !== targetInvader.id)
+        .slice(0, game.alienCount / 2 - 1),
+    ];
     const advanced = advanceSpaceInvadersGame(
       createRunningGame({
         invaderShotCooldownTicks: 1_000,

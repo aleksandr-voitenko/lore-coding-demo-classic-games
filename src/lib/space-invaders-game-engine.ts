@@ -58,6 +58,7 @@ export {
   SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_STEP,
   SPACE_INVADERS_MULTI_KILL_BONUSES,
   SPACE_INVADERS_MULTI_KILL_COMBO_TICKS,
+  SPACE_INVADERS_MINE_LAYER_ALIEN_COUNT,
   SPACE_INVADERS_PLAYER_BURST_SHOT_COUNT,
   SPACE_INVADERS_PLAYER_BURST_SHOT_DELAY_TICKS,
   SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
@@ -173,6 +174,16 @@ type PlayerShotInvaderDamage = {
 type PlayerShotInvaderResolution = {
   didScoreWithShot: boolean;
   shotDamagedInvaderIds: string[];
+};
+
+type MineBlastDamageSets = {
+  invaderShotIds: Set<string>;
+  playerShotIds: Set<string>;
+};
+
+type MineBlastResolution = {
+  didDamagePlayer: boolean;
+  game: SpaceInvadersGameState;
 };
 
 export type {
@@ -404,6 +415,10 @@ export function advanceSpaceInvadersGame(
     gameAfterInvaderShots.status === "lost" ||
     gameAfterInvaderShots.lives < gameAfterPlayerVolley.lives
   ) {
+    return finalizeSpaceInvadersMultiKillCombo(gameAfterInvaderShots);
+  }
+
+  if (gameAfterInvaderShots.status === "won") {
     return finalizeSpaceInvadersMultiKillCombo(gameAfterInvaderShots);
   }
 
@@ -1057,54 +1072,44 @@ function advanceInvaderShots(
       isInvaderShotDangerous(shot) &&
       rectanglesIntersect(shot, gameAfterShotCollisions.player),
   );
-  const didHitPlayer = hittingShots.length > 0;
+  const hittingMineShots = hittingShots.filter((shot) => shot.kind === "mine");
+  const gameAfterMineHits =
+    hittingMineShots.length === 0
+      ? gameAfterShotCollisions
+      : detonateMineShots(gameAfterShotCollisions, hittingMineShots, random).game;
 
-  if (!didHitPlayer) {
-    return gameAfterShotCollisions;
+  if (
+    hittingMineShots.length > 0 &&
+    (gameAfterMineHits.playerRespawnTicks > 0 ||
+      gameAfterMineHits.status === "lost")
+  ) {
+    return gameAfterMineHits;
   }
 
-  if (gameAfterShotCollisions.playerRespawnTicks > 0) {
-    return gameAfterShotCollisions;
+  const remainingHittingShots = gameAfterMineHits.invaderShots.filter(
+    (shot) =>
+      isInvaderShotDangerous(shot) &&
+      rectanglesIntersect(shot, gameAfterMineHits.player),
+  );
+
+  if (remainingHittingShots.length === 0) {
+    return gameAfterMineHits;
   }
 
-  if (gameAfterShotCollisions.playerShieldTicks > 0) {
+  if (gameAfterMineHits.playerRespawnTicks > 0) {
+    return gameAfterMineHits;
+  }
+
+  if (gameAfterMineHits.playerShieldTicks > 0) {
     return {
-      ...gameAfterShotCollisions,
-      invaderShots: gameAfterShotCollisions.invaderShots.filter(
-        (shot) => !hittingShots.includes(shot),
+      ...gameAfterMineHits,
+      invaderShots: gameAfterMineHits.invaderShots.filter(
+        (shot) => !remainingHittingShots.includes(shot),
       ),
     };
   }
 
-  const lives = gameAfterShotCollisions.lives - 1;
-  const gameWithExplosion = createSpaceInvadersExplosion(
-    gameAfterShotCollisions,
-    "player",
-    gameAfterShotCollisions.player,
-    random,
-  );
-
-  return {
-    ...gameWithExplosion,
-    invaderBurst: null,
-    invaderShotCooldownTicks: INVADER_HIT_RECOVERY_TICKS,
-    invaderShots: [],
-    nextInvaderShotId: gameAfterShotCollisions.nextInvaderShotId,
-    hitStreak: 0,
-    lives,
-    player: createCenteredPlayer(
-      gameAfterShotCollisions.boardWidth,
-      gameAfterShotCollisions.boardHeight,
-    ),
-    playerBurst: null,
-    playerRespawnTicks: lives <= 0 ? 0 : SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
-    playerShieldTicks: 0,
-    playerShots: [],
-    playerVolleyHasArmoredHit: false,
-    playerVolleyHasScored: false,
-    playerVolleyHasUnscoredExit: false,
-    status: lives <= 0 ? "lost" : gameAfterShotCollisions.status,
-  };
+  return damageSpaceInvadersPlayer(gameAfterMineHits, random);
 }
 
 function resolveOpposingShotCollisions(
@@ -1118,6 +1123,7 @@ function resolveOpposingShotCollisions(
   const collidedPlayerShotIds = new Set<string>();
   const collidedInvaderShotIds = new Set<string>();
   const splitCommanderShotIds = new Set<string>();
+  const collidedMineShots = new Map<string, SpaceInvadersInvaderShot>();
   let didCollide = false;
   let nextGame = game;
 
@@ -1130,16 +1136,20 @@ function resolveOpposingShotCollisions(
         }
         if (!isInvaderShotInvulnerable(invaderShot)) {
           collidedInvaderShotIds.add(invaderShot.id);
-          if (shouldSplitCommanderShotOnCollision(invaderShot)) {
+          if (invaderShot.kind === "mine") {
+            collidedMineShots.set(invaderShot.id, invaderShot);
+          } else if (shouldSplitCommanderShotOnCollision(invaderShot)) {
             splitCommanderShotIds.add(invaderShot.id);
           }
         }
-        nextGame = createSpaceInvadersExplosion(
-          nextGame,
-          "projectile",
-          getProjectileCollisionExplosionTarget(playerShot, invaderShot),
-          random,
-        );
+        if (invaderShot.kind !== "mine") {
+          nextGame = createSpaceInvadersExplosion(
+            nextGame,
+            "projectile",
+            getProjectileCollisionExplosionTarget(playerShot, invaderShot),
+            random,
+          );
+        }
       }
     }
   }
@@ -1148,12 +1158,31 @@ function resolveOpposingShotCollisions(
     return game;
   }
 
+  const splitCommanderShots: SpaceInvadersInvaderShot[] = [];
+  let nextInvaderShotId = game.nextInvaderShotId;
+
+  if (collidedMineShots.size > 0) {
+    const mineBlastResolution = detonateMineShots(
+      nextGame,
+      [...collidedMineShots.values()],
+      random,
+      {
+        invaderShotIds: collidedInvaderShotIds,
+        playerShotIds: collidedPlayerShotIds,
+      },
+    );
+
+    nextGame = mineBlastResolution.game;
+
+    if (mineBlastResolution.didDamagePlayer) {
+      return nextGame;
+    }
+  }
+
   const playerShots = game.playerShots.filter(
     (shot) => !collidedPlayerShotIds.has(shot.id),
   );
   const isPlayerVolleyFinished = playerShots.length === 0 && game.playerBurst === null;
-  const splitCommanderShots: SpaceInvadersInvaderShot[] = [];
-  let nextInvaderShotId = game.nextInvaderShotId;
 
   for (const invaderShot of game.invaderShots) {
     if (!splitCommanderShotIds.has(invaderShot.id)) {
@@ -1199,6 +1228,249 @@ function isInvaderShotInvulnerable(
   shot: Pick<SpaceInvadersInvaderShot, "kind">,
 ) {
   return shot.kind === "armor-wave";
+}
+
+function detonateMineShots(
+  game: SpaceInvadersGameState,
+  mineShots: SpaceInvadersInvaderShot[],
+  random: SpaceInvadersRandomSource,
+  destroyedShotIds: MineBlastDamageSets = {
+    invaderShotIds: new Set<string>(),
+    playerShotIds: new Set<string>(),
+  },
+): MineBlastResolution {
+  const queuedMineShots = [...mineShots];
+  const detonatedMineShotIds = new Set<string>();
+  let didDamagePlayer = false;
+  let nextGame = game;
+
+  while (queuedMineShots.length > 0) {
+    const mineShot = queuedMineShots.shift()!;
+
+    if (detonatedMineShotIds.has(mineShot.id)) {
+      continue;
+    }
+
+    detonatedMineShotIds.add(mineShot.id);
+    destroyedShotIds.invaderShotIds.add(mineShot.id);
+
+    const blastBounds = getMineBlastBounds(mineShot);
+
+    nextGame = createSpaceInvadersExplosion(nextGame, "mine", mineShot, random);
+    nextGame = applyMineBlastInvaderDamage(nextGame, blastBounds, random);
+
+    for (const playerShot of game.playerShots) {
+      if (
+        !destroyedShotIds.playerShotIds.has(playerShot.id) &&
+        rectanglesIntersect(playerShot, blastBounds)
+      ) {
+        destroyedShotIds.playerShotIds.add(playerShot.id);
+      }
+    }
+
+    for (const invaderShot of game.invaderShots) {
+      if (
+        destroyedShotIds.invaderShotIds.has(invaderShot.id) ||
+        !rectanglesIntersect(invaderShot, blastBounds)
+      ) {
+        continue;
+      }
+
+      destroyedShotIds.invaderShotIds.add(invaderShot.id);
+
+      if (invaderShot.kind === "mine") {
+        queuedMineShots.push(invaderShot);
+      }
+    }
+
+    didDamagePlayer =
+      didDamagePlayer || doesMineBlastDamagePlayer(nextGame, blastBounds);
+  }
+
+  nextGame = {
+    ...nextGame,
+    invaderShots: nextGame.invaderShots.filter(
+      (shot) => !destroyedShotIds.invaderShotIds.has(shot.id),
+    ),
+    playerShots: nextGame.playerShots.filter(
+      (shot) => !destroyedShotIds.playerShotIds.has(shot.id),
+    ),
+  };
+
+  if (didDamagePlayer) {
+    return {
+      didDamagePlayer: true,
+      game: damageSpaceInvadersPlayer(nextGame, random),
+    };
+  }
+
+  return {
+    didDamagePlayer: false,
+    game: nextGame,
+  };
+}
+
+function getMineBlastBounds(
+  mineShot: Pick<SpaceInvadersInvaderShot, "height" | "width" | "x" | "y">,
+): SpaceInvadersScoreTarget {
+  const padding = EXPLOSION_PADDING_BY_KIND.mine;
+  const height = mineShot.height + padding * 2;
+  const width = mineShot.width + padding * 2;
+
+  return {
+    height,
+    width,
+    x: mineShot.x + mineShot.width / 2 - width / 2,
+    y: mineShot.y + mineShot.height / 2 - height / 2,
+  };
+}
+
+function applyMineBlastInvaderDamage(
+  game: SpaceInvadersGameState,
+  blastBounds: SpaceInvadersScoreTarget,
+  random: SpaceInvadersRandomSource,
+) {
+  const hitInvaders = game.invaders.filter(
+    (invader) =>
+      invader.isActive &&
+      rectanglesIntersect(blastBounds, getInvaderCollisionBounds(invader)),
+  );
+
+  if (hitInvaders.length === 0) {
+    return game;
+  }
+
+  const damage = getMineBlastInvaderDamage(hitInvaders);
+  const damagedArmoredHitPointsById = new Map(
+    damage.damagedArmoredInvaders.map(({ hitPoints, invader }) => [
+      invader.id,
+      hitPoints,
+    ]),
+  );
+  const destroyedInvaderIds = new Set(
+    damage.destroyedInvaders.map((invader) => invader.id),
+  );
+  const invadersAfterDamage = game.invaders.map((invader) => {
+    if (destroyedInvaderIds.has(invader.id)) {
+      return { ...invader, hitPoints: 0, isActive: false };
+    }
+
+    const hitPoints = damagedArmoredHitPointsById.get(invader.id);
+
+    return hitPoints === undefined ? invader : { ...invader, hitPoints };
+  });
+  const splitterFragments = createSpaceInvadersSplitterFragments(
+    damage.destroyedInvaders,
+    game.boardWidth,
+  );
+  const invaders = [...invadersAfterDamage, ...splitterFragments];
+  const activeInvaderCount = invaders.filter((invader) => invader.isActive).length;
+  let gameWithDamage: SpaceInvadersGameState = {
+    ...game,
+    invaders,
+    score: game.score + damage.destroyedInvaderPoints,
+    status: activeInvaderCount === 0 ? "won" : game.status,
+  };
+
+  for (const destroyedInvader of damage.destroyedInvaders) {
+    gameWithDamage = createSpaceInvadersExplosion(
+      gameWithDamage,
+      "invader",
+      destroyedInvader,
+      random,
+    );
+    gameWithDamage = maybeCreateSpaceInvadersPowerUpDrop(
+      gameWithDamage,
+      destroyedInvader,
+      random,
+    );
+  }
+
+  gameWithDamage = maybePrimeSpaceInvadersRevengeVolley(
+    gameWithDamage,
+    damage.destroyedInvaders,
+    random,
+  );
+
+  if (damage.destroyedInvaders.length === 0) {
+    return gameWithDamage;
+  }
+
+  return continueSpaceInvadersMultiKillCombo(
+    gameWithDamage,
+    getCombinedSpaceInvadersScoreTarget(damage.destroyedInvaders),
+    damage.destroyedInvaders.length,
+    damage.destroyedInvaderPoints,
+    1,
+  );
+}
+
+function getMineBlastInvaderDamage(
+  hitInvaders: SpaceInvader[],
+): PlayerShotInvaderDamage {
+  const hitResults = hitInvaders.map((invader) => ({
+    hitPoints: getInvaderHitPointsAfterPlayerShot(invader),
+    invader,
+  }));
+  const damagedArmoredInvaders = hitResults.filter(
+    ({ hitPoints, invader }) => invader.kind === "armored" && hitPoints > 0,
+  );
+  const destroyedInvaders = hitResults
+    .filter(({ hitPoints }) => hitPoints <= 0)
+    .map(({ invader }) => invader);
+  const destroyedInvaderPoints = destroyedInvaders.reduce(
+    (total, invader) => total + invader.points,
+    0,
+  );
+
+  return {
+    damagedArmoredInvaders,
+    destroyedInvaderPoints,
+    destroyedInvaders,
+    hitTargets: hitInvaders,
+  };
+}
+
+function doesMineBlastDamagePlayer(
+  game: SpaceInvadersGameState,
+  blastBounds: SpaceInvadersScoreTarget,
+) {
+  return (
+    game.playerRespawnTicks === 0 &&
+    game.playerShieldTicks <= 0 &&
+    rectanglesIntersect(blastBounds, game.player)
+  );
+}
+
+function damageSpaceInvadersPlayer(
+  game: SpaceInvadersGameState,
+  random: SpaceInvadersRandomSource,
+): SpaceInvadersGameState {
+  const lives = game.lives - 1;
+  const gameWithExplosion = createSpaceInvadersExplosion(
+    game,
+    "player",
+    game.player,
+    random,
+  );
+
+  return {
+    ...gameWithExplosion,
+    invaderBurst: null,
+    invaderShotCooldownTicks: INVADER_HIT_RECOVERY_TICKS,
+    invaderShots: [],
+    hitStreak: 0,
+    lives,
+    player: createCenteredPlayer(game.boardWidth, game.boardHeight),
+    playerBurst: null,
+    playerRespawnTicks: lives <= 0 ? 0 : SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
+    playerShieldTicks: 0,
+    playerShots: [],
+    playerVolleyHasArmoredHit: false,
+    playerVolleyHasScored: false,
+    playerVolleyHasUnscoredExit: false,
+    status: lives <= 0 ? "lost" : game.status,
+  };
 }
 
 function getProjectileCollisionExplosionTarget(

@@ -33,6 +33,12 @@ const SPACE_INVADERS_ROW_ALIEN_HITBOXES = {
     2: createInvaderHitboxRatio({ height: 83, offsetX: 3, offsetY: 14, width: 106 }),
     3: createInvaderHitboxRatio({ height: 81, offsetX: 3, offsetY: 16, width: 106 }),
   } as const satisfies Record<1 | 2 | 3, InvaderHitboxRatio>,
+  mineLayer: createInvaderHitboxRatio({
+    height: 92,
+    offsetX: 20,
+    offsetY: 10,
+    width: 72,
+  }),
   revenge: createInvaderHitboxRatio({
     height: 98,
     offsetX: 1,
@@ -80,6 +86,10 @@ function getInvaderHitboxRatio(
 
   if (invader.kind === "revenge") {
     return SPACE_INVADERS_ROW_ALIEN_HITBOXES.revenge;
+  }
+
+  if (invader.kind === "mine-layer") {
+    return SPACE_INVADERS_ROW_ALIEN_HITBOXES.mineLayer;
   }
 
   if (invader.kind === "splitter" || invader.kind === "splitter-fragment") {

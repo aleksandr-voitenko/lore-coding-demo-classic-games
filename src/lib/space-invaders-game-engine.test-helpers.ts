@@ -22,6 +22,7 @@ export {
   SPACE_INVADERS_HIT_STREAK_POPUP_SCALE_STEP,
   SPACE_INVADERS_MULTI_KILL_BONUSES,
   SPACE_INVADERS_MULTI_KILL_COMBO_TICKS,
+  SPACE_INVADERS_MINE_LAYER_ALIEN_COUNT,
   SPACE_INVADERS_PLAYER_BURST_SHOT_COUNT,
   SPACE_INVADERS_PLAYER_BURST_SHOT_DELAY_TICKS,
   SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
@@ -104,6 +105,12 @@ export function getSplitterAlienIds(game: SpaceInvadersGameState) {
 export function getArmoredAlienIds(game: SpaceInvadersGameState) {
   return game.invaders
     .filter((invader) => invader.kind === "armored")
+    .map((invader) => invader.id);
+}
+
+export function getMineLayerAlienIds(game: SpaceInvadersGameState) {
+  return game.invaders
+    .filter((invader) => invader.kind === "mine-layer")
     .map((invader) => invader.id);
 }
 

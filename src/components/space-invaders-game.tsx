@@ -146,6 +146,7 @@ export const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
       "Revenge Aliens glow red, fire fast counterfire shots toward your position, and mark up to five random formation aliens with a red aura when destroyed; after two seconds, each marked alien fires one shot.",
       "Splitter Aliens fire magenta fork shots and split into two smaller fragments when destroyed; fragments dive like Divers, do not shoot, do not drop bonuses, and still count as invaders.",
       "Armored Aliens take three hits to destroy; non-lethal hits change their armor and keep clean streaks alive while their wide armor-wave shots move straight down.",
+      "Mine Layers drop slow mines; destroying one creates a large blast that damages ships, aliens, and shots, so shoot them near invaders and avoid detonating them near your cannon.",
       `Destroyed diver invaders drop power-up icons: bonus score adds ${SPACE_INVADERS_BONUS_SCORE_POINTS} points, extra life rarely grants a life, Burst, Freeze, Piercing, Shield, and Shotgun grant their matching bonuses.`,
       "Burst, Piercing, and Shotgun change your next shot, then return the cannon to its normal laser.",
       "Standard invader rows fire tracking commander bolts that split into smaller shards when intercepted, delayed bursts, scatter bursts, needles, or lasers; Divers use their original row shot, while Shield Bearers fire bottom-row lasers.",

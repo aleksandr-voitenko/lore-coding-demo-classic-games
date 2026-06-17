@@ -57,8 +57,10 @@ export const SPACE_INVADERS_REVENGE_VOLLEY_WINDUP_TICKS = Math.round(
 export const SPACE_INVADERS_SPLITTER_ALIEN_COUNT = 3;
 export const SPACE_INVADERS_ARMORED_ALIEN_COUNT = 3;
 export const SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS = 3;
+export const SPACE_INVADERS_MINE_LAYER_ALIEN_COUNT = 3;
 export const EXPLOSION_PADDING_BY_KIND: Record<SpaceInvadersExplosionKind, number> = {
   invader: 16,
+  mine: 36,
   player: 12,
   projectile: 0,
   shield: 0,

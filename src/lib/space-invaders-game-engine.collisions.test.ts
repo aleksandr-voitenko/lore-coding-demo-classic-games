@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { EXPLOSION_PADDING_BY_KIND } from "./space-invaders/constants";
 import { getInvaderCollisionBounds } from "./space-invaders/hitboxes";
 import {
   advanceSpaceInvadersGame,
@@ -161,6 +162,224 @@ describe("space invaders collision engine", () => {
     expect(advanced.playerVolleyHasArmoredHit).toBe(false);
     expect(advanced.playerVolleyHasScored).toBe(false);
     expect(advanced.playerVolleyHasUnscoredExit).toBe(false);
+  });
+
+  it("detonates intercepted mines into large blasts that damage nearby aliens and shots", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const movedMine = createInvaderShotFixture({
+      height: 18,
+      id: "mine-shot",
+      kind: "mine",
+      velocityY: 1.55,
+      width: 18,
+      x: 200,
+      y: 170,
+    });
+    const standardTarget = {
+      ...getInvader(game, 1, 2),
+      hitPoints: 1,
+      isActive: true,
+      kind: "standard" as const,
+      x: 170,
+      y: 150,
+    };
+    const armoredTarget = {
+      ...getInvader(game, 1, 3),
+      hitPoints: SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS,
+      isActive: true,
+      kind: "armored" as const,
+      x: 225,
+      y: 150,
+    };
+    const survivor = {
+      ...getInvader(game, SPACE_INVADERS_ROWS - 1, 9),
+      hitPoints: 1,
+      isActive: true,
+      kind: "standard" as const,
+      x: 360,
+      y: 420,
+    };
+    const triggeringPlayerShot = {
+      ...createPlayerShotAlignedWith(movedMine),
+      id: "player-shot-trigger",
+    };
+    const blastOnlyPlayerShot = {
+      ...triggeringPlayerShot,
+      id: "player-shot-blast-only",
+      x: 245,
+      y: 185,
+    };
+    const nearbyInvaderShot = createInvaderShotFixture({
+      id: "nearby-shot",
+      x: 240,
+      y: 175,
+    });
+    const mineBlastSize = movedMine.width + EXPLOSION_PADDING_BY_KIND.mine * 2;
+    const runningGame = createRunningGame({
+      invaderShotCooldownTicks: 1_000,
+      invaderShots: [
+        {
+          ...movedMine,
+          y: movedMine.y - movedMine.velocityY,
+        },
+        nearbyInvaderShot,
+      ],
+      invaders: game.invaders.map((invader) => {
+        if (invader.id === standardTarget.id) {
+          return standardTarget;
+        }
+
+        if (invader.id === armoredTarget.id) {
+          return armoredTarget;
+        }
+
+        if (invader.id === survivor.id) {
+          return survivor;
+        }
+
+        return {
+          ...invader,
+          isActive: false,
+        };
+      }),
+      playerShots: [triggeringPlayerShot, blastOnlyPlayerShot],
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
+    const damagedStandard = advanced.invaders.find(
+      (invader) => invader.id === standardTarget.id,
+    );
+    const damagedArmored = advanced.invaders.find(
+      (invader) => invader.id === armoredTarget.id,
+    );
+    const activeSurvivor = advanced.invaders.find((invader) => invader.id === survivor.id);
+
+    expect(advanced.lives).toBe(SPACE_INVADERS_STARTING_LIVES);
+    expect(advanced.playerShots).toEqual([]);
+    expect(advanced.invaderShots).toEqual([]);
+    expect(damagedStandard).toMatchObject({
+      hitPoints: 0,
+      isActive: false,
+    });
+    expect(damagedArmored).toMatchObject({
+      hitPoints: SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS - 1,
+      isActive: true,
+    });
+    expect(activeSurvivor).toMatchObject({
+      isActive: true,
+    });
+    expect(advanced.score).toBe(standardTarget.points);
+    expect(advanced.explosions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          height: mineBlastSize,
+          kind: "mine",
+          width: mineBlastSize,
+        }),
+        expect.objectContaining({
+          kind: "invader",
+        }),
+      ]),
+    );
+  });
+
+  it("chains mine detonations when a blast reaches another mine", () => {
+    const firstMine = createInvaderShotFixture({
+      height: 18,
+      id: "first-mine-shot",
+      kind: "mine",
+      velocityY: 1.55,
+      width: 18,
+      x: 200,
+      y: 260,
+    });
+    const secondMine = createInvaderShotFixture({
+      height: 18,
+      id: "second-mine-shot",
+      kind: "mine",
+      velocityY: 1.55,
+      width: 18,
+      x: 240,
+      y: 260,
+    });
+    const runningGame = createRunningGame({
+      invaderShotCooldownTicks: 1_000,
+      invaderShots: [
+        {
+          ...firstMine,
+          y: firstMine.y - firstMine.velocityY,
+        },
+        {
+          ...secondMine,
+          y: secondMine.y - secondMine.velocityY,
+        },
+      ],
+      playerShots: [
+        {
+          ...createPlayerShotAlignedWith(firstMine),
+          id: "player-shot-trigger",
+        },
+      ],
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
+
+    expect(advanced.invaderShots).toEqual([]);
+    expect(advanced.playerShots).toEqual([]);
+    expect(advanced.explosions.filter((explosion) => explosion.kind === "mine")).toHaveLength(
+      2,
+    );
+  });
+
+  it("damages the player when a mine blast catches the cannon", () => {
+    const game = createInitialSpaceInvadersGame();
+    const movedMine = createInvaderShotFixture({
+      height: 18,
+      id: "mine-shot",
+      kind: "mine",
+      velocityY: 1.55,
+      width: 18,
+      x: game.player.x + game.player.width / 2 - 9,
+      y: game.player.y - 42,
+    });
+    const runningGame = createRunningGame({
+      invaderBurst: {
+        remainingShots: 2,
+        sourceInvaderId: "1:5",
+      },
+      invaderShotCooldownTicks: 1_000,
+      invaderShots: [
+        {
+          ...movedMine,
+          y: movedMine.y - movedMine.velocityY,
+        },
+      ],
+      playerBurst: {
+        cooldownTicks: 2,
+        remainingShots: 3,
+      },
+      playerVolleyHasArmoredHit: true,
+      playerShots: [
+        {
+          ...createPlayerShotAlignedWith(movedMine),
+          id: "player-shot-trigger",
+        },
+      ],
+    });
+    const advanced = advanceSpaceInvadersGame(runningGame, () => 0);
+
+    expect(advanced.status).toBe("running");
+    expect(advanced.lives).toBe(SPACE_INVADERS_STARTING_LIVES - 1);
+    expect(advanced.invaderBurst).toBeNull();
+    expect(advanced.invaderShots).toEqual([]);
+    expect(advanced.playerBurst).toBeNull();
+    expect(advanced.playerShots).toEqual([]);
+    expect(advanced.playerRespawnTicks).toBe(SPACE_INVADERS_PLAYER_RESPAWN_TICKS);
+    expect(advanced.player.x + advanced.player.width / 2).toBe(
+      SPACE_INVADERS_BOARD_WIDTH / 2,
+    );
+    expect(advanced.explosions.map((explosion) => explosion.kind)).toEqual([
+      "mine",
+      "player",
+    ]);
   });
 
 

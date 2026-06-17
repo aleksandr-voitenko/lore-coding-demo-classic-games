@@ -62,6 +62,8 @@ export const invaderShotClassNames: Record<SpaceInvadersInvaderShotKind, string>
     "drop-shadow-[0_0_10px_color-mix(in_oklch,var(--invaders-yellow)_62%,transparent)]",
   counterfire:
     "drop-shadow-[0_0_16px_color-mix(in_oklch,var(--invaders-red)_82%,transparent)]",
+  mine:
+    "drop-shadow-[0_0_18px_color-mix(in_oklch,var(--invaders-lime)_76%,transparent)]",
   needle:
     "drop-shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-cyan)_78%,transparent)]",
   scatter:
@@ -78,6 +80,7 @@ export const invaderShotClassNames: Record<SpaceInvadersInvaderShotKind, string>
 
 export const explosionClassNames: Record<SpaceInvadersExplosionKind, string> = {
   invader: "space-invaders-explosion--invader",
+  mine: "space-invaders-explosion--mine",
   player: "space-invaders-explosion--player",
   projectile: "space-invaders-explosion--projectile",
   shield: "space-invaders-explosion--shield",

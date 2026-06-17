@@ -86,6 +86,8 @@ const COMMANDER_SHARD_SCALE = 0.5;
 const COMMANDER_SHARD_STEER_X = COMMANDER_SHOT_STEER_X * 0.5;
 const COMMANDER_SHARD_MAX_SPEED_X = COMMANDER_SHOT_MAX_SPEED_X * 0.5;
 const COMMANDER_SHARD_SPEED_RATIO = 0.8;
+const MINE_SHOT_SIZE = 18;
+const MINE_SHOT_VELOCITY_Y = 1.55;
 const COMMANDER_SHARD_SPLIT_PROFILES = [
   {
     offsetX: -3,
@@ -145,6 +147,15 @@ const INVADER_SHOT_SPECS: Record<SpaceInvadersInvaderShotKind, InvaderShotSpec> 
     velocityX: 0,
     velocityY: REVENGE_COUNTERFIRE_VELOCITY_Y,
     width: 20.8,
+  },
+  mine: {
+    cooldownTicks: 128,
+    height: MINE_SHOT_SIZE,
+    kind: "mine",
+    ttlTicks: null,
+    velocityX: 0,
+    velocityY: MINE_SHOT_VELOCITY_Y,
+    width: MINE_SHOT_SIZE,
   },
   standard: {
     cooldownTicks: INVADER_FIRE_COOLDOWN_TICKS,
@@ -859,6 +870,10 @@ function getInvaderShotKind(
 
   if (invader.kind === "splitter" && options.useSplitterFork === true) {
     return "splitter-fork";
+  }
+
+  if (invader.kind === "mine-layer") {
+    return "mine";
   }
 
   if (invader.kind !== "standard" && invader.kind !== "diver") {

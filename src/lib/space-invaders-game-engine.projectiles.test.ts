@@ -439,6 +439,55 @@ describe("space invaders projectile engine", () => {
   });
 
 
+  it("fires a slow mine from Mine Layer normal shots", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const shooter = {
+      ...getInvader(game, 1, 5),
+      kind: "mine-layer" as const,
+    };
+    const fired = advanceSpaceInvadersGame(
+      withOnlyActiveInvader(
+        createRunningGame({
+          invaderShotCooldownTicks: 0,
+          player: centerPlayerUnderInvader(game, shooter),
+        }),
+        shooter,
+      ),
+      () => 0,
+    );
+    const mine = fired.invaderShots[0]!;
+    const moved = advanceSpaceInvadersGame(fired, () => 0);
+    const standardShot = fireFromOnlyInvader(SPACE_INVADERS_ROWS - 1).advanced
+      .invaderShots[0]!;
+
+    expect(fired.invaderShots).toHaveLength(1);
+    expect(mine).toMatchObject({
+      ageTicks: 0,
+      height: 18,
+      id: "invader-shot-0",
+      kind: "mine",
+      sourceInvaderId: shooter.id,
+      sourceRow: shooter.row,
+      ttlTicks: null,
+      velocityX: 0,
+      velocityY: 1.55,
+      width: 18,
+    });
+    expect(mine.width).toBeGreaterThan(standardShot.width);
+    expect(mine.velocityY).toBeLessThan(standardShot.velocityY);
+    expect(mine.x).toBeCloseTo(shooter.x + shooter.width / 2 - mine.width / 2);
+    expect(mine.y).toBeCloseTo(shooter.y + shooter.height + 1);
+    expect(moved.invaderShots[0]).toMatchObject({
+      ageTicks: 1,
+      kind: "mine",
+      x: mine.x,
+      y: mine.y + mine.velocityY,
+    });
+    expect(fired.invaderBurst).toBeNull();
+    expect(fired.nextInvaderShotId).toBe(1);
+  });
+
+
   it("fires a splitter fork that splits halfway to the base line", () => {
     const game = createInitialSpaceInvadersGame({ random: () => 0 });
     const shooter = {

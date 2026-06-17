@@ -34,6 +34,7 @@ const invaderShotSpriteSrcByKind: Partial<Record<SpaceInvadersInvaderShotKind, s
   commander: getSpaceInvadersAssetSrc("invader-shot-commander"),
   "commander-shard": getSpaceInvadersAssetSrc("invader-shot-commander"),
   counterfire: getSpaceInvadersAssetSrc("invader-shot-counterfire"),
+  mine: getSpaceInvadersAssetSrc("invader-shot-mine"),
   needle: getSpaceInvadersAssetSrc("invader-shot-needle"),
   scatter: getSpaceInvadersAssetSrc("invader-shot-scatter"),
   standard: getSpaceInvadersAssetSrc("invader-shot-standard"),
@@ -115,6 +116,13 @@ const armoredInvaderSprite = {
   spriteClassName: "inset-x-[-16%] inset-y-[-24%]",
 } as const;
 
+const mineLayerInvaderSprite = {
+  glowClassName:
+    "drop-shadow-[0_0_15px_color-mix(in_oklch,var(--invaders-lime)_58%,transparent)]",
+  spriteClassName: "inset-x-[-16%] inset-y-[-24%]",
+  src: getSpaceInvadersAssetSrc("alien-mine-layer"),
+} as const;
+
 export function getSpaceInvaderSprite(row: number) {
   return spaceInvaderSprites[row % spaceInvaderSprites.length];
 }
@@ -144,6 +152,10 @@ export function getSpaceInvaderRenderSprite(
       ...armoredInvaderSprite,
       src: armoredInvaderSpriteSrcByHitPoints[hitPoints],
     };
+  }
+
+  if (invader.kind === "mine-layer") {
+    return mineLayerInvaderSprite;
   }
 
   return {

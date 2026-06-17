@@ -6,6 +6,7 @@ export type SpaceInvaderKind =
   | "standard"
   | "diver"
   | "armored"
+  | "mine-layer"
   | "shield-bearer"
   | "revenge"
   | "splitter"
@@ -19,6 +20,7 @@ export type SpaceInvadersInvaderShotKind =
   | "commander-shard"
   | "burst"
   | "counterfire"
+  | "mine"
   | "standard"
   | "needle"
   | "scatter"
@@ -47,6 +49,7 @@ export type SpaceInvadersPlayerShotKind =
 
 export type SpaceInvadersExplosionKind =
   | "invader"
+  | "mine"
   | "player"
   | "projectile"
   | "shield"

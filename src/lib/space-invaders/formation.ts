@@ -11,6 +11,7 @@ import {
   SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS,
   SPACE_INVADERS_BOARD_WIDTH,
   SPACE_INVADERS_COLUMNS,
+  SPACE_INVADERS_MINE_LAYER_ALIEN_COUNT,
   SPACE_INVADERS_REVENGE_ALIEN_COUNT,
   SPACE_INVADERS_ROWS,
   SPACE_INVADERS_SHIELD_BEARER_COUNT,
@@ -67,11 +68,23 @@ export function createSpaceInvadersFormation({
     random,
     rows,
   });
+  const mineLayerAlienIds = selectMineLayerAlienIds({
+    columns,
+    excludedIds: new Set([
+      ...shieldBearerInvaderIds,
+      ...revengeAlienIds,
+      ...splitterAlienIds,
+      ...armoredAlienIds,
+    ]),
+    random,
+    rows,
+  });
   const specialInvaderIds = new Set([
     ...shieldBearerInvaderIds,
     ...revengeAlienIds,
     ...splitterAlienIds,
     ...armoredAlienIds,
+    ...mineLayerAlienIds,
   ]);
   const diverInvaderIds = selectDiverInvaderIds(
     rows,
@@ -91,6 +104,8 @@ export function createSpaceInvadersFormation({
           ? "splitter"
         : armoredAlienIds.has(id)
           ? "armored"
+        : mineLayerAlienIds.has(id)
+          ? "mine-layer"
         : diverInvaderIds.has(id)
           ? "diver"
           : "standard";
@@ -346,6 +361,46 @@ function selectArmoredAlienIds({
   const selectedCount = Math.min(
     SPACE_INVADERS_ARMORED_ALIEN_COUNT,
     maximumArmoredAlienCount,
+    candidates.length,
+  );
+  const selectedIds = new Set<string>();
+
+  for (let selectedIndex = 0; selectedIndex < selectedCount; selectedIndex += 1) {
+    const candidateIndex = getRandomIndex(candidates.length, random);
+    const [selectedId] = candidates.splice(candidateIndex, 1);
+
+    if (selectedId !== undefined) {
+      selectedIds.add(selectedId);
+    }
+  }
+
+  return selectedIds;
+}
+
+function selectMineLayerAlienIds({
+  columns,
+  excludedIds,
+  random,
+  rows,
+}: {
+  columns: number;
+  excludedIds: Set<string>;
+  random: SpaceInvadersRandomSource;
+  rows: number;
+}) {
+  const candidates = Array.from({ length: Math.max(0, rows - 2) }, (_, index) =>
+    Array.from({ length: columns }, (_, column) => `${index + 1}:${column}`),
+  )
+    .flat()
+    .filter((id) => !excludedIds.has(id));
+  const nonBottomSlotCount = Math.max(0, rows - 1) * columns;
+  const maximumMineLayerAlienCount = Math.max(
+    0,
+    nonBottomSlotCount - excludedIds.size - DIVER_INVADER_COUNT,
+  );
+  const selectedCount = Math.min(
+    SPACE_INVADERS_MINE_LAYER_ALIEN_COUNT,
+    maximumMineLayerAlienCount,
     candidates.length,
   );
   const selectedIds = new Set<string>();
