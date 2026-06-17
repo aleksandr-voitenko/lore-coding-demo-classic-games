@@ -452,6 +452,7 @@ test("Snake replay preserves a delayed downward turn without phantom advances", 
 
   await expect(page.getByTestId("snake-game-over-screen")).toBeVisible();
 
+  const liveFinalScore = await page.getByTestId("snake-final-score").innerText();
   const liveFinalHead = await getSnakeHeadPosition(page);
 
   await page.getByTestId("snake-save-replay-button").click();
@@ -483,6 +484,6 @@ test("Snake replay preserves a delayed downward turn without phantom advances", 
   await expect(page).toHaveURL("/?replay=snake");
   await expect(page.getByTestId("snake-replay-status")).toHaveText("Replay playing");
   await expect(page.getByTestId("snake-replay-finished-screen")).toBeVisible();
-  await expect(page.getByTestId("snake-replay-final-score")).toHaveText("0");
+  await expect(page.getByTestId("snake-replay-final-score")).toHaveText(liveFinalScore);
   await expect(await getSnakeHeadPosition(page)).toEqual(liveFinalHead);
 });
