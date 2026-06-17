@@ -15,6 +15,8 @@ All the code in this repository was created using AI agents and the Lore Coding 
   persistent board power-ups, and difficulty-scoped records.
 - Simon uses Easy, Medium, and Hard difficulty presets for target sequence
   length while keeping records scoped to the selected difficulty.
+- Minesweeper uses traditional Easy, Medium, and Hard minefield presets with
+  records scoped to the selected difficulty.
 - Snake includes level progression through key-and-door exits, timed special
   foods, obstacle islands, and a full-board win state.
 - SQLite-backed, parameter-scoped top-three leaderboards for every game.

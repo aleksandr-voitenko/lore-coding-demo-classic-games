@@ -121,6 +121,7 @@ describe("advanceMinesweeperReplayFrame", () => {
     const initialReplay = createInitialMinesweeperReplayGame({
       boardHeight: 9,
       boardWidth: 9,
+      difficulty: "easy",
       mineCount: 10,
       seed: 530633489,
     });

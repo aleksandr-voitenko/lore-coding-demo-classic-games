@@ -12,11 +12,10 @@ import {
   BREAKOUT_STARTING_LIVES,
 } from "@/lib/breakout-game-engine";
 import {
-  MINESWEEPER_BOARD_HEIGHT,
-  MINESWEEPER_BOARD_SIZE_OPTIONS,
-  MINESWEEPER_BOARD_WIDTH,
-  MINESWEEPER_MINE_COUNT,
-  MINESWEEPER_MINE_COUNT_OPTIONS,
+  MINESWEEPER_DEFAULT_DIFFICULTY,
+  MINESWEEPER_DIFFICULTY_OPTIONS,
+  normalizeMinesweeperDifficulty,
+  type MinesweeperDifficulty,
 } from "@/lib/minesweeper-game-engine";
 import {
   PONG_BOARD_HEIGHT,
@@ -62,7 +61,7 @@ import {
 
 export type { GameId } from "@/lib/game-catalog";
 
-type GameDifficulty = AsteroidsDifficulty | SimonDifficulty;
+type GameDifficulty = AsteroidsDifficulty | MinesweeperDifficulty | SimonDifficulty;
 
 export type PlayableGameProps = {
   initialAlienCount?: number;
@@ -71,7 +70,6 @@ export type PlayableGameProps = {
   initialBoardWidth?: number;
   initialDifficulty?: GameDifficulty;
   initialLives?: number;
-  initialMineCount?: number;
   initialStartLevel?: number;
   initialTargetScore?: number;
   initialWinTile?: number;
@@ -135,20 +133,16 @@ export const GAME_PARAMETER_CONFIG = defineGameParameterConfig({
       initialLives: Number(value),
     }),
   },
-  "minesweeper-board-size": createBoardSizeParameter({
-    defaultSize: {
-      height: MINESWEEPER_BOARD_HEIGHT,
-      width: MINESWEEPER_BOARD_WIDTH,
-    },
-    label: "Board",
-    options: MINESWEEPER_BOARD_SIZE_OPTIONS,
-  }),
-  "minesweeper-mines": {
-    defaultValue: String(MINESWEEPER_MINE_COUNT),
-    label: "Mines",
-    options: createNumberSelectOptions(MINESWEEPER_MINE_COUNT_OPTIONS),
+  "minesweeper-difficulty": {
+    defaultValue: MINESWEEPER_DEFAULT_DIFFICULTY,
+    label: "Difficulty",
+    normalizeValue: normalizeMinesweeperDifficulty,
+    options: MINESWEEPER_DIFFICULTY_OPTIONS.map((option) => ({
+      label: option.label,
+      value: option.value,
+    })),
     toInitialProps: (value) => ({
-      initialMineCount: Number(value),
+      initialDifficulty: normalizeMinesweeperDifficulty(value),
     }),
   },
   "space-invaders-board-size": createBoardSizeParameter({
@@ -300,7 +294,7 @@ export const GAME_CARDS: readonly GameCard[] = [
     description: "A classic minefield puzzle with safe first clicks, flags, and flood reveals.",
     id: minesweeperCatalogEntry.id,
     label: minesweeperCatalogEntry.label,
-    parameters: ["minesweeper-board-size", "minesweeper-mines"],
+    parameters: ["minesweeper-difficulty"],
   },
   {
     accentClassName:

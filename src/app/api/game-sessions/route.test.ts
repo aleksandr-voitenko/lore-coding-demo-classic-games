@@ -30,7 +30,7 @@ describe("game sessions route", () => {
         activeDurationMs: 3200,
         finalScore: 32,
         gameId: "minesweeper",
-        leaderboardKey: "minesweeper|board=9x9|mines=10",
+        leaderboardKey: "minesweeper|difficulty=easy",
         result: "won",
         sortDirection: "asc",
       }),

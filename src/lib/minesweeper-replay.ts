@@ -20,9 +20,12 @@ import {
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 import {
   createInitialMinesweeperGame,
+  getMinesweeperDifficultySettings,
   getMinesweeperCellId,
+  normalizeMinesweeperDifficulty,
   revealMinesweeperCell,
   toggleMinesweeperFlag,
+  type MinesweeperDifficulty,
   type MinesweeperGameState,
 } from "@/lib/minesweeper-game-engine";
 
@@ -60,6 +63,7 @@ export type MinesweeperReplayPayload = BaseGameReplayPayload<
 > & {
   boardHeight: number;
   boardWidth: number;
+  difficulty: MinesweeperDifficulty;
   events: MinesweeperReplayEvent[];
   finalFlagCount: number;
   finalRevealedSafeCellCount: number;
@@ -69,7 +73,7 @@ export type MinesweeperReplayPayload = BaseGameReplayPayload<
 export type ParseMinesweeperReplayPayloadResult =
   ParseGameReplayPayloadResult<MinesweeperReplayPayload>;
 
-export const MINESWEEPER_REPLAY_SCHEMA_VERSION = 1;
+export const MINESWEEPER_REPLAY_SCHEMA_VERSION = 2;
 export const MINESWEEPER_REPLAY_GAME_ID = "minesweeper";
 export const MINESWEEPER_REPLAY_API_PATH = getGameReplayApiPath(
   MINESWEEPER_REPLAY_GAME_ID,
@@ -128,13 +132,10 @@ function parseReplayCellId(
 }
 
 export function createMinesweeperReplayLeaderboardKey({
-  boardHeight,
-  boardWidth,
-  mineCount,
-}: Pick<MinesweeperReplayPayload, "boardHeight" | "boardWidth" | "mineCount">) {
+  difficulty,
+}: Pick<MinesweeperReplayPayload, "difficulty">) {
   return createGameLeaderboardKey(MINESWEEPER_REPLAY_GAME_ID, [
-    { name: "board", value: `${boardWidth}x${boardHeight}` },
-    { name: "mines", value: mineCount },
+    { name: "difficulty", value: difficulty },
   ]);
 }
 
@@ -192,6 +193,7 @@ export function parseMinesweeperReplayPayload(
   }
 
   if (
+    typeof value.difficulty !== "string" ||
     !isPositiveInteger(value.boardWidth) ||
     !isPositiveInteger(value.boardHeight) ||
     !isNonNegativeInteger(value.mineCount) ||
@@ -203,17 +205,29 @@ export function parseMinesweeperReplayPayload(
     };
   }
 
+  const difficulty = normalizeMinesweeperDifficulty(value.difficulty);
+  const difficultySettings = getMinesweeperDifficultySettings(difficulty);
   const boardHeight = value.boardHeight;
   const boardWidth = value.boardWidth;
   const mineCount = value.mineCount;
   const safeCellCount = boardWidth * boardHeight - mineCount;
 
   if (
+    difficulty !== value.difficulty ||
+    boardHeight !== difficultySettings.height ||
+    boardWidth !== difficultySettings.width ||
+    mineCount !== difficultySettings.mineCount
+  ) {
+    return {
+      error: "Minesweeper replay parameters are not supported.",
+      success: false,
+    };
+  }
+
+  if (
     baseReplay.payload.leaderboardKey !==
     createMinesweeperReplayLeaderboardKey({
-      boardHeight,
-      boardWidth,
-      mineCount,
+      difficulty,
     })
   ) {
     return {
@@ -256,6 +270,7 @@ export function parseMinesweeperReplayPayload(
       ...baseReplay.payload,
       boardHeight,
       boardWidth,
+      difficulty,
       events: events.payload,
       finalFlagCount: value.finalFlagCount,
       finalRevealedSafeCellCount: value.finalRevealedSafeCellCount,
@@ -266,10 +281,14 @@ export function parseMinesweeperReplayPayload(
 }
 
 export function createInitialMinesweeperReplayGame(
-  payload: Pick<MinesweeperReplayPayload, "boardHeight" | "boardWidth" | "mineCount" | "seed">,
+  payload: Pick<
+    MinesweeperReplayPayload,
+    "boardHeight" | "boardWidth" | "difficulty" | "mineCount" | "seed"
+  >,
 ) {
   const random = createMinesweeperReplayRandom(payload.seed);
   const game = createInitialMinesweeperGame({
+    difficulty: payload.difficulty,
     height: payload.boardHeight,
     mineCount: payload.mineCount,
     width: payload.boardWidth,

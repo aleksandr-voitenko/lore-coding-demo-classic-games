@@ -5,6 +5,7 @@ import {
   MINESWEEPER_REPLAY_SCHEMA_VERSION,
   type MinesweeperReplayPayload,
 } from "@/lib/minesweeper-replay";
+import { getMinesweeperDifficultySettings } from "@/lib/minesweeper-game-engine";
 import type { SqliteReplayStore } from "@/lib/server/sqlite-replay-store";
 import type { SqliteUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
 
@@ -13,13 +14,16 @@ import { createMinesweeperReplayRouteHandlers } from "./route";
 function createReplayPayload(
   overrides: Partial<MinesweeperReplayPayload> = {},
 ): MinesweeperReplayPayload {
-  const boardHeight = overrides.boardHeight ?? 9;
-  const boardWidth = overrides.boardWidth ?? 9;
-  const mineCount = overrides.mineCount ?? 10;
+  const difficulty = overrides.difficulty ?? "easy";
+  const difficultySettings = getMinesweeperDifficultySettings(difficulty);
+  const boardHeight = overrides.boardHeight ?? difficultySettings.height;
+  const boardWidth = overrides.boardWidth ?? difficultySettings.width;
+  const mineCount = overrides.mineCount ?? difficultySettings.mineCount;
 
   return {
     boardHeight,
     boardWidth,
+    difficulty,
     events: [
       {
         elapsedMs: 0,
@@ -35,9 +39,7 @@ function createReplayPayload(
     finalTick: 42,
     gameId: "minesweeper",
     leaderboardKey: createMinesweeperReplayLeaderboardKey({
-      boardHeight,
-      boardWidth,
-      mineCount,
+      difficulty,
     }),
     mineCount,
     runId: "run-1",

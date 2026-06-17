@@ -42,21 +42,15 @@ const startLeaderboardIsolationCases: StartLeaderboardIsolationCase[] = [
     ],
   },
   {
-    alternateKey: "minesweeper|board=9x9|mines=10",
-    alternateParameters: [
-      { testId: "minesweeper-board-size", value: "9x9" },
-      { testId: "minesweeper-mines", value: "10" },
-    ],
+    alternateKey: "minesweeper|difficulty=easy",
+    alternateParameters: [{ testId: "minesweeper-difficulty", value: "easy" }],
     alternateScore: 73,
     gameId: "minesweeper",
     leaderboardTestId: "minesweeper-start-leaderboard",
     name: "Minesweeper",
     playerSuffix: "MS",
-    selectedKey: "minesweeper|board=12x12|mines=20",
-    selectedParameters: [
-      { testId: "minesweeper-board-size", value: "12x12" },
-      { testId: "minesweeper-mines", value: "20" },
-    ],
+    selectedKey: "minesweeper|difficulty=medium",
+    selectedParameters: [{ testId: "minesweeper-difficulty", value: "medium" }],
     selectedScore: 41,
     sortDirection: "asc",
   },
@@ -254,8 +248,8 @@ for (const leaderboardCase of startLeaderboardIsolationCases) {
 test("Minesweeper leaderboard API ranks faster selected-parameter clears first", async ({
   request,
 }, testInfo) => {
-  const selectedKey = "minesweeper|board=16x16|mines=40";
-  const alternateKey = "minesweeper|board=9x9|mines=10";
+  const selectedKey = "minesweeper|difficulty=hard";
+  const alternateKey = "minesweeper|difficulty=easy";
   const fastPlayer = createPlayerName(testInfo, "MSF");
   const slowPlayer = createPlayerName(testInfo, "MSS");
   const alternatePlayer = createPlayerName(testInfo, "MSA");

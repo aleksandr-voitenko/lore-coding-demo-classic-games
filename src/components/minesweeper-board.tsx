@@ -43,7 +43,10 @@ export function MinesweeperBoard({
   statusLabel,
 }: MinesweeperBoardProps) {
   return (
-    <div className="relative aspect-square overflow-hidden rounded-md border border-[var(--minesweeper-board-border)] bg-[var(--minesweeper-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--minesweeper-board)_24%,transparent)]">
+    <div
+      className="relative w-full overflow-hidden rounded-md border border-[var(--minesweeper-board-border)] bg-[var(--minesweeper-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--minesweeper-board)_24%,transparent)]"
+      style={{ aspectRatio: `${game.width} / ${game.height}` }}
+    >
       <div
         aria-label={`Minesweeper board. Field ${game.width} by ${game.height}. ${game.mineCount} mines. ${game.flagCount} flags. ${game.revealedSafeCellCount} safe cells revealed. ${statusLabel}.`}
         className="grid size-full gap-px rounded-[0.375rem] bg-[var(--minesweeper-grid)] p-px"

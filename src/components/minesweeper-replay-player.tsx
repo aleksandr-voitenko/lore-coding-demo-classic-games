@@ -26,6 +26,7 @@ import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-prese
 import { MinesweeperBoard } from "@/components/minesweeper-board";
 import { Button } from "@/components/ui/button";
 import {
+  MINESWEEPER_DEFAULT_DIFFICULTY,
   getMinesweeperRemainingMineCount,
   type MinesweeperGameState,
 } from "@/lib/minesweeper-game-engine";
@@ -141,9 +142,7 @@ export function MinesweeperReplayPlayer({
   const leaderboardKey =
     replay?.leaderboardKey ??
     createMinesweeperReplayLeaderboardKey({
-      boardHeight: 9,
-      boardWidth: 9,
-      mineCount: 10,
+      difficulty: MINESWEEPER_DEFAULT_DIFFICULTY,
     });
   const { finalLeaderboardProps } = useGameLeaderboardPresenter({
     formatScore: formatElapsedTime,
@@ -268,7 +267,7 @@ export function MinesweeperReplayPlayer({
 
   return (
     <GameShell className="bg-[var(--minesweeper-page)] text-[var(--minesweeper-ink)]">
-      <GameBoardColumn className="w-[min(92vw,37.25rem,calc(100svh_-_12rem))]">
+      <GameBoardColumn className={getMinesweeperBoardColumnClassName(game)}>
         <GameSidebar className="border-[var(--minesweeper-border)] bg-[var(--minesweeper-panel)]">
           <GameHeader
             status={statusLabel}
@@ -372,4 +371,12 @@ function formatElapsedTime(totalSeconds: number) {
   const seconds = totalSeconds % 60;
 
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function getMinesweeperBoardColumnClassName(
+  game: Pick<MinesweeperGameState, "height" | "width">,
+) {
+  return game.width > game.height
+    ? "w-[min(96vw,56rem)]"
+    : "w-[min(92vw,37.25rem,calc(100svh_-_12rem))]";
 }

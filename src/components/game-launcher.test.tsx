@@ -33,16 +33,10 @@ const EXPECTED_PARAMETER_SELECTS = [
     testId: "breakout-lives",
   },
   {
-    defaultLabel: "9 x 9",
-    defaultValue: "9x9",
-    label: "Board",
-    testId: "minesweeper-board-size",
-  },
-  {
-    defaultLabel: "10",
-    defaultValue: "10",
-    label: "Mines",
-    testId: "minesweeper-mines",
+    defaultLabel: "Easy",
+    defaultValue: "easy",
+    label: "Difficulty",
+    testId: "minesweeper-difficulty",
   },
   {
     defaultLabel: "420 x 560",
@@ -120,6 +114,8 @@ describe("game launcher", () => {
     expect(markup).not.toContain(">Top 3<");
     expect(markup).not.toContain(">Pieces<");
     expect(markup).not.toContain(">Pads<");
+    expect(markup).not.toContain('data-testid="minesweeper-board-size"');
+    expect(markup).not.toContain('data-testid="minesweeper-mines"');
     expect(markup).not.toContain('data-testid="simon-target"');
   });
 
@@ -134,6 +130,8 @@ describe("game launcher", () => {
         'value="' + parameter.defaultValue + '" selected="">' + parameter.defaultLabel,
       );
     }
+
+    expect(getSelectMarkup(markup, "minesweeper-difficulty").match(/<option/g)).toHaveLength(3);
   });
 });
 

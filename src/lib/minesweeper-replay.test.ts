@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { withReplayElapsed } from "./game-replay.test-helpers";
 import {
+  getMinesweeperDifficultySettings,
   getMinesweeperCellId,
   type MinesweeperGameState,
 } from "./minesweeper-game-engine";
@@ -18,13 +19,16 @@ import {
 function createReplayPayload(
   overrides: Partial<MinesweeperReplayPayload> = {},
 ): MinesweeperReplayPayload {
-  const boardHeight = overrides.boardHeight ?? 4;
-  const boardWidth = overrides.boardWidth ?? 4;
-  const mineCount = overrides.mineCount ?? 2;
+  const difficulty = overrides.difficulty ?? "easy";
+  const difficultySettings = getMinesweeperDifficultySettings(difficulty);
+  const boardHeight = overrides.boardHeight ?? difficultySettings.height;
+  const boardWidth = overrides.boardWidth ?? difficultySettings.width;
+  const mineCount = overrides.mineCount ?? difficultySettings.mineCount;
 
   const payload = {
     boardHeight,
     boardWidth,
+    difficulty,
     events: [
       {
         seq: 0,
@@ -51,9 +55,7 @@ function createReplayPayload(
     finalTick: 12,
     gameId: "minesweeper",
     leaderboardKey: createMinesweeperReplayLeaderboardKey({
-      boardHeight,
-      boardWidth,
-      mineCount,
+      difficulty,
     }),
     mineCount,
     runId: "run-1",
@@ -81,12 +83,13 @@ function applyReplayEvents(
 }
 
 function createTerminalReplay(seed: number) {
-  const boardHeight = 4;
-  const boardWidth = 4;
-  const mineCount = 2;
+  const difficulty = "easy";
+  const { height: boardHeight, mineCount, width: boardWidth } =
+    getMinesweeperDifficultySettings(difficulty);
   const initialReplay = createInitialMinesweeperReplayGame({
     boardHeight,
     boardWidth,
+    difficulty,
     mineCount,
     seed,
   });
@@ -143,9 +146,7 @@ function createTerminalReplay(seed: number) {
     finalStatus: game.status,
     finalTick: 3,
     leaderboardKey: createMinesweeperReplayLeaderboardKey({
-      boardHeight,
-      boardWidth,
-      mineCount,
+      difficulty,
     }),
     mineCount,
     seed,
@@ -162,8 +163,9 @@ describe("minesweeper replay", () => {
 
     expect(parsedReplay).toMatchObject({
       payload: {
-        boardHeight: 4,
-        boardWidth: 4,
+        boardHeight: 9,
+        boardWidth: 9,
+        difficulty: "easy",
         events: [
           {
             type: "start",
@@ -180,7 +182,7 @@ describe("minesweeper replay", () => {
         finalFlagCount: 1,
         finalRevealedSafeCellCount: 3,
         gameId: "minesweeper",
-        mineCount: 2,
+        mineCount: 10,
       },
       success: true,
     });
@@ -188,7 +190,7 @@ describe("minesweeper replay", () => {
     expect(
       parseMinesweeperReplayPayload(
         createReplayPayload({
-          leaderboardKey: "minesweeper|board=9x9|mines=2",
+          leaderboardKey: "minesweeper|difficulty=medium",
         }),
       ),
     ).toEqual({
@@ -198,7 +200,7 @@ describe("minesweeper replay", () => {
     expect(
       parseMinesweeperReplayPayload(
         createReplayPayload({
-          mineCount: 16,
+          mineCount: 11,
         }),
       ),
     ).toEqual({
@@ -210,7 +212,7 @@ describe("minesweeper replay", () => {
         createReplayPayload({
           events: [
             {
-              cellId: "4:0",
+              cellId: "9:0",
               seq: 0,
               tick: 0,
               type: "reveal",
@@ -237,7 +239,7 @@ describe("minesweeper replay", () => {
 
   it("accepts terminal won replay payloads with elapsed-second scores", () => {
     const payload = createReplayPayload({
-      finalRevealedSafeCellCount: 14,
+      finalRevealedSafeCellCount: 71,
       finalScore: 9,
       finalStatus: "won",
       finalTick: 9,

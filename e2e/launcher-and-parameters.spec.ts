@@ -70,18 +70,15 @@ const launcherParameterHandoffCases: LauncherParameterHandoffCase[] = [
   {
     assertGameSeeded: async (page) => {
       await expect(page.getByTestId("minesweeper-status")).toHaveText("Ready");
-      await expect(page.getByTestId("minesweeper-mines-remaining")).toHaveText("40");
+      await expect(page.getByTestId("minesweeper-mines-remaining")).toHaveText("99");
       await expect(page.getByTestId("minesweeper-board")).toHaveAttribute(
         "aria-label",
-        /Minesweeper board\. Field 16 by 16\. 40 mines\. 0 flags\. 0 safe cells revealed\. Ready\./,
+        /Minesweeper board\. Field 30 by 16\. 99 mines\. 0 flags\. 0 safe cells revealed\. Ready\./,
       );
     },
     gameId: "minesweeper",
-    name: "Minesweeper board and mines",
-    parameters: [
-      { testId: "minesweeper-board-size", value: "16x16" },
-      { testId: "minesweeper-mines", value: "40" },
-    ],
+    name: "Minesweeper difficulty",
+    parameters: [{ testId: "minesweeper-difficulty", value: "hard" }],
   },
   {
     assertGameSeeded: async (page) => {
@@ -274,7 +271,9 @@ test("launcher renders game cards and configurable parameters", async ({ page })
   await expect(page.getByTestId("snake-board-size")).toHaveCount(0);
   await expect(page.getByTestId("tetris-board-size")).toHaveValue("10x20");
   await expect(page.getByTestId("tetris-start-level")).toHaveValue("1");
-  await expect(page.getByTestId("minesweeper-mines")).toHaveValue("10");
+  await expect(page.getByTestId("minesweeper-board-size")).toHaveCount(0);
+  await expect(page.getByTestId("minesweeper-mines")).toHaveCount(0);
+  await expect(page.getByTestId("minesweeper-difficulty")).toHaveValue("easy");
   await expect(page.getByTestId("simon-target")).toHaveCount(0);
   await expect(page.getByTestId("simon-difficulty")).toHaveValue("medium");
   await expect(page.getByTestId("asteroids-board-size")).toHaveCount(0);

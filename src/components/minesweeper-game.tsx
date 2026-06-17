@@ -41,6 +41,7 @@ import {
   restartMinesweeperGame,
   revealMinesweeperCell,
   toggleMinesweeperFlag,
+  type MinesweeperDifficulty,
   type MinesweeperGameState,
   type MinesweeperStatus,
 } from "@/lib/minesweeper-game-engine";
@@ -61,9 +62,7 @@ import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-prese
 import { useGameSession } from "@/hooks/use-game-session";
 
 type MinesweeperGameProps = {
-  initialBoardHeight?: number;
-  initialBoardWidth?: number;
-  initialMineCount?: number;
+  initialDifficulty?: MinesweeperDifficulty;
   onBackToMenu?: () => void;
   onReplayBackToProfile?: () => void;
   replayMode?: "latest";
@@ -123,25 +122,17 @@ const MINESWEEPER_HELP_SECTIONS: GameHelpSection[] = [
 ];
 
 function createNewMinesweeperGame({
-  boardHeight,
-  boardWidth,
-  mineCount,
+  difficulty,
 }: {
-  boardHeight?: number;
-  boardWidth?: number;
-  mineCount?: number;
+  difficulty?: MinesweeperDifficulty;
 } = {}) {
   return createInitialMinesweeperGame({
-    height: boardHeight,
-    mineCount,
-    width: boardWidth,
+    difficulty,
   });
 }
 
 export function MinesweeperGame({
-  initialBoardHeight,
-  initialBoardWidth,
-  initialMineCount,
+  initialDifficulty,
   onBackToMenu,
   onReplayBackToProfile,
   replayMode,
@@ -156,9 +147,7 @@ export function MinesweeperGame({
 
   return (
     <MinesweeperLiveGame
-      initialBoardHeight={initialBoardHeight}
-      initialBoardWidth={initialBoardWidth}
-      initialMineCount={initialMineCount}
+      initialDifficulty={initialDifficulty}
       onBackToMenu={onBackToMenu}
     />
   );
@@ -186,19 +175,15 @@ function applyMinesweeperReplayPendingAction(
 }
 
 function MinesweeperLiveGame({
-  initialBoardHeight,
-  initialBoardWidth,
-  initialMineCount,
+  initialDifficulty,
   onBackToMenu,
 }: Pick<
   MinesweeperGameProps,
-  "initialBoardHeight" | "initialBoardWidth" | "initialMineCount" | "onBackToMenu"
+  "initialDifficulty" | "onBackToMenu"
 > = {}) {
   const [game, setGame] = useState<MinesweeperGameState>(() =>
     createNewMinesweeperGame({
-      boardHeight: initialBoardHeight,
-      boardWidth: initialBoardWidth,
-      mineCount: initialMineCount,
+      difficulty: initialDifficulty,
     }),
   );
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -230,8 +215,7 @@ function MinesweeperLiveGame({
   const showStartScreen = isStartScreenVisible && game.status === "ready";
   const showEndScreen = game.status === "lost" || game.status === "won";
   const leaderboardKey = createGameLeaderboardKey("minesweeper", [
-    { name: "board", value: `${game.width}x${game.height}` },
-    { name: "mines", value: game.mineCount },
+    { name: "difficulty", value: game.difficulty },
   ]);
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen();
   const { completedSessionId } = useGameSession({
@@ -483,6 +467,7 @@ function MinesweeperLiveGame({
     captureFinishedReplay((recording) => ({
       boardHeight: game.height,
       boardWidth: game.width,
+      difficulty: game.difficulty,
       events: [...recording.events],
       finalFlagCount: game.flagCount,
       finalRevealedSafeCellCount: game.revealedSafeCellCount,
@@ -499,6 +484,7 @@ function MinesweeperLiveGame({
     }));
   }, [
     captureFinishedReplay,
+    game.difficulty,
     game.flagCount,
     game.height,
     game.mineCount,
@@ -546,7 +532,7 @@ function MinesweeperLiveGame({
 
   return (
     <GameShell className="bg-[var(--minesweeper-page)] text-[var(--minesweeper-ink)]">
-      <GameBoardColumn className="w-[min(92vw,37.25rem,calc(100svh_-_12rem))]">
+      <GameBoardColumn className={getMinesweeperBoardColumnClassName(game)}>
         <GameSidebar className="border-[var(--minesweeper-border)] bg-[var(--minesweeper-panel)]">
           <GameHeader
             status={statusLabels[game.status]}
@@ -694,4 +680,12 @@ function formatElapsedTime(totalSeconds: number) {
   const seconds = totalSeconds % 60;
 
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function getMinesweeperBoardColumnClassName(
+  game: Pick<MinesweeperGameState, "height" | "width">,
+) {
+  return game.width > game.height
+    ? "w-[min(96vw,56rem)]"
+    : "w-[min(92vw,37.25rem,calc(100svh_-_12rem))]";
 }

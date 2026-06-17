@@ -28,7 +28,7 @@ rules live in child memory files for `src/app`, `src/components`, `src/lib`, and
   orchestration in `src/components/<game>-game.tsx`, and board rendering in
   `src/components/<game>-board.tsx`.
 - Engine modules expose launcher preset constants/options when the launcher needs
-  configurable parameters such as board size, difficulty, mine count, target
+  configurable parameters such as board size, difficulty, target
   score, lives, alien count, start level, or win target.
 - Snake has additional shared pickup feedback logic in
   `src/lib/snake-food-feedback.ts`. Keep that effect metadata pure so game

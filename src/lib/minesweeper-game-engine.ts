@@ -1,5 +1,6 @@
 export type MinesweeperStatus = "ready" | "running" | "lost" | "won";
 export type MinefieldStatus = "pending" | "placed";
+export type MinesweeperDifficulty = "easy" | "medium" | "hard";
 
 export type MinesweeperCell = {
   adjacentMines: number;
@@ -13,6 +14,7 @@ export type MinesweeperCell = {
 
 export type MinesweeperGameState = {
   cells: MinesweeperCell[];
+  difficulty: MinesweeperDifficulty;
   flagCount: number;
   height: number;
   mineCount: number;
@@ -23,6 +25,7 @@ export type MinesweeperGameState = {
 };
 
 export type CreateMinesweeperGameOptions = {
+  difficulty?: MinesweeperDifficulty | string;
   height?: number;
   mineCount?: number;
   width?: number;
@@ -37,25 +40,60 @@ type RandomSource = () => number;
 export const MINESWEEPER_BOARD_WIDTH = 9;
 export const MINESWEEPER_BOARD_HEIGHT = 9;
 export const MINESWEEPER_MINE_COUNT = 10;
-export const MINESWEEPER_BOARD_SIZE_OPTIONS = [
-  { height: 9, label: "9 x 9", width: 9 },
-  { height: 12, label: "12 x 12", width: 12 },
-  { height: 16, label: "16 x 16", width: 16 },
-] as const;
-export const MINESWEEPER_MINE_COUNT_OPTIONS = [10, 20, 40] as const;
+export const MINESWEEPER_DEFAULT_DIFFICULTY = "easy" satisfies MinesweeperDifficulty;
+export const MINESWEEPER_DIFFICULTY_SETTINGS = {
+  easy: {
+    height: MINESWEEPER_BOARD_HEIGHT,
+    label: "Easy",
+    mineCount: MINESWEEPER_MINE_COUNT,
+    width: MINESWEEPER_BOARD_WIDTH,
+  },
+  hard: {
+    height: 16,
+    label: "Hard",
+    mineCount: 99,
+    width: 30,
+  },
+  medium: {
+    height: 16,
+    label: "Medium",
+    mineCount: 40,
+    width: 16,
+  },
+} as const satisfies Record<
+  MinesweeperDifficulty,
+  {
+    height: number;
+    label: string;
+    mineCount: number;
+    width: number;
+  }
+>;
+export const MINESWEEPER_DIFFICULTY_OPTIONS = [
+  { label: MINESWEEPER_DIFFICULTY_SETTINGS.easy.label, value: "easy" },
+  { label: MINESWEEPER_DIFFICULTY_SETTINGS.medium.label, value: "medium" },
+  { label: MINESWEEPER_DIFFICULTY_SETTINGS.hard.label, value: "hard" },
+] as const satisfies readonly { label: string; value: MinesweeperDifficulty }[];
 
 export function createInitialMinesweeperGame({
-  height = MINESWEEPER_BOARD_HEIGHT,
-  mineCount = MINESWEEPER_MINE_COUNT,
-  width = MINESWEEPER_BOARD_WIDTH,
+  difficulty = MINESWEEPER_DEFAULT_DIFFICULTY,
+  height,
+  mineCount,
+  width,
 }: CreateMinesweeperGameOptions = {}): MinesweeperGameState {
-  const normalizedWidth = Math.max(1, Math.floor(width));
-  const normalizedHeight = Math.max(1, Math.floor(height));
+  const normalizedDifficulty = normalizeMinesweeperDifficulty(difficulty);
+  const difficultySettings = getMinesweeperDifficultySettings(normalizedDifficulty);
+  const normalizedWidth = Math.max(1, Math.floor(width ?? difficultySettings.width));
+  const normalizedHeight = Math.max(1, Math.floor(height ?? difficultySettings.height));
   const cellCount = normalizedWidth * normalizedHeight;
-  const normalizedMineCount = Math.max(0, Math.min(Math.floor(mineCount), cellCount - 1));
+  const normalizedMineCount = Math.max(
+    0,
+    Math.min(Math.floor(mineCount ?? difficultySettings.mineCount), cellCount - 1),
+  );
 
   return {
     cells: createEmptyCells(normalizedWidth, normalizedHeight),
+    difficulty: normalizedDifficulty,
     flagCount: 0,
     height: normalizedHeight,
     mineCount: normalizedMineCount,
@@ -67,13 +105,15 @@ export function createInitialMinesweeperGame({
 }
 
 export function restartMinesweeperGame(
-  game: Pick<MinesweeperGameState, "height" | "mineCount" | "width"> = {
+  game: Pick<MinesweeperGameState, "difficulty" | "height" | "mineCount" | "width"> = {
+    difficulty: MINESWEEPER_DEFAULT_DIFFICULTY,
     height: MINESWEEPER_BOARD_HEIGHT,
     mineCount: MINESWEEPER_MINE_COUNT,
     width: MINESWEEPER_BOARD_WIDTH,
   },
 ) {
   return createInitialMinesweeperGame({
+    difficulty: game.difficulty,
     height: game.height,
     mineCount: game.mineCount,
     width: game.width,
@@ -168,6 +208,27 @@ export function getMinesweeperCell(
   y: number,
 ) {
   return game.cells.find((cell) => cell.x === x && cell.y === y) ?? null;
+}
+
+export function normalizeMinesweeperDifficulty(
+  value: unknown,
+): MinesweeperDifficulty {
+  return (
+    MINESWEEPER_DIFFICULTY_OPTIONS.find((option) => option.value === value)
+      ?.value ?? MINESWEEPER_DEFAULT_DIFFICULTY
+  );
+}
+
+export function getMinesweeperDifficultySettings(
+  difficulty: MinesweeperDifficulty,
+) {
+  return MINESWEEPER_DIFFICULTY_SETTINGS[difficulty];
+}
+
+export function getMinesweeperDifficultyLabel(
+  difficulty: MinesweeperDifficulty,
+) {
+  return getMinesweeperDifficultySettings(difficulty).label;
 }
 
 function createEmptyCells(width: number, height: number) {

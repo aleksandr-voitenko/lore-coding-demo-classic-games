@@ -144,7 +144,7 @@ describe("sqlite user profile store", () => {
       activeDurationMs: 45_000,
       finalScore: 32,
       gameId: "minesweeper",
-      leaderboardKey: "minesweeper|board=9x9|mines=10",
+      leaderboardKey: "minesweeper|difficulty=easy",
       result: "won",
       sortDirection: "asc",
     });

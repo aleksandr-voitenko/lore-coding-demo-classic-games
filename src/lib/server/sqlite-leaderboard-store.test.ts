@@ -59,7 +59,7 @@ describe("sqlite leaderboard store", () => {
     });
     expect(
       parseScoreSubmission({
-        leaderboardKey: "minesweeper|board=9x9|mines=10",
+        leaderboardKey: "minesweeper|difficulty=easy",
         name: "Grace",
         score: 42,
         sortDirection: "asc",
@@ -151,7 +151,7 @@ describe("sqlite leaderboard store", () => {
   it("ranks lower scores first for timed leaderboards", async () => {
     const { dispose, store } = createTempStore();
     disposables.push(dispose);
-    const leaderboardKey = "minesweeper|board=9x9|mines=10";
+    const leaderboardKey = "minesweeper|difficulty=easy";
 
     await store.submitScore({
       leaderboardKey,

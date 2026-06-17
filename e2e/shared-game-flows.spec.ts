@@ -324,13 +324,21 @@ test("terminal New game actions start playable boards without returning to the s
   page,
   request,
 }) => {
+  await page.route("**/api/replays/minesweeper/run", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({ id: "run-minesweeper-e2e", seed: 1 }),
+      contentType: "application/json",
+      status: 201,
+    });
+  });
+
   await openLauncher(page);
-  await selectInjectedGameParameter(page, "minesweeper-mines", "80");
   await openGame(page, "minesweeper");
 
   await page.getByTestId("minesweeper-start-button").click();
   await expect(page.getByTestId("minesweeper-cell-0:0")).toBeEnabled();
   await page.getByTestId("minesweeper-cell-0:0").click();
+  await page.getByTestId("minesweeper-cell-2:0").click();
   await expect(page.getByTestId("minesweeper-end-screen")).toBeVisible();
 
   await page.getByTestId("minesweeper-new-game-button").click();
@@ -338,7 +346,7 @@ test("terminal New game actions start playable boards without returning to the s
   await expect(page.getByTestId("minesweeper-end-screen")).toBeHidden();
   await expect(page.getByTestId("minesweeper-start-screen")).toBeHidden();
   await expect(page.getByTestId("minesweeper-cell-0:0")).toBeEnabled();
-  await expect(page.getByTestId("minesweeper-safe-cells")).toHaveText("0/1");
+  await expect(page.getByTestId("minesweeper-safe-cells")).toHaveText("0/71");
 
   await page.keyboard.press("Escape");
   await expectGameMenuVisible(page);

@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   createInitialMinesweeperGame,
+  getMinesweeperDifficultySettings,
   getMinesweeperCell,
   getMinesweeperCellId,
   getMinesweeperRemainingMineCount,
   MINESWEEPER_BOARD_HEIGHT,
   MINESWEEPER_BOARD_WIDTH,
+  MINESWEEPER_DEFAULT_DIFFICULTY,
   MINESWEEPER_MINE_COUNT,
   restartMinesweeperGame,
   revealMinesweeperCell,
@@ -41,6 +43,7 @@ describe("minesweeper game engine", () => {
 
     expect(game.status).toBe("ready");
     expect(game.minefieldStatus).toBe("pending");
+    expect(game.difficulty).toBe(MINESWEEPER_DEFAULT_DIFFICULTY);
     expect(game.width).toBe(MINESWEEPER_BOARD_WIDTH);
     expect(game.height).toBe(MINESWEEPER_BOARD_HEIGHT);
     expect(game.mineCount).toBe(MINESWEEPER_MINE_COUNT);
@@ -48,6 +51,38 @@ describe("minesweeper game engine", () => {
     expect(game.cells.some((cell) => cell.isMine)).toBe(false);
     expect(game.cells.some((cell) => cell.isRevealed)).toBe(false);
     expect(game.flagCount).toBe(0);
+  });
+
+  it("uses traditional difficulty presets and falls back to Easy", () => {
+    const easy = createInitialMinesweeperGame({ difficulty: "easy" });
+    const medium = createInitialMinesweeperGame({ difficulty: "medium" });
+    const hard = createInitialMinesweeperGame({ difficulty: "hard" });
+    const fallback = createInitialMinesweeperGame({ difficulty: "expert" });
+
+    expect(easy).toMatchObject({
+      difficulty: "easy",
+      height: 9,
+      mineCount: 10,
+      width: 9,
+    });
+    expect(medium).toMatchObject({
+      difficulty: "medium",
+      height: 16,
+      mineCount: 40,
+      width: 16,
+    });
+    expect(hard).toMatchObject({
+      difficulty: "hard",
+      height: 16,
+      mineCount: 99,
+      width: 30,
+    });
+    expect(fallback.difficulty).toBe(MINESWEEPER_DEFAULT_DIFFICULTY);
+    expect(getMinesweeperDifficultySettings("hard")).toMatchObject({
+      height: 16,
+      mineCount: 99,
+      width: 30,
+    });
   });
 
   it("places mines deterministically after the first reveal", () => {
@@ -147,12 +182,18 @@ describe("minesweeper game engine", () => {
   });
 
   it("restarts to a new ready board with the same dimensions and mine count", () => {
-    const game = createInitialMinesweeperGame({ height: 4, mineCount: 1, width: 4 });
+    const game = createInitialMinesweeperGame({
+      difficulty: "hard",
+      height: 4,
+      mineCount: 1,
+      width: 4,
+    });
     const running = revealCell(game, 0, 0, constantRandom(0));
     const flagged = toggleMinesweeperFlag(running, getMinesweeperCellId(1, 1));
     const restarted = restartMinesweeperGame(flagged);
 
     expect(restarted).toMatchObject({
+      difficulty: "hard",
       flagCount: 0,
       height: 4,
       mineCount: 1,
