@@ -25,10 +25,13 @@ import {
   normalizeGameReplayRunId,
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
+  parseGameReplayCursorEvent,
   parseGameReplayEventEnvelope,
   parseGameReplayEvents,
   saveGameReplay,
+  shouldRecordGameReplayCursorEvent,
   type BaseGameReplayPayload,
+  type GameReplayCursorPosition,
   type GameReplayEventEnvelope,
   type GameReplayRun,
   type ParseGameReplayPayloadResult,
@@ -42,10 +45,7 @@ type SimonReplayEventInputFor<Event> = Omit<
   "elapsedMs" | "seq" | "tick"
 >;
 
-export type SimonReplayCursorPosition = {
-  x: number;
-  y: number;
-};
+export type SimonReplayCursorPosition = GameReplayCursorPosition;
 
 export type SimonReplayStartEvent = GameReplayEventEnvelope<"start">;
 
@@ -140,10 +140,6 @@ function isSimonPadId(value: unknown): value is SimonPadId {
   return typeof value === "string" && (SIMON_PADS as readonly string[]).includes(value);
 }
 
-function isNormalizedReplayCoordinate(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
-}
-
 export function shouldRecordSimonReplayCursorEvent({
   elapsedMs,
   force = false,
@@ -153,11 +149,12 @@ export function shouldRecordSimonReplayCursorEvent({
   force?: boolean;
   lastElapsedMs: number | null;
 }) {
-  return (
-    force ||
-    lastElapsedMs === null ||
-    elapsedMs - lastElapsedMs >= SIMON_REPLAY_CURSOR_SAMPLE_INTERVAL_MS
-  );
+  return shouldRecordGameReplayCursorEvent({
+    elapsedMs,
+    force,
+    lastElapsedMs,
+    sampleIntervalMs: SIMON_REPLAY_CURSOR_SAMPLE_INTERVAL_MS,
+  });
 }
 
 export function createSimonReplayLeaderboardKey({
@@ -194,24 +191,10 @@ function parseSimonReplayEvent(value: unknown): SimonReplayEvent | null {
 function parseSimonReplayCursorEvent(
   value: unknown,
 ): SimonReplayCursorEvent | null {
-  const envelope = parseGameReplayEventEnvelope(
+  return parseGameReplayCursorEvent(
     value,
     SIMON_CURSOR_EVENT_TYPES,
   );
-
-  if (envelope === null || !isRecord(value)) {
-    return null;
-  }
-
-  if (!isNormalizedReplayCoordinate(value.x) || !isNormalizedReplayCoordinate(value.y)) {
-    return null;
-  }
-
-  return {
-    ...envelope,
-    x: value.x,
-    y: value.y,
-  };
 }
 
 function parseSimonBaseReplayPayload(

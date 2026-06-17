@@ -13,10 +13,12 @@ import {
   normalizeGameReplaySeed,
   pauseGameReplayActiveClock,
   parseBaseGameReplayPayload,
+  parseGameReplayCursorEvent,
   parseGameReplayEventEnvelope,
   parseGameReplayEvents,
   resumeGameReplayActiveClock,
   saveGameReplay,
+  shouldRecordGameReplayCursorEvent,
   type BaseGameReplayPayload,
 } from "./game-replay";
 
@@ -229,6 +231,90 @@ describe("game replay", () => {
         allowedTypes,
       ),
     ).toBeNull();
+  });
+
+  it("parses shared replay cursor events with normalized board coordinates", () => {
+    const allowedTypes = new Set(["cursorMove"] as const);
+
+    expect(
+      parseGameReplayCursorEvent(
+        {
+          elapsedMs: 1200,
+          seq: 2,
+          tick: 8,
+          type: "cursorMove",
+          x: 0.25,
+          y: 1,
+        },
+        allowedTypes,
+      ),
+    ).toEqual({
+      elapsedMs: 1200,
+      seq: 2,
+      tick: 8,
+      type: "cursorMove",
+      x: 0.25,
+      y: 1,
+    });
+
+    expect(
+      parseGameReplayCursorEvent(
+        {
+          elapsedMs: 1200,
+          seq: 2,
+          tick: 8,
+          type: "cursorMove",
+          x: -0.01,
+          y: 0.5,
+        },
+        allowedTypes,
+      ),
+    ).toBeNull();
+    expect(
+      parseGameReplayCursorEvent(
+        {
+          elapsedMs: 1200,
+          seq: 2,
+          tick: 8,
+          type: "drag",
+          x: 0.25,
+          y: 0.5,
+        },
+        allowedTypes,
+      ),
+    ).toBeNull();
+  });
+
+  it("shares replay cursor sampling throttles with forced samples", () => {
+    expect(
+      shouldRecordGameReplayCursorEvent({
+        elapsedMs: 100,
+        lastElapsedMs: null,
+        sampleIntervalMs: 50,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRecordGameReplayCursorEvent({
+        elapsedMs: 149,
+        lastElapsedMs: 100,
+        sampleIntervalMs: 50,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRecordGameReplayCursorEvent({
+        elapsedMs: 149,
+        force: true,
+        lastElapsedMs: 100,
+        sampleIntervalMs: 50,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRecordGameReplayCursorEvent({
+        elapsedMs: 150,
+        lastElapsedMs: 100,
+        sampleIntervalMs: 50,
+      }),
+    ).toBe(true);
   });
 
   it("parses replay event arrays with the provided game event parser", () => {

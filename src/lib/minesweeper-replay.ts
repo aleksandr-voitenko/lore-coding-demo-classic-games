@@ -9,10 +9,13 @@ import {
   normalizeGameReplayRunId,
   normalizeGameReplaySeed,
   parseBaseGameReplayPayload,
+  parseGameReplayCursorEvent,
   parseGameReplayEventEnvelope,
   parseGameReplayEvents,
   saveGameReplay,
+  shouldRecordGameReplayCursorEvent,
   type BaseGameReplayPayload,
+  type GameReplayCursorPosition,
   type GameReplayEventEnvelope,
   type GameReplayRun,
   type ParseGameReplayPayloadResult,
@@ -36,10 +39,7 @@ type MinesweeperReplayEventInputFor<Event> = Omit<
   "elapsedMs" | "seq" | "tick"
 >;
 
-export type MinesweeperReplayCursorPosition = {
-  x: number;
-  y: number;
-};
+export type MinesweeperReplayCursorPosition = GameReplayCursorPosition;
 
 export type MinesweeperReplayStartEvent = GameReplayEventEnvelope<"start">;
 
@@ -120,10 +120,6 @@ function isPositiveInteger(value: unknown): value is number {
   return isNonNegativeInteger(value) && value > 0;
 }
 
-function isNormalizedReplayCoordinate(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
-}
-
 export function shouldRecordMinesweeperReplayCursorEvent({
   elapsedMs,
   force = false,
@@ -133,11 +129,12 @@ export function shouldRecordMinesweeperReplayCursorEvent({
   force?: boolean;
   lastElapsedMs: number | null;
 }) {
-  return (
-    force ||
-    lastElapsedMs === null ||
-    elapsedMs - lastElapsedMs >= MINESWEEPER_REPLAY_CURSOR_SAMPLE_INTERVAL_MS
-  );
+  return shouldRecordGameReplayCursorEvent({
+    elapsedMs,
+    force,
+    lastElapsedMs,
+    sampleIntervalMs: MINESWEEPER_REPLAY_CURSOR_SAMPLE_INTERVAL_MS,
+  });
 }
 
 function parseReplayCellId(
@@ -218,24 +215,10 @@ function parseMinesweeperReplayEvent(
 function parseMinesweeperReplayCursorEvent(
   value: unknown,
 ): MinesweeperReplayCursorEvent | null {
-  const envelope = parseGameReplayEventEnvelope(
+  return parseGameReplayCursorEvent(
     value,
     MINESWEEPER_CURSOR_EVENT_TYPES,
   );
-
-  if (envelope === null || !isRecord(value)) {
-    return null;
-  }
-
-  if (!isNormalizedReplayCoordinate(value.x) || !isNormalizedReplayCoordinate(value.y)) {
-    return null;
-  }
-
-  return {
-    ...envelope,
-    x: value.x,
-    y: value.y,
-  };
 }
 
 function parseMinesweeperBaseReplayPayload(

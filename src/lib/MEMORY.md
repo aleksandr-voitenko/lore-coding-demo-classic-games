@@ -42,7 +42,8 @@ This file covers deterministic game engines and shared source logic under
   for `/api/auth/*`, `/api/me`, and `/api/game-sessions`.
 - `game-replay.ts` owns shared replay run ids, seed normalization, deterministic
   replay random creation, active-play replay clocks, API path/client helpers,
-  and base replay payload validation for all future game-specific replay modules.
+  base replay payload validation, and generic cursor coordinate
+  validation/sampling helpers for all future game-specific replay modules.
 - `snake-replay.ts`, `tetris-replay.ts`, `breakout-replay.ts`,
   `minesweeper-replay.ts`, `space-invaders-replay.ts`, `pong-replay.ts`,
   `simon-replay.ts`, `twenty-forty-eight-replay.ts`, and

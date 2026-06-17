@@ -44,6 +44,11 @@ export type GameReplayEventEnvelope<EventType extends string = string> =
       }
     : never;
 
+export type GameReplayCursorPosition = {
+  x: number;
+  y: number;
+};
+
 export type GameReplayActiveClock = {
   activeElapsedMs: number;
   lastStartedAtMs: number | null;
@@ -200,6 +205,54 @@ export function parseGameReplayEventEnvelope<const EventType extends string>(
     tick: value.tick,
     type: eventType,
   } as GameReplayEventEnvelope<EventType>;
+}
+
+export function isGameReplayNormalizedCursorCoordinate(
+  value: unknown,
+): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
+export function parseGameReplayCursorEvent<const EventType extends string>(
+  value: unknown,
+  allowedTypes: ReadonlySet<EventType>,
+): (GameReplayEventEnvelope<EventType> & GameReplayCursorPosition) | null {
+  const envelope = parseGameReplayEventEnvelope(value, allowedTypes);
+
+  if (envelope === null || !isRecord(value)) {
+    return null;
+  }
+
+  if (
+    !isGameReplayNormalizedCursorCoordinate(value.x) ||
+    !isGameReplayNormalizedCursorCoordinate(value.y)
+  ) {
+    return null;
+  }
+
+  return {
+    ...envelope,
+    x: value.x,
+    y: value.y,
+  };
+}
+
+export function shouldRecordGameReplayCursorEvent({
+  elapsedMs,
+  force = false,
+  lastElapsedMs,
+  sampleIntervalMs,
+}: {
+  elapsedMs: number;
+  force?: boolean;
+  lastElapsedMs: number | null;
+  sampleIntervalMs: number;
+}) {
+  return (
+    force ||
+    lastElapsedMs === null ||
+    elapsedMs - lastElapsedMs >= sampleIntervalMs
+  );
 }
 
 export function parseGameReplayEvents<Event>(

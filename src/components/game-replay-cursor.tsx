@@ -1,9 +1,8 @@
 import { MousePointer2Icon } from "lucide-react";
 
-export type GameReplayCursorPosition = {
-  x: number;
-  y: number;
-};
+import type { GameReplayCursorPosition } from "@/lib/game-replay";
+
+export type { GameReplayCursorPosition } from "@/lib/game-replay";
 
 type GameReplayCursorProps = {
   position: GameReplayCursorPosition | null;
