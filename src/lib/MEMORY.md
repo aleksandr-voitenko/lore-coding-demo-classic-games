@@ -16,6 +16,12 @@ This file covers deterministic game engines and shared source logic under
   `hitboxes.ts`, `projectiles.ts`, `scoring.ts`, plus shared geometry/random
   helpers. Keep lifecycle orchestration in the facade unless a later refactor
   can move it without obscuring cross-system behavior.
+- Asteroids uses `src/lib/asteroids/` internals behind
+  `asteroids-game-engine.ts`: `types.ts`, `constants.ts`, `difficulty.ts`,
+  `asteroids.ts`, `projectiles.ts`, `saucers.ts`, `power-ups.ts`, `scoring.ts`,
+  `geometry.ts`, and `ship.ts`. Keep lifecycle/world tick orchestration in the
+  facade so ship, bullet, asteroid, saucer, power-up, scoring, and respawn
+  ordering stays easy to audit.
 - Engines that expose launcher presets keep those values in game state so
   restart, terminal replay, board rendering, accessibility labels, and leaderboard
   keys preserve the selected board size, difficulty, target, lives, alien
