@@ -225,12 +225,6 @@ export function getMinesweeperDifficultySettings(
   return MINESWEEPER_DIFFICULTY_SETTINGS[difficulty];
 }
 
-export function getMinesweeperDifficultyLabel(
-  difficulty: MinesweeperDifficulty,
-) {
-  return getMinesweeperDifficultySettings(difficulty).label;
-}
-
 function createEmptyCells(width: number, height: number) {
   return Array.from({ length: height }, (_, y) =>
     Array.from({ length: width }, (_, x): MinesweeperCell => ({

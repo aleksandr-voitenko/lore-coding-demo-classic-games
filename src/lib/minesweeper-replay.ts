@@ -36,6 +36,11 @@ type MinesweeperReplayEventInputFor<Event> = Omit<
   "elapsedMs" | "seq" | "tick"
 >;
 
+export type MinesweeperReplayCursorPosition = {
+  x: number;
+  y: number;
+};
+
 export type MinesweeperReplayStartEvent = GameReplayEventEnvelope<"start">;
 
 export type MinesweeperReplayRevealEvent = GameReplayEventEnvelope<"reveal"> & {
@@ -57,12 +62,24 @@ export type MinesweeperReplayEventInput =
   | MinesweeperReplayEventInputFor<MinesweeperReplayStartEvent>
   | MinesweeperReplayEventInputFor<MinesweeperReplayToggleFlagEvent>;
 
+export type MinesweeperReplayCursorEvent =
+  GameReplayEventEnvelope<"cursorMove"> &
+    MinesweeperReplayCursorPosition;
+
+export type MinesweeperReplayCursorEventInput =
+  MinesweeperReplayEventInputFor<MinesweeperReplayCursorEvent>;
+
+type MinesweeperReplaySchemaVersion =
+  | typeof MINESWEEPER_REPLAY_LEGACY_SCHEMA_VERSION
+  | typeof MINESWEEPER_REPLAY_SCHEMA_VERSION;
+
 export type MinesweeperReplayPayload = BaseGameReplayPayload<
   typeof MINESWEEPER_REPLAY_GAME_ID,
-  typeof MINESWEEPER_REPLAY_SCHEMA_VERSION
+  MinesweeperReplaySchemaVersion
 > & {
   boardHeight: number;
   boardWidth: number;
+  cursorEvents: MinesweeperReplayCursorEvent[];
   difficulty: MinesweeperDifficulty;
   events: MinesweeperReplayEvent[];
   finalFlagCount: number;
@@ -73,7 +90,8 @@ export type MinesweeperReplayPayload = BaseGameReplayPayload<
 export type ParseMinesweeperReplayPayloadResult =
   ParseGameReplayPayloadResult<MinesweeperReplayPayload>;
 
-export const MINESWEEPER_REPLAY_SCHEMA_VERSION = 2;
+export const MINESWEEPER_REPLAY_LEGACY_SCHEMA_VERSION = 2;
+export const MINESWEEPER_REPLAY_SCHEMA_VERSION = 3;
 export const MINESWEEPER_REPLAY_GAME_ID = "minesweeper";
 export const MINESWEEPER_REPLAY_API_PATH = getGameReplayApiPath(
   MINESWEEPER_REPLAY_GAME_ID,
@@ -82,12 +100,17 @@ export const MINESWEEPER_REPLAY_RUN_API_PATH = getGameReplayRunApiPath(
   MINESWEEPER_REPLAY_GAME_ID,
 );
 export const MAX_MINESWEEPER_REPLAY_EVENTS = 80_000;
+export const MAX_MINESWEEPER_REPLAY_CURSOR_EVENTS = 80_000;
+export const MINESWEEPER_REPLAY_CURSOR_SAMPLE_INTERVAL_MS = 50;
 
 const MINESWEEPER_EVENT_TYPES = new Set<MinesweeperReplayEvent["type"]>([
   "reveal",
   "start",
   "toggleFlag",
 ]);
+const MINESWEEPER_CURSOR_EVENT_TYPES = new Set<
+  MinesweeperReplayCursorEvent["type"]
+>(["cursorMove"]);
 
 export const normalizeMinesweeperReplayRunId = normalizeGameReplayRunId;
 export const normalizeMinesweeperReplaySeed = normalizeGameReplaySeed;
@@ -95,6 +118,26 @@ export const createMinesweeperReplayRandom = createGameReplayRandom;
 
 function isPositiveInteger(value: unknown): value is number {
   return isNonNegativeInteger(value) && value > 0;
+}
+
+function isNormalizedReplayCoordinate(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
+export function shouldRecordMinesweeperReplayCursorEvent({
+  elapsedMs,
+  force = false,
+  lastElapsedMs,
+}: {
+  elapsedMs: number;
+  force?: boolean;
+  lastElapsedMs: number | null;
+}) {
+  return (
+    force ||
+    lastElapsedMs === null ||
+    elapsedMs - lastElapsedMs >= MINESWEEPER_REPLAY_CURSOR_SAMPLE_INTERVAL_MS
+  );
 }
 
 function parseReplayCellId(
@@ -172,14 +215,56 @@ function parseMinesweeperReplayEvent(
   };
 }
 
-export function parseMinesweeperReplayPayload(
+function parseMinesweeperReplayCursorEvent(
   value: unknown,
-): ParseMinesweeperReplayPayloadResult {
-  const baseReplay = parseBaseGameReplayPayload(value, {
+): MinesweeperReplayCursorEvent | null {
+  const envelope = parseGameReplayEventEnvelope(
+    value,
+    MINESWEEPER_CURSOR_EVENT_TYPES,
+  );
+
+  if (envelope === null || !isRecord(value)) {
+    return null;
+  }
+
+  if (!isNormalizedReplayCoordinate(value.x) || !isNormalizedReplayCoordinate(value.y)) {
+    return null;
+  }
+
+  return {
+    ...envelope,
+    x: value.x,
+    y: value.y,
+  };
+}
+
+function parseMinesweeperBaseReplayPayload(
+  value: unknown,
+): ParseGameReplayPayloadResult<
+  BaseGameReplayPayload<
+    typeof MINESWEEPER_REPLAY_GAME_ID,
+    MinesweeperReplaySchemaVersion
+  >
+> {
+  if (isRecord(value) && value.schemaVersion === MINESWEEPER_REPLAY_LEGACY_SCHEMA_VERSION) {
+    return parseBaseGameReplayPayload(value, {
+      gameId: MINESWEEPER_REPLAY_GAME_ID,
+      replayLabel: "Minesweeper replay",
+      schemaVersion: MINESWEEPER_REPLAY_LEGACY_SCHEMA_VERSION,
+    });
+  }
+
+  return parseBaseGameReplayPayload(value, {
     gameId: MINESWEEPER_REPLAY_GAME_ID,
     replayLabel: "Minesweeper replay",
     schemaVersion: MINESWEEPER_REPLAY_SCHEMA_VERSION,
   });
+}
+
+export function parseMinesweeperReplayPayload(
+  value: unknown,
+): ParseMinesweeperReplayPayloadResult {
+  const baseReplay = parseMinesweeperBaseReplayPayload(value);
 
   if (!baseReplay.success) {
     return baseReplay;
@@ -265,11 +350,32 @@ export function parseMinesweeperReplayPayload(
     return events;
   }
 
+  const cursorEvents =
+    baseReplay.payload.schemaVersion === MINESWEEPER_REPLAY_LEGACY_SCHEMA_VERSION &&
+    value.cursorEvents === undefined
+      ? {
+          payload: [] satisfies MinesweeperReplayCursorEvent[],
+          success: true as const,
+        }
+      : parseGameReplayEvents(value.cursorEvents, {
+          maxEventCount: MAX_MINESWEEPER_REPLAY_CURSOR_EVENTS,
+          parseEvent: parseMinesweeperReplayCursorEvent,
+          unsupportedEventError:
+            "Minesweeper replay includes an unsupported cursor event.",
+          unsupportedEventsError:
+            "Minesweeper replay cursor events are not supported.",
+        });
+
+  if (!cursorEvents.success) {
+    return cursorEvents;
+  }
+
   return {
     payload: {
       ...baseReplay.payload,
       boardHeight,
       boardWidth,
+      cursorEvents: cursorEvents.payload,
       difficulty,
       events: events.payload,
       finalFlagCount: value.finalFlagCount,

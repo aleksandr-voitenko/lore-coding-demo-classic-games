@@ -1,7 +1,7 @@
 "use client";
 
 import { BombIcon, FlagIcon } from "lucide-react";
-import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 
 import {
   MINESWEEPER_BOARD_HEIGHT,
@@ -16,8 +16,9 @@ type MinesweeperBoardProps = {
   game: MinesweeperGameState;
   isFlagMode: boolean;
   isInputDisabled?: boolean;
-  onRevealCell: (cellId: string) => void;
-  onToggleFlag: (cellId: string) => void;
+  onRevealCell: (cellId: string, event?: MouseEvent<HTMLButtonElement>) => void;
+  onTrackPointerMove?: (event: PointerEvent<HTMLDivElement>) => void;
+  onToggleFlag: (cellId: string, event?: MouseEvent<HTMLButtonElement>) => void;
   statusLabel: string;
 };
 
@@ -39,12 +40,14 @@ export function MinesweeperBoard({
   isFlagMode,
   isInputDisabled = false,
   onRevealCell,
+  onTrackPointerMove,
   onToggleFlag,
   statusLabel,
 }: MinesweeperBoardProps) {
   return (
     <div
       className="relative w-full overflow-hidden rounded-md border border-[var(--minesweeper-board-border)] bg-[var(--minesweeper-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--minesweeper-board)_24%,transparent)]"
+      onPointerMove={onTrackPointerMove}
       style={{ aspectRatio: `${game.width} / ${game.height}` }}
     >
       <div
@@ -77,8 +80,8 @@ type MinesweeperCellButtonProps = {
   cell: MinesweeperCell;
   disabled: boolean;
   isFlagMode: boolean;
-  onRevealCell: (cellId: string) => void;
-  onToggleFlag: (cellId: string) => void;
+  onRevealCell: (cellId: string, event?: MouseEvent<HTMLButtonElement>) => void;
+  onToggleFlag: (cellId: string, event?: MouseEvent<HTMLButtonElement>) => void;
 };
 
 function MinesweeperCellButton({
@@ -90,18 +93,18 @@ function MinesweeperCellButton({
 }: MinesweeperCellButtonProps) {
   const isCovered = !cell.isRevealed;
 
-  function handleClick() {
+  function handleClick(event: MouseEvent<HTMLButtonElement>) {
     if (isFlagMode) {
-      onToggleFlag(cell.id);
+      onToggleFlag(cell.id, event);
       return;
     }
 
-    onRevealCell(cell.id);
+    onRevealCell(cell.id, event);
   }
 
   function handleContextMenu(event: MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
-    onToggleFlag(cell.id);
+    onToggleFlag(cell.id, event);
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>) {

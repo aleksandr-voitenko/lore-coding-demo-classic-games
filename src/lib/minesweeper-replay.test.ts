@@ -11,7 +11,10 @@ import {
   createInitialMinesweeperReplayGame,
   createMinesweeperReplayLeaderboardKey,
   parseMinesweeperReplayPayload,
+  shouldRecordMinesweeperReplayCursorEvent,
+  MINESWEEPER_REPLAY_LEGACY_SCHEMA_VERSION,
   MINESWEEPER_REPLAY_SCHEMA_VERSION,
+  type MinesweeperReplayCursorEvent,
   type MinesweeperReplayEvent,
   type MinesweeperReplayPayload,
 } from "./minesweeper-replay";
@@ -28,6 +31,22 @@ function createReplayPayload(
   const payload = {
     boardHeight,
     boardWidth,
+    cursorEvents: [
+      {
+        seq: 0,
+        tick: 0,
+        type: "cursorMove",
+        x: 0.25,
+        y: 0.75,
+      },
+      {
+        seq: 1,
+        tick: 1,
+        type: "cursorMove",
+        x: 0.5,
+        y: 0.2,
+      },
+    ],
     difficulty,
     events: [
       {
@@ -67,6 +86,7 @@ function createReplayPayload(
 
   return {
     ...payload,
+    cursorEvents: withReplayElapsed(payload.cursorEvents) as MinesweeperReplayCursorEvent[],
     events: withReplayElapsed(payload.events),
   } as MinesweeperReplayPayload;
 }
@@ -165,6 +185,18 @@ describe("minesweeper replay", () => {
       payload: {
         boardHeight: 9,
         boardWidth: 9,
+        cursorEvents: [
+          {
+            type: "cursorMove",
+            x: 0.25,
+            y: 0.75,
+          },
+          {
+            type: "cursorMove",
+            x: 0.5,
+            y: 0.2,
+          },
+        ],
         difficulty: "easy",
         events: [
           {
@@ -227,6 +259,25 @@ describe("minesweeper replay", () => {
     expect(
       parseMinesweeperReplayPayload(
         createReplayPayload({
+          cursorEvents: [
+            {
+              elapsedMs: 0,
+              seq: 0,
+              tick: 0,
+              type: "cursorMove",
+              x: 1.1,
+              y: 0.5,
+            },
+          ],
+        }),
+      ),
+    ).toEqual({
+      error: "Minesweeper replay includes an unsupported cursor event.",
+      success: false,
+    });
+    expect(
+      parseMinesweeperReplayPayload(
+        createReplayPayload({
           finalRevealedSafeCellCount: 13,
           finalStatus: "won",
         }),
@@ -235,6 +286,50 @@ describe("minesweeper replay", () => {
       error: "Minesweeper replay final state is not supported.",
       success: false,
     });
+  });
+
+  it("parses legacy payloads without cursor events", () => {
+    const legacyReplay = createReplayPayload({
+      schemaVersion: MINESWEEPER_REPLAY_LEGACY_SCHEMA_VERSION,
+    });
+
+    delete (legacyReplay as Partial<MinesweeperReplayPayload>).cursorEvents;
+
+    expect(parseMinesweeperReplayPayload(legacyReplay)).toMatchObject({
+      payload: {
+        cursorEvents: [],
+        schemaVersion: MINESWEEPER_REPLAY_LEGACY_SCHEMA_VERSION,
+      },
+      success: true,
+    });
+  });
+
+  it("samples replay cursor movement at most every 50 milliseconds", () => {
+    expect(
+      shouldRecordMinesweeperReplayCursorEvent({
+        elapsedMs: 100,
+        lastElapsedMs: null,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRecordMinesweeperReplayCursorEvent({
+        elapsedMs: 149,
+        lastElapsedMs: 100,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRecordMinesweeperReplayCursorEvent({
+        elapsedMs: 149,
+        force: true,
+        lastElapsedMs: 100,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRecordMinesweeperReplayCursorEvent({
+        elapsedMs: 150,
+        lastElapsedMs: 100,
+      }),
+    ).toBe(true);
   });
 
   it("accepts terminal won replay payloads with elapsed-second scores", () => {

@@ -1,7 +1,14 @@
 "use client";
 
 import { PlayIcon, RotateCcwIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 
 import { registerGameKeyDown, shouldIgnoreGameKeyDown } from "@/components/game-input";
 import {
@@ -31,6 +38,7 @@ import {
   useLiveGameReplayRecording,
   type LiveGameReplayRecording,
 } from "@/components/game-replay-recording";
+import { getGameReplayRecordingElapsedMs } from "@/components/game-replay-timing";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { MinesweeperBoard, MinesweeperStartPreview } from "@/components/minesweeper-board";
 import { MinesweeperReplayPlayer } from "@/components/minesweeper-replay-player";
@@ -52,6 +60,10 @@ import {
   saveMinesweeperReplay,
   MINESWEEPER_REPLAY_GAME_ID,
   MINESWEEPER_REPLAY_SCHEMA_VERSION,
+  shouldRecordMinesweeperReplayCursorEvent,
+  type MinesweeperReplayCursorEvent,
+  type MinesweeperReplayCursorEventInput,
+  type MinesweeperReplayCursorPosition,
   type MinesweeperReplayEvent,
   type MinesweeperReplayEventInput,
   type MinesweeperReplayPayload,
@@ -69,16 +81,21 @@ type MinesweeperGameProps = {
 };
 
 type MinesweeperReplayRecording = LiveGameReplayRecording<MinesweeperReplayEvent, MinesweeperReplayRun> & {
+  cursorEvents: MinesweeperReplayCursorEvent[];
+  lastCursorElapsedMs: number | null;
+  nextCursorSeq: number;
   random: () => number;
 };
 
 type MinesweeperReplayPendingAction =
   | {
       cellId: string;
+      cursorPosition?: MinesweeperReplayCursorPosition;
       type: "reveal";
     }
   | {
       cellId: string;
+      cursorPosition?: MinesweeperReplayCursorPosition;
       type: "toggleFlag";
     };
 
@@ -160,6 +177,97 @@ function appendMinesweeperReplayEvent(
 ) {
   recording.tick = tick;
   appendLiveGameReplayEvent(recording, event);
+}
+
+function appendMinesweeperReplayCursorEvent(
+  recording: MinesweeperReplayRecording,
+  event: MinesweeperReplayCursorEventInput,
+  tick: number,
+  { force = false }: { force?: boolean } = {},
+) {
+  const elapsedMs = getGameReplayRecordingElapsedMs(recording);
+
+  if (
+    !shouldRecordMinesweeperReplayCursorEvent({
+      elapsedMs,
+      force,
+      lastElapsedMs: recording.lastCursorElapsedMs,
+    })
+  ) {
+    return null;
+  }
+
+  const recordedEvent: MinesweeperReplayCursorEvent = {
+    ...event,
+    elapsedMs,
+    seq: recording.nextCursorSeq,
+    tick,
+  };
+
+  recording.cursorEvents.push(recordedEvent);
+  recording.lastCursorElapsedMs = elapsedMs;
+  recording.nextCursorSeq += 1;
+
+  return recordedEvent;
+}
+
+function clampMinesweeperReplayCursorCoordinate(value: number) {
+  return Math.min(1, Math.max(0, Math.round(value * 10_000) / 10_000));
+}
+
+function getMinesweeperReplayCursorPositionFromBoardRect({
+  clientX,
+  clientY,
+  rect,
+}: {
+  clientX: number;
+  clientY: number;
+  rect: DOMRect;
+}): MinesweeperReplayCursorPosition | null {
+  if (rect.width <= 0 || rect.height <= 0) {
+    return null;
+  }
+
+  const x = (clientX - rect.left) / rect.width;
+  const y = (clientY - rect.top) / rect.height;
+
+  if (x < 0 || x > 1 || y < 0 || y > 1) {
+    return null;
+  }
+
+  return {
+    x: clampMinesweeperReplayCursorCoordinate(x),
+    y: clampMinesweeperReplayCursorCoordinate(y),
+  };
+}
+
+function getMinesweeperReplayCursorPosition(
+  event: ReactPointerEvent<HTMLDivElement>,
+) {
+  return getMinesweeperReplayCursorPositionFromBoardRect({
+    clientX: event.clientX,
+    clientY: event.clientY,
+    rect: event.currentTarget.getBoundingClientRect(),
+  });
+}
+
+function getMinesweeperReplayActionCursorPosition(
+  event: ReactMouseEvent<HTMLButtonElement> | undefined,
+) {
+  const boardGrid = event?.currentTarget.closest('[data-testid="minesweeper-board"]');
+  const boardHost = boardGrid?.parentElement;
+
+  if (event === undefined || !(boardHost instanceof HTMLElement)) {
+    return undefined;
+  }
+
+  return (
+    getMinesweeperReplayCursorPositionFromBoardRect({
+      clientX: event.clientX,
+      clientY: event.clientY,
+      rect: boardHost.getBoundingClientRect(),
+    }) ?? undefined
+  );
 }
 
 function applyMinesweeperReplayPendingAction(
@@ -287,9 +395,17 @@ function MinesweeperLiveGame({
       return createLiveGameReplayRecording<
         MinesweeperReplayEvent,
         MinesweeperReplayRun,
-        { random: () => number }
+        {
+          cursorEvents: MinesweeperReplayCursorEvent[];
+          lastCursorElapsedMs: number | null;
+          nextCursorSeq: number;
+          random: () => number;
+        }
       >({
         clock,
+        cursorEvents: [],
+        lastCursorElapsedMs: null,
+        nextCursorSeq: 0,
         random,
         run,
       });
@@ -307,9 +423,23 @@ function MinesweeperLiveGame({
     const pendingInitialAction = pendingInitialActionRef.current;
 
     if (pendingInitialAction !== null) {
+      const { cursorPosition, ...pendingReplayEvent } = pendingInitialAction;
+
+      if (cursorPosition !== undefined) {
+        appendMinesweeperReplayCursorEvent(
+          recording,
+          {
+            ...cursorPosition,
+            type: "cursorMove",
+          },
+          elapsedSecondsRef.current,
+          { force: true },
+        );
+      }
+
       appendMinesweeperReplayEvent(
         recording,
-        pendingInitialAction,
+        pendingReplayEvent,
         elapsedSecondsRef.current,
       );
       nextGame = applyMinesweeperReplayPendingAction(
@@ -331,11 +461,17 @@ function MinesweeperLiveGame({
     void startReplayRecording();
   }, [resetLeaderboardForm, resetReplayRecording, startReplayRecording]);
 
-  const revealCell = useCallback((cellId: string) => {
+  const revealCell = useCallback((
+    cellId: string,
+    event?: ReactMouseEvent<HTMLButtonElement>,
+  ) => {
+    const cursorPosition = getMinesweeperReplayActionCursorPosition(event);
+
     updateCommittedGame((current) => {
       if (current.status === "ready" && replayRecordingRef.current === null) {
         void startReplayRecording({
           cellId,
+          cursorPosition,
           type: "reveal",
         });
 
@@ -345,6 +481,18 @@ function MinesweeperLiveGame({
       const recording = replayRecordingRef.current;
 
       if (recording !== null) {
+        if (cursorPosition !== undefined) {
+          appendMinesweeperReplayCursorEvent(
+            recording,
+            {
+              ...cursorPosition,
+              type: "cursorMove",
+            },
+            elapsedSecondsRef.current,
+            { force: true },
+          );
+        }
+
         appendMinesweeperReplayEvent(
           recording,
           {
@@ -361,11 +509,17 @@ function MinesweeperLiveGame({
     });
   }, [replayRecordingRef, startReplayRecording, updateCommittedGame]);
 
-  const toggleFlag = useCallback((cellId: string) => {
+  const toggleFlag = useCallback((
+    cellId: string,
+    event?: ReactMouseEvent<HTMLButtonElement>,
+  ) => {
+    const cursorPosition = getMinesweeperReplayActionCursorPosition(event);
+
     updateCommittedGame((current) => {
       if (current.status === "ready" && replayRecordingRef.current === null) {
         void startReplayRecording({
           cellId,
+          cursorPosition,
           type: "toggleFlag",
         });
 
@@ -375,6 +529,18 @@ function MinesweeperLiveGame({
       const recording = replayRecordingRef.current;
 
       if (recording !== null) {
+        if (cursorPosition !== undefined) {
+          appendMinesweeperReplayCursorEvent(
+            recording,
+            {
+              ...cursorPosition,
+              type: "cursorMove",
+            },
+            elapsedSecondsRef.current,
+            { force: true },
+          );
+        }
+
         appendMinesweeperReplayEvent(
           recording,
           {
@@ -388,6 +554,34 @@ function MinesweeperLiveGame({
       return toggleMinesweeperFlag(current, cellId);
     });
   }, [replayRecordingRef, startReplayRecording, updateCommittedGame]);
+
+  const trackReplayPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "mouse" || isHelpVisible || showStartScreen) {
+      return;
+    }
+
+    const recording = replayRecordingRef.current;
+    const currentStatus = gameRef.current.status;
+
+    if (recording === null || currentStatus === "lost" || currentStatus === "won") {
+      return;
+    }
+
+    const cursorPosition = getMinesweeperReplayCursorPosition(event);
+
+    if (cursorPosition === null) {
+      return;
+    }
+
+    appendMinesweeperReplayCursorEvent(
+      recording,
+      {
+        ...cursorPosition,
+        type: "cursorMove",
+      },
+      elapsedSecondsRef.current,
+    );
+  }, [isHelpVisible, replayRecordingRef, showStartScreen]);
 
   const startNewGame = useCallback(() => {
     if (isReplayRunPendingRef.current) {
@@ -467,6 +661,7 @@ function MinesweeperLiveGame({
     captureFinishedReplay((recording) => ({
       boardHeight: game.height,
       boardWidth: game.width,
+      cursorEvents: [...recording.cursorEvents],
       difficulty: game.difficulty,
       events: [...recording.events],
       finalFlagCount: game.flagCount,
@@ -599,6 +794,7 @@ function MinesweeperLiveGame({
             isInputDisabled={showStartScreen || isReplayRunPending}
             isFlagMode={isFlagMode}
             onRevealCell={revealCell}
+            onTrackPointerMove={trackReplayPointerMove}
             onToggleFlag={toggleFlag}
             statusLabel={statusLabels[game.status]}
           >

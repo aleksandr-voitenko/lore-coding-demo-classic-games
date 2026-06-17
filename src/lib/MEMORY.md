@@ -50,6 +50,9 @@ This file covers deterministic game engines and shared source logic under
   move directions, and Asteroids starts/advances/control-state changes/fire
   events rather than video or full board snapshots. Each replay event requires
   active elapsed milliseconds; parsers reject payloads without event timing.
+  Minesweeper additionally carries a separate visual-only cursor event stream
+  with board-local normalized coordinates; cursor events do not apply to the
+  deterministic game engine.
 - `game-catalog.ts` owns the pure playable-game id and label catalog plus
   server-safe card artwork metadata and versioned artwork URLs. Launcher config
   should enrich these entries with descriptions and parameters locally, while

@@ -1,6 +1,11 @@
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { advanceMinesweeperReplayFrame } from "./minesweeper-replay-player";
+import {
+  advanceMinesweeperReplayFrame,
+  MinesweeperReplayCursor,
+  shouldAdvanceMinesweeperReplayCursorBeforeAction,
+} from "./minesweeper-replay-player";
 import {
   createInitialMinesweeperGame,
   getMinesweeperCellId,
@@ -148,5 +153,67 @@ describe("advanceMinesweeperReplayFrame", () => {
       revealedSafeCellCount: 71,
       status: "won",
     });
+  });
+});
+
+describe("shouldAdvanceMinesweeperReplayCursorBeforeAction", () => {
+  it("prioritizes same-timestamp cursor movement before board actions", () => {
+    expect(
+      shouldAdvanceMinesweeperReplayCursorBeforeAction({
+        cursorEvent: {
+          elapsedMs: 1_000,
+          seq: 0,
+          tick: 1,
+          type: "cursorMove",
+          x: 0.25,
+          y: 0.75,
+        },
+        event: {
+          cellId: getMinesweeperCellId(2, 4),
+          elapsedMs: 1_000,
+          seq: 1,
+          tick: 1,
+          type: "reveal",
+        },
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldAdvanceMinesweeperReplayCursorBeforeAction({
+        cursorEvent: {
+          elapsedMs: 1_050,
+          seq: 0,
+          tick: 1,
+          type: "cursorMove",
+          x: 0.25,
+          y: 0.75,
+        },
+        event: {
+          cellId: getMinesweeperCellId(2, 4),
+          elapsedMs: 1_000,
+          seq: 1,
+          tick: 1,
+          type: "reveal",
+        },
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("MinesweeperReplayCursor", () => {
+  it("renders the replay cursor at board-local percentages", () => {
+    const markup = renderToStaticMarkup(
+      <MinesweeperReplayCursor position={{ x: 0.25, y: 0.75 }} />,
+    );
+
+    expect(markup).toContain('data-testid="minesweeper-replay-cursor"');
+    expect(markup).toContain("left:25%");
+    expect(markup).toContain("top:75%");
+  });
+
+  it("does not render before the first cursor replay event", () => {
+    const markup = renderToStaticMarkup(<MinesweeperReplayCursor position={null} />);
+
+    expect(markup).not.toContain("minesweeper-replay-cursor");
   });
 });

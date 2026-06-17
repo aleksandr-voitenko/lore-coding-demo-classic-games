@@ -89,9 +89,10 @@ compatibility with existing Snake deployments. On a VPS, set
 Snake, Tetris, Breakout, Minesweeper, Space Invaders, Pong, Simon, 2048, and
 Asteroids record replay events during play after the server issues a run id and
 seed. Replay events include active-play elapsed time so playback mirrors player
-hesitation while excluding Pause and Help time. Signed-in players can save the
-completed run from the final screen; the profile page stores one latest replay
-per user and game and links back into the
+hesitation while excluding Pause and Help time. Minesweeper replays also include
+a board-local schematic cursor stream sampled from mouse movement every 50ms.
+Signed-in players can save the completed run from the final screen; the profile
+page stores one latest replay per user and game and links back into the
 launcher at `/?replay=snake`, `/?replay=tetris`, `/?replay=breakout`,
 `/?replay=minesweeper`, `/?replay=space-invaders`, `/?replay=pong`,
 `/?replay=simon`, `/?replay=twenty-forty-eight`, or `/?replay=asteroids` for
