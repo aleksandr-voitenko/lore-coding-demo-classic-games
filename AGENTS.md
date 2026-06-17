@@ -1,4 +1,4 @@
-<!-- Agentic Lore Coding v18 -->
+<!-- Agentic Lore Coding v19 -->
 
 # Introduction
 You are working in an Agentic Lore Coding environment.
@@ -76,7 +76,7 @@ Treat assumptions as part of the work. User prompts may omit important details. 
 
 ### Mandatory assumption checkpoint
 
-Before making code edits for any non-trivial task, the surface working assumptions in a short standalone `Assumptions:` section.
+Before making code edits for any non-trivial task, surface the working assumptions in a short standalone `Assumptions:` section.
 
 The section must include:
 
@@ -100,7 +100,7 @@ Treat the following as material or blocking assumptions by default:
 
 Low implementation risk does not make an assumption safe.
 
-### Documenting assumption
+### Documenting assumptions
 Do not document trivial assumptions in final task messages. Document only assumptions that materially shaped the solution.
 
 In final task descriptions:
@@ -136,6 +136,89 @@ Write useful error messages. Include what failed, why it likely failed when that
 For refactors, behavior should remain strictly unchanged unless the task explicitly says otherwise.
 
 Keep tests, fixtures, examples, and documentation close to the behavior they describe when possible. Avoid growing large, central, or high-touch modules without a strong reason; prefer cohesive extraction when it improves maintainability without causing an unnecessary rewrite.
+
+## Code comments and inline documentation
+
+Comments are part of the repository's context system for humans and AI agents. Agents can infer a lot from code, tests, types, documentation, and Lore history, but they must not rely on inference alone when intent, constraints, or risk are not obvious from the local code.
+
+Prefer code that is clear enough to need fewer comments. Use better names, smaller functions, stronger types, explicit state models, and focused tests before adding explanatory comments. Do not use comments to excuse confusing code when a straightforward implementation would make the behavior clear.
+
+### What to comment
+
+Add or keep comments when they preserve durable context that is not obvious from the code itself, including:
+
+- why a surprising, defensive, or indirect implementation exists;
+- domain rules, product rules, legal rules, or business rules that are easy to misread;
+- invariants that future edits must preserve;
+- edge cases that look unnecessary but are required by real inputs, legacy data, or external behavior;
+- integration quirks, upstream bugs, API compatibility constraints, rate limits, retry semantics, idempotency requirements, or ordering requirements;
+- security, privacy, accessibility, safety, or abuse-prevention reasoning;
+- concurrency, cancellation, timeout, caching, resource ownership, lifecycle, or thread-safety assumptions;
+- performance tradeoffs, algorithmic complexity, memory tradeoffs, or intentionally duplicated work;
+- migration, rollback, backward-compatibility, feature-flag, or rollout constraints;
+- generated-code boundaries, vendored-code boundaries, or intentionally unmodified external snapshots.
+
+A useful comment usually explains why the code is shaped this way, what constraint would be violated by a tempting change, or what external fact the code depends on.
+
+### What not to comment
+
+Do not add comments that merely restate syntax, control flow, obvious assignments, or information already clear from names and types. Avoid comments that duplicate nearby tests, repeat the commit message, narrate the implementation line by line, or describe personal reasoning that is not durable.
+
+Do not add speculative `TODO`, `FIXME`, `HACK`, or `TEMP` comments unless they follow repository convention and include enough context to make the follow-up actionable, such as an issue, owner, expiry condition, or removal trigger. Prefer creating a tracked task when follow-up work matters.
+
+Do not add comments that say the code was generated, edited, reviewed, or maintained by an AI agent unless the repository explicitly requires provenance comments. Such comments are usually noise and become stale quickly.
+
+Do not put secrets, credentials, private keys, tokens, customer data, confidential incident details, or sensitive operational details in comments. When sensitive context is necessary, point to the approved secure source of record instead of embedding it in code.
+
+### Comment lifecycle for agents
+
+Before editing code, read nearby comments, docstrings, examples, tests, project memory, and relevant Lore history. Treat comments as context, not unquestionable truth. If a comment conflicts with code, tests, documentation, or recent history, investigate before editing and update or remove the stale comment as part of the task when it is in scope.
+
+When changing behavior, update affected comments, docstrings, examples, and inline documentation in the same task. A behavior-changing diff that leaves old comments describing the previous behavior is incomplete.
+
+When refactoring without intended behavior change, preserve accurate comments with the concept they explain, not necessarily with the exact old lines. Remove comments that only explained the old implementation after the refactor makes them unnecessary.
+
+When adding new code, add comments only where the next maintainer or agent is likely to make a wrong but plausible inference from the code alone. Prefer concise local comments over distant documentation for local constraints. Prefer documentation, ADRs, or memory files for broad architecture, operational workflows, or cross-cutting decisions.
+
+When deleting code, delete comments that only applied to the deleted behavior. If a deleted comment contained durable context that still matters elsewhere, move that context to the new relevant code, documentation, memory file, or task description.
+
+After editing, scan the touched diff specifically for comment-code mismatches. Verify that comments still describe the final behavior, not the pre-edit state, the plan, or an abandoned approach.
+
+### Public APIs and docstrings
+
+For public APIs, exported functions, shared components, schemas, command-line interfaces, configuration, and extension points, use docstrings or equivalent structured comments when repository convention supports them. Document behavior, parameters, return values, errors, side effects, lifecycle expectations, compatibility constraints, and security-sensitive usage when those are not obvious from the type signature and name.
+
+Do not require docstrings for every private helper. Add private docstrings only when they clarify non-obvious intent, constraints, state transitions, algorithm choices, or integration behavior.
+
+### Lore boundaries for comments
+
+Lore task history explains why a task happened and how it was verified. Code comments explain local constraints that future edits must respect. Do not copy full task context into comments.
+
+Use a `Lore-ID` in a code comment only when a small durable pointer materially helps future maintainers understand an unusual local constraint, historical compatibility requirement, migration rule, or security decision. Do not add Lore pointers to routine comments or every changed line.
+
+Good:
+
+```ts
+// Keep retries disabled here: the provider may process the original
+// request even when our response times out. See LC-20260617-A1B2.
+await chargeCustomerOnce(request);
+```
+
+Weak:
+
+```ts
+// Increment retry count.
+retryCount += 1;
+
+// Added by AI during LC-20260617-A1B2.
+const enabled = true;
+```
+
+### Comment-only changes
+
+A comment-only change should be treated as documentation work. It must not change runtime behavior. Verify it by inspecting the rendered documentation or relevant source context when applicable, and by confirming that no code, generated artifacts, or behavior-bearing configuration changed unintentionally.
+
+If a comment-only change corrects a misleading explanation of behavior, mention the corrected misunderstanding in the task `Context:` and state that no runtime behavior changed in `Implementation:` or `Verification:`.
 
 ## Formatting and mechanical changes
 
@@ -219,7 +302,7 @@ Keep user-facing, developer-facing, and generated documentation aligned with cod
 
 When changing behavior, APIs, configuration, data models, permissions, feature flags, deployment assumptions, or operational workflows, update relevant documentation in the same task when applicable.
 
-Document non-obvious decisions close to the code they affect. Prefer concise comments that explain why something exists rather than restating what the code does.
+Document non-obvious decisions close to the code they affect. Prefer concise comments that explain why something exists rather than restating what the code does. Follow the code-comments rules when adding, changing, trusting, or removing comments.
 
 When useful, document invariants, edge cases, external constraints, compatibility requirements, data-shape assumptions, timing assumptions, or integration contracts that are not obvious from the code alone.
 
@@ -576,6 +659,7 @@ While editing code:
 - avoid unrelated cleanup;
 - keep formatting-only changes separate where practical;
 - add or update tests when the project structure supports it;
+- manage comments according to the code-comments rules: preserve accurate intent, update stale comments, and add comments for new non-obvious constraints;
 - track related historical tasks that should appear as `Lore-Link:` trailers;
 - note assumptions, rejected alternatives, and discoveries that should appear in `Context:`.
 
@@ -603,8 +687,9 @@ Before writing it:
 6. Identify concrete behaviors added, changed, fixed, or intentionally preserved.
 7. Check which verification steps were actually performed.
 8. Make sure every important changed behavior has matching verification.
-9. Omit routine development checks that passed unless directly relevant.
-10. Include expected checks that were not run, with reasons.
+9. Check that comments, docstrings, examples, and inline documentation touched by the task match the final code.
+10. Omit routine development checks that passed unless directly relevant.
+11. Include expected checks that were not run, with reasons.
 
 Before returning, check that `Context:` explains the problem and desired outcome, `Implementation:` explains the chosen solution, `Verification:` maps to acceptance evidence, routine passing checks are omitted unless relevant, `Lore-ID:` is present, and `Lore-Link:` trailers point to meaningful related tasks.
 
