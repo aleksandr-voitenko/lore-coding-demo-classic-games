@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftIcon } from "lucide-react";
+import { ArrowLeftIcon, MousePointer2Icon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
@@ -34,6 +34,8 @@ import {
   createDefaultSimonReplayLeaderboardKey,
   createInitialSimonReplayGame,
   fetchSimonReplay,
+  type SimonReplayCursorEvent,
+  type SimonReplayCursorPosition,
   type SimonReplayEvent,
   type SimonReplayPayload,
 } from "@/lib/simon-replay";
@@ -43,10 +45,28 @@ type SimonReplayPlayerProps = {
 };
 
 type PlaybackState = GameReplayTimedPlayback & {
+  cursorEventIndex: number;
+  cursorEvents: SimonReplayCursorEvent[];
   eventIndex: number;
   events: SimonReplayEvent[];
   random: () => number;
 };
+
+export function shouldAdvanceSimonReplayCursorBeforeAction({
+  cursorEvent,
+  event,
+}: {
+  cursorEvent: SimonReplayCursorEvent | undefined;
+  event: SimonReplayEvent | undefined;
+}) {
+  const cursorElapsedMs = getReplayEventElapsedMs(cursorEvent);
+  const eventElapsedMs = getReplayEventElapsedMs(event);
+
+  return (
+    cursorElapsedMs !== null &&
+    (eventElapsedMs === null || cursorElapsedMs <= eventElapsedMs)
+  );
+}
 
 const replayStatusLabels = {
   failed: "Replay unavailable",
@@ -126,6 +146,33 @@ export function SimonReplayTurnFeedback({
   return null;
 }
 
+export function SimonReplayCursor({
+  position,
+}: {
+  position: SimonReplayCursorPosition | null;
+}) {
+  if (position === null) {
+    return null;
+  }
+
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute size-5 -translate-x-[12.5%] -translate-y-[12.5%] text-white drop-shadow-[0_2px_5px_rgba(0,0,0,0.72)] sm:size-6"
+      data-testid="simon-replay-cursor"
+      style={{
+        left: `${position.x * 100}%`,
+        top: `${position.y * 100}%`,
+      }}
+    >
+      <MousePointer2Icon
+        className="size-full fill-[rgba(15,23,42,0.18)]"
+        strokeWidth={2.6}
+      />
+    </div>
+  );
+}
+
 function SimonReplayMessage({
   message,
   onBackToProfile,
@@ -151,6 +198,9 @@ function SimonReplayMessage({
 
 export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
   const [game, setGame] = useState<SimonGameState | null>(null);
+  const [cursorPosition, setCursorPosition] =
+    useState<SimonReplayCursorPosition | null>(null);
+  const [cursorStep, setCursorStep] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
   const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">("loading");
   const [playbackStep, setPlaybackStep] = useState(0);
@@ -181,11 +231,14 @@ export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
 
         gameRef.current = initialReplay.game;
         playbackRef.current = {
+          cursorEventIndex: 0,
+          cursorEvents: latestReplay.cursorEvents,
           eventIndex: 0,
           events: latestReplay.events,
           lastElapsedMs: 0,
           random: initialReplay.random,
         };
+        setCursorPosition(null);
         setGame(initialReplay.game);
         setIsFinished(false);
         setLoadStatus("ready");
@@ -241,8 +294,18 @@ export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
 
     const playback = playbackRef.current;
     const nextEvent = playback?.events[playback.eventIndex];
+    const nextCursorEvent = playback?.cursorEvents[playback.cursorEventIndex];
 
     if (playback === null || nextEvent === undefined) {
+      return;
+    }
+
+    if (
+      shouldAdvanceSimonReplayCursorBeforeAction({
+        cursorEvent: nextCursorEvent,
+        event: nextEvent,
+      })
+    ) {
       return;
     }
 
@@ -255,7 +318,43 @@ export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
     );
 
     return () => window.clearTimeout(timeout);
-  }, [advanceReplayFrame, isFinished, loadStatus, playbackStep]);
+  }, [advanceReplayFrame, cursorStep, isFinished, loadStatus, playbackStep]);
+
+  useEffect(() => {
+    if (loadStatus !== "ready" || isFinished) {
+      return;
+    }
+
+    const playback = playbackRef.current;
+    const nextCursorEvent = playback?.cursorEvents[playback.cursorEventIndex];
+
+    if (playback === null || nextCursorEvent === undefined) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      const currentPlayback = playbackRef.current;
+      const cursorEvent =
+        currentPlayback?.cursorEvents[currentPlayback.cursorEventIndex];
+
+      if (currentPlayback === null || cursorEvent === undefined) {
+        return;
+      }
+
+      currentPlayback.cursorEventIndex += 1;
+      currentPlayback.lastElapsedMs = cursorEvent.elapsedMs;
+      setCursorPosition({
+        x: cursorEvent.x,
+        y: cursorEvent.y,
+      });
+      setCursorStep((current) => current + 1);
+    }, getReplayPlaybackDelayMs({
+      event: nextCursorEvent,
+      playback,
+    }));
+
+    return () => window.clearTimeout(timeout);
+  }, [cursorStep, isFinished, loadStatus]);
 
   const ignorePadPress = useCallback(() => undefined, []);
 
@@ -342,6 +441,7 @@ export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
             onPadPress={ignorePadPress}
             statusLabel={statusLabel}
           >
+            <SimonReplayCursor position={cursorPosition} />
             <SimonReplayTurnFeedback game={game} />
             {isFinished ? (
               <GameEndScreen

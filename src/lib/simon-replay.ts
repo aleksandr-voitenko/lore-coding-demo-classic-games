@@ -42,6 +42,11 @@ type SimonReplayEventInputFor<Event> = Omit<
   "elapsedMs" | "seq" | "tick"
 >;
 
+export type SimonReplayCursorPosition = {
+  x: number;
+  y: number;
+};
+
 export type SimonReplayStartEvent = GameReplayEventEnvelope<"start">;
 
 export type SimonReplayPlaybackEvent = GameReplayEventEnvelope<"playback">;
@@ -74,10 +79,22 @@ export type SimonReplayEventInput =
   | SimonReplayEventInputFor<SimonReplayPlaybackEvent>
   | SimonReplayEventInputFor<SimonReplayStartEvent>;
 
+export type SimonReplayCursorEvent =
+  GameReplayEventEnvelope<"cursorMove"> &
+    SimonReplayCursorPosition;
+
+export type SimonReplayCursorEventInput =
+  SimonReplayEventInputFor<SimonReplayCursorEvent>;
+
+type SimonReplaySchemaVersion =
+  | typeof SIMON_REPLAY_LEGACY_SCHEMA_VERSION
+  | typeof SIMON_REPLAY_SCHEMA_VERSION;
+
 export type SimonReplayPayload = BaseGameReplayPayload<
   typeof SIMON_REPLAY_GAME_ID,
-  typeof SIMON_REPLAY_SCHEMA_VERSION
+  SimonReplaySchemaVersion
 > & {
+  cursorEvents: SimonReplayCursorEvent[];
   difficulty: SimonDifficulty;
   events: SimonReplayEvent[];
   finalInputIndex: number;
@@ -89,11 +106,14 @@ export type SimonReplayPayload = BaseGameReplayPayload<
 export type ParseSimonReplayPayloadResult =
   ParseGameReplayPayloadResult<SimonReplayPayload>;
 
-export const SIMON_REPLAY_SCHEMA_VERSION = 2;
+export const SIMON_REPLAY_LEGACY_SCHEMA_VERSION = 2;
+export const SIMON_REPLAY_SCHEMA_VERSION = 3;
 export const SIMON_REPLAY_GAME_ID = "simon";
 export const SIMON_REPLAY_API_PATH = getGameReplayApiPath(SIMON_REPLAY_GAME_ID);
 export const SIMON_REPLAY_RUN_API_PATH = getGameReplayRunApiPath(SIMON_REPLAY_GAME_ID);
 export const MAX_SIMON_REPLAY_EVENTS = 50_000;
+export const MAX_SIMON_REPLAY_CURSOR_EVENTS = 80_000;
+export const SIMON_REPLAY_CURSOR_SAMPLE_INTERVAL_MS = 50;
 
 const SIMON_MIN_WIN_TARGET = 1;
 const SIMON_EVENT_TYPES = new Set<SimonReplayEvent["type"]>([
@@ -104,6 +124,9 @@ const SIMON_EVENT_TYPES = new Set<SimonReplayEvent["type"]>([
   "playback",
   "start",
 ]);
+const SIMON_CURSOR_EVENT_TYPES = new Set<
+  SimonReplayCursorEvent["type"]
+>(["cursorMove"]);
 
 export const normalizeSimonReplayRunId = normalizeGameReplayRunId;
 export const normalizeSimonReplaySeed = normalizeGameReplaySeed;
@@ -115,6 +138,26 @@ function isPositiveInteger(value: unknown): value is number {
 
 function isSimonPadId(value: unknown): value is SimonPadId {
   return typeof value === "string" && (SIMON_PADS as readonly string[]).includes(value);
+}
+
+function isNormalizedReplayCoordinate(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
+export function shouldRecordSimonReplayCursorEvent({
+  elapsedMs,
+  force = false,
+  lastElapsedMs,
+}: {
+  elapsedMs: number;
+  force?: boolean;
+  lastElapsedMs: number | null;
+}) {
+  return (
+    force ||
+    lastElapsedMs === null ||
+    elapsedMs - lastElapsedMs >= SIMON_REPLAY_CURSOR_SAMPLE_INTERVAL_MS
+  );
 }
 
 export function createSimonReplayLeaderboardKey({
@@ -148,12 +191,54 @@ function parseSimonReplayEvent(value: unknown): SimonReplayEvent | null {
   return envelope;
 }
 
-export function parseSimonReplayPayload(value: unknown): ParseSimonReplayPayloadResult {
-  const baseReplay = parseBaseGameReplayPayload(value, {
+function parseSimonReplayCursorEvent(
+  value: unknown,
+): SimonReplayCursorEvent | null {
+  const envelope = parseGameReplayEventEnvelope(
+    value,
+    SIMON_CURSOR_EVENT_TYPES,
+  );
+
+  if (envelope === null || !isRecord(value)) {
+    return null;
+  }
+
+  if (!isNormalizedReplayCoordinate(value.x) || !isNormalizedReplayCoordinate(value.y)) {
+    return null;
+  }
+
+  return {
+    ...envelope,
+    x: value.x,
+    y: value.y,
+  };
+}
+
+function parseSimonBaseReplayPayload(
+  value: unknown,
+): ParseGameReplayPayloadResult<
+  BaseGameReplayPayload<
+    typeof SIMON_REPLAY_GAME_ID,
+    SimonReplaySchemaVersion
+  >
+> {
+  if (isRecord(value) && value.schemaVersion === SIMON_REPLAY_LEGACY_SCHEMA_VERSION) {
+    return parseBaseGameReplayPayload(value, {
+      gameId: SIMON_REPLAY_GAME_ID,
+      replayLabel: "Simon replay",
+      schemaVersion: SIMON_REPLAY_LEGACY_SCHEMA_VERSION,
+    });
+  }
+
+  return parseBaseGameReplayPayload(value, {
     gameId: SIMON_REPLAY_GAME_ID,
     replayLabel: "Simon replay",
     schemaVersion: SIMON_REPLAY_SCHEMA_VERSION,
   });
+}
+
+export function parseSimonReplayPayload(value: unknown): ParseSimonReplayPayloadResult {
+  const baseReplay = parseSimonBaseReplayPayload(value);
 
   if (!baseReplay.success) {
     return baseReplay;
@@ -229,9 +314,30 @@ export function parseSimonReplayPayload(value: unknown): ParseSimonReplayPayload
     return events;
   }
 
+  const cursorEvents =
+    baseReplay.payload.schemaVersion === SIMON_REPLAY_LEGACY_SCHEMA_VERSION &&
+    value.cursorEvents === undefined
+      ? {
+          payload: [] satisfies SimonReplayCursorEvent[],
+          success: true as const,
+        }
+      : parseGameReplayEvents(value.cursorEvents, {
+          maxEventCount: MAX_SIMON_REPLAY_CURSOR_EVENTS,
+          parseEvent: parseSimonReplayCursorEvent,
+          unsupportedEventError:
+            "Simon replay includes an unsupported cursor event.",
+          unsupportedEventsError:
+            "Simon replay cursor events are not supported.",
+        });
+
+  if (!cursorEvents.success) {
+    return cursorEvents;
+  }
+
   return {
     payload: {
       ...baseReplay.payload,
+      cursorEvents: cursorEvents.payload,
       difficulty,
       events: events.payload,
       finalInputIndex: value.finalInputIndex,

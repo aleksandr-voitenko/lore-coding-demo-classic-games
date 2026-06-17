@@ -95,9 +95,10 @@ This file covers React component ownership and shared game UI conventions under
   while Pause, Help, or abandon-confirm overlays stop the player's active view;
   replay players schedule playback from those elapsed timestamps instead of
   fixed per-turn delays.
-  Minesweeper live recordings also sample mouse movement over the board into a
-  separate cursor event stream every 50ms, and Minesweeper replay playback draws
-  that stream as a schematic board-local cursor without moving the system mouse.
+  Minesweeper and Simon live recordings also sample mouse movement over the
+  board into a separate cursor event stream every 50ms, and their replay
+  playback draws that stream as a schematic board-local cursor without moving
+  the system mouse.
 - Use `GameReplaySaveAction` for replay-enabled terminal Save replay footers.
   Keep finished replay payload creation and save handlers local to each game,
   and pass a game-specific `testIdPrefix` so existing replay save button and

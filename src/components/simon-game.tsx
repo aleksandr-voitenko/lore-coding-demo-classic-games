@@ -1,7 +1,15 @@
 "use client";
 
 import { PlayIcon, RotateCcwIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 
 import {
   isGamePauseKey,
@@ -34,6 +42,7 @@ import {
   useLiveGameReplayRecording,
   type LiveGameReplayRecording,
 } from "@/components/game-replay-recording";
+import { getGameReplayRecordingElapsedMs } from "@/components/game-replay-timing";
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { SimonBoard } from "@/components/simon-board";
@@ -66,6 +75,10 @@ import {
   saveSimonReplay,
   SIMON_REPLAY_GAME_ID,
   SIMON_REPLAY_SCHEMA_VERSION,
+  shouldRecordSimonReplayCursorEvent,
+  type SimonReplayCursorEvent,
+  type SimonReplayCursorEventInput,
+  type SimonReplayCursorPosition,
   type SimonReplayEvent,
   type SimonReplayEventInput,
   type SimonReplayPayload,
@@ -81,6 +94,9 @@ type SimonGameProps = {
 };
 
 type SimonReplayRecording = LiveGameReplayRecording<SimonReplayEvent, SimonReplayRun> & {
+  cursorEvents: SimonReplayCursorEvent[];
+  lastCursorElapsedMs: number | null;
+  nextCursorSeq: number;
   random: () => number;
 };
 
@@ -159,6 +175,105 @@ function appendSimonReplayEvent(
   event: SimonReplayEventInput,
 ) {
   appendLiveGameReplayEvent(recording, event, { advancesTick: true });
+}
+
+function appendSimonReplayCursorEvent(
+  recording: SimonReplayRecording,
+  event: SimonReplayCursorEventInput,
+  { force = false }: { force?: boolean } = {},
+) {
+  const elapsedMs = getGameReplayRecordingElapsedMs(recording);
+
+  if (
+    !shouldRecordSimonReplayCursorEvent({
+      elapsedMs,
+      force,
+      lastElapsedMs: recording.lastCursorElapsedMs,
+    })
+  ) {
+    return null;
+  }
+
+  const recordedEvent: SimonReplayCursorEvent = {
+    ...event,
+    elapsedMs,
+    seq: recording.nextCursorSeq,
+    tick: recording.tick,
+  };
+
+  recording.cursorEvents.push(recordedEvent);
+  recording.lastCursorElapsedMs = elapsedMs;
+  recording.nextCursorSeq += 1;
+
+  return recordedEvent;
+}
+
+function clampSimonReplayCursorCoordinate(value: number) {
+  return Math.min(1, Math.max(0, Math.round(value * 10_000) / 10_000));
+}
+
+function getSimonReplayCursorPositionFromBoardRect({
+  clientX,
+  clientY,
+  rect,
+}: {
+  clientX: number;
+  clientY: number;
+  rect: DOMRect;
+}): SimonReplayCursorPosition | null {
+  if (rect.width <= 0 || rect.height <= 0) {
+    return null;
+  }
+
+  const x = (clientX - rect.left) / rect.width;
+  const y = (clientY - rect.top) / rect.height;
+
+  if (x < 0 || x > 1 || y < 0 || y > 1) {
+    return null;
+  }
+
+  return {
+    x: clampSimonReplayCursorCoordinate(x),
+    y: clampSimonReplayCursorCoordinate(y),
+  };
+}
+
+function getSimonReplayCursorPosition(
+  event: ReactPointerEvent<HTMLDivElement>,
+) {
+  return getSimonReplayCursorPositionFromBoardRect({
+    clientX: event.clientX,
+    clientY: event.clientY,
+    rect: event.currentTarget.getBoundingClientRect(),
+  });
+}
+
+function getSimonReplayActionCursorPosition(
+  event: ReactMouseEvent<HTMLButtonElement> | undefined,
+) {
+  const boardGrid = event?.currentTarget.closest('[data-testid="simon-board"]');
+  const boardHost = boardGrid?.parentElement;
+
+  if (event === undefined || !(boardHost instanceof HTMLElement)) {
+    return undefined;
+  }
+
+  return (
+    getSimonReplayCursorPositionFromBoardRect({
+      clientX: event.clientX,
+      clientY: event.clientY,
+      rect: boardHost.getBoundingClientRect(),
+    }) ?? undefined
+  );
+}
+
+function isSimonReplayCursorRecordingStatus(status: SimonStatus) {
+  return (
+    status === "showing" ||
+    status === "input" ||
+    status === "correct" ||
+    status === "missed"
+  );
 }
 
 export function SimonGame({
@@ -300,8 +415,16 @@ function SimonLiveGame({
       return createLiveGameReplayRecording<
         SimonReplayEvent,
         SimonReplayRun,
-        { random: () => number }
+        {
+          cursorEvents: SimonReplayCursorEvent[];
+          lastCursorElapsedMs: number | null;
+          nextCursorSeq: number;
+          random: () => number;
+        }
       >({
+        cursorEvents: [],
+        lastCursorElapsedMs: null,
+        nextCursorSeq: 0,
         random,
         run,
       });
@@ -370,12 +493,28 @@ function SimonLiveGame({
     void startReplayRun({ restart: true });
   }, [isReplayRunPendingRef, resetLeaderboardForm, resetReplayRecording, startReplayRun]);
 
-  const pressPad = useCallback((pad: SimonPadId) => {
+  const pressPad = useCallback((
+    pad: SimonPadId,
+    event?: ReactMouseEvent<HTMLButtonElement>,
+  ) => {
+    const cursorPosition = getSimonReplayActionCursorPosition(event);
+
     updateCommittedGame((current) => {
       const nextGame = playSimonPad(current, pad);
       const recording = replayRecordingRef.current;
 
       if (nextGame !== current && current.status === "input" && recording !== null) {
+        if (cursorPosition !== undefined) {
+          appendSimonReplayCursorEvent(
+            recording,
+            {
+              ...cursorPosition,
+              type: "cursorMove",
+            },
+            { force: true },
+          );
+        }
+
         appendSimonReplayEvent(recording, {
           pad,
           type: "pad",
@@ -404,6 +543,7 @@ function SimonLiveGame({
     const finalStatus = game.status;
 
     captureFinishedReplay((recording) => ({
+      cursorEvents: [...recording.cursorEvents],
       events: [...recording.events],
       difficulty: game.difficulty,
       finalInputIndex: game.inputIndex,
@@ -445,6 +585,36 @@ function SimonLiveGame({
     onResumeGame: resumeGameAfterHelp,
     shouldPauseBeforeConfirm: canPauseGame,
   });
+
+  const trackReplayPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "mouse" || isHelpVisible) {
+      return;
+    }
+
+    const recording = replayRecordingRef.current;
+    const currentStatus = gameRef.current.status;
+
+    if (
+      recording === null ||
+      !isSimonReplayCursorRecordingStatus(currentStatus)
+    ) {
+      return;
+    }
+
+    const cursorPosition = getSimonReplayCursorPosition(event);
+
+    if (cursorPosition === null) {
+      return;
+    }
+
+    appendSimonReplayCursorEvent(
+      recording,
+      {
+        ...cursorPosition,
+        type: "cursorMove",
+      },
+    );
+  }, [isHelpVisible, replayRecordingRef]);
 
   useEffect(() => {
     if (playbackDelay === null) {
@@ -647,7 +817,12 @@ function SimonLiveGame({
             />
           }
         >
-          <SimonBoard game={game} onPadPress={pressPad} statusLabel={statusLabel}>
+          <SimonBoard
+            game={game}
+            onPadPress={pressPad}
+            onTrackPointerMove={trackReplayPointerMove}
+            statusLabel={statusLabel}
+          >
           {showStartScreen ? (
             <GameStartScreen testId="simon-start-screen">
               <GameStartScreenHeader

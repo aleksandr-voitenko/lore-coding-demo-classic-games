@@ -13,7 +13,10 @@ import {
   createInitialSimonReplayGame,
   createSimonReplayLeaderboardKey,
   parseSimonReplayPayload,
+  shouldRecordSimonReplayCursorEvent,
+  SIMON_REPLAY_LEGACY_SCHEMA_VERSION,
   SIMON_REPLAY_SCHEMA_VERSION,
+  type SimonReplayCursorEvent,
   type SimonReplayEvent,
   type SimonReplayEventInput,
   type SimonReplayPayload,
@@ -32,6 +35,22 @@ function createReplayPayload(
   const winTarget = overrides.winTarget ?? getSimonDifficultySettings(difficulty).winTarget;
 
   const payload = {
+    cursorEvents: [
+      {
+        seq: 0,
+        tick: 1,
+        type: "cursorMove",
+        x: 0.25,
+        y: 0.75,
+      },
+      {
+        seq: 1,
+        tick: 2,
+        type: "cursorMove",
+        x: 0.5,
+        y: 0.2,
+      },
+    ],
     difficulty,
     events: [
       {
@@ -74,6 +93,7 @@ function createReplayPayload(
 
   return {
     ...payload,
+    cursorEvents: withReplayElapsed(payload.cursorEvents) as SimonReplayCursorEvent[],
     events: withReplayElapsed(payload.events),
   } as SimonReplayPayload;
 }
@@ -241,6 +261,18 @@ describe("simon replay", () => {
 
     expect(parsedReplay).toMatchObject({
       payload: {
+        cursorEvents: [
+          {
+            type: "cursorMove",
+            x: 0.25,
+            y: 0.75,
+          },
+          {
+            type: "cursorMove",
+            x: 0.5,
+            y: 0.2,
+          },
+        ],
         events: expect.arrayContaining([
           expect.objectContaining({ type: "start" }),
           expect.objectContaining({ type: "playback" }),
@@ -307,6 +339,25 @@ describe("simon replay", () => {
     expect(
       parseSimonReplayPayload(
         createReplayPayload({
+          cursorEvents: [
+            {
+              elapsedMs: 0,
+              seq: 0,
+              tick: 0,
+              type: "cursorMove",
+              x: 1.1,
+              y: 0.5,
+            },
+          ],
+        }),
+      ),
+    ).toEqual({
+      error: "Simon replay includes an unsupported cursor event.",
+      success: false,
+    });
+    expect(
+      parseSimonReplayPayload(
+        createReplayPayload({
           finalSequenceLength: 3,
         }),
       ),
@@ -314,6 +365,50 @@ describe("simon replay", () => {
       error: "Simon replay final state is not supported.",
       success: false,
     });
+  });
+
+  it("parses legacy payloads without cursor events", () => {
+    const legacyReplay = createReplayPayload({
+      schemaVersion: SIMON_REPLAY_LEGACY_SCHEMA_VERSION,
+    });
+
+    delete (legacyReplay as Partial<SimonReplayPayload>).cursorEvents;
+
+    expect(parseSimonReplayPayload(legacyReplay)).toMatchObject({
+      payload: {
+        cursorEvents: [],
+        schemaVersion: SIMON_REPLAY_LEGACY_SCHEMA_VERSION,
+      },
+      success: true,
+    });
+  });
+
+  it("samples replay cursor movement at most every 50 milliseconds", () => {
+    expect(
+      shouldRecordSimonReplayCursorEvent({
+        elapsedMs: 100,
+        lastElapsedMs: null,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRecordSimonReplayCursorEvent({
+        elapsedMs: 149,
+        lastElapsedMs: 100,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRecordSimonReplayCursorEvent({
+        elapsedMs: 149,
+        force: true,
+        lastElapsedMs: 100,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRecordSimonReplayCursorEvent({
+        elapsedMs: 150,
+        lastElapsedMs: 100,
+      }),
+    ).toBe(true);
   });
 
   it("accepts terminal won replay payloads at the target round", () => {

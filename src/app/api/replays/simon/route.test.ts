@@ -18,6 +18,16 @@ function createReplayPayload(
   const winTarget = overrides.winTarget ?? getSimonDifficultySettings(difficulty).winTarget;
 
   return {
+    cursorEvents: [
+      {
+        elapsedMs: 50,
+        seq: 0,
+        tick: 0,
+        type: "cursorMove",
+        x: 0.25,
+        y: 0.75,
+      },
+    ],
     difficulty,
     events: [
       {

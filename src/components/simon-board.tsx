@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { MouseEvent, PointerEvent, ReactNode } from "react";
 
 import {
   getSimonDifficultySettings,
@@ -14,7 +14,8 @@ type SimonBoardProps = {
   children?: ReactNode;
   game: SimonGameState;
   isInteractive?: boolean;
-  onPadPress: (pad: SimonPadId) => void;
+  onPadPress: (pad: SimonPadId, event?: MouseEvent<HTMLButtonElement>) => void;
+  onTrackPointerMove?: (event: PointerEvent<HTMLDivElement>) => void;
   statusLabel: string;
 };
 
@@ -59,13 +60,17 @@ export function SimonBoard({
   game,
   isInteractive = true,
   onPadPress,
+  onTrackPointerMove,
   statusLabel,
 }: SimonBoardProps) {
   const isInputReady = game.status === "input";
   const difficultyLabel = getSimonDifficultySettings(game.difficulty).label;
 
   return (
-    <div className="simon-board-shell-border relative aspect-square overflow-hidden rounded-md border bg-[var(--simon-board-shell)] p-3 shadow-[0_24px_70px_var(--simon-board-shell-shadow)]">
+    <div
+      className="simon-board-shell-border relative aspect-square overflow-hidden rounded-md border bg-[var(--simon-board-shell)] p-3 shadow-[0_24px_70px_var(--simon-board-shell-shadow)]"
+      onPointerMove={onTrackPointerMove}
+    >
       <div
         aria-label={`Simon board. Round ${game.round}. Score ${game.score}. Difficulty ${difficultyLabel}. Target ${game.winTarget}. ${statusLabel}.`}
         className="simon-board-ring-border relative grid size-full grid-cols-2 gap-3 rounded-full border-[12px] bg-[var(--simon-board-ring)] p-2"
@@ -88,7 +93,7 @@ export function SimonBoard({
               data-testid={`simon-pad-${pad}`}
               disabled={!isInputReady || !isInteractive}
               key={pad}
-              onClick={() => onPadPress(pad)}
+              onClick={(event) => onPadPress(pad, event)}
               type="button"
             >
               <span className="sr-only">{simonPadLabels[pad]}</span>
