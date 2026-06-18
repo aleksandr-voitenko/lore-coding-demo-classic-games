@@ -25,6 +25,10 @@ This file covers React component ownership and shared game UI conventions under
 - `game-leaderboard.tsx` renders the shared top-three panel and save-score form.
   `use-game-leaderboard.ts` in `src/hooks/` owns the client state feeding those
   components and pre-fills the signed-in display name when available.
+- `global-leaderboard.tsx` renders the launcher-level leaderboard overview. It
+  should consume `src/lib/global-leaderboard.ts` targets so the overview shows
+  each game's default parameter-scoped board instead of mixing incompatible
+  launcher parameter variants.
 - `user-account-controls.tsx` is the stable launcher account-control entry point
   against `useCurrentUser`. Keep the signed-out modal implementation in
   `user-account-auth-dialog.tsx` and the signed-in circular menu implementation

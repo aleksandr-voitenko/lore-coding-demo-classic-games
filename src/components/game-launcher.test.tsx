@@ -103,6 +103,8 @@ describe("game launcher", () => {
     const markup = renderToStaticMarkup(<GameLauncher />);
 
     expect(markup).toContain('data-testid="game-menu"');
+    expect(markup).toContain('data-testid="global-leaderboard-open-button"');
+    expect(markup).toContain("Leaderboards");
 
     for (const parameter of EXPECTED_PARAMETER_SELECTS) {
       expect(markup).toContain('data-testid="' + parameter.testId + '"');

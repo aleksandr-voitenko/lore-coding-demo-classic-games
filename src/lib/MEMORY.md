@@ -37,6 +37,10 @@ This file covers deterministic game engines and shared source logic under
   top-three ranking, pending-entry calculation, and client fetch/submit helpers.
   Keys use stable game-and-parameter segments such as `snake|mode=levels` or
   `tetris|board=10x20|level=3`.
+- `global-leaderboard.ts` owns the default leaderboard targets used by the
+  launcher-level overview. Keep those targets aligned with default launcher game
+  parameters and preserve Minesweeper's ascending timed ranking; do not use it
+  for a single mixed cross-game or cross-parameter ranking.
 - `user-profile.ts` owns shared auth, user, game-session, and profile-stat
   types; display-name/password/game-id/session-id validation; and client helpers
   for `/api/auth/*`, `/api/me`, and `/api/game-sessions`.

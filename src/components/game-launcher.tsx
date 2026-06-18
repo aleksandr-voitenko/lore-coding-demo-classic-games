@@ -21,6 +21,7 @@ import {
   type GameParameterValues,
 } from "@/components/game-launcher-config";
 import { PLAYABLE_GAME_COMPONENTS } from "@/components/game-launcher-playables";
+import { GlobalLeaderboardScreen } from "@/components/global-leaderboard";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserAccountControls } from "@/components/user-account-controls";
 import type { UserAuthMode } from "@/lib/user-profile";
@@ -43,6 +44,7 @@ export function GameLauncher({
   const [selectedReplayMode, setSelectedReplayMode] = useState<"latest" | null>(
     initialReplayGameId === null ? null : "latest",
   );
+  const [isGlobalLeaderboardVisible, setIsGlobalLeaderboardVisible] = useState(false);
   const [parameterValues, setParameterValues] = useState<GameParameterValues>(() =>
     createDefaultParameterValues(),
   );
@@ -64,12 +66,23 @@ export function GameLauncher({
 
   const returnToMenu = useCallback(() => {
     shouldRestoreMenuViewportRef.current = true;
+    setIsGlobalLeaderboardVisible(false);
     setSelectedGameId(null);
     setSelectedReplayMode(null);
   }, []);
 
   const returnToProfile = useCallback(() => {
     window.location.href = "/profile";
+  }, []);
+
+  const openGlobalLeaderboard = useCallback(() => {
+    menuViewportRef.current = {
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+    };
+    shouldRestoreMenuViewportRef.current = false;
+
+    setIsGlobalLeaderboardVisible(true);
   }, []);
 
   const restoreMenuViewport = useCallback((element: HTMLElement | null) => {
@@ -91,6 +104,10 @@ export function GameLauncher({
       [parameterKind]: normalizedValue,
     }));
   }, []);
+
+  if (isGlobalLeaderboardVisible) {
+    return <GlobalLeaderboardScreen onBackToMenu={returnToMenu} />;
+  }
 
   if (selectedGame !== null) {
     const SelectedGame = PLAYABLE_GAME_COMPONENTS[selectedGame.id];
@@ -144,6 +161,15 @@ export function GameLauncher({
             </h1>
           </div>
           <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end">
+            <button
+              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] px-3 text-sm font-semibold text-[var(--chrome-ink)] shadow-sm transition hover:bg-[var(--chrome-accent-faint)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--chrome-focus-ring)] active:translate-y-px"
+              data-testid="global-leaderboard-open-button"
+              onClick={openGlobalLeaderboard}
+              type="button"
+            >
+              <TrophyIcon className="size-4" aria-hidden="true" />
+              Leaderboards
+            </button>
             <ThemeToggle testId="launcher-theme-toggle" />
             <UserAccountControls initialAuthMode={initialAuthMode} />
           </div>
