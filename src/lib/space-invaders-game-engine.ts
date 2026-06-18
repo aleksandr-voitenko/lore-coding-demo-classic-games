@@ -1127,6 +1127,7 @@ function resolveOpposingShotCollisions(
   let didCollide = false;
   let nextGame = game;
 
+  // Collect all same-tick projectile collisions before mutating shots or spawning shards.
   for (const playerShot of game.playerShots) {
     for (const invaderShot of game.invaderShots) {
       if (rectanglesIntersect(playerShot, invaderShot)) {
@@ -1244,6 +1245,7 @@ function detonateMineShots(
   let didDamagePlayer = false;
   let nextGame = game;
 
+  // Mines can trigger other mines; remove destroyed shots only after the chain resolves.
   while (queuedMineShots.length > 0) {
     const mineShot = queuedMineShots.shift()!;
 
@@ -1616,6 +1618,7 @@ function finalizeSpaceInvadersPlayerVolley(game: SpaceInvadersGameState) {
     return game;
   }
 
+  // Reset clean-hit streaks only after a whole player volley exits without scoring or armor damage.
   const resolvedGame =
     game.playerVolleyHasUnscoredExit &&
     !game.playerVolleyHasScored &&

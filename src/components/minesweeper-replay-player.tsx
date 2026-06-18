@@ -71,6 +71,7 @@ export function advanceMinesweeperReplayFrame({
   let nextGame = game;
   let processedVisibleAction = false;
   let lastElapsedMs: number | null = null;
+  // Timed payloads consume one elapsed boundary; untimed payloads stop after a visible board change.
   const frameElapsedMs = getReplayEventElapsedMs(events[eventIndex]);
   const isTimedFrame = frameElapsedMs !== null;
 
@@ -107,6 +108,7 @@ export function shouldAdvanceMinesweeperReplayCursorBeforeAction({
   cursorEvent: MinesweeperReplayCursorEvent | undefined;
   event: MinesweeperReplayEvent | undefined;
 }) {
+  // Same-timestamp cursor positions should appear before the board action they point at.
   const cursorElapsedMs = getReplayEventElapsedMs(cursorEvent);
   const eventElapsedMs = getReplayEventElapsedMs(event);
 

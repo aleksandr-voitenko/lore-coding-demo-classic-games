@@ -221,6 +221,7 @@ function createAsteroidsPowerUp(
   random?: AsteroidsRandom,
 ): AsteroidsPowerUp {
   const kind = getPowerUpKind(game.nextPowerUpId, random);
+  // If every candidate is blocked, still spawn at the last sampled position instead of skipping.
   let fallbackPosition = getPowerUpSpawnPosition(game, 0, random);
 
   for (let attempt = 0; attempt < POWER_UP_SPAWN_ATTEMPTS; attempt += 1) {

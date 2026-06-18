@@ -106,6 +106,7 @@ export function advanceTwentyFortyEightReplayFrame({
   let nextGame = game;
   let hasVisibleChange = false;
   let lastElapsedMs: number | null = null;
+  // Timed payloads consume one elapsed boundary; untimed payloads stop after a visible board change.
   const frameElapsedMs = getReplayEventElapsedMs(events[eventIndex]);
   const isTimedFrame = frameElapsedMs !== null;
 

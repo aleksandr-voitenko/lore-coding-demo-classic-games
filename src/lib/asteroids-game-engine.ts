@@ -223,6 +223,7 @@ export function advanceAsteroidsGame(
     score,
     ship,
   };
+  // Resolve power-ups before hazards so same-tick shield pickups can protect the ship.
   const gameWithPowerUp = applyAsteroidsPowerUpPickup(
     advanceAsteroidsPowerUpAvailability(candidateGame, { random }),
     { random },
@@ -325,6 +326,7 @@ function advanceExplodingShipGame(
     return game;
   }
 
+  // The world keeps advancing during the explosion, including score and bonus-life awards.
   const { scoreDelta, ...world } = advanceAsteroidsWorld(game, { random });
   const ticksRemaining = shipExplosion.ticksRemaining - 1;
   const score = game.score + scoreDelta;

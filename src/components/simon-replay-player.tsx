@@ -60,6 +60,7 @@ export function shouldAdvanceSimonReplayCursorBeforeAction({
   cursorEvent: SimonReplayCursorEvent | undefined;
   event: SimonReplayEvent | undefined;
 }) {
+  // Same-timestamp cursor positions should appear before the pad action they point at.
   const cursorElapsedMs = getReplayEventElapsedMs(cursorEvent);
   const eventElapsedMs = getReplayEventElapsedMs(event);
 

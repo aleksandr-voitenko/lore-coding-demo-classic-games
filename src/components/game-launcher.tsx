@@ -48,6 +48,7 @@ export function GameLauncher({
   const [parameterValues, setParameterValues] = useState<GameParameterValues>(() =>
     createDefaultParameterValues(),
   );
+  // Return-to-menu paths opt into restoring this viewport after a full-screen game view exits.
   const menuViewportRef = useRef<MenuViewport>({ scrollX: 0, scrollY: 0 });
   const shouldRestoreMenuViewportRef = useRef(false);
 

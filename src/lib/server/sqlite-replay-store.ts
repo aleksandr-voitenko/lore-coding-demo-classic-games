@@ -223,6 +223,7 @@ export class SqliteReplayStore {
       };
     }
 
+    // Guest-issued runs can be claimed by the signed-in saver; user-owned runs cannot cross accounts.
     if (run.userId !== null && run.userId !== user.id) {
       return {
         reason: "run-user-mismatch",

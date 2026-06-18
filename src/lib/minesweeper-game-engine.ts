@@ -252,6 +252,7 @@ function placeMinesAfterFirstClick(
     };
   }
 
+  // Prefer a safe first-click neighborhood, but fall back on tiny or dense boards.
   const preferredExcludedIds = new Set(
     getNeighboringCells(game, firstClickCell)
       .map((cell) => cell.id)
