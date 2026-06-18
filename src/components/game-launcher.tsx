@@ -1,7 +1,6 @@
 "use client";
 
 import { Gamepad2Icon, PlayIcon, TrophyIcon } from "lucide-react";
-import Image from "next/image";
 import {
   type ReactNode,
   useCallback,
@@ -20,6 +19,7 @@ import {
   type GameParameterKind,
   type GameParameterValues,
 } from "@/components/game-launcher-config";
+import { GameCardArtworkFrame } from "@/components/game-card-artwork-frame";
 import { PLAYABLE_GAME_COMPONENTS } from "@/components/game-launcher-playables";
 import { GlobalLeaderboardScreen } from "@/components/global-leaderboard";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -223,37 +223,12 @@ function GameCardArticle({
         onClick={onSelectGame}
         type="button"
       >
-        <span className="relative block h-40 w-full overflow-hidden bg-[var(--snake-board)]">
-          <span
-            className={`absolute inset-x-0 top-0 h-1 ${game.accentClassName}`}
-            aria-hidden="true"
-          />
-          <Image
-            alt=""
-            aria-hidden="true"
-            className="scale-110 object-cover opacity-55 blur-[2px]"
-            fill
-            loading={game.artwork.loading}
-            priority={game.artwork.priority}
-            sizes="(min-width: 640px) 24rem, calc(100vw - 2rem)"
-            src={versionedArtworkSrc}
-            unoptimized
-          />
-          <span className="absolute inset-0 bg-[color-mix(in_oklch,var(--snake-board)_38%,transparent)]" />
-          <span className="absolute inset-3 flex items-center justify-center">
-            <Image
-              alt=""
-              aria-hidden="true"
-              className="h-full w-auto rounded-md border border-[color-mix(in_oklch,var(--snake-board)_16%,white)] object-contain shadow-[0_18px_50px_color-mix(in_oklch,var(--snake-board)_34%,transparent)]"
-              height={game.artwork.height}
-              loading={game.artwork.loading}
-              priority={game.artwork.priority}
-              src={versionedArtworkSrc}
-              unoptimized
-              width={game.artwork.width}
-            />
-          </span>
-        </span>
+        <GameCardArtworkFrame
+          accentClassName={game.accentClassName}
+          artwork={game.artwork}
+          artworkSrc={versionedArtworkSrc}
+          backgroundSizes="(min-width: 640px) 24rem, calc(100vw - 2rem)"
+        />
 
         <span className="flex flex-1 flex-col p-4 pb-0">
           <span className="flex items-start justify-between gap-3">

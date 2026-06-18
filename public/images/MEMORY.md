@@ -7,7 +7,8 @@ This file covers public image assets under `public/images/`.
 - Launcher cards use local PNG key-art files named `<game>-game-card.png`.
 - Keep card artwork wide, centered, and text-free so the shared launcher card
   frame can crop it cleanly behind each game title.
-- `GameLauncher` renders card art with direct, versioned public URLs instead of
+- Launcher and global leaderboard cards render card art through
+  `GameCardArtworkFrame` with direct, versioned public URLs instead of
   optimized `/_next/image` URLs. Preserve this behavior so replacing an image
   file does not leave stale optimized variants in the blurred background or
   foreground preview.

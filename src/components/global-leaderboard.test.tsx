@@ -33,4 +33,23 @@ describe("global leaderboard screen", () => {
     expect(markup).not.toContain(">SCORE<");
     expect(markup).not.toContain(">TIME<");
   });
+
+  it("renders leaderboard game art with the launcher-style layered frame", () => {
+    const markup = renderToStaticMarkup(
+      <GlobalLeaderboardScreen onBackToMenu={vi.fn()} />,
+    );
+
+    expect(markup).toContain("blur-[2px]");
+    expect(markup).toContain("object-contain");
+
+    for (const game of GAME_CATALOG) {
+      const artworkSrc = getVersionedGameCatalogArtworkSrc(getGameCatalogArtwork(game.id));
+
+      expect(countOccurrences(markup, artworkSrc)).toBe(2);
+    }
+  });
 });
+
+function countOccurrences(value: string, substring: string) {
+  return value.split(substring).length - 1;
+}

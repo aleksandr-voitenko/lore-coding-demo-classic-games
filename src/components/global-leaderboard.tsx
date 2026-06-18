@@ -1,9 +1,9 @@
 "use client";
 
 import { ArrowLeftIcon, TrophyIcon } from "lucide-react";
-import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 
+import { GameCardArtworkFrame } from "@/components/game-card-artwork-frame";
 import {
   createGlobalLeaderboardSlots,
   fetchGlobalLeaderboards,
@@ -139,17 +139,11 @@ function GlobalLeaderboardCard({
       className="flex min-h-80 flex-col overflow-hidden rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] text-[var(--chrome-ink)] shadow-sm"
       data-testid={`global-leaderboard-${target.gameId}`}
     >
-      <div className="relative h-32 w-full overflow-hidden bg-[var(--chrome-accent-faint)]">
-        <Image
-          alt=""
-          aria-hidden="true"
-          className="object-cover"
-          fill
-          sizes="(min-width: 1280px) 22rem, (min-width: 768px) 50vw, calc(100vw - 2rem)"
-          src={artworkSrc}
-          unoptimized
-        />
-      </div>
+      <GameCardArtworkFrame
+        artwork={artwork}
+        artworkSrc={artworkSrc}
+        backgroundSizes="(min-width: 1280px) 22rem, (min-width: 768px) 50vw, calc(100vw - 2rem)"
+      />
 
       <header className="flex flex-col gap-1 px-4 pt-4">
         <div className="flex min-w-0 flex-col gap-1">
