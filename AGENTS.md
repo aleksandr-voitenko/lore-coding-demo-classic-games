@@ -312,7 +312,7 @@ When useful, document invariants, edge cases, external constraints, compatibilit
 
 Lore Coding is a Git-native development protocol for preserving task context in repository history.
 
-A task is an atomic unit of development effort. Each meaningful change should be recorded as a structured task commit with context, implementation summary, verification evidence, a stable `Lore-ID:` trailer, and optional `Lore-Link:` trailers to related tasks.
+A task is an atomic unit of development effort. Each meaningful change must eventually be recorded as a structured task commit with context, implementation summary, verification evidence, a stable `Lore-ID:` trailer, and optional `Lore-Link:` trailers to related tasks. However, starting or working on a task does not authorize committing. Task commits happen only during explicit finalization.
 
 Together, task commit messages and their trailers form a historical knowledge graph for human developers and AI agents.
 
@@ -602,6 +602,21 @@ Do not list standard development checks when they pass unless they are directly 
 
 ## Task lifecycle
 
+### Required human verification loop
+
+Task work must follow this loop unless the user explicitly requests a different workflow:
+
+1. The user says `Start a new task`.
+2. The agent researches, plans, implements, and runs appropriate verification.
+3. The agent stops before staging or committing, reports the completed work and verification, and waits for user review.
+4. The user verifies the result.
+5. If the user requests adjustments, the agent makes fixes and repeats the verification/reporting step.
+6. Only when the user says `Finalize the task`, `commit it`, or another explicit equivalent, the agent writes the Lore commit message, stages the task files, and creates the commit.
+
+Do not run `git add`, `git commit`, `git commit --amend`, `git tag`, `git push`, or other history-recording Git operations during normal task work unless the user explicitly asks for them.
+
+`Start a new task` establishes the task boundary. It does not mean `Finalize the task`.
+
 ### Starting a task
 
 When the user says `Start a new task`, treat it as the boundary of a new task, even if there was previous conversation.
@@ -675,7 +690,7 @@ Do not include trivial assumptions that did not shape the implementation. If an 
 
 ### Finalizing a task
 
-When the user says `Finalize the task`, create a commit-message-ready task description.
+When the user says `Finalize the task`, create the commit-message-ready task description, stage only the files belonging to the current task, and create the structured Lore commit.
 
 Before writing it:
 
