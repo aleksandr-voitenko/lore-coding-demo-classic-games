@@ -14,8 +14,8 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
 - `public/images/` owns launcher key art and the sprite-backed board assets.
   See `public/images/MEMORY.md`.
 - `e2e/` owns rendered browser-flow coverage. See `e2e/MEMORY.md`.
-- `scripts/` owns repository-local development tooling, including the
-  dependency-free Agentic Lore Coding validator. See `scripts/MEMORY.md`.
+- `.githooks/` owns repository-local Git hook tooling, including the
+  dependency-free Agentic Lore Coding validator. See `.githooks/MEMORY.md`.
 - `.github/` owns CI workflow behavior. See `.github/MEMORY.md`.
 - `Dockerfile` owns the production container image. It builds the Next.js
   standalone server bundle and runs with SQLite storage under `/data`.
@@ -105,7 +105,7 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   `npm run check:unused`, and `npm run build` are the standard TypeScript,
   ESLint, dependency-boundary, unused-code, and Next build checks.
 - `npm run lore-coding -- --file <path>` validates a Lore Coding commit message file.
-  `npm install` runs `scripts/install-lore-coding-hooks.mjs` through the package
+  `npm install` runs `.githooks/install-lore-coding-hooks.mjs` through the package
   `prepare` script to configure `core.hooksPath .githooks` for local clones;
   CI does not run Lore Coding validation yet.
 - CI repeats the build, static checks, dependency-boundary gate, Knip

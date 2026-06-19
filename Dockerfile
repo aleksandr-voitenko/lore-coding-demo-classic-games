@@ -12,7 +12,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
-COPY scripts/install-lore-coding-hooks.mjs ./scripts/install-lore-coding-hooks.mjs
+COPY .githooks/install-lore-coding-hooks.mjs ./.githooks/install-lore-coding-hooks.mjs
 RUN npm ci
 
 FROM deps AS builder

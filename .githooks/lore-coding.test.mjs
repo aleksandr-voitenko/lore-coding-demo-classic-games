@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatLoreCodingResult, validateLoreCoding } from "../.githooks/lore-coding.mjs";
+import { formatLoreCodingResult, validateLoreCoding } from "./lore-coding.mjs";
 
 const EXISTING_COMMIT = "a".repeat(40);
 const EXISTING_LORE_ID = "LC-20260529-18A1";

@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
-    "scripts/*.mjs",
+    ".githooks/*.mjs",
     "src/app/**/{layout,page,route}.tsx",
     "src/app/**/route.ts",
     "src/**/*.{test,spec}.{ts,tsx}",
@@ -10,7 +10,7 @@
   ],
   "project": [
     "*.{js,mjs,ts}",
-    "scripts/**/*.{mjs,ts}",
+    ".githooks/**/*.{mjs,ts}",
     "src/**/*.{ts,tsx}",
     "e2e/**/*.ts"
   ],

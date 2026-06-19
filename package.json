@@ -9,7 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "prepare": "node scripts/install-lore-coding-hooks.mjs",
+    "prepare": "node .githooks/install-lore-coding-hooks.mjs",
     "stats:loc": "scc . --exclude-ext md,json,svg,png,ico --no-gen",
     "check:deps": "depcruise src",
     "check:unused": "knip",

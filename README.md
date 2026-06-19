@@ -155,7 +155,7 @@ published tags are `latest`, `main`, and the short commit SHA.
 The repository includes a dependency-free Agentic Lore Coding validator at
 `.githooks/lore-coding.mjs`, a local Git `commit-msg` hook wrapper at
 `.githooks/commit-msg`, and an install-time hook setup script at
-`scripts/install-lore-coding-hooks.mjs`.
+`.githooks/install-lore-coding-hooks.mjs`.
 
 `npm install` runs the package `prepare` script, which configures this clone
 with:

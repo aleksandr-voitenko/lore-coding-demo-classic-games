@@ -1,6 +1,6 @@
-# Scripts Memory
+# Git Hooks Memory
 
-This file covers repository-local development tooling under `scripts/` and
+This file covers repository-local Git hook and Lore Coding tooling under
 `.githooks/`.
 
 ## Agentic Lore Coding Validator
@@ -14,8 +14,8 @@ This file covers repository-local development tooling under `scripts/` and
   history checks, `--no-lore-links` for syntax-only link validation, and the
   legacy `--no-git-links` alias.
 - `.githooks/commit-msg` calls `node .githooks/lore-coding.mjs --edit "$1"`.
-  `scripts/install-lore-coding-hooks.mjs` configures `core.hooksPath .githooks` from
-  the package `prepare` script after dependency install. The installer skips
+  `.githooks/install-lore-coding-hooks.mjs` configures `core.hooksPath .githooks`
+  from the package `prepare` script after dependency install. The installer skips
   outside Git worktrees, in CI, and when `LORE_CODING_INSTALL_HOOKS=0`; it does
   not overwrite an existing custom `core.hooksPath`. CI does not run this
   validator yet.
@@ -40,11 +40,11 @@ This file covers repository-local development tooling under `scripts/` and
 
 ## Tests
 
-- `scripts/lore-coding.test.mjs` covers accepted Lore messages, wrapper and
+- `.githooks/lore-coding.test.mjs` covers accepted Lore messages, wrapper and
   code-fence rejection, subject type/scope validation, required section checks,
   Lore-ID and Lore-Link trailer syntax, legacy Links rejection, Lore-Link
   history resolution, syntax-only link validation, and hook-style diagnostic
   formatting.
-- `scripts/install-lore-coding-hooks.test.mjs` covers install planning for fresh
+- `.githooks/install-lore-coding-hooks.test.mjs` covers install planning for fresh
   worktrees, non-Git directories, CI, explicit opt-out, existing custom hook
   paths, and already-configured `.githooks` paths.
