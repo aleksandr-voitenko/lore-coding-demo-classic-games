@@ -41,6 +41,7 @@ type SnakeReplayTestEvent =
 
 const SNAKE_REPLAY_SCHEMA_VERSION = 1;
 const REPLAY_DIRECTIONS: Direction[] = ["up", "right", "down", "left"];
+const REPLAY_FIXTURE_TICK_MS = 1_000;
 
 function createReplayRandom(seed: number) {
   let value = seed % 2_147_483_647;
@@ -137,7 +138,7 @@ function appendReplayDirectionEvent({
 }) {
   events.push({
     direction,
-    elapsedMs: tick * 1_000 + events.length,
+    elapsedMs: (tick + 1) * REPLAY_FIXTURE_TICK_MS + events.length,
     seq: events.length,
     tick,
     type: "direction",
@@ -146,7 +147,7 @@ function appendReplayDirectionEvent({
 
 function appendReplayAdvanceEvent(events: SnakeReplayTestEvent[], tick: number) {
   events.push({
-    elapsedMs: tick * 1_000 + events.length,
+    elapsedMs: (tick + 1) * REPLAY_FIXTURE_TICK_MS + events.length,
     seq: events.length,
     tick,
     type: "advance",
