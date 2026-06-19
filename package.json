@@ -14,7 +14,7 @@
     "check:deps": "depcruise src",
     "check:unused": "knip",
     "lint": "eslint",
-    "lore-coding": "node scripts/lore-coding.mjs",
+    "lore-coding": "node .githooks/lore-coding.mjs",
     "test": "vitest run",
     "test:agent": "vitest run --coverage --reporter=default --reporter=json --reporter=junit --outputFile.json=reports/vitest/results.json --outputFile.junit=reports/vitest/junit.xml",
     "test:coverage": "vitest run --coverage",

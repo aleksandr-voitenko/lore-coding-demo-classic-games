@@ -831,10 +831,10 @@ function getCliHelp() {
   return `Lore Coding validator
 
 Usage:
-  node scripts/lore-coding.mjs --edit <commit-message-file>
-  node scripts/lore-coding.mjs --file <commit-message-file>
-  node scripts/lore-coding.mjs [--format json] <commit-message-file>
-  node scripts/lore-coding.mjs explain <error-code>
+  node .githooks/lore-coding.mjs --edit <commit-message-file>
+  node .githooks/lore-coding.mjs --file <commit-message-file>
+  node .githooks/lore-coding.mjs [--format json] <commit-message-file>
+  node .githooks/lore-coding.mjs explain <error-code>
 
 Options:
   --edit <file>       Validate the commit message file passed by Git commit-msg.

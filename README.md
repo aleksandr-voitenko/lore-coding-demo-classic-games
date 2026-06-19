@@ -153,7 +153,7 @@ published tags are `latest`, `main`, and the short commit SHA.
 ## Lore Coding Validation
 
 The repository includes a dependency-free Agentic Lore Coding validator at
-`scripts/lore-coding.mjs`, a local Git `commit-msg` hook wrapper at
+`.githooks/lore-coding.mjs`, a local Git `commit-msg` hook wrapper at
 `.githooks/commit-msg`, and an install-time hook setup script at
 `scripts/install-lore-coding-hooks.mjs`.
 
@@ -174,7 +174,7 @@ After the hook path is configured, `git commit` passes the proposed
 commit-message file to the hook. The hook runs:
 
 ```bash
-node scripts/lore-coding.mjs --edit "$1"
+node .githooks/lore-coding.mjs --edit "$1"
 ```
 
 If validation fails, Git aborts the commit and prints stable `LORE###` error

@@ -1,10 +1,11 @@
 # Scripts Memory
 
-This file covers repository-local development tooling under `scripts/`.
+This file covers repository-local development tooling under `scripts/` and
+`.githooks/`.
 
 ## Agentic Lore Coding Validator
 
-- `scripts/lore-coding.mjs` is a dependency-free Node CLI and importable module
+- `.githooks/lore-coding.mjs` is a dependency-free Node CLI and importable module
   for validating Agentic Lore Coding commit messages. Keep it portable so it can
   be copied or packaged for other repositories without app-specific imports.
 - The CLI supports `--edit <file>` for Git `commit-msg` hooks, `--file <file>`
@@ -12,7 +13,7 @@ This file covers repository-local development tooling under `scripts/`.
   `explain <LORE###>` for stable rule help, `--target <commit>` for Lore-Link
   history checks, `--no-lore-links` for syntax-only link validation, and the
   legacy `--no-git-links` alias.
-- `.githooks/commit-msg` calls `node scripts/lore-coding.mjs --edit "$1"`.
+- `.githooks/commit-msg` calls `node .githooks/lore-coding.mjs --edit "$1"`.
   `scripts/install-lore-coding-hooks.mjs` configures `core.hooksPath .githooks` from
   the package `prepare` script after dependency install. The installer skips
   outside Git worktrees, in CI, and when `LORE_CODING_INSTALL_HOOKS=0`; it does
