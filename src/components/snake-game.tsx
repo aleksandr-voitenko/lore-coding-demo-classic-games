@@ -272,7 +272,6 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
   const pendingInitialDirectionRef = useRef<Direction | null>(null);
   const previousGameRef = useRef(game);
   const {
-    beginReplayRecording,
     captureFinishedReplay,
     finishedReplay,
     isReplayRunPending,
@@ -282,6 +281,7 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
     replaySaveStatus,
     resumeRecordingClock,
     saveFinishedReplay,
+    startReplayRecording,
   } = useLiveGameReplayRecording<SnakeReplayRecording, SnakeReplayPayload>({
     saveReplay: saveSnakeReplay,
   });
@@ -430,7 +430,7 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
     pendingInitialDirectionRef.current = initialDirection ?? null;
     setLevelIntermissionLevel(null);
     resetLeaderboardForm();
-    const recording = await beginReplayRecording(async () => {
+    const recording = await startReplayRecording(async () => {
       const run = await createSnakeReplayRun();
       const random = createSnakeReplayRandom(run.seed);
 
@@ -470,10 +470,9 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
     }
 
     pendingInitialDirectionRef.current = null;
-    replayRecordingRef.current = recording;
     setFoodFeedbacks([]);
     commitGame(nextGame);
-  }, [beginReplayRecording, bestScore, commitGame, isReplayRunPendingRef, resetLeaderboardForm, replayRecordingRef]);
+  }, [bestScore, commitGame, isReplayRunPendingRef, resetLeaderboardForm, startReplayRecording]);
 
   const toggleRunState = useCallback(() => {
     const current = gameRef.current;

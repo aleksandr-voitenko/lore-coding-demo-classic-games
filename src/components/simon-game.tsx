@@ -229,7 +229,6 @@ function SimonLiveGame({
   );
   const gameRef = useRef(game);
   const {
-    beginReplayRecording,
     captureFinishedReplay,
     finishedReplay,
     isReplayRunPending,
@@ -240,6 +239,7 @@ function SimonLiveGame({
     resetReplayRecording,
     resumeRecordingClock,
     saveFinishedReplay,
+    startReplayRecording,
   } = useLiveGameReplayRecording<SimonReplayRecording, SimonReplayPayload>({
     saveReplay: saveSimonReplay,
   });
@@ -333,7 +333,7 @@ function SimonLiveGame({
     }
 
     resetLeaderboardForm();
-    const recording = await beginReplayRecording(async () => {
+    const recording = await startReplayRecording(async () => {
       const run = await createSimonReplayRun();
       const random = createSimonReplayRandom(run.seed);
 
@@ -355,13 +355,12 @@ function SimonLiveGame({
     }
 
     appendSimonReplayEvent(recording, { type: "start" });
-    replayRecordingRef.current = recording;
     commitGame(
       restart
         ? restartSimonGame(gameRef.current, { random: recording.random })
         : startSimonGame(gameRef.current, { random: recording.random }),
     );
-  }, [beginReplayRecording, commitGame, isReplayRunPendingRef, resetLeaderboardForm, replayRecordingRef]);
+  }, [commitGame, isReplayRunPendingRef, resetLeaderboardForm, startReplayRecording]);
 
   const startGame = useCallback(() => {
     resetLeaderboardForm();

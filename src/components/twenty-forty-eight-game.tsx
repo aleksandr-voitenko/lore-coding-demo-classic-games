@@ -214,7 +214,6 @@ function TwentyFortyEightLiveGame({
   const gameRef = useRef(game);
   const pendingInitialDirectionRef = useRef<TwentyFortyEightDirection | null>(null);
   const {
-    beginReplayRecording,
     captureFinishedReplay,
     finishedReplay,
     isReplayRunPending,
@@ -225,6 +224,7 @@ function TwentyFortyEightLiveGame({
     resetReplayRecording,
     resumeRecordingClock,
     saveFinishedReplay,
+    startReplayRecording,
   } = useLiveGameReplayRecording<
     TwentyFortyEightReplayRecording,
     TwentyFortyEightReplayPayload
@@ -303,7 +303,7 @@ function TwentyFortyEightLiveGame({
 
     pendingInitialDirectionRef.current = initialDirection ?? null;
     resetLeaderboardForm();
-    const recording = await beginReplayRecording(async () => {
+    const recording = await startReplayRecording(async () => {
       const run = await createTwentyFortyEightReplayRun();
       const random = createTwentyFortyEightReplayRandom(run.seed);
 
@@ -342,9 +342,8 @@ function TwentyFortyEightLiveGame({
     }
 
     pendingInitialDirectionRef.current = null;
-    replayRecordingRef.current = recording;
     commitGame(nextGame);
-  }, [beginReplayRecording, commitGame, isReplayRunPendingRef, resetLeaderboardForm, replayRecordingRef]);
+  }, [commitGame, isReplayRunPendingRef, resetLeaderboardForm, startReplayRecording]);
 
   const startGame = useCallback(() => {
     void startNewGame();

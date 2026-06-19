@@ -3,7 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   appendLiveGameReplayEvent,
   createLiveGameReplayRecording,
+  startLiveGameReplayRecording,
   type LiveGameReplayRecordedEvent,
+  type LiveGameReplayRecording,
 } from "./game-replay-recording";
 import { pauseGameReplayActiveClock, resumeGameReplayActiveClock } from "@/lib/game-replay";
 
@@ -20,6 +22,59 @@ type TestReplayEvent = LiveGameReplayRecordedEvent &
         type: "start";
       }
   );
+
+type TestReplayRun = { id: string; seed: number };
+
+type TestReplayRecording = LiveGameReplayRecording<
+  TestReplayEvent,
+  TestReplayRun
+>;
+
+type TestReplayPayload = {
+  runId: string;
+};
+
+type TestReplayLifecycleControls = Parameters<
+  typeof startLiveGameReplayRecording<TestReplayRecording, TestReplayPayload>
+>[0];
+
+function createTestReplayRecording(runId: string) {
+  return createLiveGameReplayRecording<TestReplayEvent, TestReplayRun>({
+    run: { id: runId, seed: 123 },
+  });
+}
+
+function createTestReplayLifecycleControls({
+  isPending = false,
+  recording = null,
+}: {
+  isPending?: boolean;
+  recording?: TestReplayRecording | null;
+} = {}) {
+  const finishedReplays: Array<TestReplayPayload | null> = [];
+  const pendingStates: boolean[] = [];
+  const saveStatuses: string[] = [];
+  const controls: TestReplayLifecycleControls = {
+    isReplayRunPendingRef: { current: isPending },
+    replayRecordingRef: { current: recording },
+    setFinishedReplay: (finishedReplay) => {
+      finishedReplays.push(finishedReplay);
+    },
+    setIsReplayRunPending: (isReplayRunPending) => {
+      pendingStates.push(isReplayRunPending);
+    },
+    setReplaySaveStatus: (replaySaveStatus) => {
+      saveStatuses.push(replaySaveStatus);
+    },
+  };
+
+  return {
+    controls,
+    finishedReplays,
+    pendingStates,
+    saveStatuses,
+  };
+}
 
 describe("game replay recording", () => {
   afterEach(() => {
@@ -99,5 +154,66 @@ describe("game replay recording", () => {
       { elapsedMs: 50, seq: 0, tick: 0, type: "start" },
       { elapsedMs: 75, seq: 1, tick: 0, type: "advance" },
     ]);
+  });
+
+  it("starts replay recordings and installs the active recording ref", async () => {
+    const recording = createTestReplayRecording("run-started");
+    const createRecording = vi.fn(async () => recording);
+    const { controls, finishedReplays, pendingStates, saveStatuses } =
+      createTestReplayLifecycleControls();
+
+    await expect(
+      startLiveGameReplayRecording(controls, createRecording),
+    ).resolves.toBe(recording);
+
+    expect(createRecording).toHaveBeenCalledTimes(1);
+    expect(controls.replayRecordingRef.current).toBe(recording);
+    expect(controls.isReplayRunPendingRef.current).toBe(false);
+    expect(finishedReplays).toEqual([null]);
+    expect(pendingStates).toEqual([true, false]);
+    expect(saveStatuses).toEqual(["idle"]);
+  });
+
+  it("clears the active recording and marks failed start attempts", async () => {
+    const previousRecording = createTestReplayRecording("run-previous");
+    const createRecording = vi.fn(async () => {
+      throw new Error("run creation failed");
+    });
+    const { controls, finishedReplays, pendingStates, saveStatuses } =
+      createTestReplayLifecycleControls({
+        recording: previousRecording,
+      });
+
+    await expect(
+      startLiveGameReplayRecording(controls, createRecording),
+    ).resolves.toBeNull();
+
+    expect(createRecording).toHaveBeenCalledTimes(1);
+    expect(controls.replayRecordingRef.current).toBeNull();
+    expect(controls.isReplayRunPendingRef.current).toBe(false);
+    expect(finishedReplays).toEqual([null]);
+    expect(pendingStates).toEqual([true, false]);
+    expect(saveStatuses).toEqual(["idle", "failed"]);
+  });
+
+  it("does not create or replace recordings while a replay run is pending", async () => {
+    const existingRecording = createTestReplayRecording("run-existing");
+    const createRecording = vi.fn(async () => createTestReplayRecording("run-next"));
+    const { controls, finishedReplays, pendingStates, saveStatuses } =
+      createTestReplayLifecycleControls({
+        isPending: true,
+        recording: existingRecording,
+      });
+
+    await expect(
+      startLiveGameReplayRecording(controls, createRecording),
+    ).resolves.toBeNull();
+
+    expect(createRecording).not.toHaveBeenCalled();
+    expect(controls.replayRecordingRef.current).toBe(existingRecording);
+    expect(controls.isReplayRunPendingRef.current).toBe(true);
+    expect(finishedReplays).toEqual([]);
+    expect(pendingStates).toEqual([]);
+    expect(saveStatuses).toEqual([]);
   });
 });

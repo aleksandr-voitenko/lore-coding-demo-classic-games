@@ -232,7 +232,6 @@ function AsteroidsLiveGame({
   const nextHitSparkIdRef = useRef(0);
   const nextPickupFeedbackIdRef = useRef(0);
   const {
-    beginReplayRecording,
     captureFinishedReplay,
     finishedReplay,
     isReplayRunPending,
@@ -243,6 +242,7 @@ function AsteroidsLiveGame({
     resetReplayRecording,
     resumeRecordingClock,
     saveFinishedReplay,
+    startReplayRecording,
   } = useLiveGameReplayRecording<AsteroidsReplayRecording, AsteroidsReplayPayload>({
     saveReplay: saveAsteroidsReplay,
   });
@@ -389,7 +389,7 @@ function AsteroidsLiveGame({
     clearHitSparks();
     clearPickupFeedbacks();
     resetLeaderboardForm();
-    const recording = await beginReplayRecording(async () => {
+    const recording = await startReplayRecording(async () => {
       const run = await createAsteroidsReplayRun();
       const random = createAsteroidsReplayRandom(run.seed);
 
@@ -414,9 +414,8 @@ function AsteroidsLiveGame({
     });
 
     appendAsteroidsReplayEvent(recording, { type: "start" });
-    replayRecordingRef.current = recording;
     commitGame(startAsteroidsGame(readyGame));
-  }, [beginReplayRecording, clearHitSparks, clearPickupFeedbacks, commitGame, isReplayRunPendingRef, resetControls, resetLeaderboardForm, replayRecordingRef]);
+  }, [clearHitSparks, clearPickupFeedbacks, commitGame, isReplayRunPendingRef, resetControls, resetLeaderboardForm, startReplayRecording]);
 
   const startGame = useCallback(() => {
     void startReplayRun();

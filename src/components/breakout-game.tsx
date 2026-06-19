@@ -189,7 +189,6 @@ function BreakoutLiveGame({
   const gameRef = useRef(game);
   const preStartReplayEventsRef = useRef<BreakoutReplayEventInput[]>([]);
   const {
-    beginReplayRecording,
     captureFinishedReplay,
     finishedReplay,
     isReplayRunPending,
@@ -200,6 +199,7 @@ function BreakoutLiveGame({
     resetReplayRecording,
     resumeRecordingClock,
     saveFinishedReplay,
+    startReplayRecording,
   } = useLiveGameReplayRecording<BreakoutReplayRecording, BreakoutReplayPayload>({
     saveReplay: saveBreakoutReplay,
   });
@@ -280,7 +280,7 @@ function BreakoutLiveGame({
     }
 
     resetLeaderboardForm();
-    const recording = await beginReplayRecording(async () => {
+    const recording = await startReplayRecording(async () => {
       const run = await createBreakoutReplayRun();
       const random = createBreakoutReplayRandom(run.seed);
 
@@ -305,7 +305,6 @@ function BreakoutLiveGame({
     }
 
     preStartReplayEventsRef.current = [];
-    replayRecordingRef.current = recording;
 
     let nextGame = restart ? restartBreakoutGame(gameRef.current) : gameRef.current;
 
@@ -319,7 +318,7 @@ function BreakoutLiveGame({
     if (nextGame !== gameRef.current) {
       commitGame(nextGame);
     }
-  }, [beginReplayRecording, commitGame, isReplayRunPendingRef, resetLeaderboardForm, replayRecordingRef]);
+  }, [commitGame, isReplayRunPendingRef, resetLeaderboardForm, startReplayRecording]);
 
   const prepareGame = useCallback(() => {
     resetLeaderboardForm();

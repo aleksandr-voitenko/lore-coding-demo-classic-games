@@ -229,7 +229,6 @@ function TetrisLiveGame({
   );
   const gameRef = useRef(game);
   const {
-    beginReplayRecording,
     captureFinishedReplay,
     finishedReplay,
     isReplayRunPending,
@@ -239,6 +238,7 @@ function TetrisLiveGame({
     replaySaveStatus,
     resumeRecordingClock,
     saveFinishedReplay,
+    startReplayRecording,
   } = useLiveGameReplayRecording<TetrisReplayRecording, TetrisReplayPayload>({
     saveReplay: saveTetrisReplay,
   });
@@ -298,7 +298,7 @@ function TetrisLiveGame({
     }
 
     resetLeaderboardForm();
-    const recording = await beginReplayRecording(async () => {
+    const recording = await startReplayRecording(async () => {
       const run = await createTetrisReplayRun();
       const random = createTetrisReplayRandom(run.seed);
 
@@ -322,9 +322,8 @@ function TetrisLiveGame({
       recording,
       { type: "start" },
     );
-    replayRecordingRef.current = recording;
     commitGame(nextGame);
-  }, [beginReplayRecording, commitGame, isReplayRunPendingRef, resetLeaderboardForm, replayRecordingRef]);
+  }, [commitGame, isReplayRunPendingRef, resetLeaderboardForm, startReplayRecording]);
 
   const startGame = useCallback(() => {
     void startNewGame();

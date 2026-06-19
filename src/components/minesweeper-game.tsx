@@ -228,7 +228,6 @@ function MinesweeperLiveGame({
   const gameRef = useRef(game);
   const pendingInitialActionRef = useRef<MinesweeperReplayPendingAction | null>(null);
   const {
-    beginReplayRecording,
     captureFinishedReplay,
     finishedReplay,
     isReplayRunPending,
@@ -239,6 +238,7 @@ function MinesweeperLiveGame({
     resetReplayRecording,
     resumeRecordingClock,
     saveFinishedReplay,
+    startReplayRecording: startLiveReplayRecording,
   } = useLiveGameReplayRecording<
     MinesweeperReplayRecording,
     MinesweeperReplayPayload
@@ -315,7 +315,7 @@ function MinesweeperLiveGame({
     pendingInitialActionRef.current = initialAction ?? null;
     resetLeaderboardForm();
     const clock = createGameReplayRecordingClock();
-    const recording = await beginReplayRecording(async () => {
+    const recording = await startLiveReplayRecording(async () => {
       const run = await createMinesweeperReplayRun();
       const random = createMinesweeperReplayRandom(run.seed);
 
@@ -372,9 +372,8 @@ function MinesweeperLiveGame({
     }
 
     pendingInitialActionRef.current = null;
-    replayRecordingRef.current = recording;
     commitGame(nextGame);
-  }, [beginReplayRecording, commitGame, isReplayRunPendingRef, resetLeaderboardForm, replayRecordingRef]);
+  }, [commitGame, isReplayRunPendingRef, resetLeaderboardForm, startLiveReplayRecording]);
 
   const startGame = useCallback(() => {
     resetLeaderboardForm();

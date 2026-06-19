@@ -211,7 +211,6 @@ function SpaceInvadersLiveGame({
   );
   const gameRef = useRef(game);
   const {
-    beginReplayRecording,
     captureFinishedReplay,
     finishedReplay,
     isReplayRunPending,
@@ -222,6 +221,7 @@ function SpaceInvadersLiveGame({
     resetReplayRecording,
     resumeRecordingClock,
     saveFinishedReplay,
+    startReplayRecording,
   } = useLiveGameReplayRecording<
     SpaceInvadersReplayRecording,
     SpaceInvadersReplayPayload
@@ -285,7 +285,7 @@ function SpaceInvadersLiveGame({
     }
 
     resetLeaderboardForm();
-    const recording = await beginReplayRecording(async () => {
+    const recording = await startReplayRecording(async () => {
       const run = await createSpaceInvadersReplayRun();
       const random = createSpaceInvadersReplayRandom(run.seed);
 
@@ -312,9 +312,8 @@ function SpaceInvadersLiveGame({
     });
 
     appendSpaceInvadersReplayEvent(recording, { type: "start" });
-    replayRecordingRef.current = recording;
     commitGame(startSpaceInvadersGame(readyGame));
-  }, [beginReplayRecording, commitGame, isReplayRunPendingRef, resetLeaderboardForm, replayRecordingRef]);
+  }, [commitGame, isReplayRunPendingRef, resetLeaderboardForm, startReplayRecording]);
 
   const startGame = useCallback(() => {
     void startReplayRun();

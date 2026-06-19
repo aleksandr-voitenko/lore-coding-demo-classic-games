@@ -195,7 +195,6 @@ function PongLiveGame({
   const gameRef = useRef(game);
   const preStartReplayEventsRef = useRef<PongReplayEventInput[]>([]);
   const {
-    beginReplayRecording,
     captureFinishedReplay,
     finishedReplay,
     isReplayRunPending,
@@ -206,6 +205,7 @@ function PongLiveGame({
     resetReplayRecording,
     resumeRecordingClock,
     saveFinishedReplay,
+    startReplayRecording,
   } = useLiveGameReplayRecording<PongReplayRecording, PongReplayPayload>({
     saveReplay: savePongReplay,
   });
@@ -276,7 +276,7 @@ function PongLiveGame({
     }
 
     resetLeaderboardForm();
-    const recording = await beginReplayRecording(async () => {
+    const recording = await startReplayRecording(async () => {
       const run = await createPongReplayRun();
 
       return createLiveGameReplayRecording<PongReplayEvent, PongReplayRun>({
@@ -293,11 +293,10 @@ function PongLiveGame({
     });
     appendPongReplayEvent(recording, { type: "start" });
     preStartReplayEventsRef.current = [];
-    replayRecordingRef.current = recording;
     commitGame(
       restart ? restartPongGame(gameRef.current) : startPongGame(gameRef.current),
     );
-  }, [beginReplayRecording, commitGame, isReplayRunPendingRef, resetLeaderboardForm, replayRecordingRef]);
+  }, [commitGame, isReplayRunPendingRef, resetLeaderboardForm, startReplayRecording]);
 
   const startGame = useCallback(() => {
     resetLeaderboardForm();
