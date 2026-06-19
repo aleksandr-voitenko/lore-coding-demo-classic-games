@@ -281,6 +281,53 @@ test("launcher renders game cards and configurable parameters", async ({ page })
   await expect(page.getByTestId("asteroids-difficulty")).toHaveValue("medium");
 });
 
+test("desktop launcher centers leaderboards above the second game card", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await openLauncher(page);
+
+  const layoutMetrics = await page.evaluate(() => {
+    function getRect(testId: string) {
+      const element = document.querySelector(`[data-testid="${testId}"]`);
+
+      if (!(element instanceof HTMLElement)) {
+        throw new Error(`Expected ${testId} to render before measuring launcher layout.`);
+      }
+
+      const rect = element.getBoundingClientRect();
+
+      return {
+        bottom: rect.bottom,
+        centerX: rect.left + rect.width / 2,
+        top: rect.top,
+      };
+    }
+
+    return {
+      breakoutCard: getRect("game-card-breakout"),
+      leaderboardButton: getRect("global-leaderboard-open-button"),
+      snakeCard: getRect("game-card-snake"),
+      tetrisCard: getRect("game-card-tetris"),
+    };
+  });
+
+  expect(layoutMetrics.tetrisCard.centerX).toBeGreaterThan(
+    layoutMetrics.snakeCard.centerX,
+  );
+  expect(layoutMetrics.tetrisCard.centerX).toBeLessThan(
+    layoutMetrics.breakoutCard.centerX,
+  );
+  expect(
+    Math.abs(
+      layoutMetrics.leaderboardButton.centerX - layoutMetrics.tetrisCard.centerX,
+    ),
+  ).toBeLessThanOrEqual(2);
+  expect(layoutMetrics.leaderboardButton.bottom).toBeLessThan(
+    layoutMetrics.tetrisCard.top,
+  );
+});
+
 test("theme switching persists from launcher controls into profile chrome", async ({
   page,
 }) => {

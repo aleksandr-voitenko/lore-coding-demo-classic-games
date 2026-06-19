@@ -149,8 +149,8 @@ export function GameLauncher({
       ref={restoreMenuViewport}
     >
       <section className="mx-auto flex min-h-[calc(100svh-3rem)] w-full max-w-6xl flex-col justify-center gap-6">
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex max-w-2xl items-center gap-4">
+        <header className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center lg:grid-cols-[repeat(3,minmax(0,1fr))]">
+          <div className="flex max-w-2xl items-center gap-4 lg:col-start-1">
             <div
               className="flex size-11 shrink-0 items-center justify-center rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] text-[var(--chrome-muted)] shadow-sm"
               aria-hidden="true"
@@ -161,7 +161,7 @@ export function GameLauncher({
               Game Library
             </h1>
           </div>
-          <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end">
+          <div className="flex w-full justify-start sm:col-span-2 lg:col-span-1 lg:col-start-2 lg:row-start-1 lg:justify-center">
             <button
               className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] px-3 text-sm font-semibold text-[var(--chrome-ink)] shadow-sm transition hover:bg-[var(--chrome-accent-faint)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--chrome-focus-ring)] active:translate-y-px"
               data-testid="global-leaderboard-open-button"
@@ -171,6 +171,8 @@ export function GameLauncher({
               <TrophyIcon className="size-4" aria-hidden="true" />
               Leaderboards
             </button>
+          </div>
+          <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:col-start-2 sm:row-start-1 sm:w-auto sm:justify-end lg:col-start-3">
             <ThemeToggle testId="launcher-theme-toggle" />
             <UserAccountControls initialAuthMode={initialAuthMode} />
           </div>
