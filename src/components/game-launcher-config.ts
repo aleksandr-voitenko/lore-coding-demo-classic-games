@@ -3,33 +3,33 @@ import {
   ASTEROIDS_DIFFICULTY_OPTIONS,
   normalizeAsteroidsDifficulty,
   type AsteroidsDifficulty,
-} from "@/lib/asteroids-game-engine";
+} from "@/lib/asteroids/parameters";
 import {
   BREAKOUT_BOARD_HEIGHT,
   BREAKOUT_BOARD_SIZE_OPTIONS,
   BREAKOUT_BOARD_WIDTH,
   BREAKOUT_LIVES_OPTIONS,
   BREAKOUT_STARTING_LIVES,
-} from "@/lib/breakout-game-engine";
+} from "@/lib/breakout-parameters";
 import {
   MINESWEEPER_DEFAULT_DIFFICULTY,
   MINESWEEPER_DIFFICULTY_OPTIONS,
   normalizeMinesweeperDifficulty,
   type MinesweeperDifficulty,
-} from "@/lib/minesweeper-game-engine";
+} from "@/lib/minesweeper-parameters";
 import {
   PONG_BOARD_HEIGHT,
   PONG_BOARD_SIZE_OPTIONS,
   PONG_BOARD_WIDTH,
   PONG_TARGET_SCORE,
   PONG_TARGET_SCORE_OPTIONS,
-} from "@/lib/pong-game-engine";
+} from "@/lib/pong-parameters";
 import {
   SIMON_DEFAULT_DIFFICULTY,
   SIMON_DIFFICULTY_OPTIONS,
   normalizeSimonDifficulty,
   type SimonDifficulty,
-} from "@/lib/simon-game-engine";
+} from "@/lib/simon-parameters";
 import {
   SPACE_INVADERS_ALIEN_COUNT_OPTIONS,
   SPACE_INVADERS_BOARD_HEIGHT,
@@ -37,20 +37,20 @@ import {
   SPACE_INVADERS_BOARD_WIDTH,
   SPACE_INVADERS_COLUMNS,
   SPACE_INVADERS_ROWS,
-} from "@/lib/space-invaders-game-engine";
+} from "@/lib/space-invaders/parameters";
 import {
   TETRIS_BOARD_HEIGHT,
   TETRIS_BOARD_SIZE_OPTIONS,
   TETRIS_BOARD_WIDTH,
   TETRIS_START_LEVEL,
   TETRIS_START_LEVEL_OPTIONS,
-} from "@/lib/tetris-game-engine";
+} from "@/lib/tetris-parameters";
 import {
   TWENTY_FORTY_EIGHT_BOARD_SIZE,
   TWENTY_FORTY_EIGHT_BOARD_SIZE_OPTIONS,
   TWENTY_FORTY_EIGHT_WIN_TILE,
   TWENTY_FORTY_EIGHT_WIN_TILE_OPTIONS,
-} from "@/lib/twenty-forty-eight-game-engine";
+} from "@/lib/twenty-forty-eight-parameters";
 import {
   getGameCatalogArtwork,
   getGameCatalogEntry,

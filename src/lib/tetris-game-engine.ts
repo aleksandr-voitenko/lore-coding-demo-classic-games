@@ -1,3 +1,17 @@
+import {
+  TETRIS_BOARD_HEIGHT,
+  TETRIS_BOARD_WIDTH,
+  TETRIS_START_LEVEL,
+} from "./tetris-parameters";
+
+export {
+  TETRIS_BOARD_HEIGHT,
+  TETRIS_BOARD_SIZE_OPTIONS,
+  TETRIS_BOARD_WIDTH,
+  TETRIS_START_LEVEL,
+  TETRIS_START_LEVEL_OPTIONS,
+} from "./tetris-parameters";
+
 export type TetrisStatus = "ready" | "running" | "paused" | "lost";
 export type TetrominoKind = "I" | "J" | "L" | "O" | "S" | "T" | "Z";
 export type TetrisCell = TetrominoKind | null;
@@ -40,16 +54,6 @@ type LockPieceOptions = {
   random?: RandomSource;
   scoreBonus?: number;
 };
-
-export const TETRIS_BOARD_WIDTH = 10;
-export const TETRIS_BOARD_HEIGHT = 20;
-export const TETRIS_START_LEVEL = 1;
-export const TETRIS_BOARD_SIZE_OPTIONS = [
-  { height: 18, label: "10 x 18", width: 10 },
-  { height: 20, label: "10 x 20", width: 10 },
-  { height: 22, label: "12 x 22", width: 12 },
-] as const;
-export const TETRIS_START_LEVEL_OPTIONS = [1, 3, 5] as const;
 
 export const TETROMINO_KINDS = ["I", "J", "L", "O", "S", "T", "Z"] as const;
 

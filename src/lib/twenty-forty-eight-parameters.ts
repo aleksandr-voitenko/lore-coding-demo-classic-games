@@ -1,0 +1,4 @@
+export const TWENTY_FORTY_EIGHT_BOARD_SIZE = 4;
+export const TWENTY_FORTY_EIGHT_WIN_TILE = 2048;
+export const TWENTY_FORTY_EIGHT_BOARD_SIZE_OPTIONS = [4, 5, 6] as const;
+export const TWENTY_FORTY_EIGHT_WIN_TILE_OPTIONS = [1024, 2048, 4096] as const;

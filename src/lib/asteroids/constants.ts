@@ -1,17 +1,23 @@
 import type {
   AsteroidSize,
-  AsteroidsDifficulty,
   AsteroidsPowerUpKind,
   AsteroidsSaucerKind,
 } from "./types";
+import {
+  ASTEROIDS_DIFFICULTY_OPTIONS,
+  ASTEROIDS_TICK_DELAY_MS,
+} from "./parameters";
 
 export const ASTEROIDS_BOARD_WIDTH = 800;
 export const ASTEROIDS_BOARD_HEIGHT = 600;
-export const ASTEROIDS_DEFAULT_DIFFICULTY = "medium" satisfies AsteroidsDifficulty;
-export const ASTEROIDS_STARTING_ASTEROID_COUNT = 4;
-export const ASTEROIDS_STARTING_LIVES = 3;
+export {
+  ASTEROIDS_DEFAULT_DIFFICULTY,
+  ASTEROIDS_DIFFICULTY_OPTIONS,
+  ASTEROIDS_STARTING_ASTEROID_COUNT,
+  ASTEROIDS_STARTING_LIVES,
+  ASTEROIDS_TICK_DELAY_MS,
+} from "./parameters";
 export const ASTEROIDS_BONUS_LIFE_SCORE = 10_000;
-export const ASTEROIDS_TICK_DELAY_MS = 16;
 export const ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS = Math.ceil(
   3_000 / ASTEROIDS_TICK_DELAY_MS,
 );
@@ -26,39 +32,6 @@ export const ASTEROIDS_POWER_UP_MAX_SPAWN_TICKS = Math.ceil(
 );
 export const ASTEROIDS_BONUS_SCORE_POWER_UP_POINTS = 1_000;
 export const ASTEROIDS_SHIP_EXPLOSION_TICKS = Math.ceil(700 / ASTEROIDS_TICK_DELAY_MS);
-export const ASTEROIDS_DIFFICULTY_OPTIONS = [
-  {
-    asteroidCount: 3,
-    label: "Easy",
-    lives: 4,
-    saucerInitialSpawnTicks: Math.ceil(24_000 / ASTEROIDS_TICK_DELAY_MS),
-    saucerRespawnCooldownTicks: Math.ceil(32_000 / ASTEROIDS_TICK_DELAY_MS),
-    value: "easy",
-  },
-  {
-    asteroidCount: ASTEROIDS_STARTING_ASTEROID_COUNT,
-    label: "Medium",
-    lives: ASTEROIDS_STARTING_LIVES,
-    saucerInitialSpawnTicks: Math.ceil(12_000 / ASTEROIDS_TICK_DELAY_MS),
-    saucerRespawnCooldownTicks: Math.ceil(16_000 / ASTEROIDS_TICK_DELAY_MS),
-    value: ASTEROIDS_DEFAULT_DIFFICULTY,
-  },
-  {
-    asteroidCount: 5,
-    label: "Hard",
-    lives: 2,
-    saucerInitialSpawnTicks: Math.ceil(6_000 / ASTEROIDS_TICK_DELAY_MS),
-    saucerRespawnCooldownTicks: Math.ceil(8_000 / ASTEROIDS_TICK_DELAY_MS),
-    value: "hard",
-  },
-] as const satisfies readonly {
-  asteroidCount: number;
-  label: string;
-  lives: number;
-  saucerInitialSpawnTicks: number;
-  saucerRespawnCooldownTicks: number;
-  value: AsteroidsDifficulty;
-}[];
 export const ASTEROIDS_SAUCER_INITIAL_SPAWN_TICKS =
   ASTEROIDS_DIFFICULTY_OPTIONS[1].saucerInitialSpawnTicks;
 

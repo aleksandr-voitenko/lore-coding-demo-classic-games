@@ -1,3 +1,19 @@
+import {
+  getSimonDifficultySettings,
+  normalizeSimonDifficulty,
+  SIMON_DEFAULT_DIFFICULTY,
+  type SimonDifficulty,
+} from "./simon-parameters";
+
+export {
+  getSimonDifficultySettings,
+  normalizeSimonDifficulty,
+  SIMON_DEFAULT_DIFFICULTY,
+  SIMON_DIFFICULTY_OPTIONS,
+  SIMON_DIFFICULTY_SETTINGS,
+} from "./simon-parameters";
+export type { SimonDifficulty } from "./simon-parameters";
+
 export type SimonPadId = "green" | "red" | "yellow" | "blue";
 export type SimonStatus =
   | "ready"
@@ -10,7 +26,6 @@ export type SimonStatus =
   | "won";
 
 export type SimonPlayableStatus = Exclude<SimonStatus, "ready" | "paused" | "lost" | "won">;
-export type SimonDifficulty = "easy" | "medium" | "hard";
 
 export type SimonGameState = {
   activePad: SimonPadId | null;
@@ -36,30 +51,10 @@ export type SimonRandomOptions = {
 type RandomSource = () => number;
 
 export const SIMON_PADS = ["green", "red", "yellow", "blue"] as const;
-export const SIMON_DEFAULT_DIFFICULTY = "medium" satisfies SimonDifficulty;
 export const SIMON_PLAYBACK_DELAY_MS = 520;
 export const SIMON_INPUT_FLASH_MS = 180;
 export const SIMON_ROUND_COMPLETE_DELAY_MS = 1_000;
 export const SIMON_MISS_FEEDBACK_DELAY_MS = 1_000;
-export const SIMON_DIFFICULTY_SETTINGS = {
-  easy: {
-    label: "Easy",
-    winTarget: 8,
-  },
-  hard: {
-    label: "Hard",
-    winTarget: 16,
-  },
-  medium: {
-    label: "Medium",
-    winTarget: 12,
-  },
-} as const satisfies Record<SimonDifficulty, { label: string; winTarget: number }>;
-export const SIMON_DIFFICULTY_OPTIONS = [
-  { label: SIMON_DIFFICULTY_SETTINGS.easy.label, value: "easy" },
-  { label: SIMON_DIFFICULTY_SETTINGS.medium.label, value: "medium" },
-  { label: SIMON_DIFFICULTY_SETTINGS.hard.label, value: "hard" },
-] as const satisfies readonly { label: string; value: SimonDifficulty }[];
 
 export function createInitialSimonGame({
   difficulty = SIMON_DEFAULT_DIFFICULTY,
@@ -288,17 +283,6 @@ export function getRandomSimonPad(random: RandomSource = Math.random): SimonPadI
   const index = Math.min(SIMON_PADS.length - 1, Math.floor(random() * SIMON_PADS.length));
 
   return SIMON_PADS[index] ?? SIMON_PADS[0];
-}
-
-export function normalizeSimonDifficulty(value: unknown): SimonDifficulty {
-  return (
-    SIMON_DIFFICULTY_OPTIONS.find((option) => option.value === value)?.value ??
-    SIMON_DEFAULT_DIFFICULTY
-  );
-}
-
-export function getSimonDifficultySettings(difficulty: SimonDifficulty) {
-  return SIMON_DIFFICULTY_SETTINGS[difficulty];
 }
 
 function createFirstRound(

@@ -1,3 +1,17 @@
+import {
+  PONG_BOARD_HEIGHT,
+  PONG_BOARD_WIDTH,
+  PONG_TARGET_SCORE,
+} from "./pong-parameters";
+
+export {
+  PONG_BOARD_HEIGHT,
+  PONG_BOARD_SIZE_OPTIONS,
+  PONG_BOARD_WIDTH,
+  PONG_TARGET_SCORE,
+  PONG_TARGET_SCORE_OPTIONS,
+} from "./pong-parameters";
+
 export type PongStatus = "ready" | "running" | "paused" | "won" | "lost";
 
 export type PongPoint = {
@@ -40,17 +54,8 @@ export type CreatePongGameOptions = {
   targetScore?: number;
 };
 
-export const PONG_BOARD_WIDTH = 420;
-export const PONG_BOARD_HEIGHT = 560;
-export const PONG_TARGET_SCORE = 5;
 export const PONG_TICK_DELAY_MS = 16;
 export const PONG_SCORE_TICK_DELAY_MS = 1_000;
-export const PONG_BOARD_SIZE_OPTIONS = [
-  { height: 480, label: "360 x 480", width: 360 },
-  { height: 560, label: "420 x 560", width: 420 },
-  { height: 640, label: "480 x 640", width: 480 },
-] as const;
-export const PONG_TARGET_SCORE_OPTIONS = [3, 5, 7] as const;
 
 const BALL_RADIUS = 7;
 const BALL_COLLISION_SPEED_MULTIPLIER = 1.01;

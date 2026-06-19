@@ -19,6 +19,21 @@ module.exports = {
       },
     },
     {
+      name: "launcher-entry-not-to-engine-facades",
+      severity: "error",
+      comment:
+        "Launcher entry metadata must use lightweight parameter metadata instead of importing game engine facades into the launcher bundle.",
+      from: {
+        path: [
+          "^src/components/game-launcher-config\\.ts$",
+          "^src/lib/global-leaderboard\\.ts$",
+        ],
+      },
+      to: {
+        path: "^src/lib/[^/]+-game-engine\\.ts$",
+      },
+    },
+    {
       name: "lib-not-to-ui-or-app",
       severity: "error",
       comment:
