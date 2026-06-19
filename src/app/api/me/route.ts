@@ -4,6 +4,7 @@ import type { SqliteUserProfileStore } from "@/lib/server/sqlite-user-profile-st
 import { getUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
 import {
   getSessionTokenFromRequest,
+  shouldUseSecureUserSessionCookie,
   USER_SESSION_COOKIE_NAME,
 } from "@/lib/server/user-session-cookie";
 
@@ -23,6 +24,7 @@ export function createCurrentUserRouteHandlers(store: SqliteUserProfileStore) {
         maxAge: 0,
         path: "/",
         sameSite: "lax",
+        secure: shouldUseSecureUserSessionCookie(),
       });
 
       return response;

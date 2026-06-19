@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import type { UserSession } from "@/lib/server/sqlite-user-profile-store";
 import {
+  shouldUseSecureUserSessionCookie,
   USER_SESSION_COOKIE_MAX_AGE_SECONDS,
   USER_SESSION_COOKIE_NAME,
 } from "@/lib/server/user-session-cookie";
@@ -29,6 +30,7 @@ export function createSessionResponse(session: UserSession, status: number) {
     maxAge: USER_SESSION_COOKIE_MAX_AGE_SECONDS,
     path: "/",
     sameSite: "lax",
+    secure: shouldUseSecureUserSessionCookie(),
   });
 
   return response;

@@ -50,7 +50,8 @@ This file covers routes and App Router conventions under `src/app/`.
 
 - `api/auth/signup/route.ts` registers name/password accounts, rejects duplicate
   normalized display names with `409` and `fieldErrors.displayName`, and sets the
-  HTTP-only `game_user_session` cookie on success.
+  HTTP-only `game_user_session` cookie on success. Session-cookie responses use
+  `Secure` in production while leaving local HTTP development usable.
 - Reusable API helper modules that touch server session cookies or response
   cookies, such as `api/auth/session-response.ts` and
   `api/replays/route-handlers.ts`, import `server-only`; route entry files stay
