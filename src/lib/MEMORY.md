@@ -13,9 +13,11 @@ This file covers deterministic game engines and shared source logic under
   single-file until the added navigation cost is justified.
 - Space Invaders uses `src/lib/space-invaders/` internals behind
   `space-invaders-game-engine.ts`: `types.ts`, `constants.ts`, `formation.ts`,
-  `hitboxes.ts`, `projectiles.ts`, `scoring.ts`, plus shared geometry/random
-  helpers. Keep lifecycle orchestration in the facade unless a later refactor
-  can move it without obscuring cross-system behavior.
+  `hitboxes.ts`, `projectiles.ts`, `player-shots.ts`, `effects.ts`,
+  `scoring.ts`, plus shared geometry/random helpers. Player-shot resolution and
+  effect helpers are extracted; keep lifecycle ordering and mine-blast handling
+  in the facade unless a later refactor can move them without obscuring
+  cross-system behavior.
 - Asteroids uses `src/lib/asteroids/` internals behind
   `asteroids-game-engine.ts`: `types.ts`, `constants.ts`, `difficulty.ts`,
   `asteroids.ts`, `projectiles.ts`, `saucers.ts`, `power-ups.ts`, `scoring.ts`,
