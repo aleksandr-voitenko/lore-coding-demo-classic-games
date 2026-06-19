@@ -41,6 +41,10 @@ This file covers React component ownership and shared game UI conventions under
   menu/tooltip intent, pending state, and field-level errors. Account chrome can
   host the shared `ThemeToggle`, but theme persistence and `<html class="dark">`
   mutation belong to `use-app-theme.ts`.
+- `cookie-notice.tsx` owns the app-wide essential cookie/storage disclosure. It
+  should keep dismissal state minimal and versioned in localStorage, and it
+  should not grow into an optional analytics or marketing consent manager unless
+  the app actually adds non-essential storage.
 
 ## Shared Layout
 

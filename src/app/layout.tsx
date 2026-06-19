@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
+import { CookieNotice } from "@/components/cookie-notice";
 import { APP_THEME_CSS_VARIABLES, APP_THEME_STORAGE_KEY } from "@/lib/app-theme";
 import "./globals.css";
 
@@ -56,6 +57,7 @@ export default function RootLayout({
           id="app-theme-init"
         />
         {children}
+        <CookieNotice />
       </body>
     </html>
   );

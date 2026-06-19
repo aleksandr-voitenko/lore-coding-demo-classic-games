@@ -21,8 +21,10 @@ This file covers routes and App Router conventions under `src/app/`.
 - `layout.tsx` owns the global HTML shell, Geist font variables, `globals.css`
   import, app metadata, and the small pre-hydration script that applies the
   persisted light/dark chrome theme class and `--chrome-*` variables to
-  `<html>`. Keep public title/description changes aligned with README when the
-  visible catalog changes.
+  `<html>`. It also mounts the app-wide cookie/storage notice so the session
+  cookie and theme preference disclosure follows every route without duplicating
+  per-page UI. Keep public title/description changes aligned with README when
+  the visible catalog changes.
 - `globals.css` owns global Tailwind/theme styles for the game collection. The
   launcher, profile, and account chrome consume app-level `--chrome-*` variables
   supplied by `src/lib/app-theme.ts`; game screens consume their own

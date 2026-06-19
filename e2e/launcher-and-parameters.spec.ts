@@ -14,6 +14,9 @@ import {
 } from "./support/app";
 
 const appThemeStorageKey = "game-library-theme";
+const cookieNoticeCleanupSessionFlag = "game-library-cookie-notice-cleaned";
+const cookieNoticeDismissedValue = "dismissed";
+const cookieNoticeStorageKey = "game-library-cookie-notice:v1";
 const themeCleanupSessionFlag = "game-library-theme-cleaned";
 const themeSeedSessionFlag = "game-library-theme-seeded";
 
@@ -279,6 +282,49 @@ test("launcher renders game cards and configurable parameters", async ({ page })
   await expect(page.getByTestId("asteroids-board-size")).toHaveCount(0);
   await expect(page.getByTestId("asteroids-rocks")).toHaveCount(0);
   await expect(page.getByTestId("asteroids-difficulty")).toHaveValue("medium");
+});
+
+test("cookie notice explains essential storage and stays dismissed", async ({
+  page,
+}) => {
+  await page.addInitScript(({ cleanupFlag, storageKey }) => {
+    if (window.sessionStorage.getItem(cleanupFlag) === "1") {
+      return;
+    }
+
+    window.localStorage.removeItem(storageKey);
+    window.sessionStorage.setItem(cleanupFlag, "1");
+  }, {
+    cleanupFlag: cookieNoticeCleanupSessionFlag,
+    storageKey: cookieNoticeStorageKey,
+  });
+
+  await openLauncher(page);
+
+  const notice = page.getByTestId("cookie-notice");
+  await expect(notice).toBeVisible();
+  await expect(notice).toContainText(
+    "We use essential cookies to keep you signed in and protect your game account.",
+  );
+  await expect(notice).toContainText(
+    "We also save your theme preference on this device.",
+  );
+  await expect(notice).toContainText(
+    "We do not use advertising or analytics cookies.",
+  );
+
+  await page.getByTestId("cookie-notice-dismiss").click();
+  await expect(notice).toHaveCount(0);
+  const storedNoticeState = await page.evaluate(
+    ({ storageKey }) => window.localStorage.getItem(storageKey),
+    { storageKey: cookieNoticeStorageKey },
+  );
+
+  expect(storedNoticeState).toBe(cookieNoticeDismissedValue);
+
+  await page.reload();
+  await expect(page.getByTestId("game-menu")).toBeVisible();
+  await expect(page.getByTestId("cookie-notice")).toHaveCount(0);
 });
 
 test("desktop launcher centers leaderboards above the second game card", async ({
