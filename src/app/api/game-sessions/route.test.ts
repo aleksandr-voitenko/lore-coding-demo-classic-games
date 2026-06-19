@@ -65,6 +65,18 @@ describe("game sessions route", () => {
       parseGameSessionSubmission({
         activeDurationMs: 1200,
         finalScore: 9,
+        gameId: "unknown-game",
+        leaderboardKey: "unknown-game|board=19",
+        result: "won",
+      }),
+    ).toEqual({
+      error: "Game id is not supported.",
+      success: false,
+    });
+    expect(
+      parseGameSessionSubmission({
+        activeDurationMs: 1200,
+        finalScore: 9,
         gameId: "snake",
         leaderboardKey: "bad key",
         result: "won",

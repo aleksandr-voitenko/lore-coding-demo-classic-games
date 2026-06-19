@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { isGameId } from "@/lib/game-catalog";
 import {
   isLeaderboardSortDirection,
   normalizeLeaderboardKey,
@@ -46,7 +47,7 @@ export function parseGameSessionSubmission(value: unknown): ParseGameSessionSubm
     ? value.sortDirection
     : "desc";
 
-  if (gameId === null) {
+  if (gameId === null || !isGameId(gameId)) {
     return {
       error: "Game id is not supported.",
       success: false,
