@@ -725,20 +725,6 @@ function SnakeLiveGame({ onBackToMenu }: Pick<SnakeGameProps, "onBackToMenu"> = 
             />
             <GameStatCard
               className="border-[var(--snake-border)]"
-              label="Level"
-              labelClassName="text-[var(--snake-muted)]"
-              value={game.level}
-              valueTestId="snake-level"
-            />
-            <GameStatCard
-              className="border-[var(--snake-border)]"
-              label="Length"
-              labelClassName="text-[var(--snake-muted)]"
-              value={game.snake.length}
-              valueTestId="snake-length"
-            />
-            <GameStatCard
-              className="border-[var(--snake-border)]"
               label="Speed"
               labelClassName="text-[var(--snake-muted)]"
               value={speed === null ? "0" : `${Math.round(1000 / speed)}`}

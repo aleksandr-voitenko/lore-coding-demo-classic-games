@@ -245,7 +245,6 @@ function MinesweeperLiveGame({
   >({
     saveReplay: saveMinesweeperReplay,
   });
-  const safeCellCount = game.width * game.height - game.mineCount;
   const remainingMineCount = getMinesweeperRemainingMineCount(game);
   const showStartScreen = isStartScreenVisible && game.status === "ready";
   const showEndScreen = game.status === "lost" || game.status === "won";
@@ -674,13 +673,6 @@ function MinesweeperLiveGame({
               labelClassName="text-[var(--minesweeper-muted)]"
               value={formatElapsedTime(elapsedSeconds)}
               valueTestId="minesweeper-time"
-            />
-            <GameStatCard
-              className="border-[var(--minesweeper-border)]"
-              label="Safe cells"
-              labelClassName="text-[var(--minesweeper-muted)]"
-              value={`${game.revealedSafeCellCount}/${safeCellCount}`}
-              valueTestId="minesweeper-safe-cells"
             />
             <div className="min-w-0 rounded-md border border-[var(--minesweeper-border)] p-2 sm:p-3">
               <dt className="text-xs font-medium text-[var(--minesweeper-muted)]">

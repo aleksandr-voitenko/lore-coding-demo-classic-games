@@ -4,7 +4,6 @@ import { PlayIcon, RotateCcwIcon } from "lucide-react";
 import {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
@@ -259,17 +258,6 @@ function SimonLiveGame({
     game.status === "missed" ||
     game.status === "paused";
   const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
-  const progressLabel = useMemo(() => {
-    if (game.status === "input") {
-      return `${game.inputIndex}/${game.sequence.length}`;
-    }
-
-    if (game.status === "showing") {
-      return `${Math.min(game.playbackIndex + 1, game.sequence.length)}/${game.sequence.length}`;
-    }
-
-    return `${game.score}/${game.winTarget}`;
-  }, [game.inputIndex, game.playbackIndex, game.score, game.sequence.length, game.status, game.winTarget]);
   const isTurnFeedbackWaitingForFlash =
     (game.status === "correct" || game.status === "missed") && game.activePad !== null;
   const statusLabel = isTurnFeedbackWaitingForFlash ? statusLabels.input : statusLabels[game.status];
@@ -693,24 +681,10 @@ function SimonLiveGame({
             />
             <GameStatCard
               className="simon-chrome-border"
-              label="Progress"
-              labelClassName="text-[var(--simon-muted)]"
-              value={progressLabel}
-              valueTestId="simon-progress"
-            />
-            <GameStatCard
-              className="simon-chrome-border"
               label="Target"
               labelClassName="text-[var(--simon-muted)]"
               value={game.winTarget}
               valueTestId="simon-target"
-            />
-            <GameStatCard
-              className="simon-chrome-border"
-              label="Difficulty"
-              labelClassName="text-[var(--simon-muted)]"
-              value={getSimonDifficultySettings(game.difficulty).label}
-              valueTestId="simon-difficulty"
             />
           </GameStatsBar>
         </GameSidebar>

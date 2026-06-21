@@ -613,13 +613,6 @@ function BreakoutLiveGame({
             />
             <GameStatCard
               className="border-[var(--breakout-border)]"
-              label="Bricks"
-              labelClassName="text-[var(--breakout-muted)]"
-              value={activeBrickCount}
-              valueTestId="breakout-bricks-remaining"
-            />
-            <GameStatCard
-              className="border-[var(--breakout-border)]"
               label="Speed"
               labelClassName="text-[var(--breakout-muted)]"
               value={ballSpeed === null ? "0" : ballSpeed.toFixed(2)}

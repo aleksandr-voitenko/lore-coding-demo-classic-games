@@ -305,20 +305,6 @@ export function SnakeReplayPlayer({ onBackToProfile }: SnakeReplayPlayerProps) {
             />
             <GameStatCard
               className="border-[var(--snake-border)]"
-              label="Level"
-              labelClassName="text-[var(--snake-muted)]"
-              value={game.level}
-              valueTestId="snake-replay-level"
-            />
-            <GameStatCard
-              className="border-[var(--snake-border)]"
-              label="Length"
-              labelClassName="text-[var(--snake-muted)]"
-              value={game.snake.length}
-              valueTestId="snake-replay-length"
-            />
-            <GameStatCard
-              className="border-[var(--snake-border)]"
               label="Speed"
               labelClassName="text-[var(--snake-muted)]"
               value={speed === null ? "0" : `${Math.round(1000 / speed)}`}

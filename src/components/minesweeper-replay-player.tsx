@@ -337,7 +337,6 @@ export function MinesweeperReplayPlayer({
   }
 
   const remainingMineCount = getMinesweeperRemainingMineCount(game);
-  const safeCellCount = game.width * game.height - game.mineCount;
   const statusLabel = isFinished ? "Replay finished" : replayStatusLabels.playing;
 
   return (
@@ -364,13 +363,6 @@ export function MinesweeperReplayPlayer({
               labelClassName="text-[var(--minesweeper-muted)]"
               value={formatElapsedTime(replay?.finalScore ?? 0)}
               valueTestId="minesweeper-replay-time"
-            />
-            <GameStatCard
-              className="border-[var(--minesweeper-border)]"
-              label="Safe cells"
-              labelClassName="text-[var(--minesweeper-muted)]"
-              value={`${game.revealedSafeCellCount}/${safeCellCount}`}
-              valueTestId="minesweeper-replay-safe-cells"
             />
             <GameStatCard
               className="border-[var(--minesweeper-border)]"

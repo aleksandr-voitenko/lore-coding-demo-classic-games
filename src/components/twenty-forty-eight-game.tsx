@@ -496,13 +496,6 @@ function TwentyFortyEightLiveGame({
             />
             <GameStatCard
               className="border-[var(--twenty-border)]"
-              label="Top tile"
-              labelClassName="text-[var(--twenty-muted)]"
-              value={topTile}
-              valueTestId="twenty-forty-eight-top-tile"
-            />
-            <GameStatCard
-              className="border-[var(--twenty-border)]"
               label="Moves"
               labelClassName="text-[var(--twenty-muted)]"
               value={game.moveCount}

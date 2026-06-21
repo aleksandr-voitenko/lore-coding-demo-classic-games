@@ -25,11 +25,7 @@ import {
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { SimonBoard } from "@/components/simon-board";
 import { Button } from "@/components/ui/button";
-import {
-  getSimonDifficultySettings,
-  type SimonGameState,
-  type SimonStatus,
-} from "@/lib/simon-game-engine";
+import type { SimonGameState, SimonStatus } from "@/lib/simon-game-engine";
 import {
   applySimonReplayEvent,
   createDefaultSimonReplayLeaderboardKey,
@@ -87,18 +83,6 @@ const simonStatusLabels: Record<SimonStatus, string> = {
   showing: "Watch",
   won: "Sequence cleared",
 };
-
-function getSimonReplayProgressLabel(game: SimonGameState) {
-  if (game.status === "input") {
-    return `${game.inputIndex}/${game.sequence.length}`;
-  }
-
-  if (game.status === "showing") {
-    return `${Math.min(game.playbackIndex + 1, game.sequence.length)}/${game.sequence.length}`;
-  }
-
-  return `${game.score}/${game.winTarget}`;
-}
 
 function getSimonReplayStatusLabel(game: SimonGameState, isFinished: boolean) {
   if (isFinished) {
@@ -354,8 +338,6 @@ export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
   }
 
   const statusLabel = getSimonReplayStatusLabel(game, isFinished);
-  const progressLabel = getSimonReplayProgressLabel(game);
-
   return (
     <GameShell className="bg-[var(--simon-page)] text-[var(--simon-ink)]">
       <GameBoardColumn className="w-[min(92vw,37.25rem,calc(100svh_-_12rem))]">
@@ -383,24 +365,10 @@ export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
             />
             <GameStatCard
               className="simon-chrome-border"
-              label="Progress"
-              labelClassName="text-[var(--simon-muted)]"
-              value={progressLabel}
-              valueTestId="simon-replay-progress"
-            />
-            <GameStatCard
-              className="simon-chrome-border"
               label="Target"
               labelClassName="text-[var(--simon-muted)]"
               value={game.winTarget}
               valueTestId="simon-replay-target"
-            />
-            <GameStatCard
-              className="simon-chrome-border"
-              label="Difficulty"
-              labelClassName="text-[var(--simon-muted)]"
-              value={getSimonDifficultySettings(game.difficulty).label}
-              valueTestId="simon-replay-difficulty"
             />
           </GameStatsBar>
         </GameSidebar>

@@ -221,7 +221,6 @@ export function BreakoutReplayPlayer({ onBackToProfile }: BreakoutReplayPlayerPr
     );
   }
 
-  const activeBrickCount = game.bricks.filter((brick) => brick.isActive).length;
   const ballSpeed =
     game.status === "running" ? getBreakoutBallSpeed(game.ball.velocity) : null;
   const statusLabel = isFinished ? "Replay finished" : replayStatusLabels.playing;
@@ -250,13 +249,6 @@ export function BreakoutReplayPlayer({ onBackToProfile }: BreakoutReplayPlayerPr
               labelClassName="text-[var(--breakout-muted)]"
               value={game.lives}
               valueTestId="breakout-replay-lives"
-            />
-            <GameStatCard
-              className="border-[var(--breakout-border)]"
-              label="Bricks"
-              labelClassName="text-[var(--breakout-muted)]"
-              value={activeBrickCount}
-              valueTestId="breakout-replay-bricks-remaining"
             />
             <GameStatCard
               className="border-[var(--breakout-border)]"

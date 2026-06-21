@@ -741,13 +741,6 @@ function AsteroidsLiveGame({
               value={game.wave}
               valueTestId="asteroids-wave"
             />
-            <GameStatCard
-              className="border-[var(--asteroids-border)]"
-              label="Rocks"
-              labelClassName="text-[var(--asteroids-muted)]"
-              value={game.asteroids.length}
-              valueTestId="asteroids-rocks"
-            />
           </GameStatsBar>
         </GameSidebar>
 

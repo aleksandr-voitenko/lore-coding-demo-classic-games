@@ -194,7 +194,10 @@ test("Snake shows a next-level intermission after entering the open door", async
 
   await expect(page.getByTestId("snake-level-intermission")).toContainText("Level 2");
   await expect(page.getByTestId("snake-status")).toHaveText("Level 2");
-  await expect(page.getByTestId("snake-level")).toHaveText("2");
+  await expect(page.getByTestId("snake-board")).toHaveAttribute(
+    "aria-label",
+    /Snake board\. Level 2\./,
+  );
 
   const intermissionHead = await getSnakeHeadPosition(page);
 

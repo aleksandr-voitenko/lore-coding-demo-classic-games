@@ -25,10 +25,7 @@ import {
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { TwentyFortyEightBoard } from "@/components/twenty-forty-eight-board";
 import { Button } from "@/components/ui/button";
-import {
-  getTwentyFortyEightTopTile,
-  type TwentyFortyEightGameState,
-} from "@/lib/twenty-forty-eight-game-engine";
+import type { TwentyFortyEightGameState } from "@/lib/twenty-forty-eight-game-engine";
 import {
   applyTwentyFortyEightReplayEvent,
   createInitialTwentyFortyEightReplayGame,
@@ -266,8 +263,6 @@ export function TwentyFortyEightReplayPlayer({
     );
   }
 
-  const topTile = getTwentyFortyEightTopTile(game);
-
   return (
     <GameShell className="bg-[var(--twenty-page)] text-[var(--twenty-ink)]">
       <GameBoardColumn className="w-[min(92vw,37.25rem,calc(100svh_-_12rem))]">
@@ -285,13 +280,6 @@ export function TwentyFortyEightReplayPlayer({
               labelClassName="text-[var(--twenty-muted)]"
               value={game.score}
               valueTestId="twenty-forty-eight-replay-score"
-            />
-            <GameStatCard
-              className="border-[var(--twenty-border)]"
-              label="Top tile"
-              labelClassName="text-[var(--twenty-muted)]"
-              value={topTile}
-              valueTestId="twenty-forty-eight-replay-top-tile"
             />
             <GameStatCard
               className="border-[var(--twenty-border)]"

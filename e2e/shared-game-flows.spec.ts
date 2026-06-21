@@ -346,7 +346,7 @@ test("terminal New game actions start playable boards without returning to the s
   await expect(page.getByTestId("minesweeper-end-screen")).toBeHidden();
   await expect(page.getByTestId("minesweeper-start-screen")).toBeHidden();
   await expect(page.getByTestId("minesweeper-cell-0:0")).toBeEnabled();
-  await expect(page.getByTestId("minesweeper-safe-cells")).toHaveText("0/71");
+  await expect(page.getByTestId("minesweeper-mines-remaining")).toHaveText("10");
 
   await page.keyboard.press("Escape");
   await expectGameMenuVisible(page);

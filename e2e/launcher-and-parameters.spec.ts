@@ -144,7 +144,6 @@ const launcherParameterHandoffCases: LauncherParameterHandoffCase[] = [
     assertGameSeeded: async (page) => {
       await expect(page.getByTestId("simon-status")).toHaveText("Ready");
       await expect(page.getByTestId("simon-target")).toHaveText("16");
-      await expect(page.getByTestId("simon-difficulty")).toHaveText("Hard");
       await expect(page.getByTestId("simon-board")).toHaveAttribute(
         "aria-label",
         /Simon board\. Round 0\. Score 0\. Difficulty Hard\. Target 16\. Ready\./,
@@ -158,7 +157,6 @@ const launcherParameterHandoffCases: LauncherParameterHandoffCase[] = [
     assertGameSeeded: async (page) => {
       await expect(page.getByTestId("asteroids-status")).toHaveText("Ready");
       await expect(page.getByTestId("asteroids-lives")).toHaveText("2");
-      await expect(page.getByTestId("asteroids-rocks")).toHaveText("5");
       await expect(page.getByTestId("asteroids-board")).toHaveAttribute(
         "aria-label",
         /Asteroids board\. Field 800 by 600\. Score 0\. Lives 2\. Wave 1\. 5 asteroids remaining\. Ready\./,
@@ -463,7 +461,6 @@ test("Snake opens in level progression mode at level one", async ({ page }) => {
   await openGame(page, "snake");
 
   await expect(page.getByTestId("snake-status")).toHaveText("Ready");
-  await expect(page.getByTestId("snake-level")).toHaveText("1");
   await expect(page.getByTestId("snake-board")).toHaveAttribute(
     "aria-label",
     /Snake board\. Level 1\. Field 12 by 12\. Score 0\. Ready\..*Exit door closed\./,
