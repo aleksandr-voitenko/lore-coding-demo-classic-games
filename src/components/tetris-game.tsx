@@ -40,9 +40,16 @@ import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import {
   isGamePauseKey,
   registerGameKeyDown,
+  registerGameKeyUp,
   shouldIgnoreGameKeyDown,
+  useHeldDirectionMovementController,
 } from "@/components/game-input";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
+import {
+  createTetrisPieceMovementState,
+  getTetrisPieceMovementKey,
+  type TetrisPieceMovementDirection,
+} from "@/components/tetris-piece-input";
 import { TetrisBoard, tetrominoCellClassNames } from "@/components/tetris-board";
 import { TetrisNextPiecePreview } from "@/components/tetris-next-piece-preview";
 import { TetrisReplayPlayer } from "@/components/tetris-replay-player";
@@ -165,6 +172,9 @@ const START_SCREEN_BLOCKS = [
   { kind: "I", x: 2, y: 4 },
   { kind: "I", x: 3, y: 4 },
 ] satisfies Array<{ kind: TetrominoKind; x: number; y: number }>;
+
+const TETRIS_PIECE_AUTO_SHIFT_DELAY_MS = 170;
+const TETRIS_PIECE_AUTO_SHIFT_INTERVAL_MS = 90;
 
 function createRunningTetrisGame(
   {
@@ -351,26 +361,15 @@ function TetrisLiveGame({
     void startNewGame();
   }, [startNewGame]);
 
-  const moveLeft = useCallback(() => {
+  const movePiece = useCallback((direction: TetrisPieceMovementDirection) => {
     updateCommittedGame((current) => {
-      const nextGame = moveTetrisPiece(current, -1, 0);
+      const nextGame = moveTetrisPiece(current, direction === "left" ? -1 : 1, 0);
       const recording = replayRecordingRef.current;
 
       if (recording !== null && current.status === "running" && nextGame !== current) {
-        appendLiveGameReplayEvent(recording, { type: "moveLeft" });
-      }
-
-      return nextGame;
-    });
-  }, [replayRecordingRef, updateCommittedGame]);
-
-  const moveRight = useCallback(() => {
-    updateCommittedGame((current) => {
-      const nextGame = moveTetrisPiece(current, 1, 0);
-      const recording = replayRecordingRef.current;
-
-      if (recording !== null && current.status === "running" && nextGame !== current) {
-        appendLiveGameReplayEvent(recording, { type: "moveRight" });
+        appendLiveGameReplayEvent(recording, {
+          type: direction === "left" ? "moveLeft" : "moveRight",
+        });
       }
 
       return nextGame;
@@ -506,6 +505,21 @@ function TetrisLiveGame({
     shouldPauseBeforeConfirm: canPauseGame,
   });
 
+  const {
+    beginMovement: beginPieceMovement,
+    endMovement: endPieceMovement,
+  } = useHeldDirectionMovementController({
+    createState: createTetrisPieceMovementState,
+    initialDelayMs: TETRIS_PIECE_AUTO_SHIFT_DELAY_MS,
+    intervalMs: TETRIS_PIECE_AUTO_SHIFT_INTERVAL_MS,
+    isMovementDisabled:
+      isHelpVisible ||
+      isReplayRunPending ||
+      pendingLeaderboardEntry !== null ||
+      game.status !== "running",
+    move: movePiece,
+  });
+
   useEffect(() => {
     if (tickDelay === null) {
       return;
@@ -543,15 +557,11 @@ function TetrisLiveGame({
         return;
       }
 
-      if (event.key === "ArrowLeft" || event.key === "a" || event.key === "A") {
-        event.preventDefault();
-        moveLeft();
-        return;
-      }
+      const movementKey = getTetrisPieceMovementKey(event.key);
 
-      if (event.key === "ArrowRight" || event.key === "d" || event.key === "D") {
+      if (movementKey !== null) {
         event.preventDefault();
-        moveRight();
+        beginPieceMovement(movementKey);
         return;
       }
 
@@ -585,12 +595,30 @@ function TetrisLiveGame({
       }
     }
 
-    return registerGameKeyDown(handleKeyDown);
+    function handleKeyUp(event: KeyboardEvent) {
+      const movementKey = getTetrisPieceMovementKey(event.key);
+
+      if (movementKey === null) {
+        return;
+      }
+
+      if (endPieceMovement(movementKey)) {
+        event.preventDefault();
+      }
+    }
+
+    const unregisterKeyDown = registerGameKeyDown(handleKeyDown);
+    const unregisterKeyUp = registerGameKeyUp(handleKeyUp);
+
+    return () => {
+      unregisterKeyDown();
+      unregisterKeyUp();
+    };
   }, [
+    beginPieceMovement,
+    endPieceMovement,
     game.status,
     hardDrop,
-    moveLeft,
-    moveRight,
     pendingLeaderboardEntry,
     rotateClockwise,
     rotateCounterclockwise,

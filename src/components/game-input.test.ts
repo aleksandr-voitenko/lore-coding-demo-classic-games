@@ -90,13 +90,21 @@ function createTestMovementState() {
 
 function createTestMovementTimers() {
   let nextIntervalId = 1;
+  let nextTimeoutId = 1_001;
   const listeners = new Map<number, () => void>();
+  const timeoutListeners = new Map<number, () => void>();
   const delays: number[] = [];
   const clearedIntervals: number[] = [];
+  const clearedTimeouts: number[] = [];
+  const timeoutDelays: number[] = [];
   const timers: HeldDirectionMovementTimers = {
     clearInterval(intervalId) {
       clearedIntervals.push(intervalId);
       listeners.delete(intervalId);
+    },
+    clearTimeout(timeoutId) {
+      clearedTimeouts.push(timeoutId);
+      timeoutListeners.delete(timeoutId);
     },
     setInterval(listener, intervalMs) {
       const intervalId = nextIntervalId;
@@ -107,17 +115,37 @@ function createTestMovementTimers() {
 
       return intervalId;
     },
+    setTimeout(listener, delayMs) {
+      const timeoutId = nextTimeoutId;
+
+      nextTimeoutId += 1;
+      timeoutDelays.push(delayMs);
+      timeoutListeners.set(timeoutId, listener);
+
+      return timeoutId;
+    },
   };
 
   return {
     get activeIntervalCount() {
       return listeners.size;
     },
+    get activeTimeoutCount() {
+      return timeoutListeners.size;
+    },
     clearedIntervals,
+    clearedTimeouts,
     delays,
     runActiveIntervals() {
       Array.from(listeners.values()).forEach((listener) => listener());
     },
+    runActiveTimeouts() {
+      Array.from(timeoutListeners.entries()).forEach(([timeoutId, listener]) => {
+        timeoutListeners.delete(timeoutId);
+        listener();
+      });
+    },
+    timeoutDelays,
     timers,
   };
 }
@@ -346,6 +374,66 @@ describe("held direction movement input", () => {
 
     testTimers.runActiveIntervals();
     expect(moves).toEqual(["right", "right"]);
+  });
+
+  it("can delay the first repeated movement before starting the interval", () => {
+    const state = createTestMovementState();
+    const testTimers = createTestMovementTimers();
+    const moves: TestMovementDirection[] = [];
+    const controller = createHeldDirectionMovementController({
+      initialDelayMs: 80,
+      intervalMs: 16,
+      move: (direction) => moves.push(direction),
+      state,
+      timers: testTimers.timers,
+    });
+    const rightKey = getMovementKey("ArrowRight");
+
+    expect(rightKey).not.toBeNull();
+    controller.beginMovement(rightKey!);
+
+    expect(moves).toEqual(["right"]);
+    expect(testTimers.timeoutDelays).toEqual([80]);
+    expect(testTimers.activeTimeoutCount).toBe(1);
+    expect(testTimers.activeIntervalCount).toBe(0);
+
+    testTimers.runActiveTimeouts();
+
+    expect(moves).toEqual(["right", "right"]);
+    expect(testTimers.activeTimeoutCount).toBe(0);
+    expect(testTimers.activeIntervalCount).toBe(1);
+    expect(testTimers.delays).toEqual([16]);
+
+    testTimers.runActiveIntervals();
+    expect(moves).toEqual(["right", "right", "right"]);
+  });
+
+  it("clears a delayed movement repeat during reset before the interval starts", () => {
+    const state = createTestMovementState();
+    const testTimers = createTestMovementTimers();
+    const moves: TestMovementDirection[] = [];
+    const controller = createHeldDirectionMovementController({
+      initialDelayMs: 80,
+      intervalMs: 16,
+      move: (direction) => moves.push(direction),
+      state,
+      timers: testTimers.timers,
+    });
+    const leftKey = getMovementKey("ArrowLeft");
+
+    expect(leftKey).not.toBeNull();
+    controller.beginMovement(leftKey!);
+    controller.resetMovement();
+
+    expect(moves).toEqual(["left"]);
+    expect(testTimers.clearedTimeouts).toEqual([1_001]);
+    expect(testTimers.activeTimeoutCount).toBe(0);
+    expect(testTimers.activeIntervalCount).toBe(0);
+
+    testTimers.runActiveTimeouts();
+    testTimers.runActiveIntervals();
+
+    expect(moves).toEqual(["left"]);
   });
 
   it("switches and stops controller movement through key releases", () => {

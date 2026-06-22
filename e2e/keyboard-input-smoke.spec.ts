@@ -1,3 +1,5 @@
+import type { Page } from "@playwright/test";
+
 import { expect, test } from "./support/fixtures";
 import { openGame, openLauncher } from "./support/app";
 
@@ -64,6 +66,21 @@ const keyboardPauseCases: KeyboardPauseCase[] = [
     startButtonTestId: "asteroids-start-button",
   },
 ];
+
+async function getTetrisMinimumOccupiedColumn(page: Page) {
+  return page.getByTestId("tetris-board").locator("> span").evaluateAll((cells) => {
+    const board = cells[0]?.parentElement;
+    const columnCount =
+      board === null || board === undefined
+        ? 10
+        : getComputedStyle(board).gridTemplateColumns.split(" ").length;
+    const occupiedColumns = cells.flatMap((cell, index) =>
+      cell.className.includes("--tetris-piece-border") ? [index % columnCount] : [],
+    );
+
+    return Math.min(...occupiedColumns);
+  });
+}
 
 test("2048 keyboard input starts play and advances moves", async ({ page }) => {
   await openLauncher(page);
@@ -142,6 +159,22 @@ test("Tetris keyboard input starts, soft-drops, pauses, and resumes", async ({
 
   await page.keyboard.press("P");
   await expect(page.getByTestId("tetris-status")).toHaveText("Running");
+});
+
+test("Tetris held horizontal input keeps moving the falling piece", async ({ page }) => {
+  await openLauncher(page);
+  await openGame(page, "tetris");
+
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("tetris-status")).toHaveText("Running");
+
+  await expect.poll(() => getTetrisMinimumOccupiedColumn(page)).toBeGreaterThan(0);
+
+  await page.keyboard.down("ArrowLeft");
+  await page.waitForTimeout(360);
+  await page.keyboard.up("ArrowLeft");
+
+  await expect.poll(() => getTetrisMinimumOccupiedColumn(page)).toBe(0);
 });
 
 test("Asteroids keyboard input starts, thrusts, rotates, fires, pauses, and resumes", async ({

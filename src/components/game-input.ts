@@ -46,7 +46,9 @@ export type HeldDirectionMovementKeyMap<Direction extends string> = Record<
 
 export type HeldDirectionMovementTimers = {
   clearInterval(intervalId: number): void;
+  clearTimeout?(timeoutId: number): void;
   setInterval(listener: () => void, intervalMs: number): number;
+  setTimeout?(listener: () => void, delayMs: number): number;
 };
 
 export type HeldDirectionMovementController<Direction extends string> = {
@@ -57,6 +59,7 @@ export type HeldDirectionMovementController<Direction extends string> = {
 };
 
 type HeldDirectionMovementControllerOptions<Direction extends string> = {
+  initialDelayMs?: number;
   intervalMs: number;
   move(direction: Direction): void;
   state: HeldDirectionMovementState<Direction>;
@@ -65,6 +68,7 @@ type HeldDirectionMovementControllerOptions<Direction extends string> = {
 
 type HeldDirectionMovementControllerHookOptions<Direction extends string> = {
   createState(): HeldDirectionMovementState<Direction>;
+  initialDelayMs?: number;
   intervalMs: number;
   isMovementDisabled?: boolean;
   move(direction: Direction): void;
@@ -76,8 +80,14 @@ function getDefaultHeldDirectionMovementTimers(): HeldDirectionMovementTimers {
     clearInterval(intervalId) {
       window.clearInterval(intervalId);
     },
+    clearTimeout(timeoutId) {
+      window.clearTimeout(timeoutId);
+    },
     setInterval(listener, intervalMs) {
       return window.setInterval(listener, intervalMs);
+    },
+    setTimeout(listener, delayMs) {
+      return window.setTimeout(listener, delayMs);
     },
   };
 }
@@ -190,14 +200,21 @@ export function resetHeldDirectionMovementState<Direction extends string>(
 }
 
 export function createHeldDirectionMovementController<Direction extends string>({
+  initialDelayMs,
   intervalMs,
   move,
   state,
   timers = getDefaultHeldDirectionMovementTimers(),
 }: HeldDirectionMovementControllerOptions<Direction>): HeldDirectionMovementController<Direction> {
   let movementIntervalId: number | null = null;
+  let movementTimeoutId: number | null = null;
 
   function stopMovementLoop() {
+    if (movementTimeoutId !== null) {
+      timers.clearTimeout?.(movementTimeoutId);
+      movementTimeoutId = null;
+    }
+
     if (movementIntervalId === null) {
       return;
     }
@@ -206,9 +223,7 @@ export function createHeldDirectionMovementController<Direction extends string>(
     movementIntervalId = null;
   }
 
-  function startMovementLoop(direction: Direction) {
-    state.direction = direction;
-
+  function startMovementInterval() {
     if (movementIntervalId !== null) {
       return;
     }
@@ -220,6 +235,37 @@ export function createHeldDirectionMovementController<Direction extends string>(
         move(currentDirection);
       }
     }, intervalMs);
+  }
+
+  function startMovementLoop(direction: Direction) {
+    state.direction = direction;
+
+    if (movementIntervalId !== null || movementTimeoutId !== null) {
+      return;
+    }
+
+    const delayMs = initialDelayMs ?? intervalMs;
+
+    if (
+      delayMs === intervalMs ||
+      delayMs <= 0 ||
+      timers.setTimeout === undefined ||
+      timers.clearTimeout === undefined
+    ) {
+      startMovementInterval();
+      return;
+    }
+
+    movementTimeoutId = timers.setTimeout(() => {
+      movementTimeoutId = null;
+
+      const currentDirection = state.direction;
+
+      if (currentDirection !== null) {
+        move(currentDirection);
+        startMovementInterval();
+      }
+    }, delayMs);
   }
 
   return {
@@ -273,6 +319,7 @@ export function registerHeldDirectionMovementBlurReset<Direction extends string>
 
 export function useHeldDirectionMovementController<Direction extends string>({
   createState,
+  initialDelayMs,
   intervalMs,
   isMovementDisabled = false,
   move,
@@ -281,12 +328,13 @@ export function useHeldDirectionMovementController<Direction extends string>({
   const controller = useMemo(
     () =>
       createHeldDirectionMovementController({
+        initialDelayMs,
         intervalMs,
         move,
         state: createState(),
         timers,
       }),
-    [createState, intervalMs, move, timers],
+    [createState, initialDelayMs, intervalMs, move, timers],
   );
 
   useEffect(() => {
