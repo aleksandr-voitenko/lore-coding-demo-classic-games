@@ -26,7 +26,7 @@ import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-prese
 import { TetrisBoard } from "@/components/tetris-board";
 import { TetrisNextPiecePreview } from "@/components/tetris-next-piece-preview";
 import { Button } from "@/components/ui/button";
-import { getTetrisTickDelay, type TetrisGameState } from "@/lib/tetris-game-engine";
+import type { TetrisGameState } from "@/lib/tetris-game-engine";
 import {
   applyTetrisReplayEvent,
   createInitialTetrisReplayGame,
@@ -223,8 +223,6 @@ export function TetrisReplayPlayer({ onBackToProfile }: TetrisReplayPlayerProps)
     );
   }
 
-  const tickDelay = game.status === "running" ? getTetrisTickDelay(game.level) : null;
-
   return (
     <GameShell className="bg-[var(--tetris-page)] text-[var(--tetris-ink)]">
       <GameBoardColumn className="w-[min(86vw,22.25rem,calc(50svh_-_6rem))]">
@@ -256,13 +254,6 @@ export function TetrisReplayPlayer({ onBackToProfile }: TetrisReplayPlayerProps)
               labelClassName="text-[var(--tetris-muted)]"
               value={game.level}
               valueTestId="tetris-replay-level"
-            />
-            <GameStatCard
-              className="border-[var(--tetris-border)]"
-              label="Speed"
-              labelClassName="text-[var(--tetris-muted)]"
-              value={tickDelay === null ? "0" : `${Math.round(1000 / tickDelay)}`}
-              valueTestId="tetris-replay-speed"
             />
             <div className="flex min-w-0 flex-col gap-2 rounded-md border border-[var(--tetris-border)] p-2 sm:p-3">
               <dt className="text-xs font-medium text-[var(--tetris-muted)]">Next</dt>

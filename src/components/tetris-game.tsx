@@ -632,13 +632,6 @@ function TetrisLiveGame({
               value={game.level}
               valueTestId="tetris-level"
             />
-            <GameStatCard
-              className="border-[var(--tetris-border)]"
-              label="Speed"
-              labelClassName="text-[var(--tetris-muted)]"
-              value={tickDelay === null ? "0" : `${Math.round(1000 / tickDelay)}`}
-              valueTestId="tetris-speed"
-            />
             <div className="flex min-w-0 flex-col gap-2 rounded-md border border-[var(--tetris-border)] p-2 sm:p-3">
               <dt className="text-xs font-medium text-[var(--tetris-muted)]">Next</dt>
               <dd>
