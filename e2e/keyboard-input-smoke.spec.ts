@@ -165,6 +165,9 @@ test("Tetris held horizontal input keeps moving the falling piece", async ({ pag
   await openLauncher(page);
   await openGame(page, "tetris");
 
+  await expect(page.getByTestId("tetris-status")).toHaveText("Ready");
+  await expect(page.getByTestId("tetris-start-screen")).toBeVisible();
+
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("tetris-status")).toHaveText("Running");
 
