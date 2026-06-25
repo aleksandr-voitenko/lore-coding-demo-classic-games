@@ -14,11 +14,21 @@ state, solo leaderboard keys, or solo replay uploads as multiplayer authority.
 The first multiplayer target is Pong, but the room, lobby, authority, score, and
 shell decisions must not be Pong-only.
 
+The production app should keep its current Next.js standalone packaging. Realtime
+multiplayer needs WebSocket state and room fanout, but that should not require a
+custom Next server or make the App Router process own long-lived socket runtime.
+
 ## Decision
 
 Multiplayer will use private invite rooms, not matchmaking. A signed-in user
 creates a room and becomes the room owner/host. Room invites use root launcher
 URLs in the form `/?room=<code>`, where `<code>` identifies a private room.
+
+Realtime multiplayer will use one reusable WebSocket sidecar behind the same
+external proxy as the Next app. The proxy should route normal HTTP traffic to the
+standalone Next server and upgrade the room WebSocket stream to the sidecar. The
+Next app remains responsible for App Router pages and HTTP room bootstrap; it
+must not be replaced with a custom Next server to host sockets.
 
 The server remains the authoritative owner and orderer for room lifecycle, room
 membership, game settings, game start/pause/restart commands, and canonical game
@@ -60,6 +70,33 @@ Room codes are private invite identifiers, not matchmaking queues or public
 discovery handles. Invalid, expired, or unavailable room codes should fail into a
 clear room-join state rather than silently starting a solo game.
 
+## Realtime Transport
+
+HTTP room bootstrap and WebSocket room streaming are separate responsibilities.
+HTTP routes create rooms, resolve invite codes, validate host/player/observer
+admission, return the initial room snapshot, and provide the connection details
+needed for the active room stream. The WebSocket sidecar owns the long-lived
+stream for waiting and active rooms after that bootstrap succeeds.
+
+The transport is game-agnostic. Every message should use a shared room envelope
+that identifies the room, game, participant/session context, role, message kind,
+and server sequence when applicable. Generic room payloads cover lifecycle,
+membership, settings, observer counts, errors, snapshots, and acknowledgements.
+Gameplay payloads are adapter-owned data inside the shared envelope: Pong can
+define paddle intents and state frames first, while Space Invaders and Asteroids
+only influence the adapter shape until they have their own runtime work.
+
+The sidecar orders accepted client intents, applies the selected game adapter,
+and publishes authoritative snapshots/events to connected players and observers.
+Observers connect to the same room stream and receive lobby/game state, but the
+server rejects observer gameplay controls and host lifecycle commands.
+
+Reconnect should be sequence-aware. A returning participant or observer should
+rejoin through the room identity established by bootstrap, resume from the last
+acknowledged server sequence when the event log can satisfy it, or receive a
+fresh authoritative snapshot before continuing on the live stream. Clients must
+not reconstruct canonical multiplayer state by replaying local browser input.
+
 ## Server Authority And Event Logs
 
 The authoritative multiplayer stream is a server-ordered room event log plus
@@ -79,6 +116,11 @@ Game adapters should expose deterministic state transition boundaries that the
 room service can call. Pong can start with paddle intents and server ticks;
 Space Invaders and Asteroids should be able to add richer input/control intents
 without changing room identity, invite, lobby, observer, or leaderboard rules.
+
+The sidecar should publish the same ordered room events that feed the live
+WebSocket stream into the event-log path. Durable storage, replay derivation, and
+match summaries should consume that server-ordered path instead of trusting
+client-uploaded multiplayer history.
 
 ## Scores, Leaderboards, And Profiles
 
@@ -113,6 +155,8 @@ The first implementation should target private Pong rooms only:
 
 - signed-in host creates and owns a private room;
 - invite URL uses `/?room=<code>`;
+- HTTP bootstrap runs through the Next app while the active room stream runs
+  through the reusable WebSocket sidecar behind the same proxy;
 - guests join with display names;
 - observers can join waiting or active rooms;
 - host controls settings, start, pause/resume, and restart;
@@ -130,8 +174,13 @@ or solo leaderboard behavior.
 This decision keeps multiplayer authority on the server even for a host-owned
 room, which avoids letting one browser become the trust boundary for other
 players and observers. It also means future runtime work needs an explicit room
-service, game adapter contract, and server-published state stream rather than a
-thin wrapper around the current solo Pong component.
+service, game adapter contract, WebSocket sidecar, and server-published state
+stream rather than a thin wrapper around the current solo Pong component.
+
+Keeping sockets in a sidecar preserves the standalone Next deployment boundary
+and lets realtime runtime scale or restart independently from App Router HTTP
+handling. It adds a proxy and service boundary that future implementation must
+configure deliberately, but avoids coupling room fanout to a custom Next server.
 
 Mode-scoped leaderboard keys preserve comparability between solo and multiplayer
 runs. Room-scoped guest display names preserve low-friction joining while keeping
