@@ -1,8 +1,13 @@
 import type {
   PrivateRoom,
   PrivateRoomErrorCode,
+  PrivateRoomParticipant,
   PrivateRoomSettings,
 } from "./room";
+import type {
+  PongGameState,
+  PongPaddleMoveDirection,
+} from "../pong-game-engine";
 
 export type PrivateRoomLifecycleCommand =
   | "finish"
@@ -10,6 +15,29 @@ export type PrivateRoomLifecycleCommand =
   | "restart"
   | "resume"
   | "start";
+
+export type PongMultiplayerClientInput =
+  | {
+      direction: PongPaddleMoveDirection | null;
+      type: "pong.setPaddleDirection";
+    }
+  | {
+      type: "pong.serve";
+    };
+
+export type MultiplayerRoomGameSnapshot = {
+  gameId: "pong";
+  seq: number;
+  serverTimeMs: number;
+  snapshot: PongGameState;
+};
+
+export type MultiplayerRoomSnapshot = {
+  game?: MultiplayerRoomGameSnapshot;
+  participant?: PrivateRoomParticipant;
+  room: PrivateRoom;
+  seq: number;
+};
 
 export type PrivateRoomClientMessage =
   | {
@@ -42,10 +70,17 @@ export type PrivateRoomClientMessage =
       requestId?: string;
       settings: PrivateRoomSettings;
       type: "room.updateSettings";
+    }
+  | {
+      input: PongMultiplayerClientInput;
+      participantId: string;
+      requestId?: string;
+      type: "game.input";
     };
 
 export type PrivateRoomServerMessage =
   | {
+      game?: MultiplayerRoomGameSnapshot;
       room: PrivateRoom;
       seq: number;
       type: "room.snapshot";

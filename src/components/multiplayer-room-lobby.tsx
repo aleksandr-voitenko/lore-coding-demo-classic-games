@@ -14,9 +14,11 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
+import { PongMultiplayerRoom } from "@/components/pong-multiplayer-room";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { UserAccountControls } from "@/components/user-account-controls";
@@ -32,7 +34,12 @@ import {
   type PrivateRoomSettings,
   type PrivateRoomStatus,
 } from "@/lib/multiplayer/room";
-import type { PrivateRoomLifecycleCommand } from "@/lib/multiplayer/protocol";
+import type {
+  MultiplayerRoomGameSnapshot,
+  MultiplayerRoomSnapshot,
+  PongMultiplayerClientInput,
+  PrivateRoomLifecycleCommand,
+} from "@/lib/multiplayer/protocol";
 import {
   MAX_USER_DISPLAY_NAME_LENGTH,
   type UserAuthMode,
@@ -43,8 +50,10 @@ export const MULTIPLAYER_ROOMS_API_PATH = "/api/multiplayer/rooms";
 type RoomFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 type RoomApiPayload = {
+  game?: MultiplayerRoomGameSnapshot;
   participantId?: string;
   room: PrivateRoom;
+  seq: number;
 };
 
 type CreateMultiplayerRoomOptions = {
@@ -84,12 +93,20 @@ type MultiplayerRoomHttpCommand =
       requestId?: string;
       settings: PrivateRoomSettings;
       type: "room.updateSettings";
+    }
+  | {
+      input: PongMultiplayerClientInput;
+      participantId: string;
+      requestId?: string;
+      type: "game.input";
     };
 
 type MultiplayerRoomLobbyProps = {
   initialAuthMode?: UserAuthMode | null;
+  initialGame?: MultiplayerRoomGameSnapshot | null;
   initialParticipantId?: string | null;
   initialRoom?: PrivateRoom | null;
+  initialSeq?: number;
   initialRoomCode: string;
   onBackToLibrary: () => void;
 };
@@ -157,7 +174,10 @@ function getRoomApiPath(roomCode: string) {
   return `${MULTIPLAYER_ROOMS_API_PATH}/${encodeURIComponent(normalizedRoomCode)}`;
 }
 
-async function readRoomApiPayload(response: Response, context: string) {
+async function readRoomApiPayload(
+  response: Response,
+  context: string,
+): Promise<RoomApiPayload> {
   let payload: unknown = null;
 
   try {
@@ -179,18 +199,32 @@ async function readRoomApiPayload(response: Response, context: string) {
     throw new MultiplayerRoomRequestError(`${context} response did not include a room.`, response.status);
   }
 
+  if (typeof payload.seq !== "number") {
+    throw new MultiplayerRoomRequestError(
+      `${context} response did not include a sequence.`,
+      response.status,
+    );
+  }
+
   const participantId =
     isRecord(payload.participant) && typeof payload.participant.id === "string"
       ? payload.participant.id
       : undefined;
+  const game = isRecord(payload.game)
+    ? (payload.game as MultiplayerRoomGameSnapshot)
+    : undefined;
 
   return participantId === undefined
     ? ({
+        ...(game === undefined ? {} : { game }),
         room: payload.room as PrivateRoom,
+        seq: payload.seq,
       } satisfies RoomApiPayload)
     : ({
+        ...(game === undefined ? {} : { game }),
         participantId,
         room: payload.room as PrivateRoom,
+        seq: payload.seq,
       } satisfies RoomApiPayload);
 }
 
@@ -216,8 +250,10 @@ export async function createMultiplayerRoom({
   }
 
   return {
+    ...(payload.game === undefined ? {} : { game: payload.game }),
     participantId: payload.participantId,
     room: payload.room,
+    seq: payload.seq,
   };
 }
 
@@ -330,10 +366,54 @@ function getLifecycleActions(status: PrivateRoomStatus) {
   return [{ command: "restart", label: "Restart", icon: RotateCcwIcon }] as const;
 }
 
+export function getMultiplayerRoomPollingDelayMs(
+  snapshot: Pick<MultiplayerRoomSnapshot, "game" | "room"> | null,
+) {
+  if (
+    snapshot === null ||
+    snapshot.room.status === "lobby" ||
+    snapshot.game === undefined
+  ) {
+    return 1_250;
+  }
+
+  if (snapshot.game.snapshot.status === "running") {
+    return 60;
+  }
+
+  if (
+    snapshot.game.snapshot.status === "ready" ||
+    snapshot.game.snapshot.status === "paused"
+  ) {
+    return 250;
+  }
+
+  return 1_000;
+}
+
+export function selectFreshMultiplayerRoomSnapshot<
+  Snapshot extends Pick<MultiplayerRoomSnapshot, "game" | "room" | "seq">,
+>(current: Snapshot | null, next: Snapshot) {
+  if (current === null || next.seq > current.seq) {
+    return next;
+  }
+
+  if (next.seq < current.seq) {
+    return current;
+  }
+
+  const currentGameSeq = current.game?.seq ?? -1;
+  const nextGameSeq = next.game?.seq ?? -1;
+
+  return nextGameSeq > currentGameSeq ? next : current;
+}
+
 export function MultiplayerRoomLobby({
   initialAuthMode = null,
+  initialGame = null,
   initialParticipantId = null,
   initialRoom = null,
+  initialSeq = 0,
   initialRoomCode,
   onBackToLibrary,
 }: MultiplayerRoomLobbyProps) {
@@ -349,7 +429,18 @@ export function MultiplayerRoomLobby({
   );
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [participantId, setParticipantId] = useState<string | null>(initialParticipantId);
-  const [room, setRoom] = useState<PrivateRoom | null>(initialRoom);
+  const [roomSnapshot, setRoomSnapshot] = useState<RoomApiPayload | null>(() =>
+    initialRoom === null
+      ? null
+      : {
+          ...(initialGame === null ? {} : { game: initialGame }),
+          room: initialRoom,
+          seq: initialSeq,
+        },
+  );
+  const roomSnapshotRef = useRef(roomSnapshot);
+  const room = roomSnapshot?.room ?? null;
+  const game = roomSnapshot?.game;
   const displayName = displayNameInput ?? user?.displayName ?? "";
   const invitePath = getPrivateRoomInvitePath(room?.code ?? normalizedRoomCode) ?? "/?room=";
   const participantFromLocalId = getParticipantById(room, participantId);
@@ -366,32 +457,72 @@ export function MultiplayerRoomLobby({
     () => createParticipantsById(room?.participants ?? []),
     [room?.participants],
   );
+  const applyRoomSnapshot = useCallback((nextSnapshot: RoomApiPayload) => {
+    const selectedSnapshot = selectFreshMultiplayerRoomSnapshot(
+      roomSnapshotRef.current,
+      nextSnapshot,
+    );
+
+    if (selectedSnapshot !== roomSnapshotRef.current) {
+      roomSnapshotRef.current = selectedSnapshot;
+      setRoomSnapshot(selectedSnapshot);
+    }
+
+    return selectedSnapshot;
+  }, []);
 
   useEffect(() => {
-    if (normalizedRoomCode === null || initialRoom !== null) {
+    if (normalizedRoomCode === null) {
       return;
     }
 
+    const roomCode = normalizedRoomCode;
     let isCurrent = true;
+    let pollTimeoutId: number | null = null;
 
-    fetchMultiplayerRoom(normalizedRoomCode)
-      .then(({ room: nextRoom }) => {
+    async function pollRoom() {
+      try {
+        const nextSnapshot = await fetchMultiplayerRoom(roomCode);
+
         if (!isCurrent) {
           return;
         }
 
-        setRoom(nextRoom);
-      })
-      .catch((error) => {
-        if (isCurrent) {
-          setLoadError(getRequestErrorMessage(error));
+        const selectedSnapshot = applyRoomSnapshot(nextSnapshot);
+
+        setLoadError(null);
+        pollTimeoutId = window.setTimeout(
+          pollRoom,
+          getMultiplayerRoomPollingDelayMs(selectedSnapshot),
+        );
+      } catch (error) {
+        if (!isCurrent) {
+          return;
         }
-      });
+
+        setLoadError(getRequestErrorMessage(error));
+        pollTimeoutId = window.setTimeout(
+          pollRoom,
+          getMultiplayerRoomPollingDelayMs(roomSnapshotRef.current),
+        );
+      }
+    }
+
+    pollTimeoutId = window.setTimeout(
+      pollRoom,
+      roomSnapshotRef.current === null
+        ? 0
+        : getMultiplayerRoomPollingDelayMs(roomSnapshotRef.current),
+    );
 
     return () => {
       isCurrent = false;
+
+      if (pollTimeoutId !== null) {
+        window.clearTimeout(pollTimeoutId);
+      }
     };
-  }, [initialRoom, normalizedRoomCode]);
+  }, [applyRoomSnapshot, normalizedRoomCode]);
 
   const handleCopyInvitePath = useCallback(() => {
     if (typeof navigator === "undefined" || navigator.clipboard === undefined) {
@@ -442,14 +573,14 @@ export function MultiplayerRoomLobby({
         }
 
         setParticipantId(result.participantId);
-        setRoom(result.room);
+        applyRoomSnapshot(result);
       } catch (error) {
         setFormError(getRequestErrorMessage(error));
       } finally {
         setIsJoining(false);
       }
     },
-    [displayName, isJoining, normalizedRoomCode, userId],
+    [applyRoomSnapshot, displayName, isJoining, normalizedRoomCode, userId],
   );
 
   async function handleSeatCommand(
@@ -473,7 +604,7 @@ export function MultiplayerRoomLobby({
         type,
       });
 
-      setRoom(result.room);
+      applyRoomSnapshot(result);
     } catch (error) {
       setFormError(getRequestErrorMessage(error));
     } finally {
@@ -506,13 +637,36 @@ export function MultiplayerRoomLobby({
         type: "room.lifecycle",
       });
 
-      setRoom(result.room);
+      applyRoomSnapshot(result);
     } catch (error) {
       setFormError(getRequestErrorMessage(error));
     } finally {
       setPendingAction(null);
     }
   }
+
+  async function handlePongInput(input: PongMultiplayerClientInput) {
+    if (normalizedRoomCode === null || activeParticipantId === null) {
+      return;
+    }
+
+    try {
+      const result = await postMultiplayerRoomCommand(normalizedRoomCode, {
+        input,
+        participantId: activeParticipantId,
+        type: "game.input",
+      });
+
+      applyRoomSnapshot(result);
+    } catch (error) {
+      setFormError(getRequestErrorMessage(error));
+    }
+  }
+  const shouldRenderPongRoom =
+    room !== null &&
+    room.status !== "lobby" &&
+    room.settings.gameId === "pong" &&
+    game?.gameId === "pong";
 
   return (
     <main
@@ -566,7 +720,32 @@ export function MultiplayerRoomLobby({
           />
         ) : null}
 
-        {room !== null ? (
+        {shouldRenderPongRoom ? (
+          <>
+            <PongMultiplayerRoom
+              activeParticipant={activeParticipant}
+              game={game}
+              lifecycleControls={
+                isHost ? (
+                  <HostLifecycleControls
+                    onLifecycleCommand={handleLifecycleCommand}
+                    pendingAction={pendingAction}
+                    status={room.status}
+                  />
+                ) : null
+              }
+              onGameInput={handlePongInput}
+              room={room}
+            />
+            {formError !== null ? (
+              <RoomMessage
+                message={formError}
+                testId="multiplayer-room-form-error"
+                tone="error"
+              />
+            ) : null}
+          </>
+        ) : room !== null ? (
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.8fr)]">
             <RoomSummary
               copyStatus={copyStatus}

@@ -26,6 +26,11 @@ This file covers React component ownership and shared game UI conventions under
   helpers for room snapshots and commands. Keep it game-agnostic; actual Pong
   gameplay, score submission, replay recording, and server transport authority
   belong outside this component.
+- `pong-multiplayer-room.tsx` owns the private-room Pong play surface fed by
+  server snapshots. It may render `PongBoard` and post committed room
+  `game.input` commands for seated participants, but it must not import
+  `PongGame`, solo replay/session hooks, leaderboard presenters, or local Pong
+  engine tick ownership.
 - `game-card-artwork-frame.tsx` owns the shared launcher-style key-art frame
   used by launcher cards and the global leaderboard cards. Keep the blurred
   background, dark overlay, centered rounded foreground image, direct versioned
