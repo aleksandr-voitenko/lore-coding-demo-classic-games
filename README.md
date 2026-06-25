@@ -166,6 +166,7 @@ The image uses Next.js standalone output and listens on port `3000`.
 | `npm run test:coverage:core` | Run the thresholded core coverage gate under `reports/coverage-core/`. |
 | `npm run test:e2e:install` | Install the Chromium browser used by Playwright. |
 | `npm run test:e2e` | Run the focused Chromium Playwright smoke suite. |
+| `npm run test:e2e:sidecar` | Build the multiplayer sidecar, then run the isolated Chromium Playwright smoke with Next wired to the sidecar WebSocket and internal room service. |
 | `npm run test:e2e:headed` | Run the Playwright suite in a visible browser. |
 | `npm run test:e2e:ui` | Open Playwright's interactive test runner. |
 | `npm run typecheck` | Run TypeScript without emitting. |

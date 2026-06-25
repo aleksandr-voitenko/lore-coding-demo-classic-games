@@ -24,6 +24,7 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:install": "playwright install chromium",
+    "test:e2e:sidecar": "npm run build:sidecar && playwright test --config e2e/playwright.sidecar.config.ts",
     "test:e2e:ui": "playwright test --ui",
     "typecheck": "tsc --noEmit"
   },

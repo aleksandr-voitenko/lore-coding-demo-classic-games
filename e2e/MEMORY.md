@@ -29,3 +29,10 @@ This file covers Playwright browser-flow coverage under `e2e/`.
   traces/videos, and the HTML report.
 - The configured project is focused Chromium with one worker. Keep this narrow
   unless a task specifically needs broader browser coverage.
+- `e2e/playwright.sidecar.config.ts` is the isolated realtime-sidecar entry
+  point. It starts the built sidecar on `127.0.0.1:3111`, starts Next on
+  `127.0.0.1:3110` with `MULTIPLAYER_ROOM_SERVICE_URL` and
+  `NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL` pointed at that sidecar, and only
+  discovers `e2e/sidecar/**/*.e2e.ts`.
+- Sidecar e2e files intentionally use the `.e2e.ts` suffix rather than
+  `.spec.ts` so `npm run test:e2e` remains the default Next-only smoke suite.
