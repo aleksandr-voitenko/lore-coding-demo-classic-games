@@ -47,6 +47,13 @@ This file covers Node-only server helpers and storage adapters under
   runtime, accepts an injectable `MultiplayerRoomStore`, broadcasts authoritative
   room snapshots after accepted commands, and keeps game-specific payloads nested
   behind `game.input` dispatch.
+- `multiplayer-room-sidecar.ts` owns the standalone Node HTTP/WebSocket process
+  wrapper around the gateway. It parses `MULTIPLAYER_SIDECAR_HOST`,
+  `MULTIPLAYER_SIDECAR_PORT`, and `MULTIPLAYER_SIDECAR_WEBSOCKET_PATH`, exposes
+  `/healthz`, and is emitted through `tsconfig.sidecar.json` because the main
+  app TypeScript config typechecks only and does not emit runtime JavaScript.
+  Keep sidecar-emitted runtime imports resolvable by plain Node after TypeScript
+  emits CommonJS; TypeScript path aliases are not rewritten in emitted output.
 - Keep this adapter boundary small so a future Postgres store can replace SQLite
   without changing the client API or game components.
 

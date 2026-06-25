@@ -1,6 +1,5 @@
 import { WebSocket, WebSocketServer, type RawData, type ServerOptions } from "ws";
 
-import { isGameId } from "@/lib/game-catalog";
 import type {
   MultiplayerRealtimeRejectionCode,
   MultiplayerRealtimeRoomSnapshot,
@@ -8,11 +7,12 @@ import type {
   MultiplayerRoomGameSnapshot,
   MultiplayerRoomSnapshot,
   PrivateRoomLifecycleCommand,
-} from "@/lib/multiplayer/protocol";
+} from "../multiplayer/protocol";
 import type {
   PrivateRoomSettingValue,
   PrivateRoomSettings,
-} from "@/lib/multiplayer/room";
+} from "../multiplayer/room";
+import { isGameId } from "../game-catalog";
 
 import {
   InProcessMultiplayerRoomStore,

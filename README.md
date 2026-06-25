@@ -55,6 +55,18 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000) to choose a game from the
 menu.
 
+Build and run the experimental multiplayer room sidecar in a separate terminal:
+
+```bash
+npm run build:sidecar
+npm run start:sidecar
+```
+
+The sidecar defaults to `127.0.0.1:3001`, exposes `GET /healthz`, and accepts
+room WebSocket upgrades on `/multiplayer/rooms`. Override those with
+`MULTIPLAYER_SIDECAR_HOST`, `MULTIPLAYER_SIDECAR_PORT`, and
+`MULTIPLAYER_SIDECAR_WEBSOCKET_PATH` when wiring it behind a local proxy.
+
 ## Stack
 
 - Node.js 22

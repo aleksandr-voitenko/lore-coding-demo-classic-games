@@ -3,14 +3,14 @@ import { randomBytes, randomUUID } from "node:crypto";
 import type {
   MultiplayerRoomSnapshot,
   PrivateRoomLifecycleCommand,
-} from "@/lib/multiplayer/protocol";
+} from "../multiplayer/protocol";
 import type {
   PrivateRoom,
   PrivateRoomErrorCode,
   PrivateRoomSeatInput,
   PrivateRoomSettingValue,
   PrivateRoomSettings,
-} from "@/lib/multiplayer/room";
+} from "../multiplayer/room";
 import {
   addPrivateRoomGuestParticipantAsObserver,
   claimPrivateRoomSeat,
@@ -23,14 +23,14 @@ import {
   resumePrivateRoom,
   startPrivateRoom,
   updatePrivateRoomSettings,
-} from "@/lib/multiplayer/room";
+} from "../multiplayer/room";
 import {
   decrementPongRemainingScore,
   getPongScoreTickDelay,
   getPongTickDelay,
   type PongGameState,
   type PongSide,
-} from "@/lib/pong-game-engine";
+} from "../pong-game-engine";
 import {
   advancePongMultiplayerTick,
   createInitialPongMultiplayerGame,
@@ -42,8 +42,7 @@ import {
   type PongMultiplayerError,
   type PongMultiplayerHeldInput,
   type PongMultiplayerHeldInputs,
-} from "@/lib/pong-multiplayer";
-import type { AuthenticatedUser } from "@/lib/user-profile";
+} from "../pong-multiplayer";
 
 export type PongMultiplayerInput =
   | {
@@ -92,15 +91,20 @@ export type MultiplayerRoomParticipantIdFactoryContext = {
 };
 
 export type CreateMultiplayerRoomOptions = {
-  host: AuthenticatedUser;
+  host: MultiplayerRoomHostUser;
   seats?: readonly PrivateRoomSeatInput[];
   settings?: PrivateRoomSettings;
+};
+
+export type MultiplayerRoomHostUser = {
+  displayName: string;
+  id: string;
 };
 
 export type {
   MultiplayerRoomGameSnapshot,
   MultiplayerRoomSnapshot,
-} from "@/lib/multiplayer/protocol";
+} from "../multiplayer/protocol";
 
 export type MultiplayerRoomStoreErrorCode =
   | PrivateRoomErrorCode
