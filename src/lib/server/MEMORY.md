@@ -10,11 +10,11 @@ This file covers Node-only server helpers and storage adapters under
   helpers into a browser bundle. Add the same marker to new Next-facing runtime
   modules under this boundary; tests use the shared Vitest resolver alias for the
   empty server marker implementation.
-- `multiplayer-room-runtime.ts` is the intentional exception: it owns the
-  process-local room runtime without importing `server-only` so the standalone
-  realtime sidecar can reuse the same in-memory service under normal Node
-  resolution. Next API routes should import `multiplayer-room-store.ts`, not the
-  runtime directly.
+- `multiplayer-room-runtime.ts` and `multiplayer-room-websocket.ts` are the
+  intentional exceptions: they avoid importing `server-only` so the standalone
+  realtime sidecar can reuse the same in-memory service and WebSocket gateway
+  under normal Node resolution. Next API routes should import
+  `multiplayer-room-store.ts`, not the runtime or gateway directly.
 - `leaderboard-store.ts` defines the small `LeaderboardStore` interface used by
   the API route and tests. Keep parsing, validation, normalized submissions, JSON
   response shaping, and rank calculation behind this boundary.
@@ -42,6 +42,11 @@ This file covers Node-only server helpers and storage adapters under
   server-owned game snapshots. Treat it as a replaceable development bridge
   toward a durable realtime sidecar and event log, not as the final multiplayer
   authority.
+- `multiplayer-room-websocket.ts` owns the reusable Node WebSocket gateway for
+  the realtime sidecar. It adapts the generic protocol envelopes to the room
+  runtime, accepts an injectable `MultiplayerRoomStore`, broadcasts authoritative
+  room snapshots after accepted commands, and keeps game-specific payloads nested
+  behind `game.input` dispatch.
 - Keep this adapter boundary small so a future Postgres store can replace SQLite
   without changing the client API or game components.
 
