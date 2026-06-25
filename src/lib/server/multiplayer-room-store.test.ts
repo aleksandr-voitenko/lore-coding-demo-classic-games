@@ -5,7 +5,7 @@ import {
   InProcessMultiplayerRoomStore,
   PONG_RUNTIME_CATCH_UP_TICK_LIMIT,
   type MultiplayerRoomStoreResult,
-} from "./multiplayer-room-store";
+} from "./multiplayer-room-runtime";
 import type { PrivateRoomSettings } from "../multiplayer/room";
 import {
   getPongMaximumScore,

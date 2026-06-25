@@ -7,9 +7,14 @@ This file covers Node-only server helpers and storage adapters under
 
 - Production modules in this folder import `server-only` so Next fails the build
   if a client component accidentally pulls Node-only storage, cookie, or crypto
-  helpers into a browser bundle. Add the same marker to new runtime modules under
-  this boundary; tests use the shared Vitest resolver alias for the empty server
-  marker implementation.
+  helpers into a browser bundle. Add the same marker to new Next-facing runtime
+  modules under this boundary; tests use the shared Vitest resolver alias for the
+  empty server marker implementation.
+- `multiplayer-room-runtime.ts` is the intentional exception: it owns the
+  process-local room runtime without importing `server-only` so the standalone
+  realtime sidecar can reuse the same in-memory service under normal Node
+  resolution. Next API routes should import `multiplayer-room-store.ts`, not the
+  runtime directly.
 - `leaderboard-store.ts` defines the small `LeaderboardStore` interface used by
   the API route and tests. Keep parsing, validation, normalized submissions, JSON
   response shaping, and rank calculation behind this boundary.
@@ -28,12 +33,15 @@ This file covers Node-only server helpers and storage adapters under
   saved replay per signed-in user/game. Keep generic `createReplayRun`,
   `saveReplay`, and `getReplay` behavior available for future games while
   preserving Snake wrapper methods for the current replay MVP.
-- `multiplayer-room-store.ts` is the private-room API MVP adapter. It wraps the
-  pure room model with process-local room state, deterministic id/code/time
-  factories for tests, snapshot sequence numbers for API routes, and a
-  process-local Pong runtime that exposes optional server-owned game snapshots.
-  Treat it as a replaceable development bridge toward a durable realtime sidecar
-  and event log, not as the final multiplayer authority.
+- `multiplayer-room-store.ts` is the private-room API MVP facade. It imports
+  `server-only`, exposes the Next-facing singleton, and re-exports the runtime
+  types/class from `multiplayer-room-runtime.ts`.
+- `multiplayer-room-runtime.ts` wraps the pure room model with process-local room
+  state, deterministic id/code/time factories for tests, snapshot sequence
+  numbers for API routes, and a process-local Pong runtime that exposes optional
+  server-owned game snapshots. Treat it as a replaceable development bridge
+  toward a durable realtime sidecar and event log, not as the final multiplayer
+  authority.
 - Keep this adapter boundary small so a future Postgres store can replace SQLite
   without changing the client API or game components.
 

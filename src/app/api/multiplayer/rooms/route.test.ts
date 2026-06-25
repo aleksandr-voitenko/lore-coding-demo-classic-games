@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { InProcessMultiplayerRoomStore } from "@/lib/server/multiplayer-room-store";
+import { InProcessMultiplayerRoomStore } from "@/lib/server/multiplayer-room-runtime";
 import type { AuthenticatedUser } from "@/lib/user-profile";
 
 import {
