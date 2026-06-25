@@ -391,6 +391,12 @@ export function getMultiplayerRoomPollingDelayMs(
   return 1_000;
 }
 
+export function getInitialMultiplayerRoomPollingDelayMs(
+  snapshot: Pick<MultiplayerRoomSnapshot, "game" | "room"> | null,
+) {
+  return snapshot === null ? 0 : getMultiplayerRoomPollingDelayMs(snapshot);
+}
+
 export function selectFreshMultiplayerRoomSnapshot<
   Snapshot extends Pick<MultiplayerRoomSnapshot, "game" | "room" | "seq">,
 >(current: Snapshot | null, next: Snapshot) {
@@ -457,6 +463,7 @@ export function MultiplayerRoomLobby({
     () => createParticipantsById(room?.participants ?? []),
     [room?.participants],
   );
+  const pollingDelayMs = getMultiplayerRoomPollingDelayMs(roomSnapshot);
   const applyRoomSnapshot = useCallback((nextSnapshot: RoomApiPayload) => {
     const selectedSnapshot = selectFreshMultiplayerRoomSnapshot(
       roomSnapshotRef.current,
@@ -510,9 +517,7 @@ export function MultiplayerRoomLobby({
 
     pollTimeoutId = window.setTimeout(
       pollRoom,
-      roomSnapshotRef.current === null
-        ? 0
-        : getMultiplayerRoomPollingDelayMs(roomSnapshotRef.current),
+      getInitialMultiplayerRoomPollingDelayMs(roomSnapshotRef.current),
     );
 
     return () => {
@@ -522,7 +527,7 @@ export function MultiplayerRoomLobby({
         window.clearTimeout(pollTimeoutId);
       }
     };
-  }, [applyRoomSnapshot, normalizedRoomCode]);
+  }, [applyRoomSnapshot, normalizedRoomCode, pollingDelayMs]);
 
   const handleCopyInvitePath = useCallback(() => {
     if (typeof navigator === "undefined" || navigator.clipboard === undefined) {

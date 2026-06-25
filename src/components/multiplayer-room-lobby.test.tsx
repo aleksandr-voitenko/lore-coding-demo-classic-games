@@ -15,6 +15,7 @@ import {
   MultiplayerRoomLobby,
   createMultiplayerRoom,
   fetchMultiplayerRoom,
+  getInitialMultiplayerRoomPollingDelayMs,
   getMultiplayerRoomPollingDelayMs,
   postMultiplayerRoomCommand,
   selectFreshMultiplayerRoomSnapshot,
@@ -204,13 +205,25 @@ describe("multiplayer room lobby", () => {
 
   it("selects polling delay from lobby and Pong game state", () => {
     expect(getMultiplayerRoomPollingDelayMs(null)).toBe(1_250);
+    expect(getInitialMultiplayerRoomPollingDelayMs(null)).toBe(0);
     expect(
       getMultiplayerRoomPollingDelayMs({
         room: PONG_ROOM,
       }),
     ).toBe(1_250);
     expect(
+      getInitialMultiplayerRoomPollingDelayMs({
+        room: PONG_ROOM,
+      }),
+    ).toBe(1_250);
+    expect(
       getMultiplayerRoomPollingDelayMs({
+        game: RUNNING_PONG_GAME,
+        room: ACTIVE_PONG_ROOM,
+      }),
+    ).toBe(60);
+    expect(
+      getInitialMultiplayerRoomPollingDelayMs({
         game: RUNNING_PONG_GAME,
         room: ACTIVE_PONG_ROOM,
       }),
