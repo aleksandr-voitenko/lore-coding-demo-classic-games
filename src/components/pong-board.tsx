@@ -15,7 +15,7 @@ type PongBoardProps = {
 };
 
 const PONG_BOARD_SMOOTH_MOTION_STYLE = {
-  transitionDuration: "80ms",
+  transitionDuration: "50ms",
   transitionProperty: "left, top",
   transitionTimingFunction: "linear",
   willChange: "left, top",
@@ -74,7 +74,7 @@ export function PongBoard({
 
         <span
           aria-hidden="true"
-          className="absolute rounded-full bg-[var(--pong-blue)]"
+          className="absolute rounded-sm bg-[var(--pong-blue)]"
           data-testid="pong-player-paddle"
           style={{
             height: `${(game.playerPaddle.height / game.boardHeight) * 100}%`,
@@ -87,7 +87,7 @@ export function PongBoard({
 
         <span
           aria-hidden="true"
-          className="absolute rounded-full bg-[var(--pong-pink)]"
+          className="absolute rounded-sm bg-[var(--pong-pink)]"
           data-testid="pong-cpu-paddle"
           style={{
             height: `${(game.cpuPaddle.height / game.boardHeight) * 100}%`,

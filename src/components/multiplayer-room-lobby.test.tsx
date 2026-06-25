@@ -17,6 +17,7 @@ import {
   fetchMultiplayerRoom,
   getInitialMultiplayerRoomPollingDelayMs,
   getMultiplayerRoomPollingDelayMs,
+  getPrivateRoomShareLink,
   postMultiplayerRoomCommand,
   selectFreshMultiplayerRoomSnapshot,
 } from "./multiplayer-room-lobby";
@@ -118,6 +119,26 @@ describe("multiplayer room lobby", () => {
     expect(markup).toContain('data-testid="multiplayer-room-participant-host-participant"');
     expect(markup).toContain('data-testid="multiplayer-room-host-controls"');
     expect(markup).toContain('data-testid="multiplayer-room-start-button"');
+  });
+
+  it("uses the requested room code for invite copy even before matching room data arrives", () => {
+    const staleRoom = {
+      ...PONG_ROOM,
+      code: "OLDROOM1",
+    };
+    const markup = renderToStaticMarkup(
+      <CurrentUserProvider initialUser={{ displayName: "Ada", id: "user-1" }}>
+        <MultiplayerRoomLobby
+          initialParticipantId="host-participant"
+          initialRoom={staleRoom}
+          initialRoomCode="44FE068B"
+          onBackToLibrary={vi.fn()}
+        />
+      </CurrentUserProvider>,
+    );
+
+    expect(markup).toContain("/?room=44FE068B");
+    expect(markup).not.toContain("/?room=OLDROOM1");
   });
 
   it("renders the guest display-name join form before the visitor has a participant", () => {
@@ -236,7 +257,7 @@ describe("multiplayer room lobby", () => {
         },
         room: ACTIVE_PONG_ROOM,
       }),
-    ).toBe(250);
+    ).toBe(60);
     expect(
       getMultiplayerRoomPollingDelayMs({
         game: {
@@ -245,7 +266,7 @@ describe("multiplayer room lobby", () => {
         },
         room: ACTIVE_PONG_ROOM,
       }),
-    ).toBe(250);
+    ).toBe(60);
     expect(
       getMultiplayerRoomPollingDelayMs({
         game: {
@@ -257,7 +278,15 @@ describe("multiplayer room lobby", () => {
         },
         room: ACTIVE_PONG_ROOM,
       }),
-    ).toBe(1_000);
+    ).toBe(60);
+  });
+
+  it("builds full private-room share links when a browser origin is available", () => {
+    expect(getPrivateRoomShareLink("44fe068b", "http://localhost:3000")).toBe(
+      "http://localhost:3000/?room=44FE068B",
+    );
+    expect(getPrivateRoomShareLink("44FE068B", null)).toBe("/?room=44FE068B");
+    expect(getPrivateRoomShareLink("44FE068B", "not a url")).toBe("/?room=44FE068B");
   });
 
   it("keeps fresher room and game sequence snapshots", () => {

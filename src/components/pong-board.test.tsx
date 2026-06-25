@@ -16,6 +16,8 @@ describe("PongBoard", () => {
       'data-testid="pong-ball"',
       'data-testid="pong-player-paddle"',
       'data-testid="pong-cpu-paddle"',
+      "rounded-sm bg-[var(--pong-blue)]",
+      "rounded-sm bg-[var(--pong-pink)]",
     ]);
     expect(markup).not.toContain("transition-property");
   });
@@ -27,7 +29,7 @@ describe("PongBoard", () => {
     );
 
     expect(markup).toContain("transition-property:left, top");
-    expect(markup).toContain("transition-duration:80ms");
+    expect(markup).toContain("transition-duration:50ms");
     expect(markup).toContain("will-change:left, top");
   });
 });

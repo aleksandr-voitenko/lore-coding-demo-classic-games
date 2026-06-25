@@ -16,6 +16,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 import { PongMultiplayerRoom } from "@/components/pong-multiplayer-room";
@@ -141,8 +142,8 @@ type RoomParticipantsProps = {
 
 type RoomSummaryProps = {
   copyStatus: string | null;
-  invitePath: string;
-  onCopyInvitePath: () => void;
+  inviteLink: string;
+  onCopyInviteLink: () => void;
   room: PrivateRoom;
 };
 
@@ -377,24 +378,38 @@ export function getMultiplayerRoomPollingDelayMs(
     return 1_250;
   }
 
-  if (snapshot.game.snapshot.status === "running") {
-    return 60;
-  }
-
-  if (
-    snapshot.game.snapshot.status === "ready" ||
-    snapshot.game.snapshot.status === "paused"
-  ) {
-    return 250;
-  }
-
-  return 1_000;
+  return 60;
 }
 
 export function getInitialMultiplayerRoomPollingDelayMs(
   snapshot: Pick<MultiplayerRoomSnapshot, "game" | "room"> | null,
 ) {
   return snapshot === null ? 0 : getMultiplayerRoomPollingDelayMs(snapshot);
+}
+
+export function getPrivateRoomShareLink(
+  roomCode: string | null,
+  origin: string | null,
+) {
+  const invitePath = getPrivateRoomInvitePath(roomCode) ?? "/?room=";
+
+  if (origin === null || origin.trim().length === 0) {
+    return invitePath;
+  }
+
+  try {
+    return new URL(invitePath, origin).toString();
+  } catch {
+    return invitePath;
+  }
+}
+
+function getBrowserOrigin() {
+  return typeof window === "undefined" ? null : window.location.origin;
+}
+
+function subscribeBrowserOrigin() {
+  return () => {};
 }
 
 export function selectFreshMultiplayerRoomSnapshot<
@@ -425,6 +440,11 @@ export function MultiplayerRoomLobby({
 }: MultiplayerRoomLobbyProps) {
   const { user } = useCurrentUser();
   const normalizedRoomCode = normalizePrivateRoomCode(initialRoomCode);
+  const browserOrigin = useSyncExternalStore(
+    subscribeBrowserOrigin,
+    getBrowserOrigin,
+    () => null,
+  );
   const userId = user?.id ?? null;
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [displayNameInput, setDisplayNameInput] = useState<string | null>(null);
@@ -448,7 +468,7 @@ export function MultiplayerRoomLobby({
   const room = roomSnapshot?.room ?? null;
   const game = roomSnapshot?.game;
   const displayName = displayNameInput ?? user?.displayName ?? "";
-  const invitePath = getPrivateRoomInvitePath(room?.code ?? normalizedRoomCode) ?? "/?room=";
+  const inviteLink = getPrivateRoomShareLink(normalizedRoomCode, browserOrigin);
   const participantFromLocalId = getParticipantById(room, participantId);
   const participantFromUser = getParticipantByUserId(room, userId);
   const activeParticipant = participantFromLocalId ?? participantFromUser;
@@ -476,7 +496,7 @@ export function MultiplayerRoomLobby({
     }
 
     return selectedSnapshot;
-  }, []);
+  }, [setRoomSnapshot]);
 
   useEffect(() => {
     if (normalizedRoomCode === null) {
@@ -485,9 +505,24 @@ export function MultiplayerRoomLobby({
 
     const roomCode = normalizedRoomCode;
     let isCurrent = true;
+    let isPolling = false;
     let pollTimeoutId: number | null = null;
 
+    function schedulePoll(delayMs: number) {
+      if (pollTimeoutId !== null) {
+        window.clearTimeout(pollTimeoutId);
+      }
+
+      pollTimeoutId = window.setTimeout(pollRoom, delayMs);
+    }
+
     async function pollRoom() {
+      if (isPolling) {
+        return;
+      }
+
+      isPolling = true;
+
       try {
         const nextSnapshot = await fetchMultiplayerRoom(roomCode);
 
@@ -498,30 +533,39 @@ export function MultiplayerRoomLobby({
         const selectedSnapshot = applyRoomSnapshot(nextSnapshot);
 
         setLoadError(null);
-        pollTimeoutId = window.setTimeout(
-          pollRoom,
-          getMultiplayerRoomPollingDelayMs(selectedSnapshot),
-        );
+        schedulePoll(getMultiplayerRoomPollingDelayMs(selectedSnapshot));
       } catch (error) {
         if (!isCurrent) {
           return;
         }
 
         setLoadError(getRequestErrorMessage(error));
-        pollTimeoutId = window.setTimeout(
-          pollRoom,
-          getMultiplayerRoomPollingDelayMs(roomSnapshotRef.current),
-        );
+        schedulePoll(getMultiplayerRoomPollingDelayMs(roomSnapshotRef.current));
+      } finally {
+        isPolling = false;
       }
     }
 
-    pollTimeoutId = window.setTimeout(
-      pollRoom,
-      getInitialMultiplayerRoomPollingDelayMs(roomSnapshotRef.current),
-    );
+    function requestFreshPoll() {
+      schedulePoll(0);
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        requestFreshPoll();
+      }
+    }
+
+    // Browser timer throttling can leave a backgrounded guest on an old Ready snapshot.
+    window.addEventListener("focus", requestFreshPoll);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    schedulePoll(getInitialMultiplayerRoomPollingDelayMs(roomSnapshotRef.current));
 
     return () => {
       isCurrent = false;
+      window.removeEventListener("focus", requestFreshPoll);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
 
       if (pollTimeoutId !== null) {
         window.clearTimeout(pollTimeoutId);
@@ -529,21 +573,26 @@ export function MultiplayerRoomLobby({
     };
   }, [applyRoomSnapshot, normalizedRoomCode, pollingDelayMs]);
 
-  const handleCopyInvitePath = useCallback(() => {
+  const handleCopyInviteLink = useCallback(() => {
+    const currentInviteLink = getPrivateRoomShareLink(
+      normalizedRoomCode,
+      getBrowserOrigin() ?? browserOrigin,
+    );
+
     if (typeof navigator === "undefined" || navigator.clipboard === undefined) {
-      setCopyStatus("Invite path ready");
+      setCopyStatus("Invite link ready");
       return;
     }
 
     navigator.clipboard
-      .writeText(invitePath)
+      .writeText(currentInviteLink)
       .then(() => {
-        setCopyStatus("Invite path copied");
+        setCopyStatus("Invite link copied");
       })
       .catch(() => {
-        setCopyStatus("Invite path ready");
+        setCopyStatus("Invite link ready");
       });
-  }, [invitePath]);
+  }, [browserOrigin, normalizedRoomCode, setCopyStatus]);
 
   const handleJoinRoom = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -585,7 +634,16 @@ export function MultiplayerRoomLobby({
         setIsJoining(false);
       }
     },
-    [applyRoomSnapshot, displayName, isJoining, normalizedRoomCode, userId],
+    [
+      applyRoomSnapshot,
+      displayName,
+      isJoining,
+      normalizedRoomCode,
+      setFormError,
+      setIsJoining,
+      setParticipantId,
+      userId,
+    ],
   );
 
   async function handleSeatCommand(
@@ -754,8 +812,8 @@ export function MultiplayerRoomLobby({
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.8fr)]">
             <RoomSummary
               copyStatus={copyStatus}
-              invitePath={invitePath}
-              onCopyInvitePath={handleCopyInvitePath}
+              inviteLink={inviteLink}
+              onCopyInviteLink={handleCopyInviteLink}
               room={room}
             />
 
@@ -852,8 +910,8 @@ function RoomMessage({
 
 function RoomSummary({
   copyStatus,
-  invitePath,
-  onCopyInvitePath,
+  inviteLink,
+  onCopyInviteLink,
   room,
 }: RoomSummaryProps) {
   const parameterEntries = Object.entries(room.settings.parameters ?? {});
@@ -881,7 +939,7 @@ function RoomSummary({
               <dt className="text-xs font-semibold uppercase tracking-normal text-[var(--chrome-muted)]">
                 Invite
               </dt>
-              <dd className="mt-1 break-all text-sm font-semibold">{invitePath}</dd>
+              <dd className="mt-1 break-all text-sm font-semibold">{inviteLink}</dd>
             </div>
             {parameterEntries.map(([key, value]) => (
               <div className="rounded-md border border-[var(--chrome-border)] p-3" key={key}>
@@ -897,9 +955,9 @@ function RoomSummary({
         </div>
         <div className="flex flex-col items-start gap-2 md:items-end">
           <Button
-            aria-label="Copy invite path"
+            aria-label="Copy invite link"
             data-testid="multiplayer-room-copy-invite-button"
-            onClick={onCopyInvitePath}
+            onClick={onCopyInviteLink}
             type="button"
             variant="outline"
           >
