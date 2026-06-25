@@ -29,10 +29,11 @@ This file covers Node-only server helpers and storage adapters under
   `saveReplay`, and `getReplay` behavior available for future games while
   preserving Snake wrapper methods for the current replay MVP.
 - `multiplayer-room-store.ts` is the private-room API MVP adapter. It wraps the
-  pure room model with process-local room state, deterministic id/code factories
-  for tests, and snapshot sequence numbers for API routes. Treat it as a
-  replaceable development bridge toward a durable realtime sidecar/event log,
-  not as the final multiplayer authority.
+  pure room model with process-local room state, deterministic id/code/time
+  factories for tests, snapshot sequence numbers for API routes, and a
+  process-local Pong runtime that exposes optional server-owned game snapshots.
+  Treat it as a replaceable development bridge toward a durable realtime sidecar
+  and event log, not as the final multiplayer authority.
 - Keep this adapter boundary small so a future Postgres store can replace SQLite
   without changing the client API or game components.
 

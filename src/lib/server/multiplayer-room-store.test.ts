@@ -3,8 +3,15 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_PONG_PRIVATE_ROOM_SEATS,
   InProcessMultiplayerRoomStore,
+  PONG_RUNTIME_CATCH_UP_TICK_LIMIT,
   type MultiplayerRoomStoreResult,
 } from "./multiplayer-room-store";
+import type { PrivateRoomSettings } from "../multiplayer/room";
+import {
+  getPongMaximumScore,
+  getPongScoreTickDelay,
+  getPongTickDelay,
+} from "../pong-game-engine";
 
 const HOST_USER = {
   displayName: "Ada Host",
@@ -12,9 +19,11 @@ const HOST_USER = {
 };
 
 function createTestRoomStore({
+  getNowMs,
   participantIds = ["host-1", "guest-1", "guest-2", "observer-1"],
   roomCodes = ["ROOM1"],
 }: {
+  getNowMs?: () => number;
   participantIds?: string[];
   roomCodes?: string[];
 } = {}) {
@@ -25,6 +34,7 @@ function createTestRoomStore({
     createParticipantId: ({ role }) =>
       participantIds[participantIdIndex++] ?? `${role}-${participantIdIndex}`,
     createRoomCode: () => roomCodes[roomCodeIndex++] ?? "ROOM-FALLBACK",
+    getNowMs,
   });
 }
 
@@ -36,6 +46,41 @@ function expectStoreSuccess(result: MultiplayerRoomStoreResult) {
   }
 
   return result.snapshot;
+}
+
+function createStartedPongRoom(
+  store: InProcessMultiplayerRoomStore,
+  settings: PrivateRoomSettings = { gameId: "pong" },
+) {
+  expectStoreSuccess(store.createRoom({ host: HOST_USER, settings }));
+  expectStoreSuccess(
+    store.applyCommand("ROOM1", {
+      displayName: "Guest One",
+      type: "room.joinObserver",
+    }),
+  );
+  expectStoreSuccess(
+    store.applyCommand("ROOM1", {
+      participantId: "host-1",
+      seatId: "left",
+      type: "room.claimSeat",
+    }),
+  );
+  expectStoreSuccess(
+    store.applyCommand("ROOM1", {
+      participantId: "guest-1",
+      seatId: "right",
+      type: "room.claimSeat",
+    }),
+  );
+
+  return expectStoreSuccess(
+    store.applyCommand("ROOM1", {
+      command: "start",
+      participantId: "host-1",
+      type: "room.lifecycle",
+    }),
+  );
 }
 
 describe("in-process multiplayer room store", () => {
@@ -267,6 +312,265 @@ describe("in-process multiplayer room store", () => {
     });
   });
 
+  it("initializes Pong game snapshots only when a full room starts", () => {
+    let nowMs = 1_000;
+    const store = createTestRoomStore({ getNowMs: () => nowMs });
+
+    expectStoreSuccess(store.createRoom({ host: HOST_USER }));
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        displayName: "Guest One",
+        type: "room.joinObserver",
+      }),
+    );
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        participantId: "host-1",
+        seatId: "left",
+        type: "room.claimSeat",
+      }),
+    );
+
+    expect(
+      store.applyCommand("ROOM1", {
+        command: "start",
+        participantId: "host-1",
+        type: "room.lifecycle",
+      }),
+    ).toMatchObject({
+      code: "required-seats-empty",
+      success: false,
+    });
+    expect(expectStoreSuccess(store.getRoom("ROOM1")).game).toBeUndefined();
+
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        participantId: "guest-1",
+        seatId: "right",
+        type: "room.claimSeat",
+      }),
+    );
+
+    nowMs = 1_500;
+    const started = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        command: "start",
+        participantId: "host-1",
+        type: "room.lifecycle",
+      }),
+    );
+
+    expect(started.game).toMatchObject({
+      gameId: "pong",
+      seq: 1,
+      serverTimeMs: 1_500,
+      snapshot: {
+        score: {
+          cpu: 0,
+          player: 0,
+        },
+        status: "running",
+      },
+    });
+  });
+
+  it("maps Pong input participants to seats and advances the matching paddle", () => {
+    let nowMs = 1_000;
+    const store = createTestRoomStore({ getNowMs: () => nowMs });
+    const started = createStartedPongRoom(store);
+    const initialGame = started.game!.snapshot;
+    const inputSnapshot = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        input: {
+          direction: "up",
+          type: "pong.setPaddleDirection",
+        },
+        participantId: "host-1",
+        type: "game.input",
+      }),
+    );
+
+    expect(inputSnapshot.seq).toBe(started.seq);
+    expect(inputSnapshot.game?.seq).toBe(started.game!.seq + 1);
+
+    nowMs += getPongTickDelay();
+    const advanced = expectStoreSuccess(store.getRoom("ROOM1"));
+
+    expect(advanced.game!.snapshot.playerPaddle.y).toBeLessThan(
+      initialGame.playerPaddle.y,
+    );
+    expect(advanced.game!.snapshot.cpuPaddle.y).toBe(initialGame.cpuPaddle.y);
+  });
+
+  it("rejects invalid, observer, unseated, and non-Pong game input", () => {
+    const store = createTestRoomStore();
+
+    createStartedPongRoom(store);
+
+    expect(
+      store.applyCommand("ROOM1", {
+        input: {
+          direction: "sideways",
+          type: "pong.setPaddleDirection",
+        },
+        participantId: "host-1",
+        type: "game.input",
+      }),
+    ).toEqual({
+      code: "invalid-command",
+      error: "Pong paddle direction must be up, down, or null.",
+      success: false,
+    });
+    expect(
+      store.applyCommand("ROOM1", {
+        input: {
+          direction: "down",
+          type: "pong.setPaddleDirection",
+        },
+        participantId: "missing",
+        type: "game.input",
+      }),
+    ).toEqual({
+      code: "participant-not-found",
+      error: "Participant is not in the Pong room.",
+      success: false,
+    });
+
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        displayName: "Late Observer",
+        type: "room.joinObserver",
+      }),
+    );
+    expect(
+      store.applyCommand("ROOM1", {
+        input: {
+          direction: "down",
+          type: "pong.setPaddleDirection",
+        },
+        participantId: "guest-2",
+        type: "game.input",
+      }),
+    ).toEqual({
+      code: "participant-not-seated",
+      error: "Participant does not occupy a Pong paddle seat.",
+      success: false,
+    });
+
+    const nonPongStore = createTestRoomStore({
+      participantIds: ["host-1"],
+      roomCodes: ["SNAKE1"],
+    });
+
+    expectStoreSuccess(
+      nonPongStore.createRoom({
+        host: HOST_USER,
+        settings: { gameId: "snake" },
+      }),
+    );
+    expect(
+      nonPongStore.applyCommand("SNAKE1", {
+        input: {
+          direction: "up",
+          type: "pong.setPaddleDirection",
+        },
+        participantId: "host-1",
+        type: "game.input",
+      }),
+    ).toEqual({
+      code: "invalid-command",
+      error: "Game input is only supported for Pong rooms.",
+      success: false,
+    });
+  });
+
+  it("pauses, resumes, and restarts the Pong runtime with room lifecycle", () => {
+    let nowMs = 1_000;
+    const store = createTestRoomStore({ getNowMs: () => nowMs });
+
+    createStartedPongRoom(store, {
+      gameId: "pong",
+      parameters: {
+        "pong-board-size": "1200x640",
+      },
+    });
+    nowMs += getPongTickDelay();
+
+    const paused = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        command: "pause",
+        participantId: "host-1",
+        type: "room.lifecycle",
+      }),
+    );
+    const pausedBallX = paused.game!.snapshot.ball.position.x;
+    const pausedGameSeq = paused.game!.seq;
+
+    nowMs += getPongTickDelay() * 5;
+    const stillPaused = expectStoreSuccess(store.getRoom("ROOM1"));
+
+    expect(stillPaused.game!.snapshot.status).toBe("paused");
+    expect(stillPaused.game!.snapshot.ball.position.x).toBe(pausedBallX);
+    expect(stillPaused.game!.seq).toBe(pausedGameSeq);
+
+    const resumed = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        command: "resume",
+        participantId: "host-1",
+        type: "room.lifecycle",
+      }),
+    );
+
+    expect(resumed.game!.snapshot.status).toBe("running");
+
+    nowMs += getPongScoreTickDelay();
+    const scoredDown = expectStoreSuccess(store.getRoom("ROOM1"));
+
+    expect(scoredDown.game!.snapshot.remainingScore).toBeLessThan(
+      resumed.game!.snapshot.remainingScore,
+    );
+
+    const restarted = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        command: "restart",
+        participantId: "host-1",
+        type: "room.lifecycle",
+      }),
+    );
+
+    expect(restarted.game!.snapshot).toMatchObject({
+      remainingScore: getPongMaximumScore(resumed.game!.snapshot.targetScore),
+      score: {
+        cpu: 0,
+        player: 0,
+      },
+      status: "running",
+    });
+  });
+
+  it("caps request-driven Pong catch-up deterministically", () => {
+    let nowMs = 0;
+    const store = createTestRoomStore({ getNowMs: () => nowMs });
+    const started = createStartedPongRoom(store, {
+      gameId: "pong",
+      parameters: {
+        "pong-board-size": "1200x640",
+      },
+    });
+    const initialGame = started.game!.snapshot;
+
+    nowMs += getPongScoreTickDelay() * (PONG_RUNTIME_CATCH_UP_TICK_LIMIT + 20);
+    const advanced = expectStoreSuccess(store.getRoom("ROOM1"));
+
+    expect(advanced.game!.snapshot.ball.position.x).toBeCloseTo(
+      initialGame.ball.position.x +
+        initialGame.ball.velocity.x * PONG_RUNTIME_CATCH_UP_TICK_LIMIT,
+    );
+    expect(advanced.game!.snapshot.remainingScore).toBe(
+      initialGame.remainingScore - PONG_RUNTIME_CATCH_UP_TICK_LIMIT * 5,
+    );
+  });
+
   it("returns immutable room snapshots", () => {
     const store = createTestRoomStore();
     const snapshot = expectStoreSuccess(
@@ -301,5 +605,18 @@ describe("in-process multiplayer room store", () => {
         },
       },
     });
+  });
+
+  it("returns immutable Pong game snapshots", () => {
+    const store = createTestRoomStore();
+    const snapshot = createStartedPongRoom(store);
+
+    snapshot.game!.snapshot.playerPaddle.y = 0;
+    snapshot.game!.snapshot.score.player = 99;
+
+    const nextSnapshot = expectStoreSuccess(store.getRoom("ROOM1"));
+
+    expect(nextSnapshot.game!.snapshot.playerPaddle.y).not.toBe(0);
+    expect(nextSnapshot.game!.snapshot.score.player).toBe(0);
   });
 });

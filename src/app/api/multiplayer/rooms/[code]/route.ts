@@ -51,6 +51,10 @@ function isHostOnlyCommand(command: MultiplayerRoomStoreCommand) {
   return command.type === "room.lifecycle" || command.type === "room.updateSettings";
 }
 
+function isPongPaddleDirection(value: unknown): value is "down" | "up" | null {
+  return value === "down" || value === "up" || value === null;
+}
+
 function parseRoomCommand(value: unknown): ParseRoomCommandResult {
   if (!isRecord(value)) {
     return {
@@ -88,6 +92,54 @@ function parseRoomCommand(value: unknown): ParseRoomCommandResult {
         type: "room.releaseSeat",
       },
       success: true,
+    };
+  }
+
+  if (value.type === "game.input") {
+    if (!isRecord(value.input)) {
+      return {
+        error: "Game input must be a JSON object.",
+        success: false,
+      };
+    }
+
+    if (value.input.type === "pong.setPaddleDirection") {
+      if (!isPongPaddleDirection(value.input.direction)) {
+        return {
+          error: "Pong paddle direction must be up, down, or null.",
+          success: false,
+        };
+      }
+
+      return {
+        command: {
+          input: {
+            direction: value.input.direction,
+            type: "pong.setPaddleDirection",
+          },
+          participantId: value.participantId,
+          type: "game.input",
+        },
+        success: true,
+      };
+    }
+
+    if (value.input.type === "pong.serve") {
+      return {
+        command: {
+          input: {
+            type: "pong.serve",
+          },
+          participantId: value.participantId,
+          type: "game.input",
+        },
+        success: true,
+      };
+    }
+
+    return {
+      error: "Game input type is not supported.",
+      success: false,
     };
   }
 

@@ -17,13 +17,14 @@ function createUserStore(user: AuthenticatedUser | null): MultiplayerRoomUserSes
   };
 }
 
-function createRoomStore() {
-  const participantIds = ["host-1", "guest-1"];
+function createRoomStore({ getNowMs }: { getNowMs?: () => number } = {}) {
+  const participantIds = ["host-1", "guest-1", "guest-2"];
   let participantIdIndex = 0;
 
   return new InProcessMultiplayerRoomStore({
     createParticipantId: () => participantIds[participantIdIndex++] ?? "participant-x",
     createRoomCode: () => "ROOM1",
+    getNowMs,
   });
 }
 
@@ -41,6 +42,37 @@ function createCommandRequest(body: unknown, signedIn = false) {
 
 function expectRoomCreated(store: InProcessMultiplayerRoomStore) {
   const result = store.createRoom({ host: SIGNED_IN_USER });
+
+  expect(result.success).toBe(true);
+
+  if (!result.success) {
+    throw new Error(result.error);
+  }
+
+  return result.snapshot;
+}
+
+function expectRoomStarted(store: InProcessMultiplayerRoomStore) {
+  expectRoomCreated(store);
+  store.applyCommand("ROOM1", {
+    displayName: "Guest Hero",
+    type: "room.joinObserver",
+  });
+  store.applyCommand("ROOM1", {
+    participantId: "host-1",
+    seatId: "left",
+    type: "room.claimSeat",
+  });
+  store.applyCommand("ROOM1", {
+    participantId: "guest-1",
+    seatId: "right",
+    type: "room.claimSeat",
+  });
+  const result = store.applyCommand("ROOM1", {
+    command: "start",
+    participantId: "host-1",
+    type: "room.lifecycle",
+  });
 
   expect(result.success).toBe(true);
 
@@ -72,6 +104,35 @@ describe("multiplayer room route", () => {
         status: "lobby",
       },
       seq: 1,
+    });
+  });
+
+  it("includes optional Pong game snapshots in GET responses", async () => {
+    let nowMs = 1_000;
+    const roomStore = createRoomStore({ getNowMs: () => nowMs });
+    const userStore = createUserStore(null);
+    const handlers = createMultiplayerRoomRouteHandlers(roomStore, userStore);
+
+    expectRoomStarted(roomStore);
+    nowMs = 1_100;
+
+    const response = await handlers.GET(
+      new Request("http://localhost/api/multiplayer/rooms/room1"),
+      { code: "room1" },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      game: {
+        gameId: "pong",
+        serverTimeMs: 1_100,
+        snapshot: {
+          status: "running",
+        },
+      },
+      room: {
+        code: "ROOM1",
+      },
     });
   });
 
@@ -133,6 +194,86 @@ describe("multiplayer room route", () => {
     await expect(response.json()).resolves.toEqual({
       code: "not-host",
       error: "Sign in as the room host before changing room settings or lifecycle.",
+    });
+  });
+
+  it("parses game input without requiring host authentication", async () => {
+    const roomStore = createRoomStore();
+    const userStore = createUserStore(null);
+    const handlers = createMultiplayerRoomRouteHandlers(roomStore, userStore);
+
+    expectRoomStarted(roomStore);
+
+    const response = await handlers.POST(
+      createCommandRequest({
+        input: {
+          direction: "down",
+          type: "pong.setPaddleDirection",
+        },
+        participantId: "guest-1",
+        type: "game.input",
+      }),
+      { code: "ROOM1" },
+    );
+
+    expect(response.status).toBe(200);
+    expect(userStore.getUserBySessionToken).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toMatchObject({
+      game: {
+        gameId: "pong",
+        snapshot: {
+          status: "running",
+        },
+      },
+      seq: 5,
+    });
+  });
+
+  it("rejects invalid and unseated game input with 4xx responses", async () => {
+    const roomStore = createRoomStore();
+    const userStore = createUserStore(null);
+    const handlers = createMultiplayerRoomRouteHandlers(roomStore, userStore);
+
+    expectRoomStarted(roomStore);
+
+    const invalidInputResponse = await handlers.POST(
+      createCommandRequest({
+        input: {
+          direction: "sideways",
+          type: "pong.setPaddleDirection",
+        },
+        participantId: "guest-1",
+        type: "game.input",
+      }),
+      { code: "ROOM1" },
+    );
+
+    expect(invalidInputResponse.status).toBe(400);
+    await expect(invalidInputResponse.json()).resolves.toEqual({
+      error: "Pong paddle direction must be up, down, or null.",
+    });
+
+    roomStore.applyCommand("ROOM1", {
+      displayName: "Late Observer",
+      type: "room.joinObserver",
+    });
+
+    const unseatedInputResponse = await handlers.POST(
+      createCommandRequest({
+        input: {
+          direction: "up",
+          type: "pong.setPaddleDirection",
+        },
+        participantId: "guest-2",
+        type: "game.input",
+      }),
+      { code: "ROOM1" },
+    );
+
+    expect(unseatedInputResponse.status).toBe(404);
+    await expect(unseatedInputResponse.json()).resolves.toEqual({
+      code: "participant-not-seated",
+      error: "Participant does not occupy a Pong paddle seat.",
     });
   });
 });

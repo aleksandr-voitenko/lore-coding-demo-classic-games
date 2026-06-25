@@ -23,7 +23,35 @@ import {
   startPrivateRoom,
   updatePrivateRoomSettings,
 } from "@/lib/multiplayer/room";
+import {
+  decrementPongRemainingScore,
+  getPongScoreTickDelay,
+  getPongTickDelay,
+  type PongGameState,
+  type PongSide,
+} from "@/lib/pong-game-engine";
+import {
+  advancePongMultiplayerTick,
+  createInitialPongMultiplayerGame,
+  getPongMultiplayerParticipantSide,
+  pausePongMultiplayerGame,
+  restartPongMultiplayerGame,
+  resumePongMultiplayerGame,
+  startPongMultiplayerGame,
+  type PongMultiplayerError,
+  type PongMultiplayerHeldInput,
+  type PongMultiplayerHeldInputs,
+} from "@/lib/pong-multiplayer";
 import type { AuthenticatedUser } from "@/lib/user-profile";
+
+export type PongMultiplayerInput =
+  | {
+      direction: unknown;
+      type: "pong.setPaddleDirection";
+    }
+  | {
+      type: "pong.serve";
+    };
 
 export type MultiplayerRoomStoreCommand =
   | {
@@ -50,6 +78,11 @@ export type MultiplayerRoomStoreCommand =
       participantId: unknown;
       settings: PrivateRoomSettings;
       type: "room.updateSettings";
+    }
+  | {
+      input: PongMultiplayerInput;
+      participantId: unknown;
+      type: "game.input";
     };
 
 export type MultiplayerRoomParticipantIdFactoryContext = {
@@ -64,9 +97,17 @@ export type CreateMultiplayerRoomOptions = {
 };
 
 export type MultiplayerRoomSnapshot = {
+  game?: MultiplayerRoomGameSnapshot;
   participant?: PrivateRoomParticipant;
   room: PrivateRoom;
   seq: number;
+};
+
+export type MultiplayerRoomGameSnapshot = {
+  gameId: "pong";
+  seq: number;
+  serverTimeMs: number;
+  snapshot: PongGameState;
 };
 
 export type MultiplayerRoomStoreErrorCode =
@@ -86,6 +127,11 @@ export type MultiplayerRoomStoreResult =
       success: false;
     };
 
+type MultiplayerRoomStoreFailure = Extract<
+  MultiplayerRoomStoreResult,
+  { success: false }
+>;
+
 export type MultiplayerRoomStore = {
   applyCommand: (
     roomCode: unknown,
@@ -100,12 +146,26 @@ type CreateInProcessMultiplayerRoomStoreOptions = {
     context: MultiplayerRoomParticipantIdFactoryContext,
   ) => string;
   createRoomCode?: () => string;
+  getNowMs?: () => number;
 };
 
 type StoredMultiplayerRoom = {
+  game?: StoredPongMultiplayerRuntime;
   room: PrivateRoom;
   seq: number;
 };
+
+type StoredPongMultiplayerRuntime = {
+  game: PongGameState;
+  heldInputs: WritablePongMultiplayerHeldInputs;
+  lastMovementTickMs: number;
+  lastScoreTickMs: number;
+  seq: number;
+};
+
+type WritablePongMultiplayerHeldInputs = Partial<
+  Record<PongSide, PongMultiplayerHeldInput>
+>;
 
 export const DEFAULT_PONG_PRIVATE_ROOM_SEATS = [
   {
@@ -125,6 +185,8 @@ const DEFAULT_PRIVATE_ROOM_SETTINGS = {
 } as const satisfies PrivateRoomSettings;
 
 const INITIAL_ROOM_SEQUENCE = 1;
+const INITIAL_GAME_SEQUENCE = 1;
+export const PONG_RUNTIME_CATCH_UP_TICK_LIMIT = 60;
 
 function createDefaultRoomCode() {
   return randomBytes(4).toString("hex").toLocaleUpperCase("en-US");
@@ -132,6 +194,10 @@ function createDefaultRoomCode() {
 
 function createDefaultParticipantId() {
   return randomUUID();
+}
+
+function createDefaultNowMs() {
+  return Date.now();
 }
 
 function clonePrivateRoomSettingValue(
@@ -179,10 +245,27 @@ function clonePrivateRoom(room: PrivateRoom): PrivateRoom {
   };
 }
 
+function clonePongGameState(game: PongGameState): PongGameState {
+  return {
+    ball: {
+      position: { ...game.ball.position },
+      velocity: { ...game.ball.velocity },
+    },
+    boardHeight: game.boardHeight,
+    boardWidth: game.boardWidth,
+    cpuPaddle: { ...game.cpuPaddle },
+    playerPaddle: { ...game.playerPaddle },
+    remainingScore: game.remainingScore,
+    score: { ...game.score },
+    status: game.status,
+    targetScore: game.targetScore,
+  };
+}
+
 function createStoreFailure(
   code: MultiplayerRoomStoreErrorCode,
   error: string,
-): MultiplayerRoomStoreResult {
+): MultiplayerRoomStoreFailure {
   return {
     code,
     error,
@@ -192,6 +275,7 @@ function createStoreFailure(
 
 function createStoredRoomSnapshot(
   storedRoom: StoredMultiplayerRoom,
+  serverTimeMs: number,
   participantId?: string,
 ): MultiplayerRoomStoreResult {
   const room = clonePrivateRoom(storedRoom.room);
@@ -199,9 +283,19 @@ function createStoredRoomSnapshot(
     participantId === undefined
       ? undefined
       : room.participants.find((entry) => entry.id === participantId);
+  const game =
+    storedRoom.game === undefined
+      ? undefined
+      : {
+          gameId: "pong" as const,
+          seq: storedRoom.game.seq,
+          serverTimeMs,
+          snapshot: clonePongGameState(storedRoom.game.game),
+        };
 
   return {
     snapshot: {
+      ...(game === undefined ? {} : { game }),
       ...(participant === undefined ? {} : { participant }),
       room,
       seq: storedRoom.seq,
@@ -212,7 +306,7 @@ function createStoredRoomSnapshot(
 
 function getPrivateRoomOperationFailure(
   result: Extract<ReturnType<typeof createPrivateRoom>, { success: false }>,
-): MultiplayerRoomStoreResult {
+): MultiplayerRoomStoreFailure {
   return {
     code: result.code,
     error: result.error,
@@ -220,10 +314,22 @@ function getPrivateRoomOperationFailure(
   };
 }
 
+function getPongMultiplayerFailure(result: PongMultiplayerError): MultiplayerRoomStoreFailure {
+  if (result.code === "missing-required-seats") {
+    return createStoreFailure("invalid-status", result.error);
+  }
+
+  if (result.code === "unsupported-room-game") {
+    return createStoreFailure("invalid-command", result.error);
+  }
+
+  return createStoreFailure(result.code, result.error);
+}
+
 function getStoredRoom(
   rooms: ReadonlyMap<string, StoredMultiplayerRoom>,
   roomCode: unknown,
-): MultiplayerRoomStoreResult | StoredMultiplayerRoom {
+): MultiplayerRoomStoreFailure | StoredMultiplayerRoom {
   const normalizedRoomCode = normalizePrivateRoomCode(roomCode);
 
   if (normalizedRoomCode === null) {
@@ -253,19 +359,366 @@ function applyLifecycleCommand(
   }
 }
 
+function createPongRuntime(
+  room: PrivateRoom,
+  nowMs: number,
+): MultiplayerRoomStoreFailure | StoredPongMultiplayerRuntime {
+  const result = createInitialPongMultiplayerGame(room);
+
+  if (!result.success) {
+    return getPongMultiplayerFailure(result);
+  }
+
+  return {
+    game: startPongMultiplayerGame(result.game),
+    heldInputs: {},
+    lastMovementTickMs: nowMs,
+    lastScoreTickMs: nowMs,
+    seq: INITIAL_GAME_SEQUENCE,
+  };
+}
+
+function resetPongRuntimeClocks(
+  runtime: StoredPongMultiplayerRuntime,
+  nowMs: number,
+) {
+  runtime.lastMovementTickMs = nowMs;
+  runtime.lastScoreTickMs = nowMs;
+}
+
+function advancePongRuntimeTo(
+  storedRoom: StoredMultiplayerRoom,
+  nowMs: number,
+) {
+  const runtime = storedRoom.game;
+
+  if (
+    runtime === undefined ||
+    storedRoom.room.status !== "running" ||
+    runtime.game.status !== "running"
+  ) {
+    return;
+  }
+
+  let changed = false;
+  const movementTicks = getCappedElapsedTicks(
+    runtime.lastMovementTickMs,
+    nowMs,
+    getPongTickDelay(),
+  );
+
+  for (let tickIndex = 0; tickIndex < movementTicks; tickIndex += 1) {
+    const nextGame = advancePongMultiplayerTick(
+      runtime.game,
+      runtime.heldInputs as PongMultiplayerHeldInputs,
+    );
+
+    if (nextGame !== runtime.game) {
+      runtime.game = nextGame;
+      changed = true;
+    }
+
+    runtime.lastMovementTickMs += getPongTickDelay();
+
+    if (runtime.game.status !== "running") {
+      resetPongRuntimeClocks(runtime, nowMs);
+      break;
+    }
+  }
+
+  if (runtime.game.status === "running") {
+    const scoreTicks = getCappedElapsedTicks(
+      runtime.lastScoreTickMs,
+      nowMs,
+      getPongScoreTickDelay(),
+    );
+
+    for (let tickIndex = 0; tickIndex < scoreTicks; tickIndex += 1) {
+      const nextGame = decrementPongRemainingScore(runtime.game);
+
+      if (nextGame !== runtime.game) {
+        runtime.game = nextGame;
+        changed = true;
+      }
+
+      runtime.lastScoreTickMs += getPongScoreTickDelay();
+    }
+  }
+
+  if (changed) {
+    runtime.seq += 1;
+  }
+}
+
+function getCappedElapsedTicks(lastTickMs: number, nowMs: number, tickDelayMs: number) {
+  if (tickDelayMs <= 0 || nowMs <= lastTickMs) {
+    return 0;
+  }
+
+  return Math.min(
+    Math.floor((nowMs - lastTickMs) / tickDelayMs),
+    PONG_RUNTIME_CATCH_UP_TICK_LIMIT,
+  );
+}
+
+function applyPongLifecycleCommand(
+  storedRoom: StoredMultiplayerRoom,
+  command: Extract<MultiplayerRoomStoreCommand, { type: "room.lifecycle" }>,
+  nowMs: number,
+): MultiplayerRoomStoreFailure | null {
+  const runtime = storedRoom.game;
+
+  if (command.command === "start") {
+    if (storedRoom.room.settings.gameId !== "pong") {
+      return null;
+    }
+
+    const nextRuntime = createPongRuntime(storedRoom.room, nowMs);
+
+    if ("success" in nextRuntime) {
+      return nextRuntime;
+    }
+
+    storedRoom.game = nextRuntime;
+    return null;
+  }
+
+  if (runtime === undefined) {
+    return null;
+  }
+
+  if (command.command === "pause") {
+    const nextGame = pausePongMultiplayerGame(runtime.game);
+
+    if (nextGame !== runtime.game) {
+      runtime.game = nextGame;
+      runtime.seq += 1;
+    }
+
+    resetPongRuntimeClocks(runtime, nowMs);
+    return null;
+  }
+
+  if (command.command === "resume") {
+    const nextGame = resumePongMultiplayerGame(runtime.game);
+
+    if (nextGame !== runtime.game) {
+      runtime.game = nextGame;
+      runtime.seq += 1;
+    }
+
+    resetPongRuntimeClocks(runtime, nowMs);
+    return null;
+  }
+
+  if (command.command === "restart") {
+    runtime.game = restartPongMultiplayerGame(runtime.game);
+    runtime.heldInputs = {};
+    runtime.seq += 1;
+    resetPongRuntimeClocks(runtime, nowMs);
+    return null;
+  }
+
+  if (command.command === "finish") {
+    const nextGame = pausePongMultiplayerGame(runtime.game);
+
+    if (nextGame !== runtime.game) {
+      runtime.game = nextGame;
+      runtime.seq += 1;
+    }
+
+    runtime.heldInputs = {};
+    resetPongRuntimeClocks(runtime, nowMs);
+  }
+
+  return null;
+}
+
+function applyPongInputCommand(
+  storedRoom: StoredMultiplayerRoom,
+  command: Extract<MultiplayerRoomStoreCommand, { type: "game.input" }>,
+  nowMs: number,
+): MultiplayerRoomStoreFailure | { participantId?: string; success: true } {
+  const participantId =
+    typeof command.participantId === "string" ? command.participantId : undefined;
+  const input = command.input;
+
+  if (!isObjectRecord(input)) {
+    return createStoreFailure("invalid-command", "Pong input must be a JSON object.");
+  }
+
+  if (storedRoom.room.settings.gameId !== "pong") {
+    return createStoreFailure(
+      "invalid-command",
+      "Game input is only supported for Pong rooms.",
+    );
+  }
+
+  const runtime = storedRoom.game;
+
+  if (runtime === undefined) {
+    return createStoreFailure(
+      "invalid-status",
+      "Pong input is only accepted after the room has started.",
+    );
+  }
+
+  if (storedRoom.room.status === "finished") {
+    return createStoreFailure(
+      "invalid-status",
+      "Finished rooms cannot accept Pong input.",
+    );
+  }
+
+  const sideResult = getPongMultiplayerParticipantSide(
+    storedRoom.room,
+    command.participantId,
+  );
+
+  if (!sideResult.success) {
+    return getPongMultiplayerFailure(sideResult);
+  }
+
+  if (input.type === "pong.setPaddleDirection") {
+    const direction = parsePongPaddleDirection(input.direction);
+
+    if (!direction.success) {
+      return direction;
+    }
+
+    if (setPongHeldDirection(runtime, sideResult.side, direction.direction)) {
+      runtime.seq += 1;
+    }
+
+    return {
+      participantId,
+      success: true,
+    };
+  }
+
+  if (input.type === "pong.serve") {
+    if (runtime.game.status !== "ready") {
+      return createStoreFailure(
+        "invalid-status",
+        "Pong serve is only available between rounds.",
+      );
+    }
+
+    runtime.game = startPongMultiplayerGame(runtime.game);
+    runtime.seq += 1;
+    resetPongRuntimeClocks(runtime, nowMs);
+
+    return {
+      participantId,
+      success: true,
+    };
+  }
+
+  return createStoreFailure("invalid-command", "Pong input type is not supported.");
+}
+
+function parsePongPaddleDirection(
+  direction: unknown,
+): MultiplayerRoomStoreFailure | {
+  direction: "down" | "up" | null;
+  success: true;
+} {
+  if (direction === "down" || direction === "up" || direction === null) {
+    return {
+      direction,
+      success: true,
+    };
+  }
+
+  return createStoreFailure(
+    "invalid-command",
+    "Pong paddle direction must be up, down, or null.",
+  );
+}
+
+function setPongHeldDirection(
+  runtime: StoredPongMultiplayerRuntime,
+  side: PongSide,
+  direction: "down" | "up" | null,
+) {
+  const currentInput = runtime.heldInputs[side];
+  const nextInput = getHeldInputForDirection(direction);
+
+  if (isSameHeldInput(currentInput, nextInput)) {
+    return false;
+  }
+
+  if (nextInput === undefined) {
+    delete runtime.heldInputs[side];
+  } else {
+    runtime.heldInputs[side] = nextInput;
+  }
+
+  return true;
+}
+
+function getHeldInputForDirection(direction: "down" | "up" | null) {
+  if (direction === "up") {
+    return {
+      up: true,
+    };
+  }
+
+  if (direction === "down") {
+    return {
+      down: true,
+    };
+  }
+
+  return undefined;
+}
+
+function isSameHeldInput(
+  left: PongMultiplayerHeldInput | undefined,
+  right: PongMultiplayerHeldInput | undefined,
+) {
+  return left?.up === right?.up && left?.down === right?.down;
+}
+
+function clearReleasedSeatHeldInput(
+  storedRoom: StoredMultiplayerRoom,
+  command: Extract<MultiplayerRoomStoreCommand, { type: "room.releaseSeat" }>,
+) {
+  if (storedRoom.game === undefined || typeof command.seatId !== "string") {
+    return;
+  }
+
+  const seatId = command.seatId.trim();
+
+  if (
+    (seatId === "left" || seatId === "right") &&
+    storedRoom.game.heldInputs[seatId] !== undefined
+  ) {
+    delete storedRoom.game.heldInputs[seatId];
+    storedRoom.game.seq += 1;
+  }
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
   readonly #createParticipantId: (
     context: MultiplayerRoomParticipantIdFactoryContext,
   ) => string;
   readonly #createRoomCode: () => string;
+  readonly #getNowMs: () => number;
   readonly #rooms = new Map<string, StoredMultiplayerRoom>();
 
   constructor({
     createParticipantId = createDefaultParticipantId,
     createRoomCode = createDefaultRoomCode,
+    getNowMs = createDefaultNowMs,
   }: CreateInProcessMultiplayerRoomStoreOptions = {}) {
     this.#createParticipantId = createParticipantId;
     this.#createRoomCode = createRoomCode;
+    this.#getNowMs = getNowMs;
   }
 
   createRoom({
@@ -309,13 +762,24 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
 
     this.#rooms.set(result.room.code, storedRoom);
 
-    return createStoredRoomSnapshot(storedRoom, result.room.hostParticipantId);
+    return createStoredRoomSnapshot(
+      storedRoom,
+      this.#getNowMs(),
+      result.room.hostParticipantId,
+    );
   }
 
   getRoom(roomCode: unknown): MultiplayerRoomStoreResult {
     const storedRoom = getStoredRoom(this.#rooms, roomCode);
 
-    return "room" in storedRoom ? createStoredRoomSnapshot(storedRoom) : storedRoom;
+    if (!("room" in storedRoom)) {
+      return storedRoom;
+    }
+
+    const nowMs = this.#getNowMs();
+    advancePongRuntimeTo(storedRoom, nowMs);
+
+    return createStoredRoomSnapshot(storedRoom, nowMs);
   }
 
   applyCommand(
@@ -328,12 +792,26 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
       return storedRoom;
     }
 
+    const nowMs = this.#getNowMs();
+    advancePongRuntimeTo(storedRoom, nowMs);
+
+    if (command.type === "game.input") {
+      const inputResult = applyPongInputCommand(storedRoom, command, nowMs);
+
+      if (!inputResult.success) {
+        return inputResult;
+      }
+
+      return createStoredRoomSnapshot(storedRoom, nowMs, inputResult.participantId);
+    }
+
     let participantId: string | undefined;
     let result:
       | ReturnType<typeof addPrivateRoomGuestParticipantAsObserver>
       | ReturnType<typeof claimPrivateRoomSeat>
       | ReturnType<typeof releasePrivateRoomSeat>
-      | ReturnType<typeof updatePrivateRoomSettings>;
+      | ReturnType<typeof updatePrivateRoomSettings>
+      | ReturnType<typeof applyLifecycleCommand>;
 
     if (command.type === "room.joinObserver") {
       participantId = this.#createParticipantId({
@@ -368,9 +846,19 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
     }
 
     storedRoom.room = result.room;
+    if (command.type === "room.lifecycle") {
+      const pongLifecycleResult = applyPongLifecycleCommand(storedRoom, command, nowMs);
+
+      if (pongLifecycleResult !== null) {
+        return pongLifecycleResult;
+      }
+    } else if (command.type === "room.releaseSeat") {
+      clearReleasedSeatHeldInput(storedRoom, command);
+    }
+
     storedRoom.seq += 1;
 
-    return createStoredRoomSnapshot(storedRoom, participantId);
+    return createStoredRoomSnapshot(storedRoom, nowMs, participantId);
   }
 }
 
