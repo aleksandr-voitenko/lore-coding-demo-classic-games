@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { CurrentUserProvider } from "@/hooks/use-current-user";
 import { GAME_CATALOG } from "@/lib/game-catalog";
 
 import { GameLauncher } from "./game-launcher";
@@ -135,6 +136,48 @@ describe("game launcher", () => {
 
     expect(getSelectMarkup(markup, "minesweeper-difficulty").match(/<option/g)).toHaveLength(3);
   });
+
+  it("shows a signed-out prompt for Pong private-room hosting", () => {
+    const markup = renderToStaticMarkup(<GameLauncher />);
+    const hostButtonMarkup = getButtonMarkup(markup, "private-room-host-pong-button");
+
+    expect(hostButtonMarkup).toContain('disabled=""');
+    expect(hostButtonMarkup).toContain("Sign in to host");
+    expect(markup).toContain('data-testid="private-room-host-pong-status"');
+    expect(markup).toContain("Account required");
+    expect(markup).not.toContain('data-testid="private-room-host-snake-button"');
+  });
+
+  it("enables Pong private-room hosting for signed-in users", () => {
+    const markup = renderToStaticMarkup(
+      <CurrentUserProvider initialUser={{ displayName: "Ada", id: "user-1" }}>
+        <GameLauncher />
+      </CurrentUserProvider>,
+    );
+    const hostButtonMarkup = getButtonMarkup(markup, "private-room-host-pong-button");
+
+    expect(hostButtonMarkup).not.toContain('disabled=""');
+    expect(hostButtonMarkup).toContain("Host room");
+    expect(markup).toContain("Private room");
+  });
+
+  it("renders the room lobby instead of the launcher grid when a room code is present", () => {
+    const markup = renderToStaticMarkup(<GameLauncher initialRoomCode="pong-1" />);
+
+    expect(markup).toContain('data-testid="multiplayer-room-lobby"');
+    expect(markup).toContain('data-testid="multiplayer-room-loading"');
+    expect(markup).toContain("PONG-1");
+    expect(markup).not.toContain('data-testid="game-menu"');
+  });
+
+  it("keeps unsupported room params in the lobby with a clear error", () => {
+    const markup = renderToStaticMarkup(<GameLauncher initialRoomCode="bad code" />);
+
+    expect(markup).toContain('data-testid="multiplayer-room-lobby"');
+    expect(markup).toContain('data-testid="multiplayer-room-error"');
+    expect(markup).toContain("Room code is not supported.");
+    expect(markup).not.toContain('data-testid="game-menu"');
+  });
 });
 
 function getSelectMarkup(markup: string, testId: string) {
@@ -145,4 +188,14 @@ function getSelectMarkup(markup: string, testId: string) {
   expect(selectMatch).not.toBeNull();
 
   return selectMatch?.[0] ?? "";
+}
+
+function getButtonMarkup(markup: string, testId: string) {
+  const elementMatch = markup.match(
+    new RegExp('<button(?=[^>]*data-testid="' + testId + '")[\\s\\S]*?</button>'),
+  );
+
+  expect(elementMatch).not.toBeNull();
+
+  return elementMatch?.[0] ?? "";
 }

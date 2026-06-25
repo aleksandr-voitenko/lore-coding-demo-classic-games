@@ -1,6 +1,6 @@
 "use client";
 
-import { Gamepad2Icon, PlayIcon, TrophyIcon } from "lucide-react";
+import { Gamepad2Icon, PlayIcon, TrophyIcon, UsersIcon } from "lucide-react";
 import {
   type ReactNode,
   useCallback,
@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 
+import { Button } from "@/components/ui/button";
 import {
   GAME_CARDS,
   GAME_PARAMETER_CONFIG,
@@ -22,8 +23,18 @@ import {
 import { GameCardArtworkFrame } from "@/components/game-card-artwork-frame";
 import { PLAYABLE_GAME_COMPONENTS } from "@/components/game-launcher-playables";
 import { GlobalLeaderboardScreen } from "@/components/global-leaderboard";
+import {
+  MultiplayerRoomLobby,
+  createMultiplayerRoom,
+} from "@/components/multiplayer-room-lobby";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserAccountControls } from "@/components/user-account-controls";
+import { useCurrentUser } from "@/hooks/use-current-user";
+import {
+  getPrivateRoomInvitePath,
+  type PrivateRoom,
+  type PrivateRoomSettings,
+} from "@/lib/multiplayer/room";
 import type { UserAuthMode } from "@/lib/user-profile";
 
 type MenuViewport = {
@@ -34,12 +45,38 @@ type MenuViewport = {
 type GameLauncherProps = {
   initialAuthMode?: UserAuthMode | null;
   initialReplayGameId?: GameId | null;
+  initialRoomCode?: string | null;
+};
+
+type ActiveRoomSession = {
+  participantId: string | null;
+  room: PrivateRoom | null;
+  roomCode: string;
+};
+
+type PrivateRoomHostActionProps = {
+  error: string | null;
+  gameId: GameId;
+  isCreating: boolean;
+  isSignedIn: boolean;
+  onCreatePrivateRoom: () => void;
 };
 
 export function GameLauncher({
   initialAuthMode = null,
   initialReplayGameId = null,
+  initialRoomCode = null,
 }: GameLauncherProps) {
+  const { user } = useCurrentUser();
+  const [activeRoomSession, setActiveRoomSession] = useState<ActiveRoomSession | null>(() =>
+    initialRoomCode === null
+      ? null
+      : {
+          participantId: null,
+          room: null,
+          roomCode: initialRoomCode,
+        },
+  );
   const [selectedGameId, setSelectedGameId] = useState<GameId | null>(initialReplayGameId);
   const [selectedReplayMode, setSelectedReplayMode] = useState<"latest" | null>(
     initialReplayGameId === null ? null : "latest",
@@ -48,6 +85,8 @@ export function GameLauncher({
   const [parameterValues, setParameterValues] = useState<GameParameterValues>(() =>
     createDefaultParameterValues(),
   );
+  const [privateRoomCreateError, setPrivateRoomCreateError] = useState<string | null>(null);
+  const [privateRoomCreatingGameId, setPrivateRoomCreatingGameId] = useState<GameId | null>(null);
   // Return-to-menu paths opt into restoring this viewport after a full-screen game view exits.
   const menuViewportRef = useRef<MenuViewport>({ scrollX: 0, scrollY: 0 });
   const shouldRestoreMenuViewportRef = useRef(false);
@@ -74,6 +113,13 @@ export function GameLauncher({
 
   const returnToProfile = useCallback(() => {
     window.location.href = "/profile";
+  }, []);
+
+  const returnToLibraryFromRoom = useCallback(() => {
+    window.history.pushState(null, "", "/");
+    setActiveRoomSession(null);
+    setPrivateRoomCreateError(null);
+    setPrivateRoomCreatingGameId(null);
   }, []);
 
   const openGlobalLeaderboard = useCallback(() => {
@@ -105,6 +151,55 @@ export function GameLauncher({
       [parameterKind]: normalizedValue,
     }));
   }, []);
+
+  const createPrivateRoomForGame = useCallback(
+    async (game: GameCard) => {
+      if (user === null || privateRoomCreatingGameId !== null) {
+        return;
+      }
+
+      setPrivateRoomCreatingGameId(game.id);
+      setPrivateRoomCreateError(null);
+
+      try {
+        const result = await createMultiplayerRoom({
+          gameId: game.id,
+          settings: createLauncherPrivateRoomSettings(game, parameterValues),
+        });
+        const invitePath = getPrivateRoomInvitePath(result.room.code);
+
+        if (invitePath !== null) {
+          window.history.pushState(null, "", invitePath);
+        }
+
+        setActiveRoomSession({
+          participantId: result.participantId,
+          room: result.room,
+          roomCode: result.room.code,
+        });
+      } catch (error) {
+        setPrivateRoomCreateError(
+          error instanceof Error ? error.message : "Could not create room.",
+        );
+      } finally {
+        setPrivateRoomCreatingGameId(null);
+      }
+    },
+    [parameterValues, privateRoomCreatingGameId, user],
+  );
+
+  if (activeRoomSession !== null) {
+    return (
+      <MultiplayerRoomLobby
+        initialAuthMode={initialAuthMode}
+        initialParticipantId={activeRoomSession.participantId}
+        initialRoom={activeRoomSession.room}
+        initialRoomCode={activeRoomSession.roomCode}
+        key={activeRoomSession.roomCode}
+        onBackToLibrary={returnToLibraryFromRoom}
+      />
+    );
+  }
 
   if (isGlobalLeaderboardVisible) {
     return <GlobalLeaderboardScreen onBackToMenu={returnToMenu} />;
@@ -184,6 +279,19 @@ export function GameLauncher({
               game={game}
               key={game.id}
               onSelectGame={() => selectGame(game.id)}
+              privateRoomHostAction={
+                game.id === "pong" ? (
+                  <PrivateRoomHostAction
+                    error={privateRoomCreateError}
+                    gameId={game.id}
+                    isCreating={privateRoomCreatingGameId === game.id}
+                    isSignedIn={user !== null}
+                    onCreatePrivateRoom={() => {
+                      void createPrivateRoomForGame(game);
+                    }}
+                  />
+                ) : null
+              }
               renderGameParameter={renderGameParameter}
               versionedArtworkSrc={getVersionedGameArtworkSrc(game)}
             />
@@ -206,6 +314,7 @@ export function GameLauncher({
 type GameCardArticleProps = {
   game: GameCard;
   onSelectGame: () => void;
+  privateRoomHostAction?: ReactNode;
   renderGameParameter: (game: GameCard, parameterKind: GameParameterKind) => ReactNode;
   versionedArtworkSrc: string;
 };
@@ -213,6 +322,7 @@ type GameCardArticleProps = {
 function GameCardArticle({
   game,
   onSelectGame,
+  privateRoomHostAction = null,
   renderGameParameter,
   versionedArtworkSrc,
 }: GameCardArticleProps) {
@@ -254,8 +364,53 @@ function GameCardArticle({
 
       <div className="mt-auto grid grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-2 p-4">
         {game.parameters.map((parameter) => renderGameParameter(game, parameter))}
+        {privateRoomHostAction}
       </div>
     </article>
+  );
+}
+
+function PrivateRoomHostAction({
+  error,
+  gameId,
+  isCreating,
+  isSignedIn,
+  onCreatePrivateRoom,
+}: PrivateRoomHostActionProps) {
+  const statusId = `${gameId}-private-room-host-status`;
+  const buttonLabel = isSignedIn
+    ? isCreating
+      ? "Creating room"
+      : "Host room"
+    : "Sign in to host";
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5 rounded-md border border-[var(--chrome-border)] p-2">
+      <Button
+        aria-describedby={statusId}
+        className="w-full"
+        data-testid={`private-room-host-${gameId}-button`}
+        disabled={!isSignedIn || isCreating}
+        onClick={onCreatePrivateRoom}
+        type="button"
+        variant={isSignedIn ? "default" : "outline"}
+      >
+        <UsersIcon data-icon="inline-start" />
+        {buttonLabel}
+      </Button>
+      <p
+        className={
+          error === null
+            ? "text-xs font-semibold text-[var(--chrome-muted)]"
+            : "text-xs font-semibold text-destructive"
+        }
+        data-testid={`private-room-host-${gameId}-status`}
+        id={statusId}
+        role={error === null ? "status" : "alert"}
+      >
+        {error ?? (isSignedIn ? "Private room" : "Account required")}
+      </p>
+    </div>
   );
 }
 
@@ -305,4 +460,20 @@ function GameParameterSelect({
       </select>
     </div>
   );
+}
+
+function createLauncherPrivateRoomSettings(
+  game: GameCard,
+  parameterValues: GameParameterValues,
+): PrivateRoomSettings {
+  const parameters = Object.fromEntries(
+    game.parameters.map((parameterKind) => [parameterKind, parameterValues[parameterKind]]),
+  );
+
+  return Object.keys(parameters).length === 0
+    ? { gameId: game.id }
+    : {
+        gameId: game.id,
+        parameters,
+      };
 }

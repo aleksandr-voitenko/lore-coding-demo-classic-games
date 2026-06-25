@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getInitialReplayGameId } from "./page";
+import { getInitialReplayGameId, getInitialRoomCode } from "./page";
 
 describe("home replay query parsing", () => {
   it("allows only games with replay players to launch in latest replay mode", () => {
@@ -16,5 +16,15 @@ describe("home replay query parsing", () => {
     expect(getInitialReplayGameId(["tetris", "snake"])).toBe("tetris");
     expect(getInitialReplayGameId("pac-man")).toBeNull();
     expect(getInitialReplayGameId(undefined)).toBeNull();
+  });
+});
+
+describe("home room query parsing", () => {
+  it("normalizes supported room codes and preserves present unsupported values", () => {
+    expect(getInitialRoomCode("abc-123")).toBe("ABC-123");
+    expect(getInitialRoomCode(["pong-1", "pong-2"])).toBe("PONG-1");
+    expect(getInitialRoomCode(" room code ")).toBe("room code");
+    expect(getInitialRoomCode("")).toBe("");
+    expect(getInitialRoomCode(undefined)).toBeNull();
   });
 });

@@ -22,6 +22,10 @@ This file covers React component ownership and shared game UI conventions under
   `UserAccountControls`. Keep browser-only `window` access in this client
   component; it snapshots `window.scrollX` and `window.scrollY` before opening a
   game and restores the viewport when returning to the launcher.
+- `multiplayer-room-lobby.tsx` owns the generic private-room lobby UI plus HTTP
+  helpers for room snapshots and commands. Keep it game-agnostic; actual Pong
+  gameplay, score submission, replay recording, and server transport authority
+  belong outside this component.
 - `game-card-artwork-frame.tsx` owns the shared launcher-style key-art frame
   used by launcher cards and the global leaderboard cards. Keep the blurred
   background, dark overlay, centered rounded foreground image, direct versioned
