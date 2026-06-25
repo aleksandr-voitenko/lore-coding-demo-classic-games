@@ -51,8 +51,11 @@ This file covers Node-only server helpers and storage adapters under
   authority.
 - `multiplayer-room-websocket.ts` owns the reusable Node WebSocket gateway for
   the realtime sidecar. It adapts the generic protocol envelopes to the room
-  runtime, accepts an injectable `MultiplayerRoomStore`, broadcasts authoritative
-  room snapshots after accepted commands, and keeps game-specific payloads nested
+  runtime, accepts an injectable `MultiplayerRoomStore`, rejects public
+  WebSocket lifecycle/settings commands because signed-in host authorization
+  lives on the authenticated HTTP room route, broadcasts authoritative room
+  snapshots after accepted WebSocket commands, exposes a narrow snapshot fanout
+  method for sidecar-owned mutations, and keeps game-specific payloads nested
   behind `game.input` dispatch.
 - `multiplayer-room-sidecar.ts` owns the standalone Node HTTP/WebSocket process
   wrapper around the gateway. It parses `MULTIPLAYER_SIDECAR_HOST`,
@@ -61,12 +64,13 @@ This file covers Node-only server helpers and storage adapters under
   `MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN`. It exposes `/healthz`, keeps
   public WebSocket upgrades on `/multiplayer/rooms` by default, serves internal
   JSON room create/get/command endpoints on `/_internal/multiplayer/rooms` by
-  default, and passes one in-process room store to both those HTTP endpoints and
-  the WebSocket gateway. It is emitted through `tsconfig.sidecar.json` because
-  the main app TypeScript config typechecks only and does not emit runtime
-  JavaScript. Keep sidecar-emitted runtime imports resolvable by plain Node
-  after TypeScript emits CommonJS; TypeScript path aliases are not rewritten in
-  emitted output.
+  default, passes one in-process room store to both those HTTP endpoints and the
+  WebSocket gateway, and fans successful internal room command POST results back
+  to already-subscribed WebSocket clients as authoritative `room.snapshot`
+  messages. It is emitted through `tsconfig.sidecar.json` because the main app
+  TypeScript config typechecks only and does not emit runtime JavaScript. Keep
+  sidecar-emitted runtime imports resolvable by plain Node after TypeScript emits
+  CommonJS; TypeScript path aliases are not rewritten in emitted output.
 - Keep this adapter boundary small so a future Postgres store can replace SQLite
   without changing the client API or game components.
 

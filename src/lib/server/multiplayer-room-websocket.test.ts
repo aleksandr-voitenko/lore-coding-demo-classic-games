@@ -18,6 +18,9 @@ const HOST_USER = {
   id: "user-1",
 } satisfies AuthenticatedUser;
 
+const HOST_ONLY_WEBSOCKET_COMMAND_ERROR =
+  "Host-only room commands require the authenticated HTTP room route.";
+
 const cleanupCallbacks: Array<() => Promise<void> | void> = [];
 
 afterEach(async () => {
@@ -376,11 +379,87 @@ describe("multiplayer room WebSocket gateway", () => {
 
     await expect(rejectionPromise).resolves.toEqual({
       code: "not-host",
-      error: "Only the signed-in room host can perform this action.",
+      error: HOST_ONLY_WEBSOCKET_COMMAND_ERROR,
       requestId: "guest-start",
       roomCode: "ROOM1",
       type: "room.commandRejected",
     });
+  });
+
+  it("rejects public lifecycle commands before they reach the room store", async () => {
+    const store = createTestRoomStore();
+    createStartedPongRoom(store);
+    const applyCommand = vi.spyOn(store, "applyCommand");
+    const { url } = await createGatewayFixture(store);
+    const client = await connectClient(url);
+
+    await bootstrapClient(client);
+
+    const responsePromise = waitForServerMessage(
+      client,
+      (message) => "requestId" in message && message.requestId === "host-pause",
+    );
+
+    sendClientMessage(client, {
+      command: {
+        command: "pause",
+        participantId: "host-1",
+        type: "room.lifecycle",
+      },
+      requestId: "host-pause",
+      roomCode: "ROOM1",
+      type: "room.command",
+    });
+
+    await expect(responsePromise).resolves.toEqual({
+      code: "not-host",
+      error: HOST_ONLY_WEBSOCKET_COMMAND_ERROR,
+      requestId: "host-pause",
+      roomCode: "ROOM1",
+      type: "room.commandRejected",
+    });
+    expect(applyCommand).not.toHaveBeenCalled();
+  });
+
+  it("rejects public settings commands before they reach the room store", async () => {
+    const store = createTestRoomStore();
+    createLobbyRoom(store);
+    const applyCommand = vi.spyOn(store, "applyCommand");
+    const { url } = await createGatewayFixture(store);
+    const client = await connectClient(url);
+
+    await bootstrapClient(client);
+
+    const responsePromise = waitForServerMessage(
+      client,
+      (message) =>
+        "requestId" in message && message.requestId === "host-settings",
+    );
+
+    sendClientMessage(client, {
+      command: {
+        participantId: "host-1",
+        settings: {
+          gameId: "pong",
+          parameters: {
+            targetScore: 7,
+          },
+        },
+        type: "room.updateSettings",
+      },
+      requestId: "host-settings",
+      roomCode: "ROOM1",
+      type: "room.command",
+    });
+
+    await expect(responsePromise).resolves.toEqual({
+      code: "not-host",
+      error: HOST_ONLY_WEBSOCKET_COMMAND_ERROR,
+      requestId: "host-settings",
+      roomCode: "ROOM1",
+      type: "room.commandRejected",
+    });
+    expect(applyCommand).not.toHaveBeenCalled();
   });
 
   it("acks game input and broadcasts updated Pong snapshots", async () => {

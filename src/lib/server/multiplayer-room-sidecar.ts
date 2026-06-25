@@ -87,7 +87,7 @@ export function createMultiplayerRoomSidecar(
 ): MultiplayerRoomSidecar {
   const store = new InProcessMultiplayerRoomStore();
   const server = createServer((request, response) => {
-    void handleHttpRequest(config, store, request, response).catch(
+    void handleHttpRequest(config, store, gateway, request, response).catch(
       (error: unknown) => {
         sendUnhandledError(request, response, error);
       },
@@ -137,6 +137,7 @@ export async function runMultiplayerRoomSidecarFromEnv(
 async function handleHttpRequest(
   config: MultiplayerRoomSidecarConfig,
   roomStore: MultiplayerRoomStore,
+  gateway: MultiplayerRoomWebSocketGateway,
   request: IncomingMessage,
   response: ServerResponse,
 ) {
@@ -162,6 +163,7 @@ async function handleHttpRequest(
     return handleRoomServiceRequest(
       config,
       roomStore,
+      gateway,
       roomServiceRoute,
       request,
       response,
@@ -196,6 +198,7 @@ type ReadJsonRequestBodyResult =
 async function handleRoomServiceRequest(
   config: MultiplayerRoomSidecarConfig,
   roomStore: MultiplayerRoomStore,
+  gateway: MultiplayerRoomWebSocketGateway,
   route: RoomServiceRoute,
   request: IncomingMessage,
   response: ServerResponse,
@@ -266,11 +269,13 @@ async function handleRoomServiceRequest(
       return;
     }
 
-    sendStoreResult(
-      request,
-      response,
-      await roomStore.applyCommand(route.roomCode, command.command),
-    );
+    const result = await roomStore.applyCommand(route.roomCode, command.command);
+
+    if (result.success) {
+      gateway.broadcastSnapshot(result.snapshot);
+    }
+
+    sendStoreResult(request, response, result);
     return;
   }
 

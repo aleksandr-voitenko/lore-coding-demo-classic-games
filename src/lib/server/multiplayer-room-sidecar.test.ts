@@ -160,6 +160,29 @@ function expectStoreSuccess(result: MultiplayerRoomStoreResult) {
   return result.snapshot;
 }
 
+function hasSeatOccupantSnapshot(
+  message: Record<string, unknown>,
+  seatId: string,
+  participantId: string,
+) {
+  if (message.type !== "room.snapshot" || !isRecord(message.snapshot)) {
+    return false;
+  }
+
+  const { room } = message.snapshot;
+
+  if (!isRecord(room) || !Array.isArray(room.seats)) {
+    return false;
+  }
+
+  return room.seats.some(
+    (seat) =>
+      isRecord(seat) &&
+      seat.id === seatId &&
+      seat.occupiedByParticipantId === participantId,
+  );
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -343,6 +366,11 @@ describe("multiplayer room sidecar", () => {
       throw new Error("Expected the join ack to include a participant id.");
     }
 
+    const httpCommandBroadcastPromise = waitForServerMessage(
+      client,
+      (message) => hasSeatOccupantSnapshot(message, "left", guestParticipantId),
+    );
+
     const afterWebSocketCommandResponse = await fetch(
       `${serviceBaseUrl}/${roomCode}`,
     );
@@ -378,6 +406,7 @@ describe("multiplayer room sidecar", () => {
     const afterHttpCommandSnapshot = expectStoreSuccess(
       await readStoreResult(httpCommandResponse),
     );
+    const httpCommandBroadcast = await httpCommandBroadcastPromise;
 
     expect(afterHttpCommandSnapshot.room.seats).toEqual([
       expect.objectContaining({
@@ -389,6 +418,25 @@ describe("multiplayer room sidecar", () => {
         occupiedByParticipantId: null,
       }),
     ]);
+    expect(httpCommandBroadcast).toMatchObject({
+      roomCode,
+      snapshot: {
+        room: {
+          seats: [
+            expect.objectContaining({
+              id: "left",
+              occupiedByParticipantId: guestParticipantId,
+            }),
+            expect.objectContaining({
+              id: "right",
+              occupiedByParticipantId: null,
+            }),
+          ],
+        },
+        seq: afterHttpCommandSnapshot.seq,
+      },
+      type: "room.snapshot",
+    });
 
     const observer = await connectClient(
       origin.replace("http://", "ws://") + "/rooms",

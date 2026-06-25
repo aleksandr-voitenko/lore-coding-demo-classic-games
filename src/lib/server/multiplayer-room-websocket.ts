@@ -6,12 +6,7 @@ import type {
   MultiplayerRealtimeServerMessage,
   MultiplayerRoomGameSnapshot,
   MultiplayerRoomSnapshot,
-  PrivateRoomLifecycleCommand,
 } from "../multiplayer/protocol";
-import type {
-  PrivateRoomSettingValue,
-  PrivateRoomSettings,
-} from "../multiplayer/room";
 import { isGameId } from "../game-catalog";
 
 import {
@@ -27,6 +22,7 @@ export type CreateMultiplayerRoomWebSocketGatewayOptions = ServerOptions & {
 };
 
 export type MultiplayerRoomWebSocketGateway = {
+  broadcastSnapshot: (snapshot: MultiplayerRoomSnapshot) => void;
   close: () => Promise<void>;
   roomStore: MultiplayerRoomStore;
   webSocketServer: WebSocketServer;
@@ -67,6 +63,9 @@ type GameInputStoreCommand = Extract<
   MultiplayerRoomStoreCommand,
   { type: "game.input" }
 >;
+
+const HOST_ONLY_WEBSOCKET_COMMAND_ERROR =
+  "Host-only room commands require the authenticated HTTP room route.";
 
 export function createMultiplayerRoomWebSocketGateway({
   store = new InProcessMultiplayerRoomStore(),
@@ -217,6 +216,17 @@ export function createMultiplayerRoomWebSocketGateway({
   async function handleRoomCommand(socket: WebSocket, message: RoomCommandMessage) {
     const requestId = getRoomCommandRequestId(message);
     const roomCode = getOptionalString(message.roomCode);
+
+    if (isHostOnlyRoomCommand(message.command)) {
+      sendRejection(socket, {
+        code: "not-host",
+        error: HOST_ONLY_WEBSOCKET_COMMAND_ERROR,
+        requestId,
+        roomCode,
+      });
+      return;
+    }
+
     const parsedCommand = parseRoomCommand(message.command);
 
     if (!parsedCommand.success) {
@@ -373,6 +383,7 @@ export function createMultiplayerRoomWebSocketGateway({
   });
 
   return {
+    broadcastSnapshot,
     close: () => closeWebSocketServer(webSocketServer),
     roomStore: store,
     webSocketServer,
@@ -499,6 +510,13 @@ function getCommandParticipantId(command: MultiplayerRoomStoreCommand) {
   return undefined;
 }
 
+function isHostOnlyRoomCommand(value: unknown) {
+  return (
+    isObjectRecord(value) &&
+    (value.type === "room.lifecycle" || value.type === "room.updateSettings")
+  );
+}
+
 function getRoomCommandRequestId(message: RoomCommandMessage) {
   if (typeof message.requestId === "string") {
     return message.requestId;
@@ -552,114 +570,10 @@ function parseRoomCommand(value: unknown): ParseRoomCommandResult {
     };
   }
 
-  if (value.type === "room.lifecycle") {
-    if (!isLifecycleCommand(value.command)) {
-      return {
-        error: "Room lifecycle command is not supported.",
-        success: false,
-      };
-    }
-
-    return {
-      command: {
-        command: value.command,
-        participantId: value.participantId,
-        type: "room.lifecycle",
-      },
-      success: true,
-    };
-  }
-
-  if (value.type === "room.updateSettings") {
-    const settings = parsePrivateRoomSettings(value.settings);
-
-    if (settings === null) {
-      return {
-        error: "Room settings must be a supported JSON object.",
-        success: false,
-      };
-    }
-
-    return {
-      command: {
-        participantId: value.participantId,
-        settings,
-        type: "room.updateSettings",
-      },
-      success: true,
-    };
-  }
-
   return {
     error: "Room command type is not supported.",
     success: false,
   };
-}
-
-function isLifecycleCommand(value: unknown): value is PrivateRoomLifecycleCommand {
-  return (
-    value === "finish" ||
-    value === "pause" ||
-    value === "restart" ||
-    value === "resume" ||
-    value === "start"
-  );
-}
-
-function parsePrivateRoomSettings(value: unknown): PrivateRoomSettings | null {
-  if (!isObjectRecord(value) || typeof value.gameId !== "string") {
-    return null;
-  }
-
-  const gameId = value.gameId.trim();
-
-  if (!isGameId(gameId)) {
-    return null;
-  }
-
-  if (value.parameters === undefined) {
-    return {
-      gameId,
-    };
-  }
-
-  if (!isObjectRecord(value.parameters)) {
-    return null;
-  }
-
-  if (
-    !Object.values(value.parameters).every((entry) =>
-      isPrivateRoomSettingValue(entry),
-    )
-  ) {
-    return null;
-  }
-
-  return {
-    gameId,
-    parameters: value.parameters as Readonly<Record<string, PrivateRoomSettingValue>>,
-  };
-}
-
-function isPrivateRoomSettingValue(value: unknown): value is PrivateRoomSettingValue {
-  if (
-    value === null ||
-    typeof value === "boolean" ||
-    typeof value === "string" ||
-    (typeof value === "number" && Number.isFinite(value))
-  ) {
-    return true;
-  }
-
-  if (Array.isArray(value)) {
-    return value.every((entry) => isPrivateRoomSettingValue(entry));
-  }
-
-  if (isObjectRecord(value)) {
-    return Object.values(value).every((entry) => isPrivateRoomSettingValue(entry));
-  }
-
-  return false;
 }
 
 function rawDataToText(data: RawData) {
