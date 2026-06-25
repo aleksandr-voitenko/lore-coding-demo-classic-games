@@ -96,6 +96,10 @@ describe("multiplayer realtime protocol", () => {
   });
 
   it("wraps existing room commands without making each command a transport type", () => {
+    const joinObserverCommand = {
+      displayName: "Guest Hero",
+      type: "room.joinObserver",
+    } satisfies PrivateRoomCommandMessage;
     const claimSeatCommand = {
       participantId: "guest-1",
       seatId: "left",
@@ -118,6 +122,10 @@ describe("multiplayer realtime protocol", () => {
       type: "room.updateSettings",
     } satisfies PrivateRoomClientMessage;
 
+    expect(joinObserverCommand).toEqual({
+      displayName: "Guest Hero",
+      type: "room.joinObserver",
+    });
     expect(realtimeCommand.command.type).toBe("room.claimSeat");
     expect(httpCommand.type).toBe("room.updateSettings");
     expect(httpCommand.settings.gameId).toBe("asteroids");

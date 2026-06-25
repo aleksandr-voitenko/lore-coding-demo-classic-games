@@ -20,6 +20,8 @@ import {
   getPrivateRoomShareLink,
   postMultiplayerRoomCommand,
   selectFreshMultiplayerRoomSnapshot,
+  shouldPostMultiplayerRoomCommandOverHttp,
+  shouldScheduleMultiplayerRoomPolling,
 } from "./multiplayer-room-lobby";
 
 type RoomFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -282,6 +284,71 @@ describe("multiplayer room lobby", () => {
     ).toBe(60);
   });
 
+  it("schedules HTTP polling only while WebSocket transport is unavailable or in fallback", () => {
+    expect(shouldScheduleMultiplayerRoomPolling("unconfigured")).toBe(true);
+    expect(shouldScheduleMultiplayerRoomPolling("fallback")).toBe(true);
+    expect(shouldScheduleMultiplayerRoomPolling("connecting")).toBe(false);
+    expect(shouldScheduleMultiplayerRoomPolling("active")).toBe(false);
+    expect(shouldScheduleMultiplayerRoomPolling("reconnecting")).toBe(false);
+  });
+
+  it("keeps authenticated host-only commands on HTTP while active game input uses WebSocket", () => {
+    expect(
+      shouldPostMultiplayerRoomCommandOverHttp(
+        {
+          command: "start",
+          participantId: "host-participant",
+          type: "room.lifecycle",
+        },
+        "active",
+      ),
+    ).toBe(true);
+    expect(
+      shouldPostMultiplayerRoomCommandOverHttp(
+        {
+          participantId: "host-participant",
+          settings: PONG_ROOM.settings,
+          type: "room.updateSettings",
+        },
+        "active",
+      ),
+    ).toBe(true);
+    expect(
+      shouldPostMultiplayerRoomCommandOverHttp(
+        {
+          participantId: "guest-participant",
+          seatId: "right",
+          type: "room.claimSeat",
+        },
+        "active",
+      ),
+    ).toBe(false);
+    expect(
+      shouldPostMultiplayerRoomCommandOverHttp(
+        {
+          gameId: "pong",
+          input: {
+            direction: "up",
+            type: "pong.setPaddleDirection",
+          },
+          participantId: "host-participant",
+          type: "game.input",
+        },
+        "active",
+      ),
+    ).toBe(false);
+    expect(
+      shouldPostMultiplayerRoomCommandOverHttp(
+        {
+          participantId: "guest-participant",
+          seatId: "right",
+          type: "room.claimSeat",
+        },
+        "fallback",
+      ),
+    ).toBe(true);
+  });
+
   it("builds full private-room share links when a browser origin is available", () => {
     expect(getPrivateRoomShareLink("44fe068b", "http://localhost:3000")).toBe(
       "http://localhost:3000/?room=44FE068B",
@@ -448,6 +515,7 @@ describe("multiplayer room lobby", () => {
     await postMultiplayerRoomCommand(
       "PONG-1",
       {
+        gameId: "pong",
         input: {
           direction: "up",
           type: "pong.setPaddleDirection",
@@ -460,6 +528,7 @@ describe("multiplayer room lobby", () => {
     await postMultiplayerRoomCommand(
       "PONG-1",
       {
+        gameId: "pong",
         input: {
           type: "pong.serve",
         },
@@ -470,6 +539,7 @@ describe("multiplayer room lobby", () => {
     );
 
     expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({
+      gameId: "pong",
       input: {
         direction: "up",
         type: "pong.setPaddleDirection",
@@ -478,6 +548,7 @@ describe("multiplayer room lobby", () => {
       type: "game.input",
     });
     expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body))).toEqual({
+      gameId: "pong",
       input: {
         type: "pong.serve",
       },

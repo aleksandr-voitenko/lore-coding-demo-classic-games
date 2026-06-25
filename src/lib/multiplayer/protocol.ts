@@ -87,7 +87,7 @@ export type MultiplayerRoomSnapshot =
 export type PrivateRoomCommandMessage =
   | {
       displayName: string;
-      participantId: string;
+      participantId?: string;
       requestId?: string;
       type: "room.joinObserver";
       userId?: string | null;

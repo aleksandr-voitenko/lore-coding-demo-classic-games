@@ -77,6 +77,16 @@ API routes continue using their local in-process room store unless
 `MULTIPLAYER_ROOM_SERVICE_URL` points at the sidecar room service base URL, for
 example `http://127.0.0.1:3001/_internal/multiplayer/rooms`.
 
+Browser room streams are enabled with
+`NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL`. Use an absolute endpoint such as
+`ws://127.0.0.1:3001/multiplayer/rooms` for local sidecar testing, or a
+same-origin path such as `/multiplayer/rooms` when a proxy routes WebSocket
+upgrades beside the Next app. When this value is unset, the room UI keeps using
+the existing Next HTTP polling and command fallback. Host lifecycle and settings
+commands continue to use the Next HTTP API so signed-in-host authorization stays
+on the authenticated route until the WebSocket sidecar has its own authenticated
+host session model.
+
 The sidecar room service endpoints are internal service endpoints; public HTTP
 room creation and host authorization should still flow through the Next API
 routes. If the internal hop needs a bearer token, set the same secret in

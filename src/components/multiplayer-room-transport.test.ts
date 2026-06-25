@@ -1,0 +1,355 @@
+import { beforeEach, describe, expect, it } from "vitest";
+
+import type { MultiplayerRealtimeServerMessage } from "@/lib/multiplayer/protocol";
+import type { PrivateRoom } from "@/lib/multiplayer/room";
+
+import {
+  type MultiplayerRoomTransportSnapshot,
+  type MultiplayerRoomWebSocketEventMap,
+  type MultiplayerRoomWebSocketLike,
+  createMultiplayerRoomCommandMessage,
+  createMultiplayerRoomConnectionMessage,
+  createMultiplayerRoomGameInputMessage,
+  createMultiplayerRoomWebSocketTransport,
+  resolveMultiplayerRoomWebSocketUrl,
+  shouldUseHttpMultiplayerRoomTransport,
+} from "./multiplayer-room-transport";
+
+const ROOM: PrivateRoom = {
+  code: "ROOM1",
+  hostParticipantId: "host-1",
+  participants: [
+    {
+      displayName: "Ada",
+      id: "host-1",
+      role: "host",
+      userId: "user-1",
+    },
+    {
+      displayName: "Grace",
+      id: "guest-1",
+      role: "observer",
+      userId: null,
+    },
+  ],
+  seats: [],
+  settings: {
+    gameId: "pong",
+  },
+  status: "lobby",
+};
+
+class FakeWebSocket implements MultiplayerRoomWebSocketLike {
+  static instances: FakeWebSocket[] = [];
+
+  readonly sentMessages: string[] = [];
+  readyState = 0;
+  readonly url: string;
+  readonly closeListeners = new Set<(event: CloseEvent) => void>();
+  readonly errorListeners = new Set<(event: Event) => void>();
+  readonly messageListeners = new Set<(event: MessageEvent<unknown>) => void>();
+  readonly openListeners = new Set<(event: Event) => void>();
+
+  constructor(url: string) {
+    this.url = url;
+    FakeWebSocket.instances.push(this);
+  }
+
+  addEventListener<EventName extends keyof MultiplayerRoomWebSocketEventMap>(
+    eventName: EventName,
+    listener: (event: MultiplayerRoomWebSocketEventMap[EventName]) => void,
+  ) {
+    if (eventName === "close") {
+      this.closeListeners.add(listener as (event: CloseEvent) => void);
+    } else if (eventName === "error") {
+      this.errorListeners.add(listener as (event: Event) => void);
+    } else if (eventName === "message") {
+      this.messageListeners.add(listener as (event: MessageEvent<unknown>) => void);
+    } else {
+      this.openListeners.add(listener as (event: Event) => void);
+    }
+  }
+
+  close() {
+    this.readyState = 3;
+  }
+
+  emitClose() {
+    this.readyState = 3;
+    for (const listener of this.closeListeners) {
+      listener({} as CloseEvent);
+    }
+  }
+
+  emitMessage(message: MultiplayerRealtimeServerMessage) {
+    const event = {
+      data: JSON.stringify(message),
+    } as MessageEvent<unknown>;
+
+    for (const listener of this.messageListeners) {
+      listener(event);
+    }
+  }
+
+  emitOpen() {
+    this.readyState = 1;
+    for (const listener of this.openListeners) {
+      listener({} as Event);
+    }
+  }
+
+  removeEventListener<EventName extends keyof MultiplayerRoomWebSocketEventMap>(
+    eventName: EventName,
+    listener: (event: MultiplayerRoomWebSocketEventMap[EventName]) => void,
+  ) {
+    if (eventName === "close") {
+      this.closeListeners.delete(listener as (event: CloseEvent) => void);
+    } else if (eventName === "error") {
+      this.errorListeners.delete(listener as (event: Event) => void);
+    } else if (eventName === "message") {
+      this.messageListeners.delete(listener as (event: MessageEvent<unknown>) => void);
+    } else {
+      this.openListeners.delete(listener as (event: Event) => void);
+    }
+  }
+
+  send(data: string) {
+    this.sentMessages.push(data);
+  }
+}
+
+describe("multiplayer room WebSocket URL derivation", () => {
+  it("resolves absolute and same-origin room stream URLs", () => {
+    expect(resolveMultiplayerRoomWebSocketUrl(undefined, "http://localhost:3000"))
+      .toBeNull();
+    expect(resolveMultiplayerRoomWebSocketUrl("   ", "http://localhost:3000"))
+      .toBeNull();
+    expect(
+      resolveMultiplayerRoomWebSocketUrl(
+        "ws://127.0.0.1:3001/multiplayer/rooms",
+        null,
+      ),
+    ).toBe("ws://127.0.0.1:3001/multiplayer/rooms");
+    expect(
+      resolveMultiplayerRoomWebSocketUrl(
+        "https://games.example/multiplayer/rooms",
+        null,
+      ),
+    ).toBe("wss://games.example/multiplayer/rooms");
+    expect(
+      resolveMultiplayerRoomWebSocketUrl(
+        "/multiplayer/rooms",
+        "http://localhost:3000",
+      ),
+    ).toBe("ws://localhost:3000/multiplayer/rooms");
+    expect(
+      resolveMultiplayerRoomWebSocketUrl(
+        "/multiplayer/rooms",
+        "https://games.example",
+      ),
+    ).toBe("wss://games.example/multiplayer/rooms");
+    expect(
+      resolveMultiplayerRoomWebSocketUrl(
+        "multiplayer/rooms",
+        "https://games.example",
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("multiplayer room WebSocket message shapes", () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+  });
+
+  it("builds generic connection, room-command, and game-input envelopes", () => {
+    expect(
+      createMultiplayerRoomConnectionMessage({
+        displayName: "Grace",
+        requestId: "hello-1",
+        roomCode: "ROOM1",
+      }),
+    ).toEqual({
+      displayName: "Grace",
+      requestId: "hello-1",
+      roomCode: "ROOM1",
+      type: "connection.hello",
+    });
+    expect(
+      createMultiplayerRoomConnectionMessage({
+        lastSeq: {
+          game: 4,
+          room: 3,
+        },
+        participantId: "guest-1",
+        requestId: "resume-1",
+        roomCode: "ROOM1",
+      }),
+    ).toEqual({
+      lastSeq: {
+        game: 4,
+        room: 3,
+      },
+      participantId: "guest-1",
+      requestId: "resume-1",
+      roomCode: "ROOM1",
+      type: "connection.resume",
+    });
+    expect(
+      createMultiplayerRoomCommandMessage(
+        "ROOM1",
+        {
+          displayName: "Grace",
+          type: "room.joinObserver",
+        },
+        "join-1",
+      ),
+    ).toEqual({
+      command: {
+        displayName: "Grace",
+        type: "room.joinObserver",
+      },
+      requestId: "join-1",
+      roomCode: "ROOM1",
+      type: "room.command",
+    });
+    expect(
+      createMultiplayerRoomGameInputMessage({
+        gameId: "pong",
+        input: {
+          direction: "up",
+          type: "pong.setPaddleDirection",
+        },
+        participantId: "host-1",
+        requestId: "input-1",
+        roomCode: "ROOM1",
+      }),
+    ).toEqual({
+      gameId: "pong",
+      input: {
+        direction: "up",
+        type: "pong.setPaddleDirection",
+      },
+      participantId: "host-1",
+      requestId: "input-1",
+      roomCode: "ROOM1",
+      type: "game.input",
+    });
+  });
+
+  it("sends room commands and Pong input through the generic WebSocket envelopes", async () => {
+    const participantIds: string[] = [];
+    const snapshots: MultiplayerRoomTransportSnapshot[] = [];
+    const transport = createMultiplayerRoomWebSocketTransport({
+      displayName: "Grace",
+      onBootstrap: (snapshot) => snapshots.push(snapshot),
+      onParticipantId: (participantId) => participantIds.push(participantId),
+      onSnapshot: (snapshot) => snapshots.push(snapshot),
+      roomCode: "ROOM1",
+      url: "ws://127.0.0.1:3001/multiplayer/rooms",
+      webSocketConstructor: FakeWebSocket,
+    });
+    const socket = FakeWebSocket.instances[0]!;
+
+    expect(socket.url).toBe("ws://127.0.0.1:3001/multiplayer/rooms");
+
+    socket.emitOpen();
+
+    expect(JSON.parse(socket.sentMessages[0]!)).toMatchObject({
+      displayName: "Grace",
+      roomCode: "ROOM1",
+      type: "connection.hello",
+    });
+
+    socket.emitMessage({
+      requestId: JSON.parse(socket.sentMessages[0]!).requestId,
+      roomCode: "ROOM1",
+      snapshot: {
+        room: ROOM,
+        seq: 1,
+      },
+      type: "connection.bootstrap",
+    });
+
+    const joinAck = transport.sendRoomCommand({
+      displayName: "Grace",
+      type: "room.joinObserver",
+    });
+    const joinMessage = JSON.parse(socket.sentMessages[1]!);
+
+    expect(joinMessage).toMatchObject({
+      command: {
+        displayName: "Grace",
+        type: "room.joinObserver",
+      },
+      roomCode: "ROOM1",
+      type: "room.command",
+    });
+
+    socket.emitMessage({
+      participantId: "guest-1",
+      requestId: joinMessage.requestId,
+      roomCode: "ROOM1",
+      seq: 2,
+      type: "room.commandAck",
+    });
+
+    await expect(joinAck).resolves.toEqual({
+      participantId: "guest-1",
+      seq: 2,
+    });
+
+    const inputAck = transport.sendGameInput(
+      "pong",
+      {
+        direction: "up",
+        type: "pong.setPaddleDirection",
+      },
+      "guest-1",
+    );
+    const inputMessage = JSON.parse(socket.sentMessages[2]!);
+
+    expect(inputMessage).toMatchObject({
+      gameId: "pong",
+      input: {
+        direction: "up",
+        type: "pong.setPaddleDirection",
+      },
+      participantId: "guest-1",
+      roomCode: "ROOM1",
+      type: "game.input",
+    });
+
+    socket.emitMessage({
+      gameSeq: 7,
+      participantId: "guest-1",
+      requestId: inputMessage.requestId,
+      roomCode: "ROOM1",
+      seq: 2,
+      type: "room.commandAck",
+    });
+
+    await expect(inputAck).resolves.toEqual({
+      gameSeq: 7,
+      participantId: "guest-1",
+      seq: 2,
+    });
+    expect(participantIds).toEqual(["guest-1", "guest-1"]);
+    expect(snapshots).toEqual([
+      {
+        room: ROOM,
+        seq: 1,
+      },
+    ]);
+  });
+});
+
+describe("multiplayer room HTTP transport fallback", () => {
+  it("keeps HTTP enabled only when WebSocket transport is unconfigured or failed before bootstrap", () => {
+    expect(shouldUseHttpMultiplayerRoomTransport("unconfigured")).toBe(true);
+    expect(shouldUseHttpMultiplayerRoomTransport("fallback")).toBe(true);
+    expect(shouldUseHttpMultiplayerRoomTransport("connecting")).toBe(false);
+    expect(shouldUseHttpMultiplayerRoomTransport("active")).toBe(false);
+    expect(shouldUseHttpMultiplayerRoomTransport("reconnecting")).toBe(false);
+  });
+});

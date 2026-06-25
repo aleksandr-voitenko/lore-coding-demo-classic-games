@@ -20,6 +20,11 @@ import {
 } from "react";
 
 import { PongMultiplayerRoom } from "@/components/pong-multiplayer-room";
+import {
+  type MultiplayerRoomTransportStatus,
+  shouldUseHttpMultiplayerRoomTransport,
+  useMultiplayerRoomWebSocketTransport,
+} from "@/components/multiplayer-room-transport";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { UserAccountControls } from "@/components/user-account-controls";
@@ -39,6 +44,7 @@ import type {
   MultiplayerRoomGameSnapshot,
   MultiplayerRoomSnapshot,
   PongMultiplayerClientInput,
+  PrivateRoomClientMessage,
   PrivateRoomLifecycleCommand,
 } from "@/lib/multiplayer/protocol";
 import {
@@ -62,45 +68,6 @@ type CreateMultiplayerRoomOptions = {
   gameId: GameId;
   settings?: PrivateRoomSettings;
 };
-
-type MultiplayerRoomHttpCommand =
-  | {
-      displayName: string;
-      participantId?: string;
-      requestId?: string;
-      type: "room.joinObserver";
-      userId?: string | null;
-    }
-  | {
-      participantId: string;
-      requestId?: string;
-      seatId: string;
-      type: "room.claimSeat";
-    }
-  | {
-      participantId: string;
-      requestId?: string;
-      seatId: string;
-      type: "room.releaseSeat";
-    }
-  | {
-      command: PrivateRoomLifecycleCommand;
-      participantId: string;
-      requestId?: string;
-      type: "room.lifecycle";
-    }
-  | {
-      participantId: string;
-      requestId?: string;
-      settings: PrivateRoomSettings;
-      type: "room.updateSettings";
-    }
-  | {
-      input: PongMultiplayerClientInput;
-      participantId: string;
-      requestId?: string;
-      type: "game.input";
-    };
 
 type MultiplayerRoomLobbyProps = {
   initialAuthMode?: UserAuthMode | null;
@@ -268,7 +235,7 @@ export async function fetchMultiplayerRoom(roomCode: string, fetcher?: RoomFetch
 
 export async function postMultiplayerRoomCommand(
   roomCode: string,
-  message: MultiplayerRoomHttpCommand,
+  message: PrivateRoomClientMessage,
   fetcher?: RoomFetch,
 ) {
   const response = await getDefaultFetcher(fetcher)(getRoomApiPath(roomCode), {
@@ -387,6 +354,23 @@ export function getInitialMultiplayerRoomPollingDelayMs(
   return snapshot === null ? 0 : getMultiplayerRoomPollingDelayMs(snapshot);
 }
 
+export function shouldScheduleMultiplayerRoomPolling(
+  transportStatus: MultiplayerRoomTransportStatus,
+) {
+  return shouldUseHttpMultiplayerRoomTransport(transportStatus);
+}
+
+export function shouldPostMultiplayerRoomCommandOverHttp(
+  message: PrivateRoomClientMessage,
+  transportStatus: MultiplayerRoomTransportStatus,
+) {
+  return (
+    message.type === "room.lifecycle" ||
+    message.type === "room.updateSettings" ||
+    shouldUseHttpMultiplayerRoomTransport(transportStatus)
+  );
+}
+
 export function getPrivateRoomShareLink(
   roomCode: string | null,
   origin: string | null,
@@ -483,7 +467,6 @@ export function MultiplayerRoomLobby({
     () => createParticipantsById(room?.participants ?? []),
     [room?.participants],
   );
-  const pollingDelayMs = getMultiplayerRoomPollingDelayMs(roomSnapshot);
   const applyRoomSnapshot = useCallback((nextSnapshot: RoomApiPayload) => {
     const selectedSnapshot = selectFreshMultiplayerRoomSnapshot(
       roomSnapshotRef.current,
@@ -497,9 +480,34 @@ export function MultiplayerRoomLobby({
 
     return selectedSnapshot;
   }, [setRoomSnapshot]);
+  const transportLastSeq = useMemo(
+    () => ({
+      ...(roomSnapshot?.game?.seq === undefined
+        ? {}
+        : { game: roomSnapshot.game.seq }),
+      ...(roomSnapshot?.seq === undefined ? {} : { room: roomSnapshot.seq }),
+    }),
+    [roomSnapshot],
+  );
+  const roomTransport = useMultiplayerRoomWebSocketTransport({
+    displayName,
+    enabled: normalizedRoomCode !== null,
+    lastSeq: transportLastSeq,
+    onParticipantId: setParticipantId,
+    onSnapshot: applyRoomSnapshot,
+    participantId: activeParticipantId ?? participantId,
+    roomCode: normalizedRoomCode,
+  });
+  const {
+    sendGameInput: sendRoomTransportGameInput,
+    sendRoomCommand: sendRoomTransportCommand,
+    status: roomTransportStatus,
+  } = roomTransport;
+  const pollingDelayMs = getMultiplayerRoomPollingDelayMs(roomSnapshot);
+  const shouldPollRoom = shouldScheduleMultiplayerRoomPolling(roomTransportStatus);
 
   useEffect(() => {
-    if (normalizedRoomCode === null) {
+    if (normalizedRoomCode === null || !shouldPollRoom) {
       return;
     }
 
@@ -571,7 +579,7 @@ export function MultiplayerRoomLobby({
         window.clearTimeout(pollTimeoutId);
       }
     };
-  }, [applyRoomSnapshot, normalizedRoomCode, pollingDelayMs]);
+  }, [applyRoomSnapshot, normalizedRoomCode, pollingDelayMs, shouldPollRoom]);
 
   const handleCopyInviteLink = useCallback(() => {
     const currentInviteLink = getPrivateRoomShareLink(
@@ -594,6 +602,55 @@ export function MultiplayerRoomLobby({
       });
   }, [browserOrigin, normalizedRoomCode, setCopyStatus]);
 
+  const sendRoomClientMessage = useCallback(
+    async (message: PrivateRoomClientMessage) => {
+      if (normalizedRoomCode === null) {
+        throw new MultiplayerRoomRequestError("Room code is not supported.", 400);
+      }
+
+      if (
+        shouldPostMultiplayerRoomCommandOverHttp(message, roomTransportStatus)
+      ) {
+        const result = await postMultiplayerRoomCommand(normalizedRoomCode, message);
+
+        if (result.participantId !== undefined) {
+          setParticipantId(result.participantId);
+        }
+
+        applyRoomSnapshot(result);
+
+        return result;
+      }
+
+      if (roomTransportStatus === "active") {
+        const ack =
+          message.type === "game.input"
+            ? await sendRoomTransportGameInput(
+                message.gameId,
+                message.input,
+                message.participantId,
+              )
+            : await sendRoomTransportCommand(message);
+
+        if (ack.participantId !== undefined) {
+          setParticipantId(ack.participantId);
+        }
+
+        return ack;
+      }
+
+      throw new MultiplayerRoomRequestError("Room stream is connecting.", 0);
+    },
+    [
+      applyRoomSnapshot,
+      normalizedRoomCode,
+      roomTransportStatus,
+      sendRoomTransportGameInput,
+      sendRoomTransportCommand,
+      setParticipantId,
+    ],
+  );
+
   const handleJoinRoom = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -613,7 +670,7 @@ export function MultiplayerRoomLobby({
       setFormError(null);
 
       try {
-        const result = await postMultiplayerRoomCommand(normalizedRoomCode, {
+        const result = await sendRoomClientMessage({
           displayName: normalizedDisplayName,
           type: "room.joinObserver",
           userId,
@@ -627,7 +684,6 @@ export function MultiplayerRoomLobby({
         }
 
         setParticipantId(result.participantId);
-        applyRoomSnapshot(result);
       } catch (error) {
         setFormError(getRequestErrorMessage(error));
       } finally {
@@ -635,10 +691,10 @@ export function MultiplayerRoomLobby({
       }
     },
     [
-      applyRoomSnapshot,
       displayName,
       isJoining,
       normalizedRoomCode,
+      sendRoomClientMessage,
       setFormError,
       setIsJoining,
       setParticipantId,
@@ -661,13 +717,11 @@ export function MultiplayerRoomLobby({
     setFormError(null);
 
     try {
-      const result = await postMultiplayerRoomCommand(normalizedRoomCode, {
+      await sendRoomClientMessage({
         participantId: activeParticipantId,
         seatId,
         type,
       });
-
-      applyRoomSnapshot(result);
     } catch (error) {
       setFormError(getRequestErrorMessage(error));
     } finally {
@@ -694,13 +748,11 @@ export function MultiplayerRoomLobby({
     setFormError(null);
 
     try {
-      const result = await postMultiplayerRoomCommand(normalizedRoomCode, {
+      await sendRoomClientMessage({
         command,
         participantId: activeParticipantId,
         type: "room.lifecycle",
       });
-
-      applyRoomSnapshot(result);
     } catch (error) {
       setFormError(getRequestErrorMessage(error));
     } finally {
@@ -714,13 +766,12 @@ export function MultiplayerRoomLobby({
     }
 
     try {
-      const result = await postMultiplayerRoomCommand(normalizedRoomCode, {
+      await sendRoomClientMessage({
+        gameId: "pong",
         input,
         participantId: activeParticipantId,
         type: "game.input",
       });
-
-      applyRoomSnapshot(result);
     } catch (error) {
       setFormError(getRequestErrorMessage(error));
     }
