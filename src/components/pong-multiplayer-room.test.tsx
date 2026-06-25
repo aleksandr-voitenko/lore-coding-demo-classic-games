@@ -13,6 +13,7 @@ import { expectMarkup } from "./game-board-test-utils";
 import {
   PongMultiplayerRoom,
   createPongMultiplayerInputState,
+  getPongMultiplayerBoardFrameMaxWidth,
   pressPongMultiplayerInputKey,
   releasePongMultiplayerInputKey,
   resetPongMultiplayerInputState,
@@ -84,6 +85,7 @@ describe("PongMultiplayerRoom", () => {
 
     expectMarkup(markup, [
       'data-testid="pong-multiplayer-room"',
+      'data-testid="pong-multiplayer-board-frame"',
       'data-testid="pong-board"',
       'data-testid="pong-multiplayer-status"',
       "Running",
@@ -94,6 +96,7 @@ describe("PongMultiplayerRoom", () => {
     ]);
     expect(markup).not.toContain('data-testid="pong-multiplayer-readonly"');
     expect(markup).toContain("transition-property:left, top");
+    expect(markup).toContain("max-width:min(100%, calc((100svh - 8rem) * 0.75))");
   });
 
   it("renders observer read-only state without a serve action", () => {
@@ -173,6 +176,14 @@ describe("PongMultiplayerRoom", () => {
     expect(pausedMarkup).toContain('data-testid="pong-multiplayer-paused-message"');
     expect(terminalMarkup).toContain('data-testid="pong-multiplayer-terminal-message"');
     expect(terminalMarkup).toContain("Right paddle wins the match");
+  });
+});
+
+describe("Pong multiplayer board sizing", () => {
+  it("caps board width from viewport height and game aspect ratio", () => {
+    expect(getPongMultiplayerBoardFrameMaxWidth(RUNNING_PONG_GAME)).toBe(
+      "min(100%, calc((100svh - 8rem) * 0.75))",
+    );
   });
 });
 

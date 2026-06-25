@@ -134,6 +134,12 @@ export function getPongMultiplayerStatusLabel(status: PongStatus) {
   return statusLabels[status];
 }
 
+export function getPongMultiplayerBoardFrameMaxWidth(game: MultiplayerRoomGameSnapshot) {
+  const boardAspectRatio = game.snapshot.boardWidth / game.snapshot.boardHeight;
+
+  return `min(100%, calc((100svh - 8rem) * ${boardAspectRatio}))`;
+}
+
 export function PongMultiplayerRoom({
   activeParticipant,
   game,
@@ -151,6 +157,7 @@ export function PongMultiplayerRoom({
   const canSendGameInput = activeSeat !== null;
   const statusLabel = getPongMultiplayerStatusLabel(gameState.status);
   const shouldSmoothBoardMotion = gameState.status === "running";
+  const boardFrameMaxWidth = getPongMultiplayerBoardFrameMaxWidth(game);
   const readOnlyMessage = getReadOnlyMessage(activeParticipant, activeSeat);
   const roleLabel = getParticipantRoleLabel(activeParticipant, activeSeat);
 
@@ -266,57 +273,63 @@ export function PongMultiplayerRoom({
       data-testid="pong-multiplayer-room"
     >
       <section className="min-w-0">
-        <PongBoard
-          game={gameState}
-          smoothMotion={shouldSmoothBoardMotion}
-          statusLabel={statusLabel}
+        <div
+          className="mx-auto w-full"
+          data-testid="pong-multiplayer-board-frame"
+          style={{ maxWidth: boardFrameMaxWidth }}
         >
-          {gameState.status === "ready" ? (
-            <div
-              className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--pong-board)_62%,transparent)] px-4 py-5 text-center text-[var(--pong-ball)] backdrop-blur-[1px]"
-              data-testid="pong-multiplayer-ready-message"
-            >
-              <div className="flex max-w-72 flex-col items-center gap-3 rounded-md border border-[color-mix(in_oklch,var(--pong-ball)_20%,transparent)] bg-[color-mix(in_oklch,var(--pong-board)_88%,white_12%)] p-5 shadow-[0_18px_48px_rgba(0,0,0,0.28)] dark:bg-[color-mix(in_oklch,var(--pong-board)_88%,black_12%)]">
-                <p className="text-2xl font-semibold tracking-normal">
-                  Ready to serve
-                </p>
-                {canSendGameInput ? (
-                  <Button
-                    className="min-w-32"
-                    data-testid="pong-multiplayer-serve-button"
-                    onClick={() => submitGameInput({ type: "pong.serve" })}
-                    size="lg"
-                    type="button"
-                    variant="secondary"
-                  >
-                    <PlayIcon data-icon="inline-start" />
-                    Serve
-                  </Button>
-                ) : null}
+          <PongBoard
+            game={gameState}
+            smoothMotion={shouldSmoothBoardMotion}
+            statusLabel={statusLabel}
+          >
+            {gameState.status === "ready" ? (
+              <div
+                className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--pong-board)_62%,transparent)] px-4 py-5 text-center text-[var(--pong-ball)] backdrop-blur-[1px]"
+                data-testid="pong-multiplayer-ready-message"
+              >
+                <div className="flex max-w-72 flex-col items-center gap-3 rounded-md border border-[color-mix(in_oklch,var(--pong-ball)_20%,transparent)] bg-[color-mix(in_oklch,var(--pong-board)_88%,white_12%)] p-5 shadow-[0_18px_48px_rgba(0,0,0,0.28)] dark:bg-[color-mix(in_oklch,var(--pong-board)_88%,black_12%)]">
+                  <p className="text-2xl font-semibold tracking-normal">
+                    Ready to serve
+                  </p>
+                  {canSendGameInput ? (
+                    <Button
+                      className="min-w-32"
+                      data-testid="pong-multiplayer-serve-button"
+                      onClick={() => submitGameInput({ type: "pong.serve" })}
+                      size="lg"
+                      type="button"
+                      variant="secondary"
+                    >
+                      <PlayIcon data-icon="inline-start" />
+                      Serve
+                    </Button>
+                  ) : null}
+                </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
 
-          {gameState.status === "paused" ? (
-            <div
-              className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--pong-board)_76%,transparent)] text-center text-[var(--pong-ball)] backdrop-blur-[2px]"
-              data-testid="pong-multiplayer-paused-message"
-            >
-              <p className="text-2xl font-semibold tracking-normal">Paused</p>
-            </div>
-          ) : null}
+            {gameState.status === "paused" ? (
+              <div
+                className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--pong-board)_76%,transparent)] text-center text-[var(--pong-ball)] backdrop-blur-[2px]"
+                data-testid="pong-multiplayer-paused-message"
+              >
+                <p className="text-2xl font-semibold tracking-normal">Paused</p>
+              </div>
+            ) : null}
 
-          {gameState.status === "won" || gameState.status === "lost" ? (
-            <div
-              className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--pong-board)_76%,transparent)] px-4 text-center text-[var(--pong-ball)] backdrop-blur-[2px]"
-              data-testid="pong-multiplayer-terminal-message"
-            >
-              <p className="text-2xl font-semibold tracking-normal">
-                {terminalSummaries[gameState.status]}
-              </p>
-            </div>
-          ) : null}
-        </PongBoard>
+            {gameState.status === "won" || gameState.status === "lost" ? (
+              <div
+                className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--pong-board)_76%,transparent)] px-4 text-center text-[var(--pong-ball)] backdrop-blur-[2px]"
+                data-testid="pong-multiplayer-terminal-message"
+              >
+                <p className="text-2xl font-semibold tracking-normal">
+                  {terminalSummaries[gameState.status]}
+                </p>
+              </div>
+            ) : null}
+          </PongBoard>
+        </div>
       </section>
 
       <aside className="flex min-w-0 flex-col gap-4">
