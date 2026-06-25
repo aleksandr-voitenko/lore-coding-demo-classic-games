@@ -10,11 +10,25 @@ import {
 type PongBoardProps = {
   children?: ReactNode;
   game: PongGameState;
+  smoothMotion?: boolean;
   statusLabel: string;
 };
 
-export function PongBoard({ children, game, statusLabel }: PongBoardProps) {
+const PONG_BOARD_SMOOTH_MOTION_STYLE = {
+  transitionDuration: "80ms",
+  transitionProperty: "left, top",
+  transitionTimingFunction: "linear",
+  willChange: "left, top",
+} as const;
+
+export function PongBoard({
+  children,
+  game,
+  smoothMotion = false,
+  statusLabel,
+}: PongBoardProps) {
   const ballRadius = getPongBallRadius();
+  const motionStyle = smoothMotion ? PONG_BOARD_SMOOTH_MOTION_STYLE : undefined;
 
   return (
     <div
@@ -54,6 +68,7 @@ export function PongBoard({ children, game, statusLabel }: PongBoardProps) {
             left: `${((game.ball.position.x - ballRadius) / game.boardWidth) * 100}%`,
             top: `${((game.ball.position.y - ballRadius) / game.boardHeight) * 100}%`,
             width: `${((ballRadius * 2) / game.boardWidth) * 100}%`,
+            ...motionStyle,
           }}
         />
 
@@ -66,6 +81,7 @@ export function PongBoard({ children, game, statusLabel }: PongBoardProps) {
             left: `${(game.playerPaddle.x / game.boardWidth) * 100}%`,
             top: `${(game.playerPaddle.y / game.boardHeight) * 100}%`,
             width: `${(game.playerPaddle.width / game.boardWidth) * 100}%`,
+            ...motionStyle,
           }}
         />
 
@@ -78,6 +94,7 @@ export function PongBoard({ children, game, statusLabel }: PongBoardProps) {
             left: `${(game.cpuPaddle.x / game.boardWidth) * 100}%`,
             top: `${(game.cpuPaddle.y / game.boardHeight) * 100}%`,
             width: `${(game.cpuPaddle.width / game.boardWidth) * 100}%`,
+            ...motionStyle,
           }}
         />
       </div>

@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { PongBoard } from "./pong-board";
 import { expectMarkup } from "./game-board-test-utils";
@@ -17,5 +17,17 @@ describe("PongBoard", () => {
       'data-testid="pong-player-paddle"',
       'data-testid="pong-cpu-paddle"',
     ]);
+    expect(markup).not.toContain("transition-property");
+  });
+
+  it("adds opt-in smooth motion styles to moving pieces", () => {
+    const game = createInitialPongGame();
+    const markup = renderToStaticMarkup(
+      <PongBoard game={game} smoothMotion statusLabel="Running" />,
+    );
+
+    expect(markup).toContain("transition-property:left, top");
+    expect(markup).toContain("transition-duration:80ms");
+    expect(markup).toContain("will-change:left, top");
   });
 });

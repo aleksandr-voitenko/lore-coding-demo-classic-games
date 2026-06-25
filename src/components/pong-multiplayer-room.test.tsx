@@ -93,6 +93,7 @@ describe("PongMultiplayerRoom", () => {
       "Ada · Left Paddle",
     ]);
     expect(markup).not.toContain('data-testid="pong-multiplayer-readonly"');
+    expect(markup).toContain("transition-property:left, top");
   });
 
   it("renders observer read-only state without a serve action", () => {
@@ -168,6 +169,7 @@ describe("PongMultiplayerRoom", () => {
 
     expect(readyMarkup).toContain('data-testid="pong-multiplayer-ready-message"');
     expect(readyMarkup).toContain('data-testid="pong-multiplayer-serve-button"');
+    expect(readyMarkup).not.toContain("transition-property:left, top");
     expect(pausedMarkup).toContain('data-testid="pong-multiplayer-paused-message"');
     expect(terminalMarkup).toContain('data-testid="pong-multiplayer-terminal-message"');
     expect(terminalMarkup).toContain("Right paddle wins the match");

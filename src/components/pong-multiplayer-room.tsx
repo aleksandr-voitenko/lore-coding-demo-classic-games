@@ -150,6 +150,7 @@ export function PongMultiplayerRoom({
   );
   const canSendGameInput = activeSeat !== null;
   const statusLabel = getPongMultiplayerStatusLabel(gameState.status);
+  const shouldSmoothBoardMotion = gameState.status === "running";
   const readOnlyMessage = getReadOnlyMessage(activeParticipant, activeSeat);
   const roleLabel = getParticipantRoleLabel(activeParticipant, activeSeat);
 
@@ -265,7 +266,11 @@ export function PongMultiplayerRoom({
       data-testid="pong-multiplayer-room"
     >
       <section className="min-w-0">
-        <PongBoard game={gameState} statusLabel={statusLabel}>
+        <PongBoard
+          game={gameState}
+          smoothMotion={shouldSmoothBoardMotion}
+          statusLabel={statusLabel}
+        >
           {gameState.status === "ready" ? (
             <div
               className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--pong-board)_62%,transparent)] px-4 py-5 text-center text-[var(--pong-ball)] backdrop-blur-[1px]"
