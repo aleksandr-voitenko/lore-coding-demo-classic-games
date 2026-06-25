@@ -75,6 +75,9 @@ This file covers deterministic game engines and shared source logic under
 - `game-ui-flow.ts` owns pure Help and Escape/back-to-menu state transitions.
   React hooks in `src/components/game-ui-hooks.ts` should delegate decisions here
   and only apply effects such as pause, resume, or back-to-menu callbacks.
+- `src/lib/multiplayer/` owns the pure private-room model and protocol types for
+  future multiplayer work. Keep it generic across games and free of WebSockets,
+  route handlers, persistence stores, singleton room state, and React concerns.
 - `snake-food-feedback.ts` keeps Snake pickup feedback metadata outside both the
   engine and React rendering code.
 - Snake pickup progression order lives in
