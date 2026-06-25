@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  advancePongDuelGame,
   advancePongGame,
   applyPongGameEvent,
   createInitialPongGame,
@@ -247,6 +248,21 @@ describe("pong game engine", () => {
     const advanced = advancePongGame(runningGame);
 
     expect(advanced.cpuPaddle.y).toBeGreaterThan(game.cpuPaddle.y);
+  });
+
+  it("does not move the right paddle automatically during a manual duel rally", () => {
+    const game = createInitialPongGame();
+    const runningGame = createRunningGame({
+      ball: {
+        position: { x: PONG_BOARD_WIDTH / 2, y: game.cpuPaddle.y + game.cpuPaddle.height },
+        velocity: { x: 3, y: 0 },
+      },
+      cpuPaddle: game.cpuPaddle,
+    });
+    const advanced = advancePongDuelGame(runningGame);
+
+    expect(advanced.cpuPaddle).toEqual(game.cpuPaddle);
+    expect(advanced.ball.position.x).not.toBe(runningGame.ball.position.x);
   });
 
   it("scores for the player, resets the rally, and keeps the match ready", () => {

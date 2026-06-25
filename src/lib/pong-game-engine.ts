@@ -236,6 +236,19 @@ export function advancePongGame(game: PongGameState): PongGameState {
   }
 
   const cpuPaddle = moveCpuPaddle(game.cpuPaddle, game.ball, game.boardHeight);
+
+  return advancePongRally(game, cpuPaddle);
+}
+
+export function advancePongDuelGame(game: PongGameState): PongGameState {
+  if (game.status !== "running") {
+    return game;
+  }
+
+  return advancePongRally(game, game.cpuPaddle);
+}
+
+function advancePongRally(game: PongGameState, cpuPaddle: PongPaddle): PongGameState {
   const previousBall = game.ball;
   let ball = {
     position: {
