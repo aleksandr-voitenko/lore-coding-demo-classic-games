@@ -195,7 +195,7 @@ async function isAuthorizedHostCommand(
     return true;
   }
 
-  const roomResult = roomStore.getRoom(roomCode);
+  const roomResult = await roomStore.getRoom(roomCode);
 
   if (!roomResult.success) {
     return createMultiplayerRoomErrorResponse(roomResult);
@@ -228,7 +228,7 @@ export function createMultiplayerRoomRouteHandlers(
 ) {
   return {
     async GET(_request: Request, { code }: { code: string }) {
-      const result = roomStore.getRoom(code);
+      const result = await roomStore.getRoom(code);
 
       if (!result.success) {
         return createMultiplayerRoomErrorResponse(result);
@@ -267,7 +267,7 @@ export function createMultiplayerRoomRouteHandlers(
         return hostAuthorization;
       }
 
-      const result = roomStore.applyCommand(code, parsedCommand.command);
+      const result = await roomStore.applyCommand(code, parsedCommand.command);
 
       if (!result.success) {
         return createMultiplayerRoomErrorResponse(result);

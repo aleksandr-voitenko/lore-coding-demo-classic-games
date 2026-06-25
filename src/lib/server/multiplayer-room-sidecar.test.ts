@@ -1,11 +1,14 @@
 import type { AddressInfo } from "node:net";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { WebSocket } from "ws";
+import { WebSocket, type RawData } from "ws";
+
+import type { MultiplayerRoomStoreResult } from "./multiplayer-room-runtime";
 
 import {
   DEFAULT_MULTIPLAYER_SIDECAR_HOST,
   DEFAULT_MULTIPLAYER_SIDECAR_PORT,
+  DEFAULT_MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH,
   DEFAULT_MULTIPLAYER_SIDECAR_WEBSOCKET_PATH,
   MULTIPLAYER_SIDECAR_HEALTH_PATH,
   createMultiplayerRoomSidecar,
@@ -28,6 +31,7 @@ function createTestConfig(
     healthPath: MULTIPLAYER_SIDECAR_HEALTH_PATH,
     host: "127.0.0.1",
     port: 0,
+    roomServicePath: "/_internal/rooms",
     websocketPath: "/rooms",
     ...overrides,
   };
@@ -92,12 +96,81 @@ async function connectClient(url: string) {
   return client;
 }
 
+function waitForServerMessage(
+  client: WebSocket,
+  predicate: (message: Record<string, unknown>) => boolean = () => true,
+) {
+  return new Promise<Record<string, unknown>>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error("Timed out waiting for a matching WebSocket message."));
+    }, 1_000);
+    const handleMessage = (data: RawData) => {
+      const parsedMessage = JSON.parse(rawDataToText(data)) as unknown;
+
+      if (!isRecord(parsedMessage) || !predicate(parsedMessage)) {
+        return;
+      }
+
+      cleanup();
+      resolve(parsedMessage);
+    };
+    const handleError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const cleanup = () => {
+      clearTimeout(timeout);
+      client.off("message", handleMessage);
+      client.off("error", handleError);
+    };
+
+    client.on("message", handleMessage);
+    client.once("error", handleError);
+  });
+}
+
+function rawDataToText(data: RawData) {
+  if (Array.isArray(data)) {
+    return Buffer.concat(data).toString("utf8");
+  }
+
+  if (data instanceof ArrayBuffer) {
+    return Buffer.from(data).toString("utf8");
+  }
+
+  return Buffer.from(data).toString("utf8");
+}
+
+function sendClientMessage(client: WebSocket, message: unknown) {
+  client.send(JSON.stringify(message));
+}
+
+async function readStoreResult(response: Response) {
+  return (await response.json()) as MultiplayerRoomStoreResult;
+}
+
+function expectStoreSuccess(result: MultiplayerRoomStoreResult) {
+  expect(result.success).toBe(true);
+
+  if (!result.success) {
+    throw new Error(result.error);
+  }
+
+  return result.snapshot;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 describe("multiplayer room sidecar", () => {
   it("parses safe defaults and environment overrides", () => {
     expect(parseMultiplayerRoomSidecarConfig({})).toEqual({
       healthPath: MULTIPLAYER_SIDECAR_HEALTH_PATH,
       host: DEFAULT_MULTIPLAYER_SIDECAR_HOST,
       port: DEFAULT_MULTIPLAYER_SIDECAR_PORT,
+      roomServicePath: DEFAULT_MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH,
       websocketPath: DEFAULT_MULTIPLAYER_SIDECAR_WEBSOCKET_PATH,
     });
 
@@ -105,17 +178,21 @@ describe("multiplayer room sidecar", () => {
       parseMultiplayerRoomSidecarConfig({
         MULTIPLAYER_SIDECAR_HOST: " 0.0.0.0 ",
         MULTIPLAYER_SIDECAR_PORT: "3002",
+        MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH: " /_sidecar/rooms ",
         MULTIPLAYER_SIDECAR_WEBSOCKET_PATH: " /ws/rooms ",
+        MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN: " service-secret ",
       }),
     ).toEqual({
       healthPath: MULTIPLAYER_SIDECAR_HEALTH_PATH,
       host: "0.0.0.0",
       port: 3002,
+      roomServiceBearerToken: "service-secret",
+      roomServicePath: "/_sidecar/rooms",
       websocketPath: "/ws/rooms",
     });
   });
 
-  it("rejects invalid sidecar port and WebSocket path configuration", () => {
+  it("rejects invalid sidecar port and path configuration", () => {
     expect(() =>
       parseMultiplayerRoomSidecarConfig({
         MULTIPLAYER_SIDECAR_PORT: "not-a-port",
@@ -133,6 +210,12 @@ describe("multiplayer room sidecar", () => {
         MULTIPLAYER_SIDECAR_WEBSOCKET_PATH: "/rooms?debug=true",
       }),
     ).toThrow("MULTIPLAYER_SIDECAR_WEBSOCKET_PATH must be a URL path");
+
+    expect(() =>
+      parseMultiplayerRoomSidecarConfig({
+        MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH: "rooms",
+      }),
+    ).toThrow('MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH must start with "/"');
   });
 
   it("serves health JSON and closes the HTTP server", async () => {
@@ -166,6 +249,214 @@ describe("multiplayer room sidecar", () => {
     const client = await connectClient(origin.replace("http://", "ws://") + "/rooms");
 
     expect(client.readyState).toBe(WebSocket.OPEN);
+  });
+
+  it("shares HTTP room endpoints with the WebSocket gateway store", async () => {
+    const sidecar = await createStartedSidecar();
+    const origin = getOrigin(sidecar);
+    const publicPathCreateResponse = await fetch(`${origin}/rooms`, {
+      body: JSON.stringify({
+        host: {
+          displayName: "Ada Host",
+          id: "user-1",
+        },
+      }),
+      headers: {
+        "content-type": "application/json",
+      },
+      method: "POST",
+    });
+    const serviceBaseUrl = `${origin}/_internal/rooms`;
+    const createResponse = await fetch(serviceBaseUrl, {
+      body: JSON.stringify({
+        host: {
+          displayName: "Ada Host",
+          id: "user-1",
+        },
+        settings: {
+          gameId: "pong",
+        },
+      }),
+      headers: {
+        "content-type": "application/json",
+      },
+      method: "POST",
+    });
+
+    expect(publicPathCreateResponse.status).toBe(404);
+    await expect(publicPathCreateResponse.json()).resolves.toEqual({
+      error: "Not found.",
+    });
+    expect(createResponse.status).toBe(201);
+
+    const createdSnapshot = expectStoreSuccess(
+      await readStoreResult(createResponse),
+    );
+    const { code: roomCode, hostParticipantId } = createdSnapshot.room;
+    const client = await connectClient(
+      origin.replace("http://", "ws://") + "/rooms",
+    );
+    const bootstrapPromise = waitForServerMessage(
+      client,
+      (message) => message.type === "connection.bootstrap",
+    );
+
+    sendClientMessage(client, {
+      requestId: "hello-1",
+      roomCode,
+      type: "connection.hello",
+    });
+
+    await expect(bootstrapPromise).resolves.toMatchObject({
+      requestId: "hello-1",
+      roomCode,
+      snapshot: {
+        room: {
+          code: roomCode,
+          hostParticipantId,
+        },
+        seq: 1,
+      },
+      type: "connection.bootstrap",
+    });
+
+    const joinAckPromise = waitForServerMessage(
+      client,
+      (message) =>
+        message.type === "room.commandAck" && message.requestId === "join-1",
+    );
+
+    sendClientMessage(client, {
+      command: {
+        displayName: "Guest Hero",
+        type: "room.joinObserver",
+      },
+      requestId: "join-1",
+      roomCode,
+      type: "room.command",
+    });
+
+    const joinAck = await joinAckPromise;
+    const guestParticipantId = joinAck.participantId;
+
+    if (typeof guestParticipantId !== "string") {
+      throw new Error("Expected the join ack to include a participant id.");
+    }
+
+    const afterWebSocketCommandResponse = await fetch(
+      `${serviceBaseUrl}/${roomCode}`,
+    );
+
+    expect(afterWebSocketCommandResponse.status).toBe(200);
+    const afterWebSocketCommandSnapshot = expectStoreSuccess(
+      await readStoreResult(afterWebSocketCommandResponse),
+    );
+
+    expect(afterWebSocketCommandSnapshot.room.participants).toEqual([
+      expect.objectContaining({ id: hostParticipantId, role: "host" }),
+      expect.objectContaining({
+        displayName: "Guest Hero",
+        id: guestParticipantId,
+        role: "observer",
+      }),
+    ]);
+
+    const httpCommandResponse = await fetch(`${serviceBaseUrl}/${roomCode}`, {
+      body: JSON.stringify({
+        participantId: guestParticipantId,
+        seatId: "left",
+        type: "room.claimSeat",
+      }),
+      headers: {
+        "content-type": "application/json",
+      },
+      method: "POST",
+    });
+
+    expect(httpCommandResponse.status).toBe(200);
+
+    const afterHttpCommandSnapshot = expectStoreSuccess(
+      await readStoreResult(httpCommandResponse),
+    );
+
+    expect(afterHttpCommandSnapshot.room.seats).toEqual([
+      expect.objectContaining({
+        id: "left",
+        occupiedByParticipantId: guestParticipantId,
+      }),
+      expect.objectContaining({
+        id: "right",
+        occupiedByParticipantId: null,
+      }),
+    ]);
+
+    const observer = await connectClient(
+      origin.replace("http://", "ws://") + "/rooms",
+    );
+    const observerBootstrapPromise = waitForServerMessage(
+      observer,
+      (message) => message.type === "connection.bootstrap",
+    );
+
+    sendClientMessage(observer, {
+      requestId: "hello-2",
+      roomCode,
+      type: "connection.hello",
+    });
+
+    await expect(observerBootstrapPromise).resolves.toMatchObject({
+      requestId: "hello-2",
+      roomCode,
+      snapshot: {
+        room: {
+          seats: [
+            expect.objectContaining({
+              id: "left",
+              occupiedByParticipantId: guestParticipantId,
+            }),
+            expect.objectContaining({
+              id: "right",
+              occupiedByParticipantId: null,
+            }),
+          ],
+        },
+        seq: afterHttpCommandSnapshot.seq,
+      },
+      type: "connection.bootstrap",
+    });
+  });
+
+  it("protects room service endpoints when a bearer token is configured", async () => {
+    const sidecar = await createStartedSidecar(
+      createTestConfig({
+        roomServiceBearerToken: "service-secret",
+      }),
+    );
+    const origin = getOrigin(sidecar);
+    const unauthorizedResponse = await fetch(`${origin}/_internal/rooms`, {
+      body: "{}",
+      method: "POST",
+    });
+    const authorizedResponse = await fetch(`${origin}/_internal/rooms`, {
+      body: JSON.stringify({
+        host: {
+          displayName: "Ada Host",
+          id: "user-1",
+        },
+      }),
+      headers: {
+        authorization: "Bearer service-secret",
+        "content-type": "application/json",
+      },
+      method: "POST",
+    });
+
+    expect(unauthorizedResponse.status).toBe(401);
+    await expect(unauthorizedResponse.json()).resolves.toEqual({
+      error: "Unauthorized.",
+    });
+    expect(authorizedResponse.status).toBe(201);
+    expectStoreSuccess(await readStoreResult(authorizedResponse));
   });
 
   it("imports without resolving the Next server-only marker", async () => {

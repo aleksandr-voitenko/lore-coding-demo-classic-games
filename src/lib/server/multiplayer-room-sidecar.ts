@@ -5,18 +5,35 @@ import {
   createMultiplayerRoomWebSocketGateway,
   type MultiplayerRoomWebSocketGateway,
 } from "./multiplayer-room-websocket";
+import {
+  InProcessMultiplayerRoomStore,
+  getMultiplayerRoomStoreErrorStatus,
+  type CreateMultiplayerRoomOptions,
+  type MultiplayerRoomStore,
+  type MultiplayerRoomStoreCommand,
+  type MultiplayerRoomStoreResult,
+} from "./multiplayer-room-runtime";
 
 export const DEFAULT_MULTIPLAYER_SIDECAR_HOST = "127.0.0.1";
 export const DEFAULT_MULTIPLAYER_SIDECAR_PORT = 3001;
 export const DEFAULT_MULTIPLAYER_SIDECAR_WEBSOCKET_PATH = "/multiplayer/rooms";
+export const DEFAULT_MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH =
+  "/_internal/multiplayer/rooms";
 export const MULTIPLAYER_SIDECAR_HEALTH_PATH = "/healthz";
+export const MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN_ENV =
+  "MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN";
+export const MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH_ENV =
+  "MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH";
 
 const MULTIPLAYER_SIDECAR_SERVICE_NAME = "multiplayer-room-sidecar";
+const MAX_ROOM_SERVICE_JSON_BODY_BYTES = 64 * 1024;
 
 export type MultiplayerRoomSidecarConfig = {
   healthPath: string;
   host: string;
   port: number;
+  roomServiceBearerToken?: string;
+  roomServicePath: string;
   websocketPath: string;
 };
 
@@ -35,6 +52,20 @@ export type MultiplayerRoomSidecar = {
 export function parseMultiplayerRoomSidecarConfig(
   env: MultiplayerRoomSidecarEnv = process.env,
 ): MultiplayerRoomSidecarConfig {
+  const websocketPath = parsePathEnv(
+    env.MULTIPLAYER_SIDECAR_WEBSOCKET_PATH,
+    "MULTIPLAYER_SIDECAR_WEBSOCKET_PATH",
+    DEFAULT_MULTIPLAYER_SIDECAR_WEBSOCKET_PATH,
+  );
+  const roomServiceBearerToken = getOptionalEnvString(
+    env[MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN_ENV],
+  );
+  const roomServicePath = parsePathEnv(
+    env[MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH_ENV],
+    MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH_ENV,
+    DEFAULT_MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH,
+  );
+
   return {
     healthPath: MULTIPLAYER_SIDECAR_HEALTH_PATH,
     host:
@@ -45,23 +76,27 @@ export function parseMultiplayerRoomSidecarConfig(
       "MULTIPLAYER_SIDECAR_PORT",
       DEFAULT_MULTIPLAYER_SIDECAR_PORT,
     ),
-    websocketPath: parsePathEnv(
-      env.MULTIPLAYER_SIDECAR_WEBSOCKET_PATH,
-      "MULTIPLAYER_SIDECAR_WEBSOCKET_PATH",
-      DEFAULT_MULTIPLAYER_SIDECAR_WEBSOCKET_PATH,
-    ),
+    ...(roomServiceBearerToken === undefined ? {} : { roomServiceBearerToken }),
+    roomServicePath,
+    websocketPath,
   };
 }
 
 export function createMultiplayerRoomSidecar(
   config: MultiplayerRoomSidecarConfig = parseMultiplayerRoomSidecarConfig(),
 ): MultiplayerRoomSidecar {
+  const store = new InProcessMultiplayerRoomStore();
   const server = createServer((request, response) => {
-    handleHttpRequest(config, request, response);
+    void handleHttpRequest(config, store, request, response).catch(
+      (error: unknown) => {
+        sendUnhandledError(request, response, error);
+      },
+    );
   });
   const gateway = createMultiplayerRoomWebSocketGateway({
     path: config.websocketPath,
     server,
+    store,
   });
   let closePromise: Promise<void> | null = null;
 
@@ -91,14 +126,17 @@ export async function runMultiplayerRoomSidecarFromEnv(
     `${MULTIPLAYER_SIDECAR_SERVICE_NAME} listening on ${formatServerAddress(
       sidecar.server,
       sidecar.config,
-    )} with WebSocket path ${sidecar.config.websocketPath}`,
+    )} with WebSocket path ${sidecar.config.websocketPath} and room service path ${
+      sidecar.config.roomServicePath
+    }`,
   );
 
   return sidecar;
 }
 
-function handleHttpRequest(
+async function handleHttpRequest(
   config: MultiplayerRoomSidecarConfig,
+  roomStore: MultiplayerRoomStore,
   request: IncomingMessage,
   response: ServerResponse,
 ) {
@@ -118,9 +156,366 @@ function handleHttpRequest(
     return;
   }
 
+  const roomServiceRoute = getRoomServiceRoute(config, pathname);
+
+  if (roomServiceRoute !== null) {
+    return handleRoomServiceRequest(
+      config,
+      roomStore,
+      roomServiceRoute,
+      request,
+      response,
+    );
+  }
+
   sendJson(request, response, 404, {
     error: "Not found.",
   });
+}
+
+type RoomServiceRoute =
+  | {
+      kind: "collection";
+    }
+  | {
+      kind: "room";
+      roomCode: string;
+    };
+
+type ReadJsonRequestBodyResult =
+  | {
+      success: true;
+      value: unknown;
+    }
+  | {
+      error: string;
+      statusCode: number;
+      success: false;
+    };
+
+async function handleRoomServiceRequest(
+  config: MultiplayerRoomSidecarConfig,
+  roomStore: MultiplayerRoomStore,
+  route: RoomServiceRoute,
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  if (!isAuthorizedRoomServiceRequest(config, request)) {
+    sendJson(request, response, 401, {
+      error: "Unauthorized.",
+    });
+    return;
+  }
+
+  if (route.kind === "collection") {
+    if (request.method !== "POST") {
+      sendMethodNotAllowed(request, response, ["POST"]);
+      return;
+    }
+
+    const body = await readJsonRequestBody(request);
+
+    if (!body.success) {
+      sendRoomServiceFailure(
+        request,
+        response,
+        body.statusCode,
+        body.error,
+      );
+      return;
+    }
+
+    const createOptions = parseCreateRoomOptions(body.value);
+
+    if (!createOptions.success) {
+      sendRoomServiceFailure(request, response, 400, createOptions.error);
+      return;
+    }
+
+    sendStoreResult(
+      request,
+      response,
+      await roomStore.createRoom(createOptions.options),
+      201,
+    );
+    return;
+  }
+
+  if (request.method === "GET") {
+    sendStoreResult(request, response, await roomStore.getRoom(route.roomCode));
+    return;
+  }
+
+  if (request.method === "POST") {
+    const body = await readJsonRequestBody(request);
+
+    if (!body.success) {
+      sendRoomServiceFailure(
+        request,
+        response,
+        body.statusCode,
+        body.error,
+      );
+      return;
+    }
+
+    const command = parseRoomServiceCommand(body.value);
+
+    if (!command.success) {
+      sendRoomServiceFailure(request, response, 400, command.error);
+      return;
+    }
+
+    sendStoreResult(
+      request,
+      response,
+      await roomStore.applyCommand(route.roomCode, command.command),
+    );
+    return;
+  }
+
+  sendMethodNotAllowed(request, response, ["GET", "POST"]);
+}
+
+function getRoomServiceRoute(
+  config: MultiplayerRoomSidecarConfig,
+  pathname: string,
+): RoomServiceRoute | null {
+  const basePath = config.roomServicePath;
+
+  if (pathname === basePath) {
+    return {
+      kind: "collection",
+    };
+  }
+
+  const roomPathPrefix = basePath.endsWith("/") ? basePath : `${basePath}/`;
+
+  if (!pathname.startsWith(roomPathPrefix)) {
+    return null;
+  }
+
+  const encodedRoomCode = pathname.slice(roomPathPrefix.length);
+
+  if (encodedRoomCode.length === 0 || encodedRoomCode.includes("/")) {
+    return null;
+  }
+
+  try {
+    return {
+      kind: "room",
+      roomCode: decodeURIComponent(encodedRoomCode),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function readJsonRequestBody(
+  request: IncomingMessage,
+): Promise<ReadJsonRequestBodyResult> {
+  const chunks: Buffer[] = [];
+  let bodyLength = 0;
+
+  for await (const chunk of request) {
+    const buffer = Buffer.from(chunk as Buffer);
+    bodyLength += buffer.byteLength;
+
+    if (bodyLength > MAX_ROOM_SERVICE_JSON_BODY_BYTES) {
+      return {
+        error: "Request body is too large.",
+        statusCode: 413,
+        success: false,
+      };
+    }
+
+    chunks.push(buffer);
+  }
+
+  try {
+    return {
+      success: true,
+      value: JSON.parse(Buffer.concat(chunks).toString("utf8")),
+    };
+  } catch {
+    return {
+      error: "Request body must be valid JSON.",
+      statusCode: 400,
+      success: false,
+    };
+  }
+}
+
+function parseCreateRoomOptions(value: unknown):
+  | {
+      options: CreateMultiplayerRoomOptions;
+      success: true;
+    }
+  | {
+      error: string;
+      success: false;
+    } {
+  if (!isRecord(value) || !isRecord(value.host)) {
+    return {
+      error: "Create room body must include a host.",
+      success: false,
+    };
+  }
+
+  if (
+    typeof value.host.displayName !== "string" ||
+    typeof value.host.id !== "string"
+  ) {
+    return {
+      error: "Create room host must include displayName and id.",
+      success: false,
+    };
+  }
+
+  if (value.settings !== undefined && !isRecord(value.settings)) {
+    return {
+      error: "Create room settings must be a JSON object.",
+      success: false,
+    };
+  }
+
+  return {
+    options: value as CreateMultiplayerRoomOptions,
+    success: true,
+  };
+}
+
+function parseRoomServiceCommand(value: unknown):
+  | {
+      command: MultiplayerRoomStoreCommand;
+      success: true;
+    }
+  | {
+      error: string;
+      success: false;
+    } {
+  if (!isRecord(value)) {
+    return {
+      error: "Room command must be a JSON object.",
+      success: false,
+    };
+  }
+
+  if (
+    value.type === "room.joinObserver" ||
+    value.type === "room.claimSeat" ||
+    value.type === "room.releaseSeat" ||
+    value.type === "game.input"
+  ) {
+    return {
+      command: value as MultiplayerRoomStoreCommand,
+      success: true,
+    };
+  }
+
+  if (value.type === "room.lifecycle") {
+    if (!isLifecycleCommand(value.command)) {
+      return {
+        error: "Room lifecycle command is not supported.",
+        success: false,
+      };
+    }
+
+    return {
+      command: value as MultiplayerRoomStoreCommand,
+      success: true,
+    };
+  }
+
+  if (value.type === "room.updateSettings") {
+    if (!isRecord(value.settings)) {
+      return {
+        error: "Room settings must be a supported JSON object.",
+        success: false,
+      };
+    }
+
+    return {
+      command: value as MultiplayerRoomStoreCommand,
+      success: true,
+    };
+  }
+
+  return {
+    error: "Room command type is not supported.",
+    success: false,
+  };
+}
+
+function isLifecycleCommand(value: unknown) {
+  return (
+    value === "finish" ||
+    value === "pause" ||
+    value === "restart" ||
+    value === "resume" ||
+    value === "start"
+  );
+}
+
+function sendStoreResult(
+  request: IncomingMessage,
+  response: ServerResponse,
+  result: MultiplayerRoomStoreResult,
+  successStatusCode = 200,
+) {
+  sendJson(
+    request,
+    response,
+    result.success
+      ? successStatusCode
+      : getMultiplayerRoomStoreErrorStatus(result.code),
+    result,
+  );
+}
+
+function sendRoomServiceFailure(
+  request: IncomingMessage,
+  response: ServerResponse,
+  statusCode: number,
+  error: string,
+) {
+  sendJson(request, response, statusCode, {
+    code: "invalid-command",
+    error,
+    success: false,
+  } satisfies MultiplayerRoomStoreResult);
+}
+
+function sendMethodNotAllowed(
+  request: IncomingMessage,
+  response: ServerResponse,
+  allowedMethods: readonly string[],
+) {
+  sendJson(
+    request,
+    response,
+    405,
+    {
+      error: "Method not allowed.",
+    },
+    {
+      allow: allowedMethods.join(", "),
+    },
+  );
+}
+
+function isAuthorizedRoomServiceRequest(
+  config: MultiplayerRoomSidecarConfig,
+  request: IncomingMessage,
+) {
+  if (config.roomServiceBearerToken === undefined) {
+    return true;
+  }
+
+  return (
+    request.headers.authorization ===
+    `Bearer ${config.roomServiceBearerToken}`
+  );
 }
 
 function getRequestPathname(url: string | undefined) {
@@ -136,6 +531,7 @@ function sendJson(
   response: ServerResponse,
   statusCode: number,
   payload: unknown,
+  headers: Readonly<Record<string, string>> = {},
 ) {
   const body = JSON.stringify(payload);
 
@@ -143,6 +539,7 @@ function sendJson(
     "cache-control": "no-store",
     "content-length": Buffer.byteLength(body),
     "content-type": "application/json; charset=utf-8",
+    ...headers,
   });
 
   if (request.method === "HEAD") {
@@ -151,6 +548,24 @@ function sendJson(
   }
 
   response.end(body);
+}
+
+function sendUnhandledError(
+  request: IncomingMessage,
+  response: ServerResponse,
+  error: unknown,
+) {
+  if (response.headersSent) {
+    response.destroy();
+    return;
+  }
+
+  sendJson(request, response, 500, {
+    error:
+      error instanceof Error
+        ? `Room service request failed: ${error.message}`
+        : "Room service request failed.",
+  });
 }
 
 function listen(server: HttpServer, config: MultiplayerRoomSidecarConfig) {
@@ -287,6 +702,10 @@ function getOptionalEnvString(value: string | undefined) {
   return trimmedValue === undefined || trimmedValue.length === 0
     ? undefined
     : trimmedValue;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 if (

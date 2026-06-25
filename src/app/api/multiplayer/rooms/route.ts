@@ -6,6 +6,7 @@ import type {
   PrivateRoomSettings,
 } from "@/lib/multiplayer/room";
 import {
+  getMultiplayerRoomStoreErrorStatus,
   getMultiplayerRoomStore,
   type MultiplayerRoomStore,
   type MultiplayerRoomStoreErrorCode,
@@ -146,34 +147,7 @@ export function parsePrivateRoomSettingsPayload(
 }
 
 export function getMultiplayerRoomErrorStatus(code: MultiplayerRoomStoreErrorCode) {
-  if (code === "room-not-found") {
-    return 404;
-  }
-
-  if (code === "not-host") {
-    return 403;
-  }
-
-  if (
-    code === "duplicate-participant" ||
-    code === "duplicate-room" ||
-    code === "invalid-status" ||
-    code === "participant-already-seated" ||
-    code === "required-seats-empty" ||
-    code === "seat-occupied"
-  ) {
-    return 409;
-  }
-
-  if (
-    code === "participant-not-found" ||
-    code === "participant-not-seated" ||
-    code === "seat-not-found"
-  ) {
-    return 404;
-  }
-
-  return 400;
+  return getMultiplayerRoomStoreErrorStatus(code);
 }
 
 export function createMultiplayerRoomErrorResponse(
@@ -236,7 +210,7 @@ export function createMultiplayerRoomsRouteHandlers(
         return NextResponse.json({ error: parsedSettings.error }, { status: 400 });
       }
 
-      const result = roomStore.createRoom({
+      const result = await roomStore.createRoom({
         host: user,
         settings: parsedSettings.settings,
       });

@@ -35,7 +35,14 @@ This file covers Node-only server helpers and storage adapters under
   preserving Snake wrapper methods for the current replay MVP.
 - `multiplayer-room-store.ts` is the private-room API MVP facade. It imports
   `server-only`, exposes the Next-facing singleton, and re-exports the runtime
-  types/class from `multiplayer-room-runtime.ts`.
+  types/class from `multiplayer-room-runtime.ts`. The default remains the local
+  in-process store; setting `MULTIPLAYER_ROOM_SERVICE_URL` switches Next API
+  routes to the HTTP room service client.
+- `multiplayer-room-service-client.ts` is the guarded Next-to-sidecar HTTP
+  adapter. It implements the room store contract over `POST <base>`,
+  `GET <base>/<code>`, and `POST <base>/<code>`, sends
+  `MULTIPLAYER_ROOM_SERVICE_CLIENT_BEARER_TOKEN` when configured, and maps
+  sidecar or upstream failures back into store-style results for route handlers.
 - `multiplayer-room-runtime.ts` wraps the pure room model with process-local room
   state, deterministic id/code/time factories for tests, snapshot sequence
   numbers for API routes, and a process-local Pong runtime that exposes optional
@@ -49,11 +56,17 @@ This file covers Node-only server helpers and storage adapters under
   behind `game.input` dispatch.
 - `multiplayer-room-sidecar.ts` owns the standalone Node HTTP/WebSocket process
   wrapper around the gateway. It parses `MULTIPLAYER_SIDECAR_HOST`,
-  `MULTIPLAYER_SIDECAR_PORT`, and `MULTIPLAYER_SIDECAR_WEBSOCKET_PATH`, exposes
-  `/healthz`, and is emitted through `tsconfig.sidecar.json` because the main
-  app TypeScript config typechecks only and does not emit runtime JavaScript.
-  Keep sidecar-emitted runtime imports resolvable by plain Node after TypeScript
-  emits CommonJS; TypeScript path aliases are not rewritten in emitted output.
+  `MULTIPLAYER_SIDECAR_PORT`, `MULTIPLAYER_SIDECAR_WEBSOCKET_PATH`,
+  `MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH`, and optional
+  `MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN`. It exposes `/healthz`, keeps
+  public WebSocket upgrades on `/multiplayer/rooms` by default, serves internal
+  JSON room create/get/command endpoints on `/_internal/multiplayer/rooms` by
+  default, and passes one in-process room store to both those HTTP endpoints and
+  the WebSocket gateway. It is emitted through `tsconfig.sidecar.json` because
+  the main app TypeScript config typechecks only and does not emit runtime
+  JavaScript. Keep sidecar-emitted runtime imports resolvable by plain Node
+  after TypeScript emits CommonJS; TypeScript path aliases are not rewritten in
+  emitted output.
 - Keep this adapter boundary small so a future Postgres store can replace SQLite
   without changing the client API or game components.
 

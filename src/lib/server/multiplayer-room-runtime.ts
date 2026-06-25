@@ -110,6 +110,8 @@ export type MultiplayerRoomStoreErrorCode =
   | PrivateRoomErrorCode
   | "duplicate-room"
   | "invalid-command"
+  | "room-service-invalid-response"
+  | "room-service-unavailable"
   | "room-not-found";
 
 export type MultiplayerRoomStoreResult =
@@ -123,6 +125,10 @@ export type MultiplayerRoomStoreResult =
       success: false;
     };
 
+export type MultiplayerRoomStoreOperationResult =
+  | MultiplayerRoomStoreResult
+  | Promise<MultiplayerRoomStoreResult>;
+
 type MultiplayerRoomStoreFailure = Extract<
   MultiplayerRoomStoreResult,
   { success: false }
@@ -132,9 +138,9 @@ export type MultiplayerRoomStore = {
   applyCommand: (
     roomCode: unknown,
     command: MultiplayerRoomStoreCommand,
-  ) => MultiplayerRoomStoreResult;
-  createRoom: (options: CreateMultiplayerRoomOptions) => MultiplayerRoomStoreResult;
-  getRoom: (roomCode: unknown) => MultiplayerRoomStoreResult;
+  ) => MultiplayerRoomStoreOperationResult;
+  createRoom: (options: CreateMultiplayerRoomOptions) => MultiplayerRoomStoreOperationResult;
+  getRoom: (roomCode: unknown) => MultiplayerRoomStoreOperationResult;
 };
 
 type CreateInProcessMultiplayerRoomStoreOptions = {
@@ -283,6 +289,72 @@ function createStoreFailure(
     error,
     success: false,
   };
+}
+
+export function isMultiplayerRoomStoreErrorCode(
+  value: unknown,
+): value is MultiplayerRoomStoreErrorCode {
+  switch (value) {
+    case "duplicate-participant":
+    case "duplicate-room":
+    case "invalid-command":
+    case "invalid-room-code":
+    case "invalid-room-settings":
+    case "invalid-status":
+    case "not-host":
+    case "participant-already-seated":
+    case "participant-not-found":
+    case "participant-not-seated":
+    case "required-seats-empty":
+    case "room-not-found":
+    case "room-service-invalid-response":
+    case "room-service-unavailable":
+    case "seat-not-found":
+    case "seat-occupied":
+      return true;
+  }
+
+  return false;
+}
+
+export function getMultiplayerRoomStoreErrorStatus(
+  code: MultiplayerRoomStoreErrorCode,
+) {
+  if (code === "room-not-found") {
+    return 404;
+  }
+
+  if (code === "not-host") {
+    return 403;
+  }
+
+  if (
+    code === "room-service-invalid-response" ||
+    code === "room-service-unavailable"
+  ) {
+    return 502;
+  }
+
+  if (
+    code === "duplicate-room" ||
+    code === "duplicate-participant" ||
+    code === "invalid-status" ||
+    code === "participant-already-seated" ||
+    code === "required-seats-empty" ||
+    code === "seat-occupied"
+  ) {
+    return 409;
+  }
+
+  if (
+    code === "participant-not-found" ||
+    code === "participant-not-seated" ||
+    code === "seat-not-found"
+  ) {
+    return 404;
+  }
+
+  return 400;
 }
 
 function createStoredRoomSnapshot(

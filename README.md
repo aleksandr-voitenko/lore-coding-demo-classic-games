@@ -62,10 +62,26 @@ npm run build:sidecar
 npm run start:sidecar
 ```
 
-The sidecar defaults to `127.0.0.1:3001`, exposes `GET /healthz`, and accepts
-room WebSocket upgrades on `/multiplayer/rooms`. Override those with
-`MULTIPLAYER_SIDECAR_HOST`, `MULTIPLAYER_SIDECAR_PORT`, and
-`MULTIPLAYER_SIDECAR_WEBSOCKET_PATH` when wiring it behind a local proxy.
+The sidecar defaults to `127.0.0.1:3001`, exposes `GET /healthz`, accepts public
+room WebSocket upgrades on `/multiplayer/rooms`, and serves the internal JSON
+room service on `/_internal/multiplayer/rooms`:
+
+- `POST /_internal/multiplayer/rooms` creates a room.
+- `GET /_internal/multiplayer/rooms/<code>` reads a room snapshot.
+- `POST /_internal/multiplayer/rooms/<code>` applies a parsed room command.
+
+Override the bind address and path with `MULTIPLAYER_SIDECAR_HOST`,
+`MULTIPLAYER_SIDECAR_PORT`, `MULTIPLAYER_SIDECAR_WEBSOCKET_PATH`, and
+`MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH` when wiring it behind a local proxy. Next
+API routes continue using their local in-process room store unless
+`MULTIPLAYER_ROOM_SERVICE_URL` points at the sidecar room service base URL, for
+example `http://127.0.0.1:3001/_internal/multiplayer/rooms`.
+
+The sidecar room service endpoints are internal service endpoints; public HTTP
+room creation and host authorization should still flow through the Next API
+routes. If the internal hop needs a bearer token, set the same secret in
+`MULTIPLAYER_ROOM_SERVICE_CLIENT_BEARER_TOKEN` for the Next process and
+`MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN` for the sidecar process.
 
 ## Stack
 

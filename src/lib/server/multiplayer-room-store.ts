@@ -1,5 +1,11 @@
 import "server-only";
 
+import {
+  MULTIPLAYER_ROOM_SERVICE_CLIENT_BEARER_TOKEN_ENV,
+  MULTIPLAYER_ROOM_SERVICE_URL_ENV,
+  MultiplayerRoomServiceClient,
+  getOptionalServiceString,
+} from "./multiplayer-room-service-client";
 import { InProcessMultiplayerRoomStore } from "./multiplayer-room-runtime";
 
 export {
@@ -10,6 +16,7 @@ export {
 export type {
   CreateMultiplayerRoomOptions,
   MultiplayerRoomGameSnapshot,
+  MultiplayerRoomStoreOperationResult,
   MultiplayerRoomParticipantIdFactoryContext,
   MultiplayerRoomSnapshot,
   MultiplayerRoomStore,
@@ -18,13 +25,43 @@ export type {
   MultiplayerRoomStoreResult,
   PongMultiplayerInput,
 } from "./multiplayer-room-runtime";
+export { getMultiplayerRoomStoreErrorStatus } from "./multiplayer-room-runtime";
 
-let defaultMultiplayerRoomStore: InProcessMultiplayerRoomStore | null = null;
+type MultiplayerRoomStoreEnv = Readonly<Record<string, string | undefined>>;
 
-export function getMultiplayerRoomStore() {
+let defaultLocalMultiplayerRoomStore: InProcessMultiplayerRoomStore | null = null;
+let defaultServiceMultiplayerRoomStore:
+  | {
+      cacheKey: string;
+      store: MultiplayerRoomServiceClient;
+    }
+  | null = null;
+
+export function getMultiplayerRoomStore(env: MultiplayerRoomStoreEnv = process.env) {
+  const serviceUrl = getOptionalServiceString(env[MULTIPLAYER_ROOM_SERVICE_URL_ENV]);
+
+  if (serviceUrl !== undefined) {
+    const bearerToken = getOptionalServiceString(
+      env[MULTIPLAYER_ROOM_SERVICE_CLIENT_BEARER_TOKEN_ENV],
+    );
+    const cacheKey = `${serviceUrl}\n${bearerToken ?? ""}`;
+
+    if (defaultServiceMultiplayerRoomStore?.cacheKey !== cacheKey) {
+      defaultServiceMultiplayerRoomStore = {
+        cacheKey,
+        store: new MultiplayerRoomServiceClient({
+          baseUrl: serviceUrl,
+          ...(bearerToken === undefined ? {} : { bearerToken }),
+        }),
+      };
+    }
+
+    return defaultServiceMultiplayerRoomStore.store;
+  }
+
   // Keep the Next API singleton behind the server-only facade while the
   // process-local runtime stays importable by the standalone realtime sidecar.
-  defaultMultiplayerRoomStore ??= new InProcessMultiplayerRoomStore();
+  defaultLocalMultiplayerRoomStore ??= new InProcessMultiplayerRoomStore();
 
-  return defaultMultiplayerRoomStore;
+  return defaultLocalMultiplayerRoomStore;
 }

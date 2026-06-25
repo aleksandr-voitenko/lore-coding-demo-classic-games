@@ -166,7 +166,10 @@ export function createMultiplayerRoomWebSocketGateway({
     broadcastSnapshot(result.snapshot);
   }
 
-  function handleConnectionBootstrap(socket: WebSocket, message: ConnectionMessage) {
+  async function handleConnectionBootstrap(
+    socket: WebSocket,
+    message: ConnectionMessage,
+  ) {
     const requestId = getOptionalString(message.requestId);
     const roomCode = getOptionalString(message.roomCode);
 
@@ -179,7 +182,7 @@ export function createMultiplayerRoomWebSocketGateway({
       return;
     }
 
-    const result = store.getRoom(roomCode);
+    const result = await store.getRoom(roomCode);
 
     if (!result.success) {
       sendRejection(socket, {
@@ -211,7 +214,7 @@ export function createMultiplayerRoomWebSocketGateway({
     });
   }
 
-  function handleRoomCommand(socket: WebSocket, message: RoomCommandMessage) {
+  async function handleRoomCommand(socket: WebSocket, message: RoomCommandMessage) {
     const requestId = getRoomCommandRequestId(message);
     const roomCode = getOptionalString(message.roomCode);
     const parsedCommand = parseRoomCommand(message.command);
@@ -228,14 +231,14 @@ export function createMultiplayerRoomWebSocketGateway({
 
     handleStoreResult(
       socket,
-      store.applyCommand(roomCode, parsedCommand.command),
+      await store.applyCommand(roomCode, parsedCommand.command),
       requestId,
       roomCode,
       parsedCommand.command,
     );
   }
 
-  function handleGameInput(socket: WebSocket, message: GameInputMessage) {
+  async function handleGameInput(socket: WebSocket, message: GameInputMessage) {
     const requestId = getOptionalString(message.requestId);
     const roomCode = getOptionalString(message.roomCode);
 
@@ -279,14 +282,14 @@ export function createMultiplayerRoomWebSocketGateway({
 
     handleStoreResult(
       socket,
-      store.applyCommand(roomCode, command),
+      await store.applyCommand(roomCode, command),
       requestId,
       roomCode,
       command,
     );
   }
 
-  function handleClientMessage(
+  async function handleClientMessage(
     socket: WebSocket,
     data: RawData,
     isBinary: boolean,
@@ -325,7 +328,7 @@ export function createMultiplayerRoomWebSocketGateway({
     if (message.type === "connection.hello" || message.type === "connection.resume") {
       // Resume currently reboots from the authoritative snapshot because this
       // gateway slice intentionally does not add a durable event log.
-      handleConnectionBootstrap(socket, message);
+      await handleConnectionBootstrap(socket, message);
       return;
     }
 
@@ -334,12 +337,12 @@ export function createMultiplayerRoomWebSocketGateway({
     }
 
     if (message.type === "room.command") {
-      handleRoomCommand(socket, message);
+      await handleRoomCommand(socket, message);
       return;
     }
 
     if (message.type === "game.input") {
-      handleGameInput(socket, message);
+      await handleGameInput(socket, message);
       return;
     }
 
@@ -353,7 +356,16 @@ export function createMultiplayerRoomWebSocketGateway({
 
   webSocketServer.on("connection", (socket) => {
     socket.on("message", (data, isBinary) => {
-      handleClientMessage(socket, data, isBinary);
+      void handleClientMessage(socket, data, isBinary).catch((error: unknown) => {
+        sendRejection(socket, {
+          code: "room-service-unavailable",
+          error:
+            error instanceof Error
+              ? error.message
+              : "Room command failed before it reached the room store.",
+          roomCode: roomCodeBySocket.get(socket),
+        });
+      });
     });
     socket.on("close", () => {
       removeSocketFromRoom(socket);
@@ -422,12 +434,25 @@ function sendRejection(
   },
 ) {
   sendServerMessage(socket, {
-    code,
+    code: getRealtimeRejectionCode(code),
     error,
     ...(requestId === undefined ? {} : { requestId }),
     ...(roomCode === undefined ? {} : { roomCode }),
     type: "room.commandRejected",
   });
+}
+
+function getRealtimeRejectionCode(
+  code: MultiplayerRealtimeRejectionCode | MultiplayerRoomStoreErrorCode,
+): MultiplayerRealtimeRejectionCode {
+  if (
+    code === "room-service-invalid-response" ||
+    code === "room-service-unavailable"
+  ) {
+    return "invalid-message";
+  }
+
+  return code;
 }
 
 function sendServerMessage(
