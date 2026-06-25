@@ -14,6 +14,10 @@ export {
 
 export type PongStatus = "ready" | "running" | "paused" | "won" | "lost";
 
+export type PongSide = "left" | "right";
+
+export type PongPaddleMoveDirection = "up" | "down";
+
 export type PongPoint = {
   x: number;
   y: number;
@@ -53,6 +57,30 @@ export type CreatePongGameOptions = {
   boardWidth?: number;
   targetScore?: number;
 };
+
+export type PongGameStartEvent = {
+  type: "start";
+};
+
+export type PongGameAdvanceEvent = {
+  type: "advance";
+};
+
+export type PongGameScoreTickEvent = {
+  type: "scoreTick";
+};
+
+export type PongGameMoveEvent = {
+  direction: PongPaddleMoveDirection;
+  side: PongSide;
+  type: "move";
+};
+
+export type PongGameEvent =
+  | PongGameAdvanceEvent
+  | PongGameMoveEvent
+  | PongGameScoreTickEvent
+  | PongGameStartEvent;
 
 export const PONG_TICK_DELAY_MS = 16;
 export const PONG_SCORE_TICK_DELAY_MS = 1_000;
@@ -153,23 +181,41 @@ export function restartPongGame(
   };
 }
 
-export function movePongPlayer(game: PongGameState, deltaY: number): PongGameState {
+export function movePongPaddle(
+  game: PongGameState,
+  side: PongSide,
+  deltaY: number,
+): PongGameState {
   if (game.status === "won" || game.status === "lost") {
     return game;
   }
 
+  const paddleKey = side === "left" ? "playerPaddle" : "cpuPaddle";
+
   return {
     ...game,
-    playerPaddle: movePaddle(game.playerPaddle, deltaY, game.boardHeight),
+    [paddleKey]: movePaddle(game[paddleKey], deltaY, game.boardHeight),
   };
 }
 
+export function movePongPaddleUp(game: PongGameState, side: PongSide): PongGameState {
+  return movePongPaddle(game, side, -PADDLE_SPEED);
+}
+
+export function movePongPaddleDown(game: PongGameState, side: PongSide): PongGameState {
+  return movePongPaddle(game, side, PADDLE_SPEED);
+}
+
+export function movePongPlayer(game: PongGameState, deltaY: number): PongGameState {
+  return movePongPaddle(game, "left", deltaY);
+}
+
 export function movePongPlayerUp(game: PongGameState): PongGameState {
-  return movePongPlayer(game, -PADDLE_SPEED);
+  return movePongPaddleUp(game, "left");
 }
 
 export function movePongPlayerDown(game: PongGameState): PongGameState {
-  return movePongPlayer(game, PADDLE_SPEED);
+  return movePongPaddleDown(game, "left");
 }
 
 export function isPongBetweenRounds(game: Pick<PongGameState, "score" | "status">) {
@@ -244,6 +290,24 @@ export function decrementPongRemainingScore(game: PongGameState): PongGameState 
   }
 
   return deductPongRemainingScore(game, SCORE_SECOND_PENALTY);
+}
+
+export function applyPongGameEvent(
+  game: PongGameState,
+  event: PongGameEvent,
+): PongGameState {
+  switch (event.type) {
+    case "advance":
+      return advancePongGame(game);
+    case "move":
+      return event.direction === "up"
+        ? movePongPaddleUp(game, event.side)
+        : movePongPaddleDown(game, event.side);
+    case "scoreTick":
+      return decrementPongRemainingScore(game);
+    case "start":
+      return startPongGame(game);
+  }
 }
 
 function createRoundState({

@@ -1,15 +1,13 @@
 import {
-  advancePongGame,
+  applyPongGameEvent,
   createInitialPongGame,
-  decrementPongRemainingScore,
   getPongMaximumScore,
-  movePongPlayerDown,
-  movePongPlayerUp,
   PONG_BOARD_HEIGHT,
   PONG_BOARD_WIDTH,
   PONG_TARGET_SCORE,
-  startPongGame,
   type PongGameState,
+  type PongPaddleMoveDirection,
+  type PongSide,
 } from "@/lib/pong-game-engine";
 import {
   createGameReplayRun as createGenericGameReplayRun,
@@ -41,19 +39,33 @@ export type PongReplayMoveUpEvent = GameReplayEventEnvelope<"moveUp">;
 
 export type PongReplayMoveDownEvent = GameReplayEventEnvelope<"moveDown">;
 
+export type PongReplayMoveEvent = GameReplayEventEnvelope<"move"> & {
+  direction: PongPaddleMoveDirection;
+  side: PongSide;
+};
+
 export type PongReplayScoreTickEvent = GameReplayEventEnvelope<"scoreTick">;
+
+type PongReplayEventInputFor<Event> = Omit<
+  Event,
+  "elapsedMs" | "seq" | "tick"
+>;
 
 export type PongReplayEvent =
   | PongReplayAdvanceEvent
   | PongReplayMoveDownEvent
+  | PongReplayMoveEvent
   | PongReplayMoveUpEvent
   | PongReplayScoreTickEvent
   | PongReplayStartEvent;
 
-export type PongReplayEventInput = Omit<
-  PongReplayEvent,
-  "elapsedMs" | "seq" | "tick"
->;
+export type PongReplayEventInput =
+  | PongReplayEventInputFor<PongReplayAdvanceEvent>
+  | PongReplayEventInputFor<PongReplayMoveDownEvent>
+  | PongReplayEventInputFor<PongReplayMoveEvent>
+  | PongReplayEventInputFor<PongReplayMoveUpEvent>
+  | PongReplayEventInputFor<PongReplayScoreTickEvent>
+  | PongReplayEventInputFor<PongReplayStartEvent>;
 
 export type PongReplayPayload = BaseGameReplayPayload<
   typeof PONG_REPLAY_GAME_ID,
@@ -80,6 +92,7 @@ const PONG_MIN_BOARD_HEIGHT = 320;
 const PONG_MIN_TARGET_SCORE = 1;
 const PONG_EVENT_TYPES = new Set<PongReplayEvent["type"]>([
   "advance",
+  "move",
   "moveDown",
   "moveUp",
   "scoreTick",
@@ -91,6 +104,16 @@ export const normalizePongReplaySeed = normalizeGameReplaySeed;
 
 function isMinimumInteger(value: unknown, minimum: number): value is number {
   return isNonNegativeInteger(value) && value >= minimum;
+}
+
+function isPongSide(value: unknown): value is PongSide {
+  return value === "left" || value === "right";
+}
+
+function isPongPaddleMoveDirection(
+  value: unknown,
+): value is PongPaddleMoveDirection {
+  return value === "up" || value === "down";
 }
 
 export function createPongReplayLeaderboardKey({
@@ -105,7 +128,27 @@ export function createPongReplayLeaderboardKey({
 }
 
 function parsePongReplayEvent(value: unknown): PongReplayEvent | null {
-  return parseGameReplayEventEnvelope(value, PONG_EVENT_TYPES);
+  const envelope = parseGameReplayEventEnvelope(value, PONG_EVENT_TYPES);
+
+  if (envelope === null) {
+    return null;
+  }
+
+  if (envelope.type === "move") {
+    const event = value as Record<string, unknown>;
+
+    if (!isPongSide(event.side) || !isPongPaddleMoveDirection(event.direction)) {
+      return null;
+    }
+
+    return {
+      ...envelope,
+      direction: event.direction,
+      side: event.side,
+    };
+  }
+
+  return envelope;
 }
 
 export function parsePongReplayPayload(value: unknown): ParsePongReplayPayloadResult {
@@ -214,15 +257,25 @@ export function createInitialPongReplayGame(
 export function applyPongReplayEvent(current: PongGameState, event: PongReplayEvent) {
   switch (event.type) {
     case "advance":
-      return advancePongGame(current);
+      return applyPongGameEvent(current, event);
+    case "move":
+      return applyPongGameEvent(current, event);
     case "moveDown":
-      return movePongPlayerDown(current);
+      return applyPongGameEvent(current, {
+        direction: "down",
+        side: "left",
+        type: "move",
+      });
     case "moveUp":
-      return movePongPlayerUp(current);
+      return applyPongGameEvent(current, {
+        direction: "up",
+        side: "left",
+        type: "move",
+      });
     case "scoreTick":
-      return decrementPongRemainingScore(current);
+      return applyPongGameEvent(current, event);
     case "start":
-      return startPongGame(current);
+      return applyPongGameEvent(current, event);
   }
 }
 

@@ -4,6 +4,7 @@ import { withReplayElapsed } from "./game-replay.test-helpers";
 import {
   advancePongGame,
   decrementPongRemainingScore,
+  getPongPlayerSpeed,
   startPongGame,
   type PongGameState,
 } from "./pong-game-engine";
@@ -283,6 +284,97 @@ describe("pong replay", () => {
     expect(result.status).toBe("running");
     expect(result.playerPaddle.y).toBeLessThan(initialReplay.game.playerPaddle.y);
     expect(result.remainingScore).toBe(initialReplay.game.remainingScore - 5);
+  });
+
+  it("parses and applies legacy and side-based paddle move events", () => {
+    const replay = createReplayPayload({
+      events: [
+        {
+          elapsedMs: 0,
+          seq: 0,
+          tick: 0,
+          type: "moveUp",
+        },
+        {
+          elapsedMs: 1,
+          seq: 1,
+          tick: 0,
+          type: "moveDown",
+        },
+        {
+          direction: "up",
+          elapsedMs: 2,
+          seq: 2,
+          side: "left",
+          tick: 0,
+          type: "move",
+        },
+        {
+          direction: "down",
+          elapsedMs: 3,
+          seq: 3,
+          side: "right",
+          tick: 0,
+          type: "move",
+        },
+      ],
+    });
+    const parsedReplay = parsePongReplayPayload(replay);
+
+    if (!parsedReplay.success) {
+      throw new Error(parsedReplay.error);
+    }
+
+    const initialReplay = createInitialPongReplayGame(parsedReplay.payload);
+    const result = applyReplayEvents(initialReplay.game, parsedReplay.payload.events);
+
+    expect(parsedReplay.payload.events).toEqual([
+      expect.objectContaining({ type: "moveUp" }),
+      expect.objectContaining({ type: "moveDown" }),
+      expect.objectContaining({ direction: "up", side: "left", type: "move" }),
+      expect.objectContaining({ direction: "down", side: "right", type: "move" }),
+    ]);
+    expect(result.playerPaddle.y).toBe(initialReplay.game.playerPaddle.y - getPongPlayerSpeed());
+    expect(result.cpuPaddle.y).toBe(initialReplay.game.cpuPaddle.y + getPongPlayerSpeed());
+  });
+
+  it("rejects side-based paddle move events with unsupported side or direction", () => {
+    expect(
+      parsePongReplayPayload(
+        createReplayPayload({
+          events: [
+            {
+              direction: "up",
+              seq: 0,
+              side: "center",
+              tick: 0,
+              type: "move",
+            } as unknown as PongReplayEvent,
+          ],
+        }),
+      ),
+    ).toEqual({
+      error: "Pong replay includes an unsupported event.",
+      success: false,
+    });
+    expect(
+      parsePongReplayPayload(
+        createReplayPayload({
+          events: [
+            {
+              direction: "left",
+              seq: 0,
+              side: "left",
+              tick: 0,
+              type: "move",
+            } as unknown as PongReplayEvent,
+          ],
+        }),
+      ),
+    ).toEqual({
+      error: "Pong replay includes an unsupported event.",
+      success: false,
+    });
   });
 
   it("replays a generated terminal run to the same final Pong state", () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   advancePongGame,
+  applyPongGameEvent,
   createInitialPongGame,
   decrementPongRemainingScore,
   getPongBallRadius,
@@ -11,7 +12,12 @@ import {
   isPongBetweenRounds,
   isPongMatchInProgress,
   isPongScoreCountingDown,
+  movePongPaddle,
+  movePongPaddleDown,
+  movePongPaddleUp,
   movePongPlayer,
+  movePongPlayerDown,
+  movePongPlayerUp,
   pausePongGame,
   PONG_BOARD_HEIGHT,
   PONG_BOARD_WIDTH,
@@ -109,6 +115,54 @@ describe("pong game engine", () => {
       PONG_BOARD_HEIGHT - movedToBottom.playerPaddle.height,
     );
     expect(getPongPlayerSpeed()).toBeGreaterThan(0);
+  });
+
+  it("moves and clamps either paddle by side while preserving player helpers as left aliases", () => {
+    const game = createInitialPongGame();
+    const speed = getPongPlayerSpeed();
+    const leftUp = movePongPaddleUp(game, "left");
+    const leftDown = movePongPaddleDown(game, "left");
+    const rightUp = movePongPaddleUp(game, "right");
+    const rightDown = movePongPaddleDown(game, "right");
+    const rightClampedTop = movePongPaddle(game, "right", -1_000);
+    const rightClampedBottom = movePongPaddle(rightClampedTop, "right", 1_000);
+
+    expect(leftUp).toEqual(movePongPlayerUp(game));
+    expect(leftDown).toEqual(movePongPlayerDown(game));
+    expect(leftUp.playerPaddle.y).toBe(game.playerPaddle.y - speed);
+    expect(leftUp.cpuPaddle).toEqual(game.cpuPaddle);
+    expect(rightUp.cpuPaddle.y).toBe(game.cpuPaddle.y - speed);
+    expect(rightDown.cpuPaddle.y).toBe(game.cpuPaddle.y + speed);
+    expect(rightDown.playerPaddle).toEqual(game.playerPaddle);
+    expect(rightClampedTop.cpuPaddle.y).toBe(0);
+    expect(rightClampedBottom.cpuPaddle.y).toBe(
+      PONG_BOARD_HEIGHT - rightClampedBottom.cpuPaddle.height,
+    );
+  });
+
+  it("applies lifecycle, tick, and side move events through the engine event seam", () => {
+    const initialGame = createInitialPongGame();
+    const startedGame = applyPongGameEvent(initialGame, { type: "start" });
+    const scoreTickGame = applyPongGameEvent(startedGame, { type: "scoreTick" });
+    const leftMovedGame = applyPongGameEvent(initialGame, {
+      direction: "up",
+      side: "left",
+      type: "move",
+    });
+    const rightMovedGame = applyPongGameEvent(initialGame, {
+      direction: "down",
+      side: "right",
+      type: "move",
+    });
+    const advancedGame = applyPongGameEvent(startedGame, { type: "advance" });
+
+    expect(startedGame.status).toBe("running");
+    expect(scoreTickGame.remainingScore).toBe(initialGame.remainingScore - 5);
+    expect(leftMovedGame.playerPaddle.y).toBeLessThan(initialGame.playerPaddle.y);
+    expect(leftMovedGame.cpuPaddle).toEqual(initialGame.cpuPaddle);
+    expect(rightMovedGame.cpuPaddle.y).toBeGreaterThan(initialGame.cpuPaddle.y);
+    expect(rightMovedGame.playerPaddle).toEqual(initialGame.playerPaddle);
+    expect(advancedGame.ball.position.x).not.toBe(startedGame.ball.position.x);
   });
 
   it("bounces the ball off the top and bottom walls", () => {
