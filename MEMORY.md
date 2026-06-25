@@ -14,6 +14,8 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
 - `public/images/` owns launcher key art and the sprite-backed board assets.
   See `public/images/MEMORY.md`.
 - `e2e/` owns rendered browser-flow coverage. See `e2e/MEMORY.md`.
+- `docs/adr/` owns durable architecture decision records for future runtime
+  work, including private multiplayer room architecture.
 - `.githooks/` owns repository-local Git hook tooling, including the
   dependency-free Agentic Lore Coding validator. See `.githooks/MEMORY.md`.
 - `.github/` owns CI workflow behavior. See `.github/MEMORY.md`.
