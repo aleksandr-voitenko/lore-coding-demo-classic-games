@@ -7,6 +7,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
 } from "react";
 
 import {
@@ -34,7 +35,11 @@ import type {
   PrivateRoomParticipant,
   PrivateRoomSeat,
 } from "@/lib/multiplayer/room";
-import type { PongStatus } from "@/lib/pong-game-engine";
+import type { PongGameState, PongStatus } from "@/lib/pong-game-engine";
+import {
+  getPongMultiplayerProjectionTicks,
+  projectPongMultiplayerGame,
+} from "@/lib/pong-multiplayer";
 
 type PongMultiplayerRoomProps = {
   activeParticipant: PrivateRoomParticipant | null;
@@ -62,6 +67,100 @@ const terminalSummaries = {
   lost: "Right paddle wins the match",
   won: "Left paddle wins the match",
 } satisfies Partial<Record<PongStatus, string>>;
+
+type PongMultiplayerProjection = {
+  game: PongGameState;
+  seq: number;
+  serverTimeMs: number;
+};
+
+function getPongMultiplayerProjectionNowMs() {
+  return typeof performance === "undefined" ? Date.now() : performance.now();
+}
+
+function useProjectedPongMultiplayerGame(game: MultiplayerRoomGameSnapshot) {
+  const gameRef = useRef(game);
+  const gameSeq = game.seq;
+  const gameServerTimeMs = game.serverTimeMs;
+  const gameStatus = game.snapshot.status;
+  const [projection, setProjection] = useState<PongMultiplayerProjection>(() => ({
+    game: game.snapshot,
+    seq: game.seq,
+    serverTimeMs: game.serverTimeMs,
+  }));
+
+  useEffect(() => {
+    gameRef.current = game;
+  }, [game]);
+
+  useEffect(() => {
+    const baseGame = gameRef.current;
+
+    if (baseGame.snapshot.status !== "running" || typeof window === "undefined") {
+      return;
+    }
+
+    const receivedAtMs = getPongMultiplayerProjectionNowMs();
+    let frameId: number | null = null;
+    let lastProjectedTicks = -1;
+
+    function updateProjection(nowMs: number) {
+      const elapsedMs = nowMs - receivedAtMs;
+      const ticks = getPongMultiplayerProjectionTicks(elapsedMs);
+
+      if (ticks !== lastProjectedTicks) {
+        setProjection({
+          game: projectPongMultiplayerGame(
+            baseGame.snapshot,
+            baseGame.heldInputs,
+            elapsedMs,
+          ),
+          seq: baseGame.seq,
+          serverTimeMs: baseGame.serverTimeMs,
+        });
+        lastProjectedTicks = ticks;
+      }
+
+      frameId = window.requestAnimationFrame(updateProjection);
+    }
+
+    frameId = window.requestAnimationFrame(updateProjection);
+
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [gameSeq, gameServerTimeMs, gameStatus]);
+
+  if (
+    game.snapshot.status === "running" &&
+    projection.seq === game.seq &&
+    projection.serverTimeMs === game.serverTimeMs
+  ) {
+    return projection.game;
+  }
+
+  return game.snapshot;
+}
+
+function PongMultiplayerProjectedBoard({
+  children,
+  game,
+  statusLabel,
+}: {
+  children?: ReactNode;
+  game: MultiplayerRoomGameSnapshot;
+  statusLabel: string;
+}) {
+  const projectedGame = useProjectedPongMultiplayerGame(game);
+
+  return (
+    <PongBoard game={projectedGame} statusLabel={statusLabel}>
+      {children}
+    </PongBoard>
+  );
+}
 
 export function createPongMultiplayerInputState() {
   return createPongPaddleMovementState();
@@ -156,7 +255,6 @@ export function PongMultiplayerRoom({
   );
   const canSendGameInput = activeSeat !== null;
   const statusLabel = getPongMultiplayerStatusLabel(gameState.status);
-  const shouldSmoothBoardMotion = gameState.status === "running";
   const boardFrameMaxWidth = getPongMultiplayerBoardFrameMaxWidth(game);
   const readOnlyMessage = getReadOnlyMessage(activeParticipant, activeSeat);
   const roleLabel = getParticipantRoleLabel(activeParticipant, activeSeat);
@@ -278,9 +376,8 @@ export function PongMultiplayerRoom({
           data-testid="pong-multiplayer-board-frame"
           style={{ maxWidth: boardFrameMaxWidth }}
         >
-          <PongBoard
-            game={gameState}
-            smoothMotion={shouldSmoothBoardMotion}
+          <PongMultiplayerProjectedBoard
+            game={game}
             statusLabel={statusLabel}
           >
             {gameState.status === "ready" ? (
@@ -328,7 +425,7 @@ export function PongMultiplayerRoom({
                 </p>
               </div>
             ) : null}
-          </PongBoard>
+          </PongMultiplayerProjectedBoard>
         </div>
       </section>
 

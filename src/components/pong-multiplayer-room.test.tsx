@@ -67,6 +67,7 @@ const ACTIVE_PONG_ROOM: PrivateRoom = {
 
 const RUNNING_PONG_GAME = {
   gameId: "pong",
+  heldInputs: {},
   seq: 1,
   serverTimeMs: 1_000,
   snapshot: startPongGame(createInitialPongGame()),
@@ -95,7 +96,8 @@ describe("PongMultiplayerRoom", () => {
       "Ada · Left Paddle",
     ]);
     expect(markup).not.toContain('data-testid="pong-multiplayer-readonly"');
-    expect(markup).toContain("transition-property:left, top");
+    expect(markup).not.toContain("transition-property:left, top");
+    expect(markup).not.toContain("will-change:left, top");
     expect(markup).toContain("max-width:min(100%, calc((100svh - 8rem) * 0.75))");
   });
 

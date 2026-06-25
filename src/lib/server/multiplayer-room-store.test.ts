@@ -362,6 +362,7 @@ describe("in-process multiplayer room store", () => {
 
     expect(started.game).toMatchObject({
       gameId: "pong",
+      heldInputs: {},
       seq: 1,
       serverTimeMs: 1_500,
       snapshot: {
@@ -392,10 +393,20 @@ describe("in-process multiplayer room store", () => {
 
     expect(inputSnapshot.seq).toBe(started.seq);
     expect(inputSnapshot.game?.seq).toBe(started.game!.seq + 1);
+    expect(inputSnapshot.game?.heldInputs).toEqual({
+      left: {
+        up: true,
+      },
+    });
 
     nowMs += getPongTickDelay();
     const advanced = expectStoreSuccess(store.getRoom("ROOM1"));
 
+    expect(advanced.game?.heldInputs).toEqual({
+      left: {
+        up: true,
+      },
+    });
     expect(advanced.game!.snapshot.playerPaddle.y).toBeLessThan(
       initialGame.playerPaddle.y,
     );
@@ -613,10 +624,15 @@ describe("in-process multiplayer room store", () => {
 
     snapshot.game!.snapshot.playerPaddle.y = 0;
     snapshot.game!.snapshot.score.player = 99;
+    const mutableHeldInputs = snapshot.game!.heldInputs as {
+      left?: { down?: boolean };
+    };
+    mutableHeldInputs.left = { down: true };
 
     const nextSnapshot = expectStoreSuccess(store.getRoom("ROOM1"));
 
     expect(nextSnapshot.game!.snapshot.playerPaddle.y).not.toBe(0);
     expect(nextSnapshot.game!.snapshot.score.player).toBe(0);
+    expect(nextSnapshot.game!.heldInputs).toEqual({});
   });
 });

@@ -105,6 +105,7 @@ export type MultiplayerRoomSnapshot = {
 
 export type MultiplayerRoomGameSnapshot = {
   gameId: "pong";
+  heldInputs: PongMultiplayerHeldInputs;
   seq: number;
   serverTimeMs: number;
   snapshot: PongGameState;
@@ -262,6 +263,22 @@ function clonePongGameState(game: PongGameState): PongGameState {
   };
 }
 
+function clonePongHeldInputs(
+  inputs: WritablePongMultiplayerHeldInputs,
+): PongMultiplayerHeldInputs {
+  const heldInputs: WritablePongMultiplayerHeldInputs = {};
+
+  if (inputs.left !== undefined) {
+    heldInputs.left = { ...inputs.left };
+  }
+
+  if (inputs.right !== undefined) {
+    heldInputs.right = { ...inputs.right };
+  }
+
+  return heldInputs;
+}
+
 function createStoreFailure(
   code: MultiplayerRoomStoreErrorCode,
   error: string,
@@ -288,6 +305,7 @@ function createStoredRoomSnapshot(
       ? undefined
       : {
           gameId: "pong" as const,
+          heldInputs: clonePongHeldInputs(storedRoom.game.heldInputs),
           seq: storedRoom.game.seq,
           serverTimeMs,
           snapshot: clonePongGameState(storedRoom.game.game),

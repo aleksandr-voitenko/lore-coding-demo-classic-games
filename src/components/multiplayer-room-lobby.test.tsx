@@ -88,6 +88,7 @@ const ACTIVE_PONG_ROOM: PrivateRoom = {
 
 const RUNNING_PONG_GAME = {
   gameId: "pong",
+  heldInputs: {},
   seq: 1,
   serverTimeMs: 1_000,
   snapshot: startPongGame(createInitialPongGame()),

@@ -8,6 +8,7 @@ import type {
   PongGameState,
   PongPaddleMoveDirection,
 } from "../pong-game-engine";
+import type { PongMultiplayerHeldInputs } from "../pong-multiplayer";
 
 export type PrivateRoomLifecycleCommand =
   | "finish"
@@ -27,6 +28,7 @@ export type PongMultiplayerClientInput =
 
 export type MultiplayerRoomGameSnapshot = {
   gameId: "pong";
+  heldInputs: PongMultiplayerHeldInputs;
   seq: number;
   serverTimeMs: number;
   snapshot: PongGameState;

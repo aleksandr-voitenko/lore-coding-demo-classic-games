@@ -10,6 +10,8 @@ import {
 } from "./multiplayer/room";
 import {
   createInitialPongGame,
+  getPongBallRadius,
+  getPongTickDelay,
   PONG_BOARD_HEIGHT,
   PONG_BOARD_WIDTH,
   PONG_TARGET_SCORE,
@@ -21,6 +23,7 @@ import {
   getPongMultiplayerParticipantSide,
   parsePongMultiplayerRoomSettings,
   pausePongMultiplayerGame,
+  projectPongMultiplayerGame,
   restartPongMultiplayerGame,
   resumePongMultiplayerGame,
   startPongMultiplayerGame,
@@ -267,6 +270,59 @@ describe("pong multiplayer adapter", () => {
     });
 
     expect(ticked).toBe(pausedGame);
+  });
+
+  it("projects running snapshots through paddle contact", () => {
+    const runningGame = startPongMultiplayerGame(createInitialPongGame());
+    const ballRadius = getPongBallRadius();
+    const paddleFaceX = runningGame.playerPaddle.x + runningGame.playerPaddle.width;
+    const collisionReadyGame = {
+      ...runningGame,
+      ball: {
+        position: {
+          x: paddleFaceX + ballRadius + 1,
+          y: runningGame.playerPaddle.y + runningGame.playerPaddle.height / 2,
+        },
+        velocity: {
+          x: -4.8,
+          y: 0,
+        },
+      },
+    };
+
+    const projectedGame = projectPongMultiplayerGame(
+      collisionReadyGame,
+      {},
+      getPongTickDelay(),
+    );
+
+    expect(projectedGame.ball.position.x).toBeCloseTo(paddleFaceX + ballRadius);
+    expect(projectedGame.ball.velocity.x).toBeGreaterThan(0);
+  });
+
+  it("does not project a running snapshot into a local scoring reset", () => {
+    const runningGame = startPongMultiplayerGame(createInitialPongGame());
+    const nearlyScoredGame = {
+      ...runningGame,
+      ball: {
+        position: {
+          x: runningGame.boardWidth + getPongBallRadius() + 1,
+          y: runningGame.boardHeight / 2,
+        },
+        velocity: {
+          x: 4.8,
+          y: 0,
+        },
+      },
+    };
+
+    const projectedGame = projectPongMultiplayerGame(
+      nearlyScoredGame,
+      {},
+      getPongTickDelay(),
+    );
+
+    expect(projectedGame).toBe(nearlyScoredGame);
   });
 
   it("starts, pauses, resumes, and restarts multiplayer game state", () => {

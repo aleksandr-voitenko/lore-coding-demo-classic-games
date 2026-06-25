@@ -2,6 +2,7 @@ import type { PrivateRoom, PrivateRoomSeat, PrivateRoomSettingValue } from "./mu
 import {
   advancePongDuelGame,
   createInitialPongGame,
+  getPongTickDelay,
   movePongPaddleDown,
   movePongPaddleUp,
   pausePongGame,
@@ -61,6 +62,8 @@ type PongMultiplayerRoomValidationResult =
   | PongMultiplayerError;
 
 const PONG_ROOM_SIDES = ["left", "right"] as const satisfies readonly PongSide[];
+
+export const PONG_MULTIPLAYER_PROJECTION_MAX_MS = 120;
 
 export function parsePongMultiplayerRoomSettings(
   parameters: PrivateRoom["settings"]["parameters"] = {},
@@ -167,6 +170,47 @@ export function advancePongMultiplayerTick(
   }
 
   return advancePongDuelGame(applyPongMultiplayerHeldInputs(game, inputs));
+}
+
+export function getPongMultiplayerProjectionTicks(elapsedMs: number) {
+  if (elapsedMs <= 0) {
+    return 0;
+  }
+
+  const tickDelayMs = getPongTickDelay();
+
+  if (tickDelayMs <= 0) {
+    return 0;
+  }
+
+  return Math.floor(
+    Math.min(elapsedMs, PONG_MULTIPLAYER_PROJECTION_MAX_MS) / tickDelayMs,
+  );
+}
+
+export function projectPongMultiplayerGame(
+  game: PongGameState,
+  inputs: PongMultiplayerHeldInputs,
+  elapsedMs: number,
+): PongGameState {
+  if (game.status !== "running") {
+    return game;
+  }
+
+  const projectionTicks = getPongMultiplayerProjectionTicks(elapsedMs);
+  let projectedGame = game;
+
+  for (let tickIndex = 0; tickIndex < projectionTicks; tickIndex += 1) {
+    const nextGame = advancePongMultiplayerTick(projectedGame, inputs);
+
+    if (nextGame.status !== "running") {
+      break;
+    }
+
+    projectedGame = nextGame;
+  }
+
+  return projectedGame;
 }
 
 export function startPongMultiplayerGame(game: PongGameState): PongGameState {

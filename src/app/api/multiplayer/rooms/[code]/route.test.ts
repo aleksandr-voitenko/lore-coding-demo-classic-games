@@ -125,6 +125,7 @@ describe("multiplayer room route", () => {
     await expect(response.json()).resolves.toMatchObject({
       game: {
         gameId: "pong",
+        heldInputs: {},
         serverTimeMs: 1_100,
         snapshot: {
           status: "running",
@@ -221,6 +222,11 @@ describe("multiplayer room route", () => {
     await expect(response.json()).resolves.toMatchObject({
       game: {
         gameId: "pong",
+        heldInputs: {
+          right: {
+            down: true,
+          },
+        },
         snapshot: {
           status: "running",
         },
