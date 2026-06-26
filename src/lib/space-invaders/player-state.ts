@@ -25,7 +25,7 @@ import type {
   SpaceInvadersScoreTarget,
 } from "./types";
 
-type SpaceInvadersPlayerOwnedState = Pick<
+export type SpaceInvadersPlayerOwnedState = Pick<
   SpaceInvadersGameState,
   | "pendingShotPowerUp"
   | "player"
