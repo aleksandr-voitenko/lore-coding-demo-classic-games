@@ -10,6 +10,7 @@ import {
   createInitialAsteroidsGame,
   type AsteroidsPowerUpKind,
 } from "@/lib/asteroids-game-engine";
+import { createInitialAsteroidsMultiplayerGame } from "@/lib/asteroids-multiplayer";
 
 function getExpectedAsteroidsPowerUpLabel(kind: AsteroidsPowerUpKind) {
   switch (kind) {
@@ -86,6 +87,9 @@ describe("AsteroidsBoard", () => {
       'data-testid="asteroids-ship"',
       "<polygon",
     ]);
+    expect(markup.match(/data-testid="asteroids-ship"/g)).toHaveLength(1);
+    expect(markup).not.toContain("data-ship-id=");
+    expect(markup).not.toContain("Ship A active.");
   });
 
   it("renders Asteroids power-up vector icons and board labels", () => {
@@ -241,6 +245,126 @@ describe("AsteroidsBoard", () => {
       'data-testid="asteroids-ship-explosion"',
     ]);
     expect(explosionMarkup).not.toContain('data-testid="asteroids-ship"');
+  });
+
+  it("renders multiplayer ship render states with per-seat bullets", () => {
+    const soloGame = createInitialAsteroidsGame();
+    const multiplayerGame = createInitialAsteroidsMultiplayerGame();
+    const shipA = multiplayerGame.ships["ship-a"];
+    const shipB = multiplayerGame.ships["ship-b"];
+    const markup = renderToStaticMarkup(
+      <AsteroidsBoard
+        game={{
+          ...soloGame,
+          bullets: [
+            {
+              id: "solo-bullet",
+              radius: 2.5,
+              ttl: 20,
+              velocity: { x: 0, y: -8 },
+              x: 420,
+              y: 220,
+            },
+          ],
+          status: "running",
+        }}
+        shipRenderStates={[
+          {
+            ...shipA,
+            bullets: [
+              {
+                id: "ship-a-bullet",
+                radius: 2.5,
+                ttl: 20,
+                velocity: { x: 0, y: -8 },
+                x: shipA.ship.x,
+                y: shipA.ship.y - 26,
+              },
+            ],
+            id: "ship-a",
+            label: "Ship A",
+            ship: {
+              ...shipA.ship,
+              isThrusting: true,
+            },
+          },
+          {
+            ...shipB,
+            bullets: [
+              {
+                id: "ship-b-bullet",
+                radius: 2.5,
+                ttl: 20,
+                velocity: { x: 0, y: -8 },
+                x: shipB.ship.x,
+                y: shipB.ship.y - 26,
+              },
+            ],
+            id: "ship-b",
+            label: "Ship B",
+          },
+        ]}
+        statusLabel="Running"
+      />,
+    );
+
+    expect(markup.match(/data-testid="asteroids-ship"/g)).toHaveLength(2);
+    expect(markup.match(/data-testid="asteroids-bullet"/g)).toHaveLength(2);
+    expectMarkup(markup, [
+      "Ship A active. Ship B active.",
+      'data-ship-id="ship-a"',
+      'data-ship-label="Ship A"',
+      'data-ship-id="ship-b"',
+      'data-ship-label="Ship B"',
+      'data-testid="asteroids-ship"',
+      'data-testid="asteroids-bullet"',
+      "fill-[var(--asteroids-thrust)]",
+    ]);
+  });
+
+  it("renders multiplayer shield and explosion states by ship seat", () => {
+    const soloGame = createInitialAsteroidsGame();
+    const multiplayerGame = createInitialAsteroidsMultiplayerGame();
+    const shipA = multiplayerGame.ships["ship-a"];
+    const shipB = multiplayerGame.ships["ship-b"];
+    const markup = renderToStaticMarkup(
+      <AsteroidsBoard
+        game={{
+          ...soloGame,
+          status: "running",
+        }}
+        shipRenderStates={[
+          {
+            ...shipA,
+            id: "ship-a",
+            label: "Ship A",
+            respawnInvulnerabilityTicks: ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
+          },
+          {
+            ...shipB,
+            id: "ship-b",
+            label: "Ship B",
+            shipExplosion: {
+              durationTicks: ASTEROIDS_SHIP_EXPLOSION_TICKS,
+              radius: shipB.ship.radius,
+              ticksRemaining: ASTEROIDS_SHIP_EXPLOSION_TICKS,
+              x: shipB.ship.x,
+              y: shipB.ship.y,
+            },
+          },
+        ]}
+        statusLabel="Running"
+      />,
+    );
+
+    expect(markup.match(/data-testid="asteroids-ship"/g)).toHaveLength(1);
+    expectMarkup(markup, [
+      "Ship A shield active. Ship B exploding.",
+      'data-testid="asteroids-ship-shield"',
+      'data-testid="asteroids-ship-explosion"',
+      'data-ship-id="ship-a"',
+      'data-ship-id="ship-b"',
+    ]);
   });
 
   it("renders Asteroids hit sparks as fading small particles", () => {
