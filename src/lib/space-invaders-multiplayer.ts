@@ -35,14 +35,23 @@ import {
   UFO_SPEED,
 } from "./space-invaders/constants";
 import {
+  continueSpaceInvadersMultiKillCombo,
+  createSpaceInvadersExplosion,
   deactivateSpaceInvadersUfo,
   finalizeSpaceInvadersMultiKillCombo,
+  getProjectileCollisionExplosionTarget,
+  maybeCreateSpaceInvadersPowerUpDrop,
 } from "./space-invaders/effects";
+import {
+  createSpaceInvadersSplitterFragments,
+  getInvaderHitPointsAfterPlayerShot,
+} from "./space-invaders/formation";
 import {
   clamp,
   getEntityCenterX,
   rectanglesIntersect,
 } from "./space-invaders/geometry";
+import { getInvaderCollisionBounds } from "./space-invaders/hitboxes";
 import { advanceSpaceInvadersPlayerShots } from "./space-invaders/player-shots";
 import {
   advanceSpaceInvadersPlayerBurst,
@@ -55,14 +64,43 @@ import {
 import {
   advanceInvaderShotPositions,
   advanceSpaceInvadersRevengeVolleys,
+  createCommanderShardShots,
   createInitialPlayerBurstState,
   createPlayerShots,
   isInvaderShotDangerous,
+  maybePrimeSpaceInvadersRevengeVolley,
   maybeFireInvaderShot,
 } from "./space-invaders/projectiles";
 import { getRandomIndex } from "./space-invaders/random";
-import { resetSpaceInvadersHitStreak } from "./space-invaders/scoring";
+import {
+  getCombinedSpaceInvadersScoreTarget,
+  resetSpaceInvadersHitStreak,
+} from "./space-invaders/scoring";
 import type { SpaceInvadersScoreTarget } from "./space-invaders/types";
+
+type MultiplayerMineBlastInvaderDamage = {
+  damagedArmoredInvaders: {
+    hitPoints: number;
+    invader: SpaceInvader;
+  }[];
+  destroyedInvaderPoints: number;
+  destroyedInvaders: SpaceInvader[];
+};
+
+type MultiplayerPlayerShotDamageSets = Record<
+  SpaceInvadersShipSeat,
+  Set<string>
+>;
+
+type MultiplayerMineBlastDamageSets = {
+  invaderShotIds: Set<string>;
+  playerShotIds: MultiplayerPlayerShotDamageSets;
+};
+
+type MultiplayerMineBlastResolution = {
+  didDamageShips: boolean;
+  game: SpaceInvadersMultiplayerGameState;
+};
 
 export const SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS = [
   "ship-a",
@@ -583,14 +621,458 @@ function advanceSpaceInvadersMultiplayerInvaderShots(
         getSpaceInvadersMultiplayerShotTargetPlayer(game, shot),
     },
   );
+  const gameAfterShotMovement =
+    resolveSpaceInvadersMultiplayerOpposingShotCollisions(
+      {
+        ...game,
+        invaderShots,
+        nextInvaderShotId,
+      },
+      random,
+    );
 
   return resolveSpaceInvadersMultiplayerInvaderShotHits(
-    {
-      ...game,
-      invaderShots,
-      nextInvaderShotId,
-    },
+    gameAfterShotMovement,
     random,
+  );
+}
+
+function resolveSpaceInvadersMultiplayerOpposingShotCollisions(
+  game: SpaceInvadersMultiplayerGameState,
+  random: SpaceInvadersRandomSource,
+): SpaceInvadersMultiplayerGameState {
+  if (
+    game.invaderShots.length === 0 ||
+    SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS.every(
+      (seat) => game.ships[seat].playerShots.length === 0,
+    )
+  ) {
+    return game;
+  }
+
+  const collidedPlayerShotIds = createSpaceInvadersMultiplayerPlayerShotDamageSets();
+  const collidedInvaderShotIds = new Set<string>();
+  const splitCommanderShotIds = new Set<string>();
+  const collidedMineShots = new Map<string, SpaceInvadersInvaderShot>();
+  let didCollide = false;
+  let nextGame = game;
+
+  // Collect all same-tick projectile collisions before mutating shared shots
+  // or per-ship player-shot queues.
+  for (const seat of SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS) {
+    for (const playerShot of game.ships[seat].playerShots) {
+      for (const invaderShot of game.invaderShots) {
+        if (!rectanglesIntersect(playerShot, invaderShot)) {
+          continue;
+        }
+
+        didCollide = true;
+
+        if (!isSpaceInvadersMultiplayerPlayerShotInvulnerable(playerShot)) {
+          collidedPlayerShotIds[seat].add(playerShot.id);
+        }
+
+        if (!isSpaceInvadersMultiplayerInvaderShotInvulnerable(invaderShot)) {
+          collidedInvaderShotIds.add(invaderShot.id);
+
+          if (invaderShot.kind === "mine") {
+            collidedMineShots.set(invaderShot.id, invaderShot);
+          } else if (
+            shouldSplitSpaceInvadersMultiplayerCommanderShotOnCollision(invaderShot)
+          ) {
+            splitCommanderShotIds.add(invaderShot.id);
+          }
+        }
+
+        if (invaderShot.kind !== "mine") {
+          nextGame = createSpaceInvadersMultiplayerSharedExplosion(
+            nextGame,
+            "projectile",
+            getProjectileCollisionExplosionTarget(playerShot, invaderShot),
+            random,
+          );
+        }
+      }
+    }
+  }
+
+  if (!didCollide) {
+    return game;
+  }
+
+  if (collidedMineShots.size > 0) {
+    const mineBlastResolution = detonateSpaceInvadersMultiplayerMineShots(
+      nextGame,
+      [...collidedMineShots.values()],
+      random,
+      {
+        invaderShotIds: collidedInvaderShotIds,
+        playerShotIds: collidedPlayerShotIds,
+      },
+    );
+
+    nextGame = mineBlastResolution.game;
+
+    if (mineBlastResolution.didDamageShips) {
+      return nextGame;
+    }
+  }
+
+  nextGame = removeSpaceInvadersMultiplayerDestroyedPlayerShots(
+    nextGame,
+    collidedPlayerShotIds,
+  );
+
+  const splitCommanderShots: SpaceInvadersInvaderShot[] = [];
+  let nextInvaderShotId = nextGame.nextInvaderShotId;
+
+  for (const invaderShot of game.invaderShots) {
+    if (!splitCommanderShotIds.has(invaderShot.id)) {
+      continue;
+    }
+
+    const shards = createCommanderShardShots(invaderShot, nextInvaderShotId);
+
+    splitCommanderShots.push(...shards);
+    nextInvaderShotId += shards.length;
+  }
+
+  return {
+    ...nextGame,
+    invaderShots: [
+      ...nextGame.invaderShots.filter(
+        (shot) => !collidedInvaderShotIds.has(shot.id),
+      ),
+      ...splitCommanderShots,
+    ],
+    nextInvaderShotId,
+  };
+}
+
+function shouldSplitSpaceInvadersMultiplayerCommanderShotOnCollision(
+  shot: Pick<SpaceInvadersInvaderShot, "kind">,
+) {
+  return shot.kind === "commander";
+}
+
+function isSpaceInvadersMultiplayerPlayerShotInvulnerable(
+  shot: Pick<SpaceInvadersPlayerShot, "kind">,
+) {
+  return shot.kind === "piercing";
+}
+
+function isSpaceInvadersMultiplayerInvaderShotInvulnerable(
+  shot: Pick<SpaceInvadersInvaderShot, "kind">,
+) {
+  return shot.kind === "armor-wave";
+}
+
+function detonateSpaceInvadersMultiplayerMineShots(
+  game: SpaceInvadersMultiplayerGameState,
+  mineShots: SpaceInvadersInvaderShot[],
+  random: SpaceInvadersRandomSource,
+  destroyedShotIds: MultiplayerMineBlastDamageSets = {
+    invaderShotIds: new Set<string>(),
+    playerShotIds: createSpaceInvadersMultiplayerPlayerShotDamageSets(),
+  },
+): MultiplayerMineBlastResolution {
+  const queuedMineShots = [...mineShots];
+  const detonatedMineShotIds = new Set<string>();
+  const damagedSeats = new Set<SpaceInvadersShipSeat>();
+  let nextGame = game;
+
+  // Mines can trigger other mines; remove destroyed shots only after the chain resolves.
+  while (queuedMineShots.length > 0) {
+    const mineShot = queuedMineShots.shift()!;
+
+    if (detonatedMineShotIds.has(mineShot.id)) {
+      continue;
+    }
+
+    detonatedMineShotIds.add(mineShot.id);
+    destroyedShotIds.invaderShotIds.add(mineShot.id);
+
+    const blastBounds = getSpaceInvadersMultiplayerMineBlastBounds(mineShot);
+
+    nextGame = createSpaceInvadersMultiplayerSharedExplosion(
+      nextGame,
+      "mine",
+      mineShot,
+      random,
+    );
+    nextGame = applySpaceInvadersMultiplayerMineBlastInvaderDamage(
+      nextGame,
+      blastBounds,
+      random,
+    );
+
+    for (const seat of SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS) {
+      for (const playerShot of game.ships[seat].playerShots) {
+        if (
+          !destroyedShotIds.playerShotIds[seat].has(playerShot.id) &&
+          rectanglesIntersect(playerShot, blastBounds)
+        ) {
+          destroyedShotIds.playerShotIds[seat].add(playerShot.id);
+        }
+      }
+    }
+
+    for (const invaderShot of game.invaderShots) {
+      if (
+        destroyedShotIds.invaderShotIds.has(invaderShot.id) ||
+        !rectanglesIntersect(invaderShot, blastBounds)
+      ) {
+        continue;
+      }
+
+      destroyedShotIds.invaderShotIds.add(invaderShot.id);
+
+      if (invaderShot.kind === "mine") {
+        queuedMineShots.push(invaderShot);
+      }
+    }
+
+    for (const seat of SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS) {
+      if (
+        canSpaceInvadersMultiplayerShipBeDamaged(
+          nextGame.ships[seat],
+          blastBounds,
+        )
+      ) {
+        damagedSeats.add(seat);
+      }
+    }
+  }
+
+  nextGame = {
+    ...removeSpaceInvadersMultiplayerDestroyedPlayerShots(
+      nextGame,
+      destroyedShotIds.playerShotIds,
+    ),
+    invaderShots: nextGame.invaderShots.filter(
+      (shot) => !destroyedShotIds.invaderShotIds.has(shot.id),
+    ),
+  };
+
+  if (damagedSeats.size > 0) {
+    return {
+      didDamageShips: true,
+      game: damageSpaceInvadersMultiplayerShips(
+        nextGame,
+        SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS.filter((seat) =>
+          damagedSeats.has(seat),
+        ),
+        nextGame.invaderShots,
+        random,
+      ),
+    };
+  }
+
+  return {
+    didDamageShips: false,
+    game: nextGame,
+  };
+}
+
+function getSpaceInvadersMultiplayerMineBlastBounds(
+  mineShot: Pick<SpaceInvadersInvaderShot, "height" | "width" | "x" | "y">,
+): SpaceInvadersScoreTarget {
+  const padding = EXPLOSION_PADDING_BY_KIND.mine;
+  const height = mineShot.height + padding * 2;
+  const width = mineShot.width + padding * 2;
+
+  return {
+    height,
+    width,
+    x: mineShot.x + mineShot.width / 2 - width / 2,
+    y: mineShot.y + mineShot.height / 2 - height / 2,
+  };
+}
+
+function applySpaceInvadersMultiplayerMineBlastInvaderDamage(
+  game: SpaceInvadersMultiplayerGameState,
+  blastBounds: SpaceInvadersScoreTarget,
+  random: SpaceInvadersRandomSource,
+): SpaceInvadersMultiplayerGameState {
+  const hitInvaders = game.invaders.filter(
+    (invader) =>
+      invader.isActive &&
+      rectanglesIntersect(blastBounds, getInvaderCollisionBounds(invader)),
+  );
+
+  if (hitInvaders.length === 0) {
+    return game;
+  }
+
+  const damage = getSpaceInvadersMultiplayerMineBlastInvaderDamage(hitInvaders);
+  const damagedArmoredHitPointsById = new Map(
+    damage.damagedArmoredInvaders.map(({ hitPoints, invader }) => [
+      invader.id,
+      hitPoints,
+    ]),
+  );
+  const destroyedInvaderIds = new Set(
+    damage.destroyedInvaders.map((invader) => invader.id),
+  );
+  const invadersAfterDamage = game.invaders.map((invader) => {
+    if (destroyedInvaderIds.has(invader.id)) {
+      return { ...invader, hitPoints: 0, isActive: false };
+    }
+
+    const hitPoints = damagedArmoredHitPointsById.get(invader.id);
+
+    return hitPoints === undefined ? invader : { ...invader, hitPoints };
+  });
+  const splitterFragments = createSpaceInvadersSplitterFragments(
+    damage.destroyedInvaders,
+    game.boardWidth,
+  );
+  const invaders = [...invadersAfterDamage, ...splitterFragments];
+  const activeInvaderCount = invaders.filter((invader) => invader.isActive).length;
+  let gameWithDamage: SpaceInvadersMultiplayerGameState = {
+    ...game,
+    invaders,
+    score: game.score + damage.destroyedInvaderPoints,
+    status: activeInvaderCount === 0 ? "won" : game.status,
+  };
+
+  for (const destroyedInvader of damage.destroyedInvaders) {
+    gameWithDamage = createSpaceInvadersMultiplayerSharedExplosion(
+      gameWithDamage,
+      "invader",
+      destroyedInvader,
+      random,
+    );
+    gameWithDamage = applySpaceInvadersSoloSharedState(
+      gameWithDamage,
+      maybeCreateSpaceInvadersPowerUpDrop(
+        createSpaceInvadersSoloProjection(gameWithDamage, "ship-a"),
+        destroyedInvader,
+        random,
+      ),
+    );
+  }
+
+  gameWithDamage = applySpaceInvadersSoloSharedState(
+    gameWithDamage,
+    maybePrimeSpaceInvadersRevengeVolley(
+      createSpaceInvadersSoloProjection(gameWithDamage, "ship-a"),
+      damage.destroyedInvaders,
+      random,
+    ),
+  );
+
+  if (damage.destroyedInvaders.length === 0) {
+    return gameWithDamage;
+  }
+
+  return applySpaceInvadersSoloSharedState(
+    gameWithDamage,
+    continueSpaceInvadersMultiKillCombo(
+      createSpaceInvadersSoloProjection(gameWithDamage, "ship-a"),
+      getCombinedSpaceInvadersScoreTarget(damage.destroyedInvaders),
+      damage.destroyedInvaders.length,
+      damage.destroyedInvaderPoints,
+      1,
+    ),
+  );
+}
+
+function getSpaceInvadersMultiplayerMineBlastInvaderDamage(
+  hitInvaders: SpaceInvader[],
+): MultiplayerMineBlastInvaderDamage {
+  const hitResults = hitInvaders.map((invader) => ({
+    hitPoints: getInvaderHitPointsAfterPlayerShot(invader),
+    invader,
+  }));
+  const damagedArmoredInvaders = hitResults.filter(
+    ({ hitPoints, invader }) => invader.kind === "armored" && hitPoints > 0,
+  );
+  const destroyedInvaders = hitResults
+    .filter(({ hitPoints }) => hitPoints <= 0)
+    .map(({ invader }) => invader);
+  const destroyedInvaderPoints = destroyedInvaders.reduce(
+    (total, invader) => total + invader.points,
+    0,
+  );
+
+  return {
+    damagedArmoredInvaders,
+    destroyedInvaderPoints,
+    destroyedInvaders,
+  };
+}
+
+function createSpaceInvadersMultiplayerPlayerShotDamageSets(): MultiplayerPlayerShotDamageSets {
+  return {
+    "ship-a": new Set<string>(),
+    "ship-b": new Set<string>(),
+  };
+}
+
+function removeSpaceInvadersMultiplayerDestroyedPlayerShots(
+  game: SpaceInvadersMultiplayerGameState,
+  destroyedPlayerShotIds: MultiplayerPlayerShotDamageSets,
+): SpaceInvadersMultiplayerGameState {
+  let nextShips = game.ships;
+
+  for (const seat of SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS) {
+    const shotIds = destroyedPlayerShotIds[seat];
+
+    if (shotIds.size === 0) {
+      continue;
+    }
+
+    const ship = game.ships[seat];
+    const playerShots = ship.playerShots.filter((shot) => !shotIds.has(shot.id));
+
+    if (playerShots.length === ship.playerShots.length) {
+      continue;
+    }
+
+    const isPlayerVolleyFinished =
+      playerShots.length === 0 && ship.playerBurst === null;
+
+    nextShips = {
+      ...nextShips,
+      [seat]: {
+        ...ship,
+        playerShots,
+        playerVolleyHasArmoredHit: isPlayerVolleyFinished
+          ? false
+          : ship.playerVolleyHasArmoredHit,
+        playerVolleyHasScored: isPlayerVolleyFinished
+          ? false
+          : ship.playerVolleyHasScored,
+        playerVolleyHasUnscoredExit: isPlayerVolleyFinished
+          ? false
+          : ship.playerVolleyHasUnscoredExit,
+      },
+    };
+  }
+
+  return nextShips === game.ships
+    ? game
+    : {
+        ...game,
+        ships: nextShips,
+      };
+}
+
+function createSpaceInvadersMultiplayerSharedExplosion(
+  game: SpaceInvadersMultiplayerGameState,
+  kind: Parameters<typeof createSpaceInvadersExplosion>[1],
+  target: SpaceInvadersScoreTarget,
+  random: SpaceInvadersRandomSource,
+): SpaceInvadersMultiplayerGameState {
+  return applySpaceInvadersSoloSharedState(
+    game,
+    createSpaceInvadersExplosion(
+      createSpaceInvadersSoloProjection(game, "ship-a"),
+      kind,
+      target,
+      random,
+    ),
   );
 }
 
