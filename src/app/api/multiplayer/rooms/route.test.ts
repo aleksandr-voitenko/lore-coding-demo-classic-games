@@ -100,4 +100,45 @@ describe("multiplayer rooms route", () => {
       seq: 1,
     });
   });
+
+  it("creates private Space Invaders rooms with default ship seats", async () => {
+    const roomStore = new InProcessMultiplayerRoomStore({
+      createParticipantId: () => "host-1",
+      createRoomCode: () => "ROOM1",
+    });
+    const userStore = createUserStore(SIGNED_IN_USER);
+    const handlers = createMultiplayerRoomsRouteHandlers(roomStore, userStore);
+    const response = await handlers.POST(
+      createCreateRoomRequest({
+        gameId: "space-invaders",
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(userStore.getUserBySessionToken).toHaveBeenCalledWith("session-token");
+    await expect(response.json()).resolves.toMatchObject({
+      room: {
+        code: "ROOM1",
+        seats: [
+          {
+            id: "ship-a",
+            label: "Ship A",
+            occupiedByParticipantId: null,
+            required: true,
+          },
+          {
+            id: "ship-b",
+            label: "Ship B",
+            occupiedByParticipantId: null,
+            required: true,
+          },
+        ],
+        settings: {
+          gameId: "space-invaders",
+        },
+        status: "lobby",
+      },
+      seq: 1,
+    });
+  });
 });

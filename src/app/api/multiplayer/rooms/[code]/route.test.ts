@@ -83,6 +83,47 @@ function expectRoomStarted(store: InProcessMultiplayerRoomStore) {
   return result.snapshot;
 }
 
+function expectSpaceInvadersRoomStarted(store: InProcessMultiplayerRoomStore) {
+  const createResult = store.createRoom({
+    host: SIGNED_IN_USER,
+    settings: { gameId: "space-invaders" },
+  });
+
+  expect(createResult.success).toBe(true);
+
+  if (!createResult.success) {
+    throw new Error(createResult.error);
+  }
+
+  store.applyCommand("ROOM1", {
+    displayName: "Guest Hero",
+    type: "room.joinObserver",
+  });
+  store.applyCommand("ROOM1", {
+    participantId: "host-1",
+    seatId: "ship-a",
+    type: "room.claimSeat",
+  });
+  store.applyCommand("ROOM1", {
+    participantId: "guest-1",
+    seatId: "ship-b",
+    type: "room.claimSeat",
+  });
+  const result = store.applyCommand("ROOM1", {
+    command: "start",
+    participantId: "host-1",
+    type: "room.lifecycle",
+  });
+
+  expect(result.success).toBe(true);
+
+  if (!result.success) {
+    throw new Error(result.error);
+  }
+
+  return result.snapshot;
+}
+
 describe("multiplayer room route", () => {
   it("returns room snapshots by normalized code", async () => {
     const roomStore = createRoomStore();
@@ -235,6 +276,43 @@ describe("multiplayer room route", () => {
     });
   });
 
+  it("parses Space Invaders game input without requiring host authentication", async () => {
+    const roomStore = createRoomStore();
+    const userStore = createUserStore(null);
+    const handlers = createMultiplayerRoomRouteHandlers(roomStore, userStore);
+
+    expectSpaceInvadersRoomStarted(roomStore);
+
+    const response = await handlers.POST(
+      createCommandRequest({
+        input: {
+          direction: "left",
+          type: "space-invaders.setShipDirection",
+        },
+        participantId: "guest-1",
+        type: "game.input",
+      }),
+      { code: "ROOM1" },
+    );
+
+    expect(response.status).toBe(200);
+    expect(userStore.getUserBySessionToken).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toMatchObject({
+      game: {
+        gameId: "space-invaders",
+        heldInputs: {
+          "ship-b": {
+            left: true,
+          },
+        },
+        snapshot: {
+          status: "running",
+        },
+      },
+      seq: 5,
+    });
+  });
+
   it("rejects invalid and unseated game input with 4xx responses", async () => {
     const roomStore = createRoomStore();
     const userStore = createUserStore(null);
@@ -256,6 +334,7 @@ describe("multiplayer room route", () => {
 
     expect(invalidInputResponse.status).toBe(400);
     await expect(invalidInputResponse.json()).resolves.toEqual({
+      code: "invalid-command",
       error: "Pong paddle direction must be up, down, or null.",
     });
 

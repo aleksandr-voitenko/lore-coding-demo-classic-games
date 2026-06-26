@@ -293,17 +293,8 @@ export function createMultiplayerRoomWebSocketGateway({
       return;
     }
 
-    if (gameId !== "pong") {
-      sendRejection(socket, {
-        code: "unsupported-game",
-        error: `Game input is not supported for ${gameId}.`,
-        requestId,
-        roomCode,
-      });
-      return;
-    }
-
     const command = {
+      gameId,
       input: message.input as GameInputStoreCommand["input"],
       participantId: message.participantId,
       type: "game.input",

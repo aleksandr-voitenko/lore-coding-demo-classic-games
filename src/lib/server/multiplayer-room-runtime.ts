@@ -27,7 +27,6 @@ import {
   type MultiplayerServerGameRuntimeAdapter,
   type MultiplayerServerGameRuntimeFailure,
   type MultiplayerServerGameSnapshot,
-  type PongMultiplayerInput,
 } from "./multiplayer-game-adapters";
 import {
   InMemoryMultiplayerRoomEventLog,
@@ -38,9 +37,13 @@ import {
 
 export {
   DEFAULT_PONG_PRIVATE_ROOM_SEATS,
+  DEFAULT_SPACE_INVADERS_PRIVATE_ROOM_SEATS,
   PONG_RUNTIME_CATCH_UP_TICK_LIMIT,
 } from "./multiplayer-game-adapters";
-export type { PongMultiplayerInput } from "./multiplayer-game-adapters";
+export type {
+  PongMultiplayerInput,
+  SpaceInvadersMultiplayerInput,
+} from "./multiplayer-game-adapters";
 export type {
   MultiplayerRoomEventLogEntry,
   MultiplayerRoomEventType,
@@ -73,7 +76,8 @@ export type MultiplayerRoomStoreCommand =
       type: "room.updateSettings";
     }
   | {
-      input: PongMultiplayerInput;
+      gameId?: unknown;
+      input: unknown;
       participantId: unknown;
       type: "game.input";
     };
@@ -569,8 +573,20 @@ function applyGameInputCommand(
   if (adapter === null) {
     return createStoreFailure(
       "invalid-command",
-      "Game input is only supported for Pong rooms.",
+      `Game input is not supported for ${storedRoom.room.settings.gameId} rooms.`,
     );
+  }
+
+  if (command.gameId !== undefined) {
+    const commandGameId =
+      typeof command.gameId === "string" ? command.gameId.trim() : "";
+
+    if (commandGameId !== storedRoom.room.settings.gameId) {
+      return createStoreFailure(
+        "invalid-command",
+        "Game input game id must match the room game.",
+      );
+    }
   }
 
   const result = adapter.applyInputCommand({
