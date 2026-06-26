@@ -23,7 +23,6 @@ export type {
   MultiplayerRoomStoreCommand,
   MultiplayerRoomStoreErrorCode,
   MultiplayerRoomStoreResult,
-  PongMultiplayerInput,
 } from "./multiplayer-room-runtime";
 export { getMultiplayerRoomStoreErrorStatus } from "./multiplayer-room-runtime";
 

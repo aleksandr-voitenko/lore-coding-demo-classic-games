@@ -41,10 +41,6 @@ export {
   PONG_RUNTIME_CATCH_UP_TICK_LIMIT,
 } from "./multiplayer-game-adapters";
 export type {
-  PongMultiplayerInput,
-  SpaceInvadersMultiplayerInput,
-} from "./multiplayer-game-adapters";
-export type {
   MultiplayerRoomEventLogEntry,
   MultiplayerRoomEventType,
 } from "./multiplayer-room-event-log";
