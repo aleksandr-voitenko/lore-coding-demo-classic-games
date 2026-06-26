@@ -8,6 +8,7 @@ import type {
   MultiplayerRealtimeServerMessage,
   MultiplayerRoomGameSnapshot,
   MultiplayerRoomSnapshot,
+  MultiplayerTerminalSummary,
   PrivateRoomClientMessage,
   PrivateRoomCommandMessage,
   PrivateRoomServerMessage,
@@ -171,10 +172,34 @@ describe("multiplayer realtime protocol", () => {
   });
 
   it("keeps server room snapshots, game snapshots, events, acks, rejections, and pings generic", () => {
+    const terminalSummary = {
+      key: "space-invaders|mode=private-room|board=420x560|aliens=24",
+      mode: "private-room",
+      outcome: {
+        score: 420,
+      },
+      seats: [
+        {
+          id: "ship-a",
+          label: "Ship A",
+          participant: {
+            displayName: "Host Player",
+            id: HOST_ID,
+            role: "host",
+            userId: HOST_USER_ID,
+          },
+        },
+      ],
+      settings: {
+        gameId: "space-invaders",
+      },
+      status: "won",
+    } satisfies MultiplayerTerminalSummary<"won", { score: number }>;
     const gameSnapshot = {
       gameId: "space-invaders",
       seq: 3,
       serverTimeMs: 1_000,
+      summary: terminalSummary,
       snapshot: {
         aliensRemaining: 14,
         wave: 2,
@@ -184,6 +209,9 @@ describe("multiplayer realtime protocol", () => {
       {
         aliensRemaining: number;
         wave: number;
+      },
+      {
+        summary: typeof terminalSummary;
       }
     >;
     const snapshot = {
@@ -232,6 +260,9 @@ describe("multiplayer realtime protocol", () => {
 
     expect(snapshotMessage.snapshot.seq).toBe(8);
     expect(snapshotMessage.snapshot.game.seq).toBe(3);
+    expect(snapshotMessage.snapshot.game.summary.key).toBe(
+      "space-invaders|mode=private-room|board=420x560|aliens=24",
+    );
     expect(eventMessage.event.gameSeq).toBe(4);
     expect(ackMessage.seq).toBe(9);
     expect(rejectionMessage.code).toBe("invalid-command");

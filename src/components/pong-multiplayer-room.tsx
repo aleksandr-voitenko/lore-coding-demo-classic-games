@@ -39,6 +39,7 @@ import {
   projectPongMultiplayerGame,
   type PongMultiplayerClientInput,
   type PongMultiplayerGameSnapshot,
+  type PongMultiplayerTerminalSummary,
 } from "@/lib/pong-multiplayer";
 
 type PongMultiplayerRoomProps = {
@@ -268,7 +269,11 @@ export function PongMultiplayerRoom({
   const sidePanels = [
     {
       content: (
-        <PongMultiplayerStatsPanel gameState={gameState} statusLabel={statusLabel} />
+        <PongMultiplayerStatsPanel
+          gameState={gameState}
+          statusLabel={statusLabel}
+          summary={game.summary}
+        />
       ),
       id: "pong-stats",
     },
@@ -422,7 +427,10 @@ export function PongMultiplayerRoom({
               data-testid="pong-multiplayer-terminal-message"
             >
               <p className="text-2xl font-semibold tracking-normal">
-                {terminalSummaries[gameState.status]}
+                {getPongMultiplayerTerminalMessage(
+                  game.summary,
+                  gameState.status,
+                )}
               </p>
             </div>
           ) : null}
@@ -443,12 +451,53 @@ function formatPongServeSide(serveSide: PongSide) {
   return serveSide === "left" ? "Left" : "Right";
 }
 
+function getPongMultiplayerTerminalMessage(
+  summary: PongMultiplayerTerminalSummary | undefined,
+  status: Extract<PongStatus, "lost" | "won">,
+) {
+  if (summary === undefined) {
+    return terminalSummaries[status];
+  }
+
+  return `${getPongSummaryWinnerName(summary)} wins ${summary.outcome.leftScore}-${summary.outcome.rightScore}`;
+}
+
+function getPongSummaryWinnerName(summary: PongMultiplayerTerminalSummary) {
+  const winnerSeat = getPongSummarySeat(summary, summary.outcome.winnerSeatId);
+
+  return winnerSeat?.participant?.displayName ?? getPongSummarySeatName(summary);
+}
+
+function getPongSummarySeatName(summary: PongMultiplayerTerminalSummary) {
+  return summary.outcome.winnerSeatId === "left" ? "Left paddle" : "Right paddle";
+}
+
+function getPongSummarySeat(
+  summary: PongMultiplayerTerminalSummary,
+  seatId: PongSide,
+) {
+  return summary.seats.find((seat) => seat.id === seatId) ?? null;
+}
+
+function getPongSummaryWinnerLabel(summary: PongMultiplayerTerminalSummary) {
+  const winnerSeat = getPongSummarySeat(summary, summary.outcome.winnerSeatId);
+  const seatLabel = winnerSeat?.label ?? getPongSummarySeatName(summary);
+
+  if (winnerSeat?.participant === undefined || winnerSeat.participant === null) {
+    return seatLabel;
+  }
+
+  return `${winnerSeat.participant.displayName} · ${seatLabel}`;
+}
+
 function PongMultiplayerStatsPanel({
   gameState,
   statusLabel,
+  summary,
 }: {
   gameState: PongGameState;
   statusLabel: string;
+  summary?: PongMultiplayerTerminalSummary;
 }) {
   return (
     <>
@@ -484,7 +533,64 @@ function PongMultiplayerStatsPanel({
           value={gameState.remainingScore}
         />
       </dl>
+
+      {summary === undefined ? null : (
+        <PongMultiplayerTerminalSummaryPanel summary={summary} />
+      )}
     </>
+  );
+}
+
+function PongMultiplayerTerminalSummaryPanel({
+  summary,
+}: {
+  summary: PongMultiplayerTerminalSummary;
+}) {
+  return (
+    <section
+      className="mt-4 rounded-md border border-[var(--chrome-border)] p-3"
+      data-testid="pong-multiplayer-terminal-summary"
+    >
+      <h3 className="text-sm font-semibold tracking-normal">Match summary</h3>
+      <dl className="mt-3 grid gap-2 text-sm">
+        <PongSummaryRow
+          label="Winner"
+          testId="pong-multiplayer-summary-winner"
+          value={getPongSummaryWinnerLabel(summary)}
+        />
+        <PongSummaryRow
+          label="Final"
+          testId="pong-multiplayer-summary-score"
+          value={`${summary.outcome.leftScore}-${summary.outcome.rightScore}`}
+        />
+        <PongSummaryRow
+          label="Key"
+          testId="pong-multiplayer-summary-key"
+          value={summary.key}
+        />
+      </dl>
+    </section>
+  );
+}
+
+function PongSummaryRow({
+  label,
+  testId,
+  value,
+}: {
+  label: string;
+  testId: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <dt className="text-xs font-semibold uppercase tracking-normal text-[var(--chrome-muted)]">
+        {label}
+      </dt>
+      <dd className="mt-1 break-all font-semibold tracking-normal" data-testid={testId}>
+        {value}
+      </dd>
+    </div>
   );
 }
 

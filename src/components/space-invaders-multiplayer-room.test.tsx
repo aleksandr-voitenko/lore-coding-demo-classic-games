@@ -170,6 +170,80 @@ describe("SpaceInvadersMultiplayerRoom", () => {
     expect(markup).toContain('data-testid="multiplayer-room-host-controls"');
   });
 
+  it("renders authoritative terminal summary details", () => {
+    const markup = renderToStaticMarkup(
+      <SpaceInvadersMultiplayerRoom
+        activeParticipant={ACTIVE_SPACE_INVADERS_ROOM.participants[0]!}
+        game={{
+          ...RUNNING_SPACE_INVADERS_GAME,
+          summary: {
+            key: "space-invaders|mode=private-room|board=420x560|aliens=50",
+            mode: "private-room",
+            outcome: {
+              livesRemaining: 2,
+              remainingInvaders: 0,
+              result: "won",
+              score: 420,
+            },
+            seats: [
+              {
+                id: "ship-a",
+                label: "Ship A",
+                participant: {
+                  displayName: "Ada",
+                  id: "host-participant",
+                  role: "host",
+                  userId: "user-1",
+                },
+              },
+              {
+                id: "ship-b",
+                label: "Ship B",
+                participant: {
+                  displayName: "Grace",
+                  id: "guest-participant",
+                  role: "player",
+                  userId: null,
+                },
+              },
+            ],
+            settings: ACTIVE_SPACE_INVADERS_ROOM.settings,
+            status: "won",
+          },
+          snapshot: {
+            ...RUNNING_SPACE_INVADERS_GAME.snapshot,
+            invaders: RUNNING_SPACE_INVADERS_GAME.snapshot.invaders.map(
+              (invader) => ({
+                ...invader,
+                isActive: false,
+              }),
+            ),
+            lives: 2,
+            score: 420,
+            status: "won",
+          },
+        }}
+        onGameInput={vi.fn()}
+        room={ACTIVE_SPACE_INVADERS_ROOM}
+      />,
+    );
+
+    expect(markup).toContain(
+      'data-testid="space-invaders-multiplayer-terminal-message"',
+    );
+    expect(markup).toContain("Mission won · 420 points");
+    expect(markup).toContain(
+      'data-testid="space-invaders-multiplayer-terminal-summary"',
+    );
+    expect(markup).toContain(
+      'data-testid="space-invaders-multiplayer-summary-crew"',
+    );
+    expect(markup).toContain("Ada · Ship A / Grace · Ship B");
+    expect(markup).toContain(
+      "space-invaders|mode=private-room|board=420x560|aliens=50",
+    );
+  });
+
   it("registers and renders through the multiplayer game renderer registry", () => {
     expect(
       getMultiplayerRoomGameRenderer(

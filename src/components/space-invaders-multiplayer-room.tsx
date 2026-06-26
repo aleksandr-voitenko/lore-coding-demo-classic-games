@@ -43,6 +43,7 @@ import {
   type SpaceInvadersMultiplayerClientInput,
   type SpaceInvadersMultiplayerGameSnapshot,
   type SpaceInvadersMultiplayerGameState,
+  type SpaceInvadersMultiplayerTerminalSummary,
 } from "@/lib/space-invaders-multiplayer";
 
 type SpaceInvadersMultiplayerRoomProps = {
@@ -280,6 +281,7 @@ export function SpaceInvadersMultiplayerRoom({
           activeSeatLabel={activeRoomSeat?.label ?? "Observer"}
           gameState={gameState}
           statusLabel={statusLabel}
+          summary={game.summary}
         />
       ),
       id: "space-invaders-stats",
@@ -383,7 +385,12 @@ export function SpaceInvadersMultiplayerRoom({
               className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--invaders-board)_76%,transparent)] px-4 text-center text-[var(--invaders-player)] backdrop-blur-[2px]"
               data-testid="space-invaders-multiplayer-terminal-message"
             >
-              <p className="text-2xl font-semibold tracking-normal">{statusLabel}</p>
+              <p className="text-2xl font-semibold tracking-normal">
+                {getSpaceInvadersMultiplayerTerminalMessage(
+                  game.summary,
+                  statusLabel,
+                )}
+              </p>
             </div>
           ) : null}
         </SpaceInvadersBoard>
@@ -421,10 +428,12 @@ function SpaceInvadersMultiplayerStatsPanel({
   activeSeatLabel,
   gameState,
   statusLabel,
+  summary,
 }: {
   activeSeatLabel: string;
   gameState: SpaceInvadersMultiplayerGameState;
   statusLabel: string;
+  summary?: SpaceInvadersMultiplayerTerminalSummary;
 }) {
   const remainingInvaders = gameState.invaders.filter(
     (invader) => invader.isActive,
@@ -464,7 +473,99 @@ function SpaceInvadersMultiplayerStatsPanel({
           value={activeSeatLabel}
         />
       </dl>
+
+      {summary === undefined ? null : (
+        <SpaceInvadersMultiplayerTerminalSummaryPanel summary={summary} />
+      )}
     </>
+  );
+}
+
+function getSpaceInvadersMultiplayerTerminalMessage(
+  summary: SpaceInvadersMultiplayerTerminalSummary | undefined,
+  statusLabel: string,
+) {
+  if (summary === undefined) {
+    return statusLabel;
+  }
+
+  return summary.status === "won"
+    ? `Mission won · ${summary.outcome.score} points`
+    : `Mission lost · ${summary.outcome.livesRemaining} lives`;
+}
+
+function SpaceInvadersMultiplayerTerminalSummaryPanel({
+  summary,
+}: {
+  summary: SpaceInvadersMultiplayerTerminalSummary;
+}) {
+  return (
+    <section
+      className="mt-4 rounded-md border border-[var(--chrome-border)] p-3"
+      data-testid="space-invaders-multiplayer-terminal-summary"
+    >
+      <h3 className="text-sm font-semibold tracking-normal">Match summary</h3>
+      <dl className="mt-3 grid gap-2 text-sm">
+        <SpaceInvadersSummaryRow
+          label="Outcome"
+          testId="space-invaders-multiplayer-summary-outcome"
+          value={summary.status === "won" ? "Won" : "Lost"}
+        />
+        <SpaceInvadersSummaryRow
+          label="Crew"
+          testId="space-invaders-multiplayer-summary-crew"
+          value={getSpaceInvadersSummaryCrewLabel(summary)}
+        />
+        <SpaceInvadersSummaryRow
+          label="Score"
+          testId="space-invaders-multiplayer-summary-score"
+          value={String(summary.outcome.score)}
+        />
+        <SpaceInvadersSummaryRow
+          label="Lives"
+          testId="space-invaders-multiplayer-summary-lives"
+          value={String(summary.outcome.livesRemaining)}
+        />
+        <SpaceInvadersSummaryRow
+          label="Key"
+          testId="space-invaders-multiplayer-summary-key"
+          value={summary.key}
+        />
+      </dl>
+    </section>
+  );
+}
+
+function getSpaceInvadersSummaryCrewLabel(
+  summary: SpaceInvadersMultiplayerTerminalSummary,
+) {
+  return summary.seats
+    .map((seat) => {
+      const playerLabel = seat.participant?.displayName ?? "Open";
+
+      return `${playerLabel} · ${seat.label}`;
+    })
+    .join(" / ");
+}
+
+function SpaceInvadersSummaryRow({
+  label,
+  testId,
+  value,
+}: {
+  label: string;
+  testId: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <dt className="text-xs font-semibold uppercase tracking-normal text-[var(--chrome-muted)]">
+        {label}
+      </dt>
+      <dd className="mt-1 break-all font-semibold tracking-normal" data-testid={testId}>
+        {value}
+      </dd>
+    </div>
   );
 }
 

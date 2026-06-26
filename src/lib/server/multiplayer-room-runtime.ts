@@ -335,6 +335,7 @@ function createStoredRoomSnapshot(
     storedRoom.game === undefined
       ? undefined
       : storedRoom.game.adapter.createSnapshot({
+          room,
           runtime: storedRoom.game.runtime,
           serverTimeMs,
         });

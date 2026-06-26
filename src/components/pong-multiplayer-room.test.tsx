@@ -162,9 +162,49 @@ describe("PongMultiplayerRoom", () => {
         activeParticipant={ACTIVE_PONG_ROOM.participants[1]!}
         game={{
           ...RUNNING_PONG_GAME,
+          summary: {
+            key: "pong|mode=private-room|board=480x640|target=5",
+            mode: "private-room",
+            outcome: {
+              leftScore: 3,
+              rightScore: 5,
+              targetScore: 5,
+              winnerParticipantId: "guest-participant",
+              winnerSeatId: "right",
+            },
+            seats: [
+              {
+                id: "left",
+                label: "Left Paddle",
+                participant: {
+                  displayName: "Ada",
+                  id: "host-participant",
+                  role: "host",
+                  userId: "user-1",
+                },
+              },
+              {
+                id: "right",
+                label: "Right Paddle",
+                participant: {
+                  displayName: "Grace",
+                  id: "guest-participant",
+                  role: "player",
+                  userId: null,
+                },
+              },
+            ],
+            settings: ACTIVE_PONG_ROOM.settings,
+            status: "lost",
+          },
           snapshot: {
             ...RUNNING_PONG_GAME.snapshot,
+            score: {
+              cpu: 5,
+              player: 3,
+            },
             status: "lost",
+            targetScore: 5,
           },
         }}
         onGameInput={vi.fn()}
@@ -178,7 +218,11 @@ describe("PongMultiplayerRoom", () => {
     expect(readyMarkup).not.toContain("transition-property:left, top");
     expect(pausedMarkup).toContain('data-testid="pong-multiplayer-paused-message"');
     expect(terminalMarkup).toContain('data-testid="pong-multiplayer-terminal-message"');
-    expect(terminalMarkup).toContain("Right paddle wins the match");
+    expect(terminalMarkup).toContain("Grace wins 3-5");
+    expect(terminalMarkup).toContain('data-testid="pong-multiplayer-terminal-summary"');
+    expect(terminalMarkup).toContain('data-testid="pong-multiplayer-summary-winner"');
+    expect(terminalMarkup).toContain("Grace · Right Paddle");
+    expect(terminalMarkup).toContain("pong|mode=private-room|board=480x640|target=5");
   });
 });
 

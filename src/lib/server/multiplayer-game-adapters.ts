@@ -1,5 +1,9 @@
 import type { GameId } from "../game-catalog";
-import type { PrivateRoomLifecycleCommand } from "../multiplayer/protocol";
+import type {
+  MultiplayerTerminalSummaryParticipant,
+  MultiplayerTerminalSummarySeat,
+  PrivateRoomLifecycleCommand,
+} from "../multiplayer/protocol";
 import type {
   PrivateRoom,
   PrivateRoomErrorCode,
@@ -26,6 +30,7 @@ import {
   type PongMultiplayerGameSnapshot,
   type PongMultiplayerHeldInput,
   type PongMultiplayerHeldInputs,
+  type PongMultiplayerTerminalSummary,
 } from "../pong-multiplayer";
 import { getSpaceInvadersTickDelay } from "../space-invaders-game-engine";
 import {
@@ -41,6 +46,7 @@ import {
   type SpaceInvadersMultiplayerGameState,
   type SpaceInvadersMultiplayerHeldInput,
   type SpaceInvadersMultiplayerHeldInputs,
+  type SpaceInvadersMultiplayerTerminalSummary,
   type SpaceInvadersShipSeat,
 } from "../space-invaders-multiplayer";
 
@@ -148,6 +154,7 @@ export type MultiplayerServerGameRuntimeAdapter = {
     room: PrivateRoom;
   }) => MultiplayerServerGameRuntimeCreateResult;
   createSnapshot: (options: {
+    room: PrivateRoom;
     runtime: unknown;
     serverTimeMs: number;
   }) => MultiplayerServerGameSnapshot;
@@ -250,8 +257,8 @@ const pongMultiplayerRuntimeAdapter: MultiplayerServerGameRuntimeAdapter = {
   createRuntime({ nowMs, room }) {
     return createPongRuntime(room, nowMs);
   },
-  createSnapshot({ runtime, serverTimeMs }) {
-    return createPongRuntimeSnapshot(getPongRuntime(runtime), serverTimeMs);
+  createSnapshot({ room, runtime, serverTimeMs }) {
+    return createPongRuntimeSnapshot(getPongRuntime(runtime), room, serverTimeMs);
   },
   defaultSeats: DEFAULT_PONG_PRIVATE_ROOM_SEATS,
   defaultSettings: DEFAULT_PONG_PRIVATE_ROOM_SETTINGS,
@@ -287,9 +294,10 @@ const spaceInvadersMultiplayerRuntimeAdapter: MultiplayerServerGameRuntimeAdapte
   createRuntime({ nowMs, room }) {
     return createSpaceInvadersRuntime(room, nowMs);
   },
-  createSnapshot({ runtime, serverTimeMs }) {
+  createSnapshot({ room, runtime, serverTimeMs }) {
     return createSpaceInvadersRuntimeSnapshot(
       getSpaceInvadersRuntime(runtime),
+      room,
       serverTimeMs,
     );
   },
@@ -329,6 +337,47 @@ function createGameRuntimeFailure(
     error,
     success: false,
   };
+}
+
+function createMultiplayerTerminalSummarySeats(
+  room: PrivateRoom,
+): MultiplayerTerminalSummarySeat[] {
+  return room.seats.map((seat) => ({
+    id: seat.id,
+    label: seat.label,
+    participant: getTerminalSummaryParticipant(
+      room,
+      seat.occupiedByParticipantId,
+    ),
+  }));
+}
+
+function getTerminalSummaryParticipant(
+  room: PrivateRoom,
+  participantId: string | null,
+): MultiplayerTerminalSummaryParticipant | null {
+  if (participantId === null) {
+    return null;
+  }
+
+  const participant = room.participants.find((entry) => entry.id === participantId);
+
+  if (participant === undefined) {
+    return null;
+  }
+
+  return {
+    displayName: participant.displayName,
+    id: participant.id,
+    role: participant.role,
+    userId: participant.userId,
+  };
+}
+
+function getSeatParticipantId(room: PrivateRoom, seatId: string) {
+  return (
+    room.seats.find((seat) => seat.id === seatId)?.occupiedByParticipantId ?? null
+  );
 }
 
 function clonePongGameState(game: PongGameState): PongGameState {
@@ -743,14 +792,44 @@ function clearReleasedPongSeatHeldInput(
 
 function createPongRuntimeSnapshot(
   runtime: StoredPongMultiplayerRuntime,
+  room: PrivateRoom,
   serverTimeMs: number,
 ): PongMultiplayerGameSnapshot {
+  const summary = createPongTerminalSummary(room, runtime.game);
+
   return {
     gameId: "pong",
     heldInputs: clonePongHeldInputs(runtime.heldInputs),
     seq: runtime.seq,
     serverTimeMs,
+    ...(summary === undefined ? {} : { summary }),
     snapshot: clonePongGameState(runtime.game),
+  };
+}
+
+function createPongTerminalSummary(
+  room: PrivateRoom,
+  game: PongGameState,
+): PongMultiplayerTerminalSummary | undefined {
+  if (game.status !== "won" && game.status !== "lost") {
+    return undefined;
+  }
+
+  const winnerSeatId = game.status === "won" ? "left" : "right";
+
+  return {
+    key: `pong|mode=private-room|board=${game.boardWidth}x${game.boardHeight}|target=${game.targetScore}`,
+    mode: "private-room",
+    outcome: {
+      leftScore: game.score.player,
+      rightScore: game.score.cpu,
+      targetScore: game.targetScore,
+      winnerParticipantId: getSeatParticipantId(room, winnerSeatId),
+      winnerSeatId,
+    },
+    seats: createMultiplayerTerminalSummarySeats(room),
+    settings: room.settings,
+    status: game.status,
   };
 }
 
@@ -1181,15 +1260,48 @@ function clearReleasedSpaceInvadersSeatHeldInput(
 
 function createSpaceInvadersRuntimeSnapshot(
   runtime: StoredSpaceInvadersMultiplayerRuntime,
+  room: PrivateRoom,
   serverTimeMs: number,
 ): SpaceInvadersMultiplayerServerGameSnapshot {
+  const summary = createSpaceInvadersTerminalSummary(room, runtime.game);
+
   return {
     gameId: "space-invaders",
     heldInputs: cloneSpaceInvadersHeldInputs(runtime.heldInputs),
     seq: runtime.seq,
     serverTimeMs,
+    ...(summary === undefined ? {} : { summary }),
     snapshot: cloneSpaceInvadersMultiplayerGame(runtime.game),
   };
+}
+
+function createSpaceInvadersTerminalSummary(
+  room: PrivateRoom,
+  game: SpaceInvadersMultiplayerGameState,
+): SpaceInvadersMultiplayerTerminalSummary | undefined {
+  if (game.status !== "won" && game.status !== "lost") {
+    return undefined;
+  }
+
+  return {
+    key: `space-invaders|mode=private-room|board=${game.boardWidth}x${game.boardHeight}|aliens=${game.alienCount}`,
+    mode: "private-room",
+    outcome: {
+      livesRemaining: game.lives,
+      remainingInvaders: getRemainingSpaceInvadersCount(game),
+      result: game.status,
+      score: game.score,
+    },
+    seats: createMultiplayerTerminalSummarySeats(room),
+    settings: room.settings,
+    status: game.status,
+  };
+}
+
+function getRemainingSpaceInvadersCount(
+  game: Pick<SpaceInvadersMultiplayerGameState, "invaders">,
+) {
+  return game.invaders.filter((invader) => invader.isActive).length;
 }
 
 function cloneSpaceInvadersHeldInputs(

@@ -55,6 +55,29 @@ export type MultiplayerRoomGameSnapshot<
   Extras extends object = object,
 > = MultiplayerRealtimeGameSnapshot<Game, Snapshot, Extras>;
 
+export type MultiplayerTerminalSummaryParticipant = Pick<
+  PrivateRoomParticipant,
+  "displayName" | "id" | "role" | "userId"
+>;
+
+export type MultiplayerTerminalSummarySeat = {
+  id: string;
+  label: string;
+  participant: MultiplayerTerminalSummaryParticipant | null;
+};
+
+export type MultiplayerTerminalSummary<
+  Status extends string = string,
+  Outcome extends object = Record<string, unknown>,
+> = {
+  key: string;
+  mode: "private-room";
+  outcome: Outcome;
+  seats: readonly MultiplayerTerminalSummarySeat[];
+  settings: PrivateRoomSettings;
+  status: Status;
+};
+
 export type MultiplayerRealtimeRoomSnapshot<GameSnapshot = MultiplayerRealtimeGameSnapshot> = {
   game?: GameSnapshot;
   participant?: PrivateRoomParticipant;

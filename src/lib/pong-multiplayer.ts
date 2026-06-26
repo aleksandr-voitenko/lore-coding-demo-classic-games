@@ -1,6 +1,7 @@
 import type {
   MultiplayerRealtimeGameSnapshot,
   MultiplayerRealtimeRoomSnapshot,
+  MultiplayerTerminalSummary,
 } from "./multiplayer/protocol";
 import type { PrivateRoom, PrivateRoomSeat, PrivateRoomSettingValue } from "./multiplayer/room";
 import {
@@ -16,6 +17,7 @@ import {
   type PongGameState,
   type PongPaddleMoveDirection,
   type PongSide,
+  type PongStatus,
 } from "./pong-game-engine";
 
 export type PongMultiplayerErrorCode =
@@ -62,11 +64,23 @@ export type PongMultiplayerClientInput =
       type: "pong.serve";
     };
 
+export type PongMultiplayerTerminalSummary = MultiplayerTerminalSummary<
+  Extract<PongStatus, "lost" | "won">,
+  {
+    leftScore: number;
+    rightScore: number;
+    targetScore: number;
+    winnerParticipantId: string | null;
+    winnerSeatId: PongSide;
+  }
+>;
+
 export type PongMultiplayerGameSnapshot = MultiplayerRealtimeGameSnapshot<
   "pong",
   PongGameState,
   {
     heldInputs: PongMultiplayerHeldInputs;
+    summary?: PongMultiplayerTerminalSummary;
   }
 >;
 

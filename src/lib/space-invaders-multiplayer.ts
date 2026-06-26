@@ -1,6 +1,7 @@
 import type {
   MultiplayerRealtimeGameSnapshot,
   MultiplayerRealtimeRoomSnapshot,
+  MultiplayerTerminalSummary,
 } from "./multiplayer/protocol";
 import {
   createInitialSpaceInvadersGame,
@@ -177,10 +178,23 @@ export type SpaceInvadersMultiplayerGameState =
 export type CreateSpaceInvadersMultiplayerGameOptions =
   CreateSpaceInvadersGameOptions;
 
+export type SpaceInvadersMultiplayerTerminalSummary = MultiplayerTerminalSummary<
+  Extract<SpaceInvadersMultiplayerGameState["status"], "lost" | "won">,
+  {
+    livesRemaining: number;
+    remainingInvaders: number;
+    result: Extract<SpaceInvadersMultiplayerGameState["status"], "lost" | "won">;
+    score: number;
+  }
+>;
+
 export type SpaceInvadersMultiplayerGameSnapshot =
   MultiplayerRealtimeGameSnapshot<
     "space-invaders",
-    SpaceInvadersMultiplayerGameState
+    SpaceInvadersMultiplayerGameState,
+    {
+      summary?: SpaceInvadersMultiplayerTerminalSummary;
+    }
   >;
 
 export type SpaceInvadersMultiplayerRoomSnapshot =

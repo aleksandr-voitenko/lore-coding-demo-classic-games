@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -153,6 +155,14 @@ function serveStartedPongRoom(store: InProcessMultiplayerRoomStore) {
       type: "game.input",
     }),
   );
+}
+
+function getPongParticipantIdForSide(side: "left" | "right") {
+  return side === "left" ? "host-1" : "guest-1";
+}
+
+function getTerminalPongStatusForServeSide(serveSide: "left" | "right") {
+  return serveSide === "left" ? "won" : "lost";
 }
 
 describe("in-process multiplayer room store", () => {
@@ -916,6 +926,210 @@ describe("in-process multiplayer room store", () => {
       }),
     ]);
     expect(tickEvents[0]?.payload).not.toHaveProperty("snapshot");
+  });
+
+  it("adds a server-derived Pong terminal summary to terminal game snapshots", () => {
+    let nowMs = 1_000;
+    const store = createTestRoomStore({ getNowMs: () => nowMs });
+    const started = createStartedPongRoom(store, {
+      gameId: "pong",
+      parameters: {
+        "pong-board-size": "240x320",
+        "pong-target": "1",
+      },
+    });
+    const serveSide = expectPongGame(started).snapshot.serveSide;
+    const receivingSide = serveSide === "left" ? "right" : "left";
+    const servingParticipantId = getPongParticipantIdForSide(serveSide);
+
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        input: {
+          direction: "up",
+          type: "pong.setPaddleDirection",
+        },
+        participantId: getPongParticipantIdForSide(receivingSide),
+        type: "game.input",
+      }),
+    );
+
+    nowMs += getPongTickDelay() * 20;
+    expectStoreSuccess(store.getRoom("ROOM1"));
+
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        input: {
+          type: "pong.serve",
+        },
+        participantId: servingParticipantId,
+        type: "game.input",
+      }),
+    );
+
+    let terminal = expectStoreSuccess(store.getRoom("ROOM1"));
+
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const status = expectPongGame(terminal).snapshot.status;
+
+      if (status === "won" || status === "lost") {
+        break;
+      }
+
+      nowMs += getPongTickDelay() * 10;
+      terminal = expectStoreSuccess(store.getRoom("ROOM1"));
+    }
+
+    const terminalGame = expectPongGame(terminal);
+    const terminalStatus = getTerminalPongStatusForServeSide(serveSide);
+
+    expect(terminalGame.snapshot.status).toBe(terminalStatus);
+    expect(terminalGame.summary).toEqual({
+      key: "pong|mode=private-room|board=240x320|target=1",
+      mode: "private-room",
+      outcome: {
+        leftScore: serveSide === "left" ? 1 : 0,
+        rightScore: serveSide === "right" ? 1 : 0,
+        targetScore: 1,
+        winnerParticipantId: servingParticipantId,
+        winnerSeatId: serveSide,
+      },
+      seats: [
+        {
+          id: "left",
+          label: "Left",
+          participant: {
+            displayName: "Ada Host",
+            id: "host-1",
+            role: "host",
+            userId: "user-1",
+          },
+        },
+        {
+          id: "right",
+          label: "Right",
+          participant: {
+            displayName: "Guest One",
+            id: "guest-1",
+            role: "player",
+            userId: null,
+          },
+        },
+      ],
+      settings: {
+        gameId: "pong",
+        parameters: {
+          "pong-board-size": "240x320",
+          "pong-target": "1",
+        },
+      },
+      status: terminalStatus,
+    });
+  });
+
+  it("adds a server-derived Space Invaders terminal summary to terminal game snapshots", () => {
+    let nowMs = 1_000;
+    const store = createTestRoomStore({ getNowMs: () => nowMs });
+
+    let terminal = createStartedSpaceInvadersRoom(store, {
+      gameId: "space-invaders",
+      parameters: {
+        "space-invaders-aliens": "24",
+        "space-invaders-board-size": "360x480",
+      },
+    });
+
+    for (let attempt = 0; attempt < 180; attempt += 1) {
+      const status = expectSpaceInvadersGame(terminal).snapshot.status;
+
+      if (status === "won" || status === "lost") {
+        break;
+      }
+
+      nowMs += getSpaceInvadersTickDelay() * 60;
+      terminal = expectStoreSuccess(store.getRoom("ROOM1"));
+    }
+
+    const terminalGame = expectSpaceInvadersGame(terminal);
+    const terminalStatus = terminalGame.snapshot.status;
+
+    expect(["lost", "won"]).toContain(terminalStatus);
+    expect(terminalGame.summary).toEqual({
+      key: "space-invaders|mode=private-room|board=360x480|aliens=24",
+      mode: "private-room",
+      outcome: {
+        livesRemaining: terminalGame.snapshot.lives,
+        remainingInvaders: terminalGame.snapshot.invaders.filter(
+          (invader) => invader.isActive,
+        ).length,
+        result: terminalStatus,
+        score: terminalGame.snapshot.score,
+      },
+      seats: [
+        {
+          id: "ship-a",
+          label: "Ship A",
+          participant: {
+            displayName: "Ada Host",
+            id: "host-1",
+            role: "host",
+            userId: "user-1",
+          },
+        },
+        {
+          id: "ship-b",
+          label: "Ship B",
+          participant: {
+            displayName: "Guest One",
+            id: "guest-1",
+            role: "player",
+            userId: null,
+          },
+        },
+      ],
+      settings: {
+        gameId: "space-invaders",
+        parameters: {
+          "space-invaders-aliens": "24",
+          "space-invaders-board-size": "360x480",
+        },
+      },
+      status: terminalStatus,
+    });
+  });
+
+  it("keeps multiplayer summaries separate from solo result mechanisms", async () => {
+    const sources = await Promise.all(
+      [
+        "src/components/pong-multiplayer-room.tsx",
+        "src/components/space-invaders-multiplayer-room.tsx",
+        "src/lib/server/multiplayer-game-adapters.ts",
+        "src/lib/server/multiplayer-room-runtime.ts",
+      ].map((path) => readFile(path, "utf8")),
+    );
+    const combinedSource = sources.join("\n");
+
+    for (const forbidden of [
+      "@/components/game-leaderboard",
+      "@/components/game-leaderboard-presenter",
+      "@/components/game-replay-save-action",
+      "@/hooks/use-game-session",
+      "@/lib/leaderboard",
+      "@/lib/pong-replay",
+      "@/lib/space-invaders-replay",
+      "@/lib/user-profile",
+      "../leaderboard",
+      "../pong-replay",
+      "../space-invaders-replay",
+      "../user-profile",
+      "createGameLeaderboardKey",
+      "recordGameSession",
+      "saveReplay",
+      "useGameLeaderboard",
+      "useGameLeaderboardPresenter",
+      "useGameSession",
+    ]) {
+      expect(combinedSource).not.toContain(forbidden);
+    }
   });
 
   it("only accepts Pong serve input from the current serving paddle", () => {
