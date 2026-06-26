@@ -67,7 +67,7 @@ export function applyAsteroidsPowerUpPickup(
   if (
     game.powerUp === null ||
     game.shipExplosion !== null ||
-    !shipTouchesPowerUp(game)
+    !asteroidsShipTouchesPowerUp(game)
   ) {
     return game;
   }
@@ -77,11 +77,14 @@ export function applyAsteroidsPowerUpPickup(
   return {
     ...pickedUpGame,
     powerUp: null,
-    powerUpSpawnCooldownTicks: createPowerUpSpawnCooldown(game.nextPowerUpId, random),
+    powerUpSpawnCooldownTicks: createAsteroidsPowerUpSpawnCooldown(
+      game.nextPowerUpId,
+      random,
+    ),
   };
 }
 
-function applyAsteroidsPowerUpEffect(
+export function applyAsteroidsPowerUpEffect(
   game: AsteroidsGameState,
   powerUp: AsteroidsPowerUp,
 ): AsteroidsGameState {
@@ -124,7 +127,7 @@ function applyAsteroidsPowerUpEffect(
   }
 }
 
-function shipTouchesPowerUp(
+export function asteroidsShipTouchesPowerUp(
   game: Pick<AsteroidsGameState, "boardHeight" | "boardWidth" | "powerUp" | "ship">,
 ) {
   if (game.powerUp === null) {
@@ -212,7 +215,7 @@ function circleIntersectsSegment(
   return dx * dx + dy * dy <= circle.radius * circle.radius;
 }
 
-function createAsteroidsPowerUp(
+export function createAsteroidsPowerUp(
   game: Pick<
     AsteroidsGameState,
     | "asteroids"
@@ -221,7 +224,9 @@ function createAsteroidsPowerUp(
     | "nextPowerUpId"
     | "saucer"
     | "ship"
-  >,
+  > & {
+    ships?: readonly AsteroidsShip[];
+  },
   random?: AsteroidsRandom,
 ): AsteroidsPowerUp {
   const kind = getPowerUpKind(game.nextPowerUpId, random);
@@ -251,7 +256,10 @@ function createAsteroidsPowerUp(
   };
 }
 
-function createPowerUpSpawnCooldown(idNumber: number, random?: AsteroidsRandom) {
+export function createAsteroidsPowerUpSpawnCooldown(
+  idNumber: number,
+  random?: AsteroidsRandom,
+) {
   const spawnRange =
     ASTEROIDS_POWER_UP_MAX_SPAWN_TICKS - ASTEROIDS_POWER_UP_MIN_SPAWN_TICKS;
 
@@ -310,19 +318,27 @@ function getDeterministicPowerUpCoordinate(
 
 function isPowerUpSpawnBlocked(
   powerUp: AsteroidsPoint,
-  game: Pick<AsteroidsGameState, "asteroids" | "boardHeight" | "boardWidth" | "saucer" | "ship">,
+  game: Pick<
+    AsteroidsGameState,
+    "asteroids" | "boardHeight" | "boardWidth" | "saucer" | "ship"
+  > & {
+    ships?: readonly AsteroidsShip[];
+  },
 ) {
   const candidate = {
     ...powerUp,
     radius: POWER_UP_RADIUS,
   };
+  const ships = game.ships ?? [game.ship];
 
   if (
-    entitiesCollideWrapped(
-      { ...candidate, radius: candidate.radius + POWER_UP_SHIP_SPAWN_PADDING },
-      game.ship,
-      game.boardWidth,
-      game.boardHeight,
+    ships.some((ship) =>
+      entitiesCollideWrapped(
+        { ...candidate, radius: candidate.radius + POWER_UP_SHIP_SPAWN_PADDING },
+        ship,
+        game.boardWidth,
+        game.boardHeight,
+      ),
     )
   ) {
     return true;
