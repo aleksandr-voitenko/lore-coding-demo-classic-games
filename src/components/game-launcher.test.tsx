@@ -8,7 +8,11 @@ import { GameLauncher, createLauncherPrivateRoomSettings } from "./game-launcher
 import { GAME_CARDS, createDefaultParameterValues } from "./game-launcher-config";
 import { PLAYABLE_GAME_COMPONENTS } from "./game-launcher-playables";
 
-const PRIVATE_ROOM_HOSTABLE_GAME_IDS = ["pong", "space-invaders"] as const;
+const PRIVATE_ROOM_HOSTABLE_GAME_IDS = [
+  "asteroids",
+  "pong",
+  "space-invaders",
+] as const;
 
 const EXPECTED_PARAMETER_SELECTS = [
   {
@@ -196,6 +200,26 @@ describe("game launcher", () => {
       parameters: {
         "space-invaders-aliens": "24",
         "space-invaders-board-size": "480x640",
+      },
+    });
+  });
+
+  it("creates Asteroids private-room settings from selected launcher difficulty", () => {
+    const asteroids = GAME_CARDS.find((game) => game.id === "asteroids");
+
+    if (asteroids === undefined) {
+      throw new Error("Asteroids launcher card is missing.");
+    }
+
+    const parameterValues = {
+      ...createDefaultParameterValues(),
+      "asteroids-difficulty": "hard",
+    };
+
+    expect(createLauncherPrivateRoomSettings(asteroids, parameterValues)).toEqual({
+      gameId: "asteroids",
+      parameters: {
+        "asteroids-difficulty": "hard",
       },
     });
   });

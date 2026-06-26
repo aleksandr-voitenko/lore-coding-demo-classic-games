@@ -2,9 +2,14 @@
 
 import type { ComponentType, ReactNode } from "react";
 
+import { AsteroidsMultiplayerRoom } from "@/components/asteroids-multiplayer-room";
 import { PongMultiplayerRoom } from "@/components/pong-multiplayer-room";
 import { SpaceInvadersMultiplayerRoom } from "@/components/space-invaders-multiplayer-room";
 import type { GameId } from "@/lib/game-catalog";
+import type {
+  AsteroidsMultiplayerClientInput,
+  AsteroidsMultiplayerGameSnapshot,
+} from "@/lib/asteroids-multiplayer";
 import type {
   PrivateRoom,
   PrivateRoomParticipant,
@@ -61,6 +66,12 @@ function isSpaceInvadersMultiplayerGameSnapshot(
   return game?.gameId === "space-invaders";
 }
 
+function isAsteroidsMultiplayerGameSnapshot(
+  game: MultiplayerRoomGameSnapshot | null | undefined,
+): game is AsteroidsMultiplayerGameSnapshot {
+  return game?.gameId === "asteroids";
+}
+
 function PongMultiplayerRoomRendererView({
   activeParticipant,
   game,
@@ -113,9 +124,39 @@ function SpaceInvadersMultiplayerRoomRendererView({
   );
 }
 
+function AsteroidsMultiplayerRoomRendererView({
+  activeParticipant,
+  game,
+  lifecycleControls,
+  room,
+  sendGameInput,
+}: MultiplayerRoomGameRendererProps) {
+  if (!isAsteroidsMultiplayerGameSnapshot(game)) {
+    return null;
+  }
+
+  function handleAsteroidsInput(input: AsteroidsMultiplayerClientInput) {
+    return sendGameInput("asteroids", input);
+  }
+
+  return (
+    <AsteroidsMultiplayerRoom
+      activeParticipant={activeParticipant}
+      game={game}
+      lifecycleControls={lifecycleControls}
+      onGameInput={handleAsteroidsInput}
+      room={room}
+    />
+  );
+}
+
 const MULTIPLAYER_ROOM_GAME_RENDERERS: Partial<
   Record<GameId, MultiplayerRoomGameRenderer>
 > = {
+  asteroids: {
+    gameId: "asteroids",
+    View: AsteroidsMultiplayerRoomRendererView,
+  },
   pong: {
     gameId: "pong",
     View: PongMultiplayerRoomRendererView,

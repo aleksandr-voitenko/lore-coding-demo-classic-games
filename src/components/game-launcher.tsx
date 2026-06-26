@@ -62,7 +62,11 @@ type PrivateRoomHostActionProps = {
   onCreatePrivateRoom: () => void;
 };
 
-const PRIVATE_ROOM_HOSTABLE_GAME_IDS = new Set<GameId>(["pong", "space-invaders"]);
+const PRIVATE_ROOM_HOSTABLE_GAME_IDS = new Set<GameId>([
+  "asteroids",
+  "pong",
+  "space-invaders",
+]);
 
 export function GameLauncher({
   initialAuthMode = null,
