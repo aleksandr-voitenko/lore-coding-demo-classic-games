@@ -1,6 +1,5 @@
 import type {
   MultiplayerRealtimeGameSnapshot,
-  MultiplayerRealtimeRoomSnapshot,
   MultiplayerTerminalSummary,
 } from "./multiplayer/protocol";
 import type { PrivateRoom, PrivateRoomSeat, PrivateRoomSettingValue } from "./multiplayer/room";
@@ -83,9 +82,6 @@ export type PongMultiplayerGameSnapshot = MultiplayerRealtimeGameSnapshot<
     summary?: PongMultiplayerTerminalSummary;
   }
 >;
-
-export type PongMultiplayerRoomSnapshot =
-  MultiplayerRealtimeRoomSnapshot<PongMultiplayerGameSnapshot>;
 
 type PongMultiplayerRoomSeats = {
   left: PrivateRoomSeat;
