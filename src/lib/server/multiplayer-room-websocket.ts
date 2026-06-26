@@ -4,17 +4,17 @@ import type {
   MultiplayerRealtimeRejectionCode,
   MultiplayerRealtimeRoomSnapshot,
   MultiplayerRealtimeServerMessage,
-  MultiplayerRoomGameSnapshot,
-  MultiplayerRoomSnapshot,
 } from "../multiplayer/protocol";
 import { isGameId } from "../game-catalog";
 
 import {
   InProcessMultiplayerRoomStore,
+  type MultiplayerRoomGameSnapshot,
   type MultiplayerRoomStore,
   type MultiplayerRoomStoreCommand,
   type MultiplayerRoomStoreErrorCode,
   type MultiplayerRoomStoreResult,
+  type MultiplayerRoomSnapshot,
 } from "./multiplayer-room-runtime";
 
 export type CreateMultiplayerRoomWebSocketGatewayOptions = ServerOptions & {

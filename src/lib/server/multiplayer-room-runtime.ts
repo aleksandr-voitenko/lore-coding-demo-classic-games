@@ -1,9 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 
-import type {
-  MultiplayerRoomSnapshot,
-  PrivateRoomLifecycleCommand,
-} from "../multiplayer/protocol";
+import type { PrivateRoomLifecycleCommand } from "../multiplayer/protocol";
 import type {
   PrivateRoom,
   PrivateRoomErrorCode,
@@ -40,8 +37,10 @@ import {
   resumePongMultiplayerGame,
   startPongMultiplayerGame,
   type PongMultiplayerError,
+  type PongMultiplayerGameSnapshot,
   type PongMultiplayerHeldInput,
   type PongMultiplayerHeldInputs,
+  type PongMultiplayerRoomSnapshot,
 } from "../pong-multiplayer";
 
 export type PongMultiplayerInput =
@@ -101,10 +100,8 @@ export type MultiplayerRoomHostUser = {
   id: string;
 };
 
-export type {
-  MultiplayerRoomGameSnapshot,
-  MultiplayerRoomSnapshot,
-} from "../multiplayer/protocol";
+export type MultiplayerRoomGameSnapshot = PongMultiplayerGameSnapshot;
+export type MultiplayerRoomSnapshot = PongMultiplayerRoomSnapshot;
 
 export type MultiplayerRoomStoreErrorCode =
   | PrivateRoomErrorCode

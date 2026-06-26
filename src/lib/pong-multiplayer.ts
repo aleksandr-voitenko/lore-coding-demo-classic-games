@@ -1,3 +1,7 @@
+import type {
+  MultiplayerRealtimeGameSnapshot,
+  MultiplayerRealtimeRoomSnapshot,
+} from "./multiplayer/protocol";
 import type { PrivateRoom, PrivateRoomSeat, PrivateRoomSettingValue } from "./multiplayer/room";
 import {
   advancePongDuelGame,
@@ -48,6 +52,26 @@ export type PongMultiplayerHeldInput = {
 export type PongMultiplayerHeldInputs = Readonly<
   Partial<Record<PongSide, PongMultiplayerHeldInput>>
 >;
+
+export type PongMultiplayerClientInput =
+  | {
+      direction: PongPaddleMoveDirection | null;
+      type: "pong.setPaddleDirection";
+    }
+  | {
+      type: "pong.serve";
+    };
+
+export type PongMultiplayerGameSnapshot = MultiplayerRealtimeGameSnapshot<
+  "pong",
+  PongGameState,
+  {
+    heldInputs: PongMultiplayerHeldInputs;
+  }
+>;
+
+export type PongMultiplayerRoomSnapshot =
+  MultiplayerRealtimeRoomSnapshot<PongMultiplayerGameSnapshot>;
 
 type PongMultiplayerRoomSeats = {
   left: PrivateRoomSeat;

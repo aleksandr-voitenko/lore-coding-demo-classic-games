@@ -1,10 +1,5 @@
 import type { GameId } from "../game-catalog";
 import type {
-  PongGameState,
-  PongPaddleMoveDirection,
-} from "../pong-game-engine";
-import type { PongMultiplayerHeldInputs } from "../pong-multiplayer";
-import type {
   PrivateRoom,
   PrivateRoomErrorCode,
   PrivateRoomParticipant,
@@ -18,25 +13,13 @@ export type PrivateRoomLifecycleCommand =
   | "resume"
   | "start";
 
-type PongMultiplayerInputPayload =
-  | {
-      direction: PongPaddleMoveDirection | null;
-      type: "pong.setPaddleDirection";
-    }
-  | {
-      type: "pong.serve";
-    };
-
 export type MultiplayerGenericGamePayload = {
   readonly [key: string]: unknown;
   type: string;
 };
 
-export type MultiplayerGameInputPayload<Game extends string> = Game extends "pong"
-  ? PongMultiplayerInputPayload
-  : MultiplayerGenericGamePayload;
-
-export type PongMultiplayerClientInput = MultiplayerGameInputPayload<"pong">;
+export type MultiplayerGameInputPayload<Game extends string = string> =
+  Game extends string ? MultiplayerGenericGamePayload : never;
 
 export type MultiplayerRealtimeGameInputMessage<
   Game extends string = GameId,
@@ -66,13 +49,11 @@ export type MultiplayerRealtimeGameSnapshot<
   snapshot: Snapshot;
 } & Extras;
 
-export type MultiplayerRoomGameSnapshot = MultiplayerRealtimeGameSnapshot<
-  "pong",
-  PongGameState,
-  {
-    heldInputs: PongMultiplayerHeldInputs;
-  }
->;
+export type MultiplayerRoomGameSnapshot<
+  Game extends string = GameId,
+  Snapshot = unknown,
+  Extras extends object = object,
+> = MultiplayerRealtimeGameSnapshot<Game, Snapshot, Extras>;
 
 export type MultiplayerRealtimeRoomSnapshot<GameSnapshot = MultiplayerRealtimeGameSnapshot> = {
   game?: GameSnapshot;
@@ -81,8 +62,9 @@ export type MultiplayerRealtimeRoomSnapshot<GameSnapshot = MultiplayerRealtimeGa
   seq: number;
 };
 
-export type MultiplayerRoomSnapshot =
-  MultiplayerRealtimeRoomSnapshot<MultiplayerRoomGameSnapshot>;
+export type MultiplayerRoomSnapshot<
+  GameSnapshot = MultiplayerRoomGameSnapshot,
+> = MultiplayerRealtimeRoomSnapshot<GameSnapshot>;
 
 export type PrivateRoomCommandMessage =
   | {
@@ -158,9 +140,12 @@ export type MultiplayerRealtimeClientMessage =
   | MultiplayerRealtimeGameInputMessage
   | MultiplayerRealtimeRoomCommandMessage;
 
-export type PrivateRoomClientMessage =
+export type PrivateRoomClientMessage<
+  Game extends string = GameId,
+  Input = MultiplayerGameInputPayload<Game>,
+> =
   | PrivateRoomCommandMessage
-  | PrivateRoomGameInputMessage;
+  | PrivateRoomGameInputMessage<Game, Input>;
 
 export type MultiplayerRealtimeRejectionCode =
   | PrivateRoomErrorCode

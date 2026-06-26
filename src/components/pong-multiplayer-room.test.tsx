@@ -1,13 +1,13 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import type { MultiplayerRoomGameSnapshot } from "@/lib/multiplayer/protocol";
 import type { PrivateRoom } from "@/lib/multiplayer/room";
 import {
   createInitialPongGame,
   pausePongGame,
   startPongGame,
 } from "@/lib/pong-game-engine";
+import type { PongMultiplayerGameSnapshot } from "@/lib/pong-multiplayer";
 
 import { expectMarkup } from "./game-board-test-utils";
 import {
@@ -71,7 +71,7 @@ const RUNNING_PONG_GAME = {
   seq: 1,
   serverTimeMs: 1_000,
   snapshot: startPongGame(createInitialPongGame()),
-} satisfies MultiplayerRoomGameSnapshot;
+} satisfies PongMultiplayerGameSnapshot;
 
 describe("PongMultiplayerRoom", () => {
   it("renders the active board, score, target, and seated participant role", () => {

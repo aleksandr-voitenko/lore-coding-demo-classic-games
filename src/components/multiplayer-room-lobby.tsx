@@ -43,10 +43,13 @@ import {
 import type {
   MultiplayerRoomGameSnapshot,
   MultiplayerRoomSnapshot,
-  PongMultiplayerClientInput,
   PrivateRoomClientMessage,
   PrivateRoomLifecycleCommand,
 } from "@/lib/multiplayer/protocol";
+import type {
+  PongMultiplayerClientInput,
+  PongMultiplayerGameSnapshot,
+} from "@/lib/pong-multiplayer";
 import {
   MAX_USER_DISPLAY_NAME_LENGTH,
   type UserAuthMode,
@@ -126,6 +129,12 @@ export class MultiplayerRoomRequestError extends Error {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isPongMultiplayerGameSnapshot(
+  game: MultiplayerRoomGameSnapshot | null | undefined,
+): game is PongMultiplayerGameSnapshot {
+  return game?.gameId === "pong";
 }
 
 function getDefaultFetcher(fetcher: RoomFetch | undefined) {
@@ -451,6 +460,7 @@ export function MultiplayerRoomLobby({
   const roomSnapshotRef = useRef(roomSnapshot);
   const room = roomSnapshot?.room ?? null;
   const game = roomSnapshot?.game;
+  const pongGame = isPongMultiplayerGameSnapshot(game) ? game : null;
   const displayName = displayNameInput ?? user?.displayName ?? "";
   const inviteLink = getPrivateRoomShareLink(normalizedRoomCode, browserOrigin);
   const participantFromLocalId = getParticipantById(room, participantId);
@@ -780,7 +790,7 @@ export function MultiplayerRoomLobby({
     room !== null &&
     room.status !== "lobby" &&
     room.settings.gameId === "pong" &&
-    game?.gameId === "pong";
+    pongGame !== null;
 
   return (
     <main
@@ -838,7 +848,7 @@ export function MultiplayerRoomLobby({
           <>
             <PongMultiplayerRoom
               activeParticipant={activeParticipant}
-              game={game}
+              game={pongGame}
               lifecycleControls={
                 isHost ? (
                   <HostLifecycleControls

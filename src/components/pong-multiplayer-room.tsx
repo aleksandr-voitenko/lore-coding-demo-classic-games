@@ -25,10 +25,6 @@ import {
   type PongPaddleMovementState,
 } from "@/components/pong-paddle-input";
 import type {
-  MultiplayerRoomGameSnapshot,
-  PongMultiplayerClientInput,
-} from "@/lib/multiplayer/protocol";
-import type {
   PrivateRoom,
   PrivateRoomParticipant,
   PrivateRoomSeat,
@@ -37,11 +33,13 @@ import type { PongGameState, PongSide, PongStatus } from "@/lib/pong-game-engine
 import {
   getPongMultiplayerProjectionTicks,
   projectPongMultiplayerGame,
+  type PongMultiplayerClientInput,
+  type PongMultiplayerGameSnapshot,
 } from "@/lib/pong-multiplayer";
 
 type PongMultiplayerRoomProps = {
   activeParticipant: PrivateRoomParticipant | null;
-  game: MultiplayerRoomGameSnapshot;
+  game: PongMultiplayerGameSnapshot;
   lifecycleControls?: ReactNode;
   onGameInput: (input: PongMultiplayerClientInput) => void | Promise<void>;
   room: PrivateRoom;
@@ -76,7 +74,7 @@ function getPongMultiplayerProjectionNowMs() {
   return typeof performance === "undefined" ? Date.now() : performance.now();
 }
 
-function useProjectedPongMultiplayerGame(game: MultiplayerRoomGameSnapshot) {
+function useProjectedPongMultiplayerGame(game: PongMultiplayerGameSnapshot) {
   const gameRef = useRef(game);
   const gameSeq = game.seq;
   const gameServerTimeMs = game.serverTimeMs;
@@ -148,7 +146,7 @@ function PongMultiplayerProjectedBoard({
   statusLabel,
 }: {
   children?: ReactNode;
-  game: MultiplayerRoomGameSnapshot;
+  game: PongMultiplayerGameSnapshot;
   statusLabel: string;
 }) {
   const projectedGame = useProjectedPongMultiplayerGame(game);
@@ -235,7 +233,7 @@ export function getPongMultiplayerStatusLabel(status: PongStatus) {
   return statusLabels[status];
 }
 
-export function getPongMultiplayerBoardFrameMaxWidth(game: MultiplayerRoomGameSnapshot) {
+export function getPongMultiplayerBoardFrameMaxWidth(game: PongMultiplayerGameSnapshot) {
   const boardAspectRatio = game.snapshot.boardWidth / game.snapshot.boardHeight;
 
   return `min(100%, calc((100svh - 8rem) * ${boardAspectRatio}))`;

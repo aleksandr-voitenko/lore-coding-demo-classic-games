@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { createInitialPongGame } from "../pong-game-engine";
 import type {
   MultiplayerRealtimeClientMessage,
   MultiplayerRealtimeGameInputMessage,
@@ -239,21 +238,33 @@ describe("multiplayer realtime protocol", () => {
     expect(pingMessage.serverTimeMs).toBe(1_250);
   });
 
-  it("keeps current Pong room snapshot aliases compatible with nested payloads", () => {
+  it("keeps room snapshot aliases compatible with nested game-specific payloads", () => {
     const game = {
-      gameId: "pong",
-      heldInputs: {
-        left: {
-          up: true,
-        },
+      fleet: {
+        columns: 11,
       },
+      gameId: "space-invaders",
       seq: 2,
       serverTimeMs: 500,
-      snapshot: createInitialPongGame(),
-    } satisfies MultiplayerRoomGameSnapshot;
+      snapshot: {
+        aliensRemaining: 14,
+        wave: 2,
+      },
+    } satisfies MultiplayerRoomGameSnapshot<
+      "space-invaders",
+      {
+        aliensRemaining: number;
+        wave: number;
+      },
+      {
+        fleet: {
+          columns: number;
+        };
+      }
+    >;
     const snapshot = {
       game,
-      room: createProtocolRoom({ gameId: "pong" }),
+      room: createProtocolRoom({ gameId: "space-invaders" }),
       seq: 5,
     } satisfies MultiplayerRoomSnapshot;
     const serverMessage = {
@@ -261,19 +272,26 @@ describe("multiplayer realtime protocol", () => {
       room: snapshot.room,
       seq: snapshot.seq,
       type: "room.snapshot",
-    } satisfies PrivateRoomServerMessage;
+    } satisfies PrivateRoomServerMessage<typeof game>;
     const clientMessage = {
-      gameId: "pong",
+      gameId: "space-invaders",
       input: {
-        type: "pong.serve",
+        fire: true,
+        type: "space-invaders.setControls",
       },
       participantId: "guest-left",
       requestId: "request-serve",
       type: "game.input",
-    } satisfies PrivateRoomClientMessage;
+    } satisfies PrivateRoomClientMessage<
+      "space-invaders",
+      {
+        fire: boolean;
+        type: "space-invaders.setControls";
+      }
+    >;
 
-    expect(serverMessage.game?.heldInputs.left?.up).toBe(true);
-    expect(serverMessage.game?.snapshot.status).toBe("ready");
-    expect(clientMessage.gameId).toBe("pong");
+    expect(serverMessage.game?.fleet.columns).toBe(11);
+    expect(serverMessage.game?.snapshot.wave).toBe(2);
+    expect(clientMessage.gameId).toBe("space-invaders");
   });
 });
