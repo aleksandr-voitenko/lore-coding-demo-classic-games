@@ -8,6 +8,7 @@ import {
   createRandomSequence,
   createPlayerShotAlignedWith,
   SPACE_INVADERS_ALIEN_FREEZE_TICKS,
+  SPACE_INVADERS_BASE_Y,
   SPACE_INVADERS_BONUS_SCORE_POINTS,
   createScorePopupFixture,
   SPACE_INVADERS_COLUMNS,
@@ -21,6 +22,7 @@ import {
   SPACE_INVADERS_ROWS,
   SPACE_INVADERS_SCORE_POPUP_TICKS,
   SPACE_INVADERS_STARTING_LIVES,
+  type SpaceInvader,
 } from "./space-invaders-game-engine.test-helpers";
 import {
   advanceSpaceInvadersMultiplayerGameTick,
@@ -75,6 +77,20 @@ function withOverlappingShips(
   game: SpaceInvadersMultiplayerGameState,
 ): SpaceInvadersMultiplayerGameState {
   return withShipPlayer(game, "ship-b", game.ships["ship-a"].player);
+}
+
+function withOnlyActiveMultiplayerInvader(
+  game: SpaceInvadersMultiplayerGameState,
+  activeInvader: SpaceInvader,
+): SpaceInvadersMultiplayerGameState {
+  return {
+    ...game,
+    invaders: game.invaders.map((invader) => ({
+      ...invader,
+      ...(invader.id === activeInvader.id ? activeInvader : {}),
+      isActive: invader.id === activeInvader.id,
+    })),
+  };
 }
 
 function createInvaderShotTouchingShip(
@@ -588,12 +604,160 @@ describe("space invaders multiplayer state model", () => {
     expect(ticked.ships["ship-b"].playerShieldTicks).toBe(1);
   });
 
-  it("advances invader shots while leaving shared wave movement for a follow-up tick slice", () => {
+  it("ages shared effects and active multi-kill combo windows", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame();
+    const activeExplosion = createExplosionFixture({
+      ageTicks: 3,
+      id: "active-explosion",
+      ttlTicks: 2,
+    });
+    const expiredExplosion = createExplosionFixture({
+      id: "expired-explosion",
+      ttlTicks: 1,
+    });
+    const activePopup = createScorePopupFixture({
+      ageTicks: 4,
+      id: "active-popup",
+      ttlTicks: 2,
+    });
+    const expiredPopup = createScorePopupFixture({
+      id: "expired-popup",
+      ttlTicks: 1,
+    });
+    const comboKeeperShot = {
+      height: 14,
+      id: "combo-keeper",
+      kind: "standard" as const,
+      velocityX: 0,
+      velocityY: -6.4,
+      width: 4,
+      x: 0,
+      y: initialGame.boardHeight / 2,
+    };
+    const ticked = advanceSpaceInvadersMultiplayerGameTick({
+      ...initialGame,
+      alienFreezeTicks: 1,
+      explosions: [activeExplosion, expiredExplosion],
+      multiKillCombo: {
+        destroyedCount: 2,
+        height: 24,
+        points: 40,
+        ticksRemaining: 3,
+        width: 40,
+        x: 100,
+        y: 80,
+      },
+      scorePopups: [activePopup, expiredPopup],
+      ships: {
+        ...initialGame.ships,
+        "ship-a": {
+          ...initialGame.ships["ship-a"],
+          playerShots: [comboKeeperShot],
+        },
+      },
+    });
+
+    expect(ticked.explosions).toEqual([
+      {
+        ...activeExplosion,
+        ageTicks: activeExplosion.ageTicks + 1,
+        ttlTicks: activeExplosion.ttlTicks - 1,
+      },
+    ]);
+    expect(ticked.scorePopups).toEqual([
+      {
+        ...activePopup,
+        ageTicks: activePopup.ageTicks + 1,
+        ttlTicks: activePopup.ttlTicks - 1,
+      },
+    ]);
+    expect(ticked.multiKillCombo).toMatchObject({
+      destroyedCount: 2,
+      points: 40,
+      ticksRemaining: 2,
+    });
+  });
+
+  it("finalizes an expired multi-kill combo through the tick path", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame();
+    const comboKeeperShot = {
+      height: 14,
+      id: "combo-keeper",
+      kind: "standard" as const,
+      velocityX: 0,
+      velocityY: -6.4,
+      width: 4,
+      x: 0,
+      y: initialGame.boardHeight / 2,
+    };
+    const ticked = advanceSpaceInvadersMultiplayerGameTick({
+      ...initialGame,
+      alienFreezeTicks: 1,
+      multiKillCombo: {
+        destroyedCount: 2,
+        height: 24,
+        points: 40,
+        ticksRemaining: 1,
+        width: 40,
+        x: 100,
+        y: 80,
+      },
+      score: 90,
+      ships: {
+        ...initialGame.ships,
+        "ship-a": {
+          ...initialGame.ships["ship-a"],
+          playerShots: [comboKeeperShot],
+        },
+      },
+    });
+
+    expect(ticked.multiKillCombo).toBeNull();
+    expect(ticked.score).toBe(90 + SPACE_INVADERS_MULTI_KILL_BONUSES[2]);
+    expect(ticked.scorePopups).toEqual([
+      expect.objectContaining({
+        id: "score-popup-0",
+        points: 40 + SPACE_INVADERS_MULTI_KILL_BONUSES[2],
+      }),
+    ]);
+  });
+
+  it("pauses alien fire, UFOs, and formation movement while freeze ticks down", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame();
+    const firstInvader = initialGame.invaders[0]!;
+    const activeUfo = {
+      ...initialGame.ufo,
+      isActive: true,
+      x: 120,
+    };
+    const ticked = advanceSpaceInvadersMultiplayerGameTick({
+      ...initialGame,
+      alienFreezeTicks: SPACE_INVADERS_ALIEN_FREEZE_TICKS,
+      invaderShotCooldownTicks: 0,
+      ufo: activeUfo,
+    });
+    const frozenInvader = ticked.invaders.find(
+      (invader) => invader.id === firstInvader.id,
+    );
+
+    expect(ticked.alienFreezeTicks).toBe(SPACE_INVADERS_ALIEN_FREEZE_TICKS - 1);
+    expect(ticked.invaderShotCooldownTicks).toBe(0);
+    expect(ticked.invaderShots).toEqual([]);
+    expect(ticked.ufo.x).toBe(activeUfo.x);
+    expect(frozenInvader?.x).toBe(firstInvader.x);
+  });
+
+  it("advances invader shots and shared formation movement in one tick", () => {
     const shot = createInvaderShotFixture();
     const game = createRunningSpaceInvadersMultiplayerGame({
+      invaderShotCooldownTicks: 1_000,
       invaderShots: [shot],
     });
+    const firstInvader = game.invaders[0]!;
     const ticked = advanceSpaceInvadersMultiplayerGameTick(game);
+    const marchedInvader = ticked.invaders.find(
+      (invader) => invader.id === firstInvader.id,
+    );
 
     expect(ticked.invaderShots).toEqual([
       {
@@ -602,8 +766,242 @@ describe("space invaders multiplayer state model", () => {
         y: shot.y + shot.velocityY,
       },
     ]);
-    expect(ticked.invaders).toEqual(game.invaders);
-    expect(ticked.ufo).toEqual(game.ufo);
+    expect(marchedInvader?.x).toBeGreaterThan(firstInvader.x);
+    expect(ticked.ufo.cooldownTicks).toBe(game.ufo.cooldownTicks - 1);
+  });
+
+  it("counts down invader fire cooldowns and fires from the nearest active ship target", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame();
+    const shooter = initialGame.invaders.find(
+      (invader) => invader.row === SPACE_INVADERS_ROWS - 1 && invader.column === 7,
+    )!;
+    const shipBTarget = {
+      ...initialGame.ships["ship-b"].player,
+      x: shooter.x + shooter.width / 2 - initialGame.ships["ship-b"].player.width / 2,
+    };
+    const targetedGame: SpaceInvadersMultiplayerGameState = {
+      ...initialGame,
+      invaderShotCooldownTicks: 0,
+      ships: {
+        ...initialGame.ships,
+        "ship-a": {
+          ...initialGame.ships["ship-a"],
+          isActive: false,
+        },
+        "ship-b": {
+          ...initialGame.ships["ship-b"],
+          player: shipBTarget,
+        },
+      },
+    };
+    const cooling = advanceSpaceInvadersMultiplayerGameTick({
+      ...targetedGame,
+      invaderShotCooldownTicks: 1,
+    });
+    const fired = advanceSpaceInvadersMultiplayerGameTick(targetedGame);
+    const firedShot = fired.invaderShots[0]!;
+
+    expect(cooling.invaderShotCooldownTicks).toBe(0);
+    expect(cooling.invaderShots).toEqual([]);
+    expect(fired.invaderShots).toHaveLength(1);
+    expect(firedShot).toMatchObject({
+      id: "invader-shot-0",
+      kind: "standard",
+      sourceColumn: shooter.column,
+      sourceInvaderId: shooter.id,
+      sourceRow: shooter.row,
+    });
+    expect(firedShot.x).toBeCloseTo(shooter.x + shooter.width / 2 - firedShot.width / 2);
+    expect(fired.nextInvaderShotId).toBe(1);
+    expect(fired.invaderShotCooldownTicks).toBeGreaterThan(0);
+  });
+
+  it("creates and continues invader burst fire through the multiplayer tick", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame();
+    const burstShooter = {
+      ...initialGame.invaders.find(
+        (invader) => invader.row === 1 && invader.column === 5,
+      )!,
+      kind: "standard" as const,
+    };
+    const fired = advanceSpaceInvadersMultiplayerGameTick(
+      withOnlyActiveMultiplayerInvader(
+        {
+          ...initialGame,
+          invaderShotCooldownTicks: 0,
+        },
+        burstShooter,
+      ),
+    );
+    const secondBurstTick = advanceSpaceInvadersMultiplayerGameTick({
+      ...fired,
+      invaderShotCooldownTicks: 0,
+    });
+
+    expect(fired.invaderShots).toHaveLength(1);
+    expect(fired.invaderShots[0]).toMatchObject({
+      id: "invader-shot-0",
+      kind: "burst",
+      sourceInvaderId: burstShooter.id,
+    });
+    expect(fired.invaderBurst).toEqual({
+      remainingShots: 2,
+      sourceInvaderId: burstShooter.id,
+    });
+    expect(secondBurstTick.invaderShots).toHaveLength(2);
+    expect(secondBurstTick.invaderShots[1]).toMatchObject({
+      id: "invader-shot-1",
+      kind: "burst",
+      sourceInvaderId: burstShooter.id,
+    });
+    expect(secondBurstTick.invaderBurst).toEqual({
+      remainingShots: 1,
+      sourceInvaderId: burstShooter.id,
+    });
+  });
+
+  it("fires pending revenge volleys before frozen alien world progression pauses", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame();
+    const revengeSource = {
+      ...initialGame.invaders.find(
+        (invader) => invader.row === 1 && invader.column === 5,
+      )!,
+      kind: "revenge" as const,
+    };
+    const shipBTarget = {
+      ...initialGame.ships["ship-b"].player,
+      x:
+        revengeSource.x +
+        revengeSource.width / 2 +
+        90 -
+        initialGame.ships["ship-b"].player.width / 2,
+    };
+    const ticked = advanceSpaceInvadersMultiplayerGameTick(
+      withOnlyActiveMultiplayerInvader(
+        {
+          ...initialGame,
+          alienFreezeTicks: 1,
+          invaderShotCooldownTicks: 0,
+          revengeVolleys: [
+            {
+              invaderIds: [revengeSource.id],
+              ticksRemaining: 1,
+            },
+          ],
+          ships: {
+            ...initialGame.ships,
+            "ship-a": {
+              ...initialGame.ships["ship-a"],
+              isActive: false,
+            },
+            "ship-b": {
+              ...initialGame.ships["ship-b"],
+              player: shipBTarget,
+            },
+          },
+        },
+        revengeSource,
+      ),
+    );
+
+    expect(ticked.alienFreezeTicks).toBe(0);
+    expect(ticked.revengeVolleys).toEqual([]);
+    expect(ticked.invaderShots).toHaveLength(1);
+    expect(ticked.invaderShots[0]).toMatchObject({
+      id: "invader-shot-0",
+      kind: "counterfire",
+      sourceInvaderId: revengeSource.id,
+    });
+    expect(ticked.invaderShots[0]?.velocityX).toBeGreaterThan(0);
+  });
+
+  it("spawns, moves, and deactivates UFOs through shared world ticks", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame();
+    const spawned = advanceSpaceInvadersMultiplayerGameTick({
+      ...initialGame,
+      invaderShotCooldownTicks: 1_000,
+      ufo: {
+        ...initialGame.ufo,
+        cooldownTicks: 0,
+      },
+    });
+    const moved = advanceSpaceInvadersMultiplayerGameTick({
+      ...initialGame,
+      invaderShotCooldownTicks: 1_000,
+      ufo: spawned.ufo,
+    });
+    const exited = advanceSpaceInvadersMultiplayerGameTick({
+      ...initialGame,
+      invaderShotCooldownTicks: 1_000,
+      ufo: {
+        ...initialGame.ufo,
+        isActive: true,
+        x: initialGame.boardWidth - 1,
+      },
+      ufoHitStreak: 2,
+    });
+
+    expect(spawned.ufo).toMatchObject({
+      direction: 1,
+      isActive: true,
+      x: -initialGame.ufo.width,
+    });
+    expect(moved.ufo.x).toBeCloseTo(spawned.ufo.x + 2.4);
+    expect(exited.ufo).toMatchObject({
+      direction: -1,
+      isActive: false,
+      x: initialGame.boardWidth,
+    });
+    expect(exited.ufoHitStreak).toBe(0);
+    expect(exited.ufo.cooldownTicks).toBeGreaterThan(0);
+  });
+
+  it("drops and reverses the formation when active invaders hit an edge", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame();
+    const edgeInvader = {
+      ...initialGame.invaders.find(
+        (invader) => invader.row === SPACE_INVADERS_ROWS - 1 && invader.column === 0,
+      )!,
+      x: initialGame.boardWidth - initialGame.invaders[0]!.width - 0.1,
+      y: 100,
+    };
+    const ticked = advanceSpaceInvadersMultiplayerGameTick(
+      withOnlyActiveMultiplayerInvader(
+        {
+          ...initialGame,
+          invaderShotCooldownTicks: 1_000,
+          marchDirection: 1,
+        },
+        edgeInvader,
+      ),
+    );
+    const droppedInvader = ticked.invaders.find(
+      (invader) => invader.id === edgeInvader.id,
+    );
+
+    expect(droppedInvader?.x).toBe(edgeInvader.x);
+    expect(droppedInvader?.y).toBeCloseTo(edgeInvader.y + 4);
+    expect(ticked.marchDirection).toBe(-1);
+  });
+
+  it("loses the shared game when an active invader reaches the base", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame();
+    const baseInvader = {
+      ...initialGame.invaders[0]!,
+      y: SPACE_INVADERS_BASE_Y - initialGame.invaders[0]!.height + 1,
+    };
+    const ticked = advanceSpaceInvadersMultiplayerGameTick(
+      withOnlyActiveMultiplayerInvader(
+        {
+          ...initialGame,
+          invaderShotCooldownTicks: 1_000,
+        },
+        baseInvader,
+      ),
+    );
+
+    expect(ticked.status).toBe("lost");
+    expect(ticked.lives).toBe(0);
   });
 
   it("moves invader shots before resolving a ship-a hit", () => {

@@ -30,6 +30,7 @@ import type {
   SpaceInvadersPlayerShotKind,
   SpaceInvadersRandomSource,
   SpaceInvadersRevengeVolley,
+  SpaceInvadersScoreTarget,
 } from "./types";
 
 type InvaderShotSpec = {
@@ -282,7 +283,10 @@ export function isPlayerShotActive(
   );
 }
 
-export function maybeFireInvaderShot(game: SpaceInvadersGameState): SpaceInvadersGameState {
+export function maybeFireInvaderShot(
+  game: SpaceInvadersGameState,
+  options: InvaderShotTargetingOptions = {},
+): SpaceInvadersGameState {
   if (game.invaderShotCooldownTicks > 0) {
     return {
       ...game,
@@ -291,14 +295,14 @@ export function maybeFireInvaderShot(game: SpaceInvadersGameState): SpaceInvader
   }
 
   if (game.invaderBurst !== null) {
-    return continueInvaderBurst(game);
+    return continueInvaderBurst(game, options);
   }
 
   if (game.invaderShots.length >= MAX_INVADER_SHOTS) {
     return game;
   }
 
-  const shooter = selectInvaderShotSource(game);
+  const shooter = selectInvaderShotSource(game, options);
 
   if (shooter === undefined) {
     return {
@@ -308,7 +312,7 @@ export function maybeFireInvaderShot(game: SpaceInvadersGameState): SpaceInvader
   }
 
   const createdShots = createInvaderShots(shooter, game.nextInvaderShotId, {
-    player: game.player,
+    player: getInvaderShotTargetPlayer(shooter, game, options),
     useArmoredArmorWave: true,
     useRevengeCounterfire: true,
     useSplitterFork: true,
@@ -340,7 +344,10 @@ export function maybeFireInvaderShot(game: SpaceInvadersGameState): SpaceInvader
   };
 }
 
-function continueInvaderBurst(game: SpaceInvadersGameState): SpaceInvadersGameState {
+function continueInvaderBurst(
+  game: SpaceInvadersGameState,
+  options: InvaderShotTargetingOptions,
+): SpaceInvadersGameState {
   const burst = game.invaderBurst;
 
   if (burst === null) {
@@ -360,7 +367,7 @@ function continueInvaderBurst(game: SpaceInvadersGameState): SpaceInvadersGameSt
   }
 
   const createdShots = createInvaderShots(shooter, game.nextInvaderShotId, {
-    player: game.player,
+    player: getInvaderShotTargetPlayer(shooter, game, options),
     useArmoredArmorWave: true,
     useRevengeCounterfire: true,
     useSplitterFork: true,
@@ -394,7 +401,10 @@ function continueInvaderBurst(game: SpaceInvadersGameState): SpaceInvadersGameSt
   };
 }
 
-function selectInvaderShotSource(game: SpaceInvadersGameState) {
+function selectInvaderShotSource(
+  game: SpaceInvadersGameState,
+  options: InvaderShotTargetingOptions,
+) {
   const lowestInvaders = getLowestActiveInvadersByColumn(game.invaders);
   const blockedColumns = new Set(game.invaderShots.map((shot) => shot.sourceColumn));
   const unblockedInvaders = lowestInvaders.filter(
@@ -410,11 +420,15 @@ function selectInvaderShotSource(game: SpaceInvadersGameState) {
     return undefined;
   }
 
-  const playerCenterX = game.player.x + game.player.width / 2;
-
   return [...candidates].sort((first, second) => {
-    const firstDistance = Math.abs(getEntityCenterX(first) - playerCenterX);
-    const secondDistance = Math.abs(getEntityCenterX(second) - playerCenterX);
+    const firstDistance = Math.abs(
+      getEntityCenterX(first) -
+        getEntityCenterX(getInvaderShotTargetPlayer(first, game, options)),
+    );
+    const secondDistance = Math.abs(
+      getEntityCenterX(second) -
+        getEntityCenterX(getInvaderShotTargetPlayer(second, game, options)),
+    );
 
     if (firstDistance !== secondDistance) {
       return firstDistance - secondDistance;
@@ -635,6 +649,10 @@ type CreateInvaderShotOptions = {
   useSplitterFork?: boolean;
 };
 
+type InvaderShotTargetingOptions = {
+  getTargetPlayer?: (target: SpaceInvadersScoreTarget) => SpaceInvadersPlayer;
+};
+
 function createInvaderShots(
   invader: SpaceInvader,
   nextInvaderShotId: number,
@@ -695,6 +713,7 @@ export function maybePrimeSpaceInvadersRevengeVolley(
 
 export function advanceSpaceInvadersRevengeVolleys(
   game: SpaceInvadersGameState,
+  options: InvaderShotTargetingOptions = {},
 ): SpaceInvadersGameState {
   if (game.revengeVolleys.length === 0) {
     return game;
@@ -729,7 +748,7 @@ export function advanceSpaceInvadersRevengeVolleys(
 
       revengeShots.push(
         createSingleInvaderShot(source, nextInvaderShotId, {
-          player: game.player,
+          player: getInvaderShotTargetPlayer(source, game, options),
           useArmoredArmorWave: true,
           useRevengeCounterfire: true,
           useSplitterFork: true,
@@ -856,6 +875,14 @@ function getInvaderShotSpec(
   > = {},
 ) {
   return INVADER_SHOT_SPECS[getInvaderShotKind(invader, options)];
+}
+
+function getInvaderShotTargetPlayer(
+  target: SpaceInvadersScoreTarget,
+  game: Pick<SpaceInvadersGameState, "player">,
+  options: InvaderShotTargetingOptions,
+) {
+  return options.getTargetPlayer?.(target) ?? game.player;
 }
 
 function getInvaderShotKind(

@@ -5,6 +5,8 @@ import type {
 import {
   createInitialSpaceInvadersGame,
   type CreateSpaceInvadersGameOptions,
+  type SpaceInvader,
+  type SpaceInvadersDirection,
   type SpaceInvadersGameState,
   type SpaceInvadersInvaderShot,
   type SpaceInvadersPlayer,
@@ -13,9 +15,15 @@ import {
   type SpaceInvadersRandomSource,
 } from "./space-invaders-game-engine";
 import {
+  DIVER_DROP_Y,
+  DIVER_STEP_MULTIPLIER,
   EXPLOSION_PADDING_BY_KIND,
   EXPLOSION_TTL_TICKS,
+  FORMATION_MAX_SPEED_MULTIPLIER,
+  FORMATION_SPEEDUP_START_RATIO,
+  INVADER_DROP_Y,
   INVADER_HIT_RECOVERY_TICKS,
+  INVADER_STEP_X,
   PLAYER_SPEED,
   SPACE_INVADERS_ALIEN_FREEZE_TICKS,
   SPACE_INVADERS_BONUS_SCORE_POINTS,
@@ -24,8 +32,12 @@ import {
   SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
   SPACE_INVADERS_POWER_UP_SHIELD_TICKS,
   SPACE_INVADERS_SCORE_POPUP_TICKS,
+  UFO_SPEED,
 } from "./space-invaders/constants";
-import { finalizeSpaceInvadersMultiKillCombo } from "./space-invaders/effects";
+import {
+  deactivateSpaceInvadersUfo,
+  finalizeSpaceInvadersMultiKillCombo,
+} from "./space-invaders/effects";
 import {
   clamp,
   getEntityCenterX,
@@ -42,9 +54,11 @@ import {
 } from "./space-invaders/player-state";
 import {
   advanceInvaderShotPositions,
+  advanceSpaceInvadersRevengeVolleys,
   createInitialPlayerBurstState,
   createPlayerShots,
   isInvaderShotDangerous,
+  maybeFireInvaderShot,
 } from "./space-invaders/projectiles";
 import { getRandomIndex } from "./space-invaders/random";
 import { resetSpaceInvadersHitStreak } from "./space-invaders/scoring";
@@ -300,8 +314,14 @@ export function advanceSpaceInvadersMultiplayerGameTick(
   }
 
   const gameAfterInput = applySpaceInvadersMultiplayerHeldInputs(game, inputs);
+  const gameAfterExplosions =
+    advanceSpaceInvadersMultiplayerExplosions(gameAfterInput);
+  const gameAfterScorePopups =
+    advanceSpaceInvadersMultiplayerScorePopups(gameAfterExplosions);
+  const gameAfterMultiKillComboWindow =
+    advanceSpaceInvadersMultiplayerMultiKillComboWindow(gameAfterScorePopups);
   const gameAfterPowerUps = advanceSpaceInvadersMultiplayerPowerUps(
-    gameAfterInput,
+    gameAfterMultiKillComboWindow,
     random,
   );
   const gameAfterPlayerShots = advanceSpaceInvadersMultiplayerPlayerShots(
@@ -325,10 +345,36 @@ export function advanceSpaceInvadersMultiplayerGameTick(
     gameAfterInvaderShots.status !== gameAfterPlayerVolleys.status ||
     gameAfterInvaderShots.lives < gameAfterPlayerVolleys.lives
   ) {
-    return gameAfterInvaderShots;
+    return finalizeSpaceInvadersMultiplayerMultiKillCombo(gameAfterInvaderShots);
   }
 
-  return advanceSpaceInvadersMultiplayerShipRecovery(gameAfterInvaderShots);
+  if (gameAfterInvaderShots.status === "won") {
+    return finalizeSpaceInvadersMultiplayerMultiKillCombo(gameAfterInvaderShots);
+  }
+
+  const gameAfterRevengeVolleys =
+    advanceSpaceInvadersMultiplayerRevengeVolleys(gameAfterInvaderShots);
+  const { game: gameAfterFreezeTick, isFrozen: areAliensFrozen } =
+    advanceSpaceInvadersMultiplayerAlienFreeze(gameAfterRevengeVolleys);
+
+  if (areAliensFrozen) {
+    return advanceSpaceInvadersMultiplayerShipRecovery(gameAfterFreezeTick);
+  }
+
+  const gameAfterInvaderFire =
+    advanceSpaceInvadersMultiplayerInvaderFire(gameAfterFreezeTick);
+  const gameAfterUfo = advanceSpaceInvadersMultiplayerUfo(gameAfterInvaderFire);
+  const marchedGame = marchSpaceInvadersMultiplayerInvaders(gameAfterUfo);
+
+  if (hasSpaceInvadersMultiplayerInvaderReachedBase(marchedGame)) {
+    return finalizeSpaceInvadersMultiplayerMultiKillCombo({
+      ...marchedGame,
+      lives: 0,
+      status: "lost" as const,
+    });
+  }
+
+  return advanceSpaceInvadersMultiplayerShipRecovery(marchedGame);
 }
 
 export function resolveSpaceInvadersMultiplayerInvaderShotHits(
@@ -534,7 +580,7 @@ function advanceSpaceInvadersMultiplayerInvaderShots(
     createSpaceInvadersSoloProjection(game, "ship-a"),
     {
       getTargetPlayer: (shot) =>
-        getSpaceInvadersMultiplayerInvaderShotTargetPlayer(game, shot),
+        getSpaceInvadersMultiplayerShotTargetPlayer(game, shot),
     },
   );
 
@@ -548,6 +594,393 @@ function advanceSpaceInvadersMultiplayerInvaderShots(
   );
 }
 
+function advanceSpaceInvadersMultiplayerExplosions(
+  game: SpaceInvadersMultiplayerGameState,
+): SpaceInvadersMultiplayerGameState {
+  if (game.explosions.length === 0) {
+    return game;
+  }
+
+  return {
+    ...game,
+    explosions: game.explosions
+      .map((explosion) => ({
+        ...explosion,
+        ageTicks: explosion.ageTicks + 1,
+        ttlTicks: explosion.ttlTicks - 1,
+      }))
+      .filter((explosion) => explosion.ttlTicks > 0),
+  };
+}
+
+function advanceSpaceInvadersMultiplayerScorePopups(
+  game: SpaceInvadersMultiplayerGameState,
+): SpaceInvadersMultiplayerGameState {
+  if (game.scorePopups.length === 0) {
+    return game;
+  }
+
+  return {
+    ...game,
+    scorePopups: game.scorePopups
+      .map((popup) => ({
+        ...popup,
+        ageTicks: popup.ageTicks + 1,
+        ttlTicks: popup.ttlTicks - 1,
+      }))
+      .filter((popup) => popup.ttlTicks > 0),
+  };
+}
+
+function advanceSpaceInvadersMultiplayerMultiKillComboWindow(
+  game: SpaceInvadersMultiplayerGameState,
+): SpaceInvadersMultiplayerGameState {
+  const combo = game.multiKillCombo;
+
+  if (combo === null) {
+    return game;
+  }
+
+  if (game.status !== "running" || areSpaceInvadersMultiplayerPlayerVolleysFinished(game)) {
+    return finalizeSpaceInvadersMultiplayerMultiKillCombo(game);
+  }
+
+  const nextCombo = {
+    ...combo,
+    ticksRemaining: combo.ticksRemaining - 1,
+  };
+
+  if (nextCombo.ticksRemaining <= 0) {
+    return finalizeSpaceInvadersMultiplayerMultiKillCombo({
+      ...game,
+      multiKillCombo: nextCombo,
+    });
+  }
+
+  return {
+    ...game,
+    multiKillCombo: nextCombo,
+  };
+}
+
+function advanceSpaceInvadersMultiplayerRevengeVolleys(
+  game: SpaceInvadersMultiplayerGameState,
+): SpaceInvadersMultiplayerGameState {
+  if (game.revengeVolleys.length === 0) {
+    return game;
+  }
+
+  return applySpaceInvadersSoloSharedState(
+    game,
+    advanceSpaceInvadersRevengeVolleys(
+      createSpaceInvadersSoloProjection(game, "ship-a"),
+      {
+        getTargetPlayer: (target) =>
+          getSpaceInvadersMultiplayerShotTargetPlayer(game, target),
+      },
+    ),
+  );
+}
+
+function advanceSpaceInvadersMultiplayerAlienFreeze(
+  game: SpaceInvadersMultiplayerGameState,
+) {
+  if (game.alienFreezeTicks <= 0) {
+    return {
+      game,
+      isFrozen: false,
+    };
+  }
+
+  return {
+    game: {
+      ...game,
+      alienFreezeTicks: game.alienFreezeTicks - 1,
+    },
+    isFrozen: true,
+  };
+}
+
+function advanceSpaceInvadersMultiplayerInvaderFire(
+  game: SpaceInvadersMultiplayerGameState,
+): SpaceInvadersMultiplayerGameState {
+  return applySpaceInvadersSoloSharedState(
+    game,
+    maybeFireInvaderShot(createSpaceInvadersSoloProjection(game, "ship-a"), {
+      getTargetPlayer: (target) =>
+        getSpaceInvadersMultiplayerShotTargetPlayer(game, target),
+    }),
+  );
+}
+
+function advanceSpaceInvadersMultiplayerUfo(
+  game: SpaceInvadersMultiplayerGameState,
+): SpaceInvadersMultiplayerGameState {
+  if (game.ufo.isActive) {
+    const movedUfo = {
+      ...game.ufo,
+      x: game.ufo.x + game.ufo.direction * UFO_SPEED,
+    };
+
+    if (
+      (movedUfo.direction === 1 && movedUfo.x > game.boardWidth) ||
+      (movedUfo.direction === -1 && movedUfo.x + movedUfo.width < 0)
+    ) {
+      return {
+        ...game,
+        ufo: deactivateSpaceInvadersUfo(movedUfo, game.boardWidth),
+        ufoHitStreak: 0,
+      };
+    }
+
+    return {
+      ...game,
+      ufo: movedUfo,
+    };
+  }
+
+  if (game.ufo.cooldownTicks > 0) {
+    return {
+      ...game,
+      ufo: {
+        ...game.ufo,
+        cooldownTicks: game.ufo.cooldownTicks - 1,
+      },
+    };
+  }
+
+  return {
+    ...game,
+    ufo: {
+      ...game.ufo,
+      isActive: true,
+      x: game.ufo.direction === 1 ? -game.ufo.width : game.boardWidth,
+    },
+  };
+}
+
+function marchSpaceInvadersMultiplayerInvaders(
+  game: SpaceInvadersMultiplayerGameState,
+): SpaceInvadersMultiplayerGameState {
+  const activeInvaders = game.invaders.filter((invader) => invader.isActive);
+
+  if (activeInvaders.length === 0) {
+    return game;
+  }
+
+  const exposedDiverIds = getExposedSpaceInvadersMultiplayerDiverIds(activeInvaders);
+  const formationSpeedMultiplier = getSpaceInvadersMultiplayerFormationSpeedMultiplier(
+    game,
+    activeInvaders.length,
+  );
+  const formationInvaders = activeInvaders.filter(
+    (invader) => !isExposedSpaceInvadersMultiplayerDiver(invader, exposedDiverIds),
+  );
+  const wouldFormationHitWall = formationInvaders.some((invader) => {
+    const nextX =
+      invader.x +
+      game.marchDirection *
+        getSpaceInvadersMultiplayerInvaderStepX(
+          invader,
+          exposedDiverIds,
+          formationSpeedMultiplier,
+        );
+
+    return nextX < 0 || nextX + invader.width > game.boardWidth;
+  });
+  const nextMarchDirection = wouldFormationHitWall
+    ? ((game.marchDirection * -1) as SpaceInvadersDirection)
+    : game.marchDirection;
+
+  if (wouldFormationHitWall) {
+    return {
+      ...game,
+      invaders: game.invaders.map((invader) => {
+        if (!invader.isActive) {
+          return invader;
+        }
+
+        const isDiving = isExposedSpaceInvadersMultiplayerDiver(
+          invader,
+          exposedDiverIds,
+        );
+
+        return {
+          ...invader,
+          direction: nextMarchDirection,
+          isDiving,
+          y: invader.y + (isDiving ? DIVER_DROP_Y : INVADER_DROP_Y),
+        };
+      }),
+      marchDirection: nextMarchDirection,
+    };
+  }
+
+  return {
+    ...game,
+    invaders: game.invaders.map((invader) => {
+      if (!invader.isActive) {
+        return invader;
+      }
+
+      if (isExposedSpaceInvadersMultiplayerDiver(invader, exposedDiverIds)) {
+        return advanceSpaceInvadersMultiplayerDivingInvader(invader, game);
+      }
+
+      return {
+        ...invader,
+        direction: game.marchDirection,
+        isDiving: getNextSpaceInvadersMultiplayerDiverState(
+          invader,
+          exposedDiverIds,
+        ),
+        x:
+          invader.x +
+          game.marchDirection *
+            getSpaceInvadersMultiplayerInvaderStepX(
+              invader,
+              exposedDiverIds,
+              formationSpeedMultiplier,
+            ),
+      };
+    }),
+  };
+}
+
+function advanceSpaceInvadersMultiplayerDivingInvader(
+  invader: SpaceInvader,
+  game: Pick<SpaceInvadersMultiplayerGameState, "boardWidth">,
+): SpaceInvader {
+  const nextX = invader.x + invader.direction * INVADER_STEP_X * DIVER_STEP_MULTIPLIER;
+
+  if (nextX < 0 || nextX + invader.width > game.boardWidth) {
+    return {
+      ...invader,
+      direction: (invader.direction * -1) as SpaceInvadersDirection,
+      isDiving: true,
+      x: clamp(invader.x, 0, game.boardWidth - invader.width),
+      y: invader.y + DIVER_DROP_Y,
+    };
+  }
+
+  return {
+    ...invader,
+    isDiving: true,
+    x: nextX,
+  };
+}
+
+function getExposedSpaceInvadersMultiplayerDiverIds(activeInvaders: SpaceInvader[]) {
+  return new Set(
+    activeInvaders
+      .filter(isSpaceInvadersMultiplayerDiverMovementInvader)
+      .filter(
+        (invader) =>
+          invader.isDiving ||
+          isSpaceInvadersMultiplayerDiverLaneClear(invader, activeInvaders),
+      )
+      .map((invader) => invader.id),
+  );
+}
+
+function isSpaceInvadersMultiplayerDiverLaneClear(
+  diver: SpaceInvader,
+  activeInvaders: SpaceInvader[],
+) {
+  return !activeInvaders.some(
+    (invader) =>
+      invader.id !== diver.id &&
+      invader.y > diver.y &&
+      doSpaceInvadersMultiplayerInvadersOverlapX(diver, invader),
+  );
+}
+
+function doSpaceInvadersMultiplayerInvadersOverlapX(
+  first: SpaceInvader,
+  second: SpaceInvader,
+) {
+  return first.x < second.x + second.width && second.x < first.x + first.width;
+}
+
+function getSpaceInvadersMultiplayerFormationSpeedMultiplier(
+  game: Pick<SpaceInvadersMultiplayerGameState, "alienCount">,
+  activeInvaderCount: number,
+) {
+  const speedupStartCount = game.alienCount * FORMATION_SPEEDUP_START_RATIO;
+
+  if (activeInvaderCount <= 1) {
+    return FORMATION_MAX_SPEED_MULTIPLIER;
+  }
+
+  if (activeInvaderCount >= speedupStartCount) {
+    return 1;
+  }
+
+  const interpolationSpan = speedupStartCount - 1;
+  const depletionProgress = (speedupStartCount - activeInvaderCount) / interpolationSpan;
+
+  return 1 + depletionProgress * (FORMATION_MAX_SPEED_MULTIPLIER - 1);
+}
+
+function getSpaceInvadersMultiplayerInvaderStepX(
+  invader: SpaceInvader,
+  exposedDiverIds: Set<string>,
+  formationSpeedMultiplier: number,
+) {
+  return (
+    INVADER_STEP_X *
+    getSpaceInvadersMultiplayerInvaderMovementMultiplier(
+      invader,
+      exposedDiverIds,
+      formationSpeedMultiplier,
+    )
+  );
+}
+
+function getSpaceInvadersMultiplayerInvaderMovementMultiplier(
+  invader: SpaceInvader,
+  exposedDiverIds: Set<string>,
+  formationSpeedMultiplier: number,
+) {
+  return isExposedSpaceInvadersMultiplayerDiver(invader, exposedDiverIds)
+    ? DIVER_STEP_MULTIPLIER
+    : formationSpeedMultiplier;
+}
+
+function getNextSpaceInvadersMultiplayerDiverState(
+  invader: SpaceInvader,
+  exposedDiverIds: Set<string>,
+) {
+  return (
+    invader.isDiving ||
+    isExposedSpaceInvadersMultiplayerDiver(invader, exposedDiverIds)
+  );
+}
+
+function isExposedSpaceInvadersMultiplayerDiver(
+  invader: SpaceInvader,
+  exposedDiverIds: Set<string>,
+) {
+  return (
+    isSpaceInvadersMultiplayerDiverMovementInvader(invader) &&
+    exposedDiverIds.has(invader.id)
+  );
+}
+
+function isSpaceInvadersMultiplayerDiverMovementInvader(
+  invader: Pick<SpaceInvader, "kind">,
+) {
+  return invader.kind === "diver" || invader.kind === "splitter-fragment";
+}
+
+function hasSpaceInvadersMultiplayerInvaderReachedBase(
+  game: SpaceInvadersMultiplayerGameState,
+) {
+  return game.invaders.some(
+    (invader) => invader.isActive && invader.y + invader.height >= game.baseY,
+  );
+}
+
 function finalizeSpaceInvadersMultiplayerMultiKillComboIfVolleysEnded(
   game: SpaceInvadersMultiplayerGameState,
 ): SpaceInvadersMultiplayerGameState {
@@ -558,6 +991,12 @@ function finalizeSpaceInvadersMultiplayerMultiKillComboIfVolleysEnded(
     return game;
   }
 
+  return finalizeSpaceInvadersMultiplayerMultiKillCombo(game);
+}
+
+function finalizeSpaceInvadersMultiplayerMultiKillCombo(
+  game: SpaceInvadersMultiplayerGameState,
+): SpaceInvadersMultiplayerGameState {
   return applySpaceInvadersSoloSharedState(
     game,
     finalizeSpaceInvadersMultiKillCombo(
@@ -786,18 +1225,18 @@ function canFireSpaceInvadersMultiplayerShipShot(
   );
 }
 
-function getSpaceInvadersMultiplayerInvaderShotTargetPlayer(
+function getSpaceInvadersMultiplayerShotTargetPlayer(
   game: SpaceInvadersMultiplayerGameState,
-  shot: SpaceInvadersInvaderShot,
+  target: SpaceInvadersScoreTarget,
 ): SpaceInvadersPlayer {
-  const seat = getSpaceInvadersMultiplayerInvaderShotTargetSeat(game, shot);
+  const seat = getSpaceInvadersMultiplayerShotTargetSeat(game, target);
 
   return game.ships[seat].player;
 }
 
-function getSpaceInvadersMultiplayerInvaderShotTargetSeat(
+function getSpaceInvadersMultiplayerShotTargetSeat(
   game: SpaceInvadersMultiplayerGameState,
-  shot: SpaceInvadersInvaderShot,
+  target: SpaceInvadersScoreTarget,
 ): SpaceInvadersShipSeat {
   const targetableSeats = SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS.filter((seat) => {
     const ship = game.ships[seat];
@@ -809,14 +1248,14 @@ function getSpaceInvadersMultiplayerInvaderShotTargetSeat(
     return "ship-a";
   }
 
-  const shotCenterX = getEntityCenterX(shot);
+  const targetCenterX = getEntityCenterX(target);
 
   return [...targetableSeats].sort((firstSeat, secondSeat) => {
     const firstDistance = Math.abs(
-      getEntityCenterX(game.ships[firstSeat].player) - shotCenterX,
+      getEntityCenterX(game.ships[firstSeat].player) - targetCenterX,
     );
     const secondDistance = Math.abs(
-      getEntityCenterX(game.ships[secondSeat].player) - shotCenterX,
+      getEntityCenterX(game.ships[secondSeat].player) - targetCenterX,
     );
 
     if (firstDistance !== secondDistance) {
