@@ -12,7 +12,6 @@ import {
   createMultiplayerRoomGameInputMessage,
   createMultiplayerRoomWebSocketTransport,
   resolveMultiplayerRoomWebSocketUrl,
-  shouldUseHttpMultiplayerRoomTransport,
 } from "./multiplayer-room-transport";
 
 const ROOM: PrivateRoom = {
@@ -299,6 +298,62 @@ describe("multiplayer room WebSocket message shapes", () => {
       seq: 2,
     });
 
+    const claimAck = transport.sendRoomCommand({
+      participantId: "guest-1",
+      seatId: "right",
+      type: "room.claimSeat",
+    });
+    const claimMessage = JSON.parse(socket.sentMessages[2]!);
+
+    expect(claimMessage).toMatchObject({
+      command: {
+        participantId: "guest-1",
+        seatId: "right",
+        type: "room.claimSeat",
+      },
+      roomCode: "ROOM1",
+      type: "room.command",
+    });
+
+    socket.emitMessage({
+      requestId: claimMessage.requestId,
+      roomCode: "ROOM1",
+      seq: 3,
+      type: "room.commandAck",
+    });
+
+    await expect(claimAck).resolves.toEqual({
+      seq: 3,
+    });
+
+    const releaseAck = transport.sendRoomCommand({
+      participantId: "guest-1",
+      seatId: "right",
+      type: "room.releaseSeat",
+    });
+    const releaseMessage = JSON.parse(socket.sentMessages[3]!);
+
+    expect(releaseMessage).toMatchObject({
+      command: {
+        participantId: "guest-1",
+        seatId: "right",
+        type: "room.releaseSeat",
+      },
+      roomCode: "ROOM1",
+      type: "room.command",
+    });
+
+    socket.emitMessage({
+      requestId: releaseMessage.requestId,
+      roomCode: "ROOM1",
+      seq: 4,
+      type: "room.commandAck",
+    });
+
+    await expect(releaseAck).resolves.toEqual({
+      seq: 4,
+    });
+
     const inputAck = transport.sendGameInput(
       "pong",
       {
@@ -307,7 +362,7 @@ describe("multiplayer room WebSocket message shapes", () => {
       },
       "guest-1",
     );
-    const inputMessage = JSON.parse(socket.sentMessages[2]!);
+    const inputMessage = JSON.parse(socket.sentMessages[4]!);
 
     expect(inputMessage).toMatchObject({
       gameId: "pong",
@@ -325,14 +380,14 @@ describe("multiplayer room WebSocket message shapes", () => {
       participantId: "guest-1",
       requestId: inputMessage.requestId,
       roomCode: "ROOM1",
-      seq: 2,
+      seq: 4,
       type: "room.commandAck",
     });
 
     await expect(inputAck).resolves.toEqual({
       gameSeq: 7,
       participantId: "guest-1",
-      seq: 2,
+      seq: 4,
     });
     expect(participantIds).toEqual(["guest-1", "guest-1"]);
     expect(snapshots).toEqual([
@@ -341,15 +396,5 @@ describe("multiplayer room WebSocket message shapes", () => {
         seq: 1,
       },
     ]);
-  });
-});
-
-describe("multiplayer room HTTP transport fallback", () => {
-  it("keeps HTTP enabled only when WebSocket transport is unconfigured or failed before bootstrap", () => {
-    expect(shouldUseHttpMultiplayerRoomTransport("unconfigured")).toBe(true);
-    expect(shouldUseHttpMultiplayerRoomTransport("fallback")).toBe(true);
-    expect(shouldUseHttpMultiplayerRoomTransport("connecting")).toBe(false);
-    expect(shouldUseHttpMultiplayerRoomTransport("active")).toBe(false);
-    expect(shouldUseHttpMultiplayerRoomTransport("reconnecting")).toBe(false);
   });
 });

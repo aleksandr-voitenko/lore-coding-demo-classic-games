@@ -83,12 +83,12 @@ Browser room streams are enabled with
 `NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL`. Use an absolute endpoint such as
 `ws://127.0.0.1:3001/multiplayer/rooms` for local sidecar testing, or a
 same-origin path such as `/multiplayer/rooms` when a proxy routes WebSocket
-upgrades beside the Next app. When this value is unset, the room UI keeps using
-the existing Next HTTP polling and command fallback. That room-event polling
-fallback is temporary: milestone task 13 removes it after WebSocket room events
-cover the active-room paths. Host lifecycle and settings commands continue to
-use the Next HTTP API so signed-in-host authorization stays on the authenticated
-route until the WebSocket sidecar has its own authenticated host session model.
+upgrades beside the Next app. Existing rooms require this WebSocket stream for
+live lobby snapshots, guest join/seat commands, and game input; when it is unset
+or unavailable, the room UI surfaces a stream connection error instead of using
+browser HTTP polling. Host lifecycle and settings commands continue to use the
+Next HTTP API so signed-in-host authorization stays on the authenticated route
+until the WebSocket sidecar has its own authenticated host session model.
 
 The sidecar room service endpoints are internal service endpoints; public HTTP
 room creation and host authorization should still flow through the Next API

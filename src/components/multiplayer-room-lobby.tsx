@@ -12,7 +12,6 @@ import {
 import {
   type FormEvent,
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -22,7 +21,6 @@ import {
 import { renderMultiplayerRoomGame } from "@/components/multiplayer-room-game-registry";
 import {
   type MultiplayerRoomTransportStatus,
-  shouldUseHttpMultiplayerRoomTransport,
   useMultiplayerRoomWebSocketTransport,
 } from "@/components/multiplayer-room-transport";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -45,6 +43,7 @@ import type {
   MultiplayerRoomGameSnapshot,
   MultiplayerRoomSnapshot,
   PrivateRoomClientMessage,
+  PrivateRoomCommandMessage,
   PrivateRoomLifecycleCommand,
 } from "@/lib/multiplayer/protocol";
 import {
@@ -62,6 +61,11 @@ type RoomApiPayload = {
   room: PrivateRoom;
   seq: number;
 };
+
+type HostOnlyRoomCommandMessage = Extract<
+  PrivateRoomCommandMessage,
+  { type: "room.lifecycle" | "room.updateSettings" }
+>;
 
 type CreateMultiplayerRoomOptions = {
   fetcher?: RoomFetch;
@@ -225,20 +229,9 @@ export async function createMultiplayerRoom({
   };
 }
 
-export async function fetchMultiplayerRoom(roomCode: string, fetcher?: RoomFetch) {
-  const response = await getDefaultFetcher(fetcher)(getRoomApiPath(roomCode), {
-    cache: "no-store",
-  });
-
-  return readRoomApiPayload(response, "Load room");
-}
-
-export async function postMultiplayerRoomCommand<
-  Game extends GameId = GameId,
-  Input = MultiplayerGameInputPayload<Game>,
->(
+export async function postMultiplayerRoomCommand(
   roomCode: string,
-  message: PrivateRoomClientMessage<Game, Input>,
+  message: HostOnlyRoomCommandMessage,
   fetcher?: RoomFetch,
 ) {
   const response = await getDefaultFetcher(fetcher)(getRoomApiPath(roomCode), {
@@ -337,44 +330,35 @@ function getLifecycleActions(status: PrivateRoomStatus) {
   return [{ command: "restart", label: "Restart", icon: RotateCcwIcon }] as const;
 }
 
-export function getMultiplayerRoomPollingDelayMs(
-  snapshot: Pick<MultiplayerRoomSnapshot, "game" | "room"> | null,
-) {
-  if (
-    snapshot === null ||
-    snapshot.room.status === "lobby" ||
-    snapshot.game === undefined
-  ) {
-    return 1_250;
-  }
-
-  return 60;
-}
-
-export function getInitialMultiplayerRoomPollingDelayMs(
-  snapshot: Pick<MultiplayerRoomSnapshot, "game" | "room"> | null,
-) {
-  return snapshot === null ? 0 : getMultiplayerRoomPollingDelayMs(snapshot);
-}
-
-export function shouldScheduleMultiplayerRoomPolling(
-  transportStatus: MultiplayerRoomTransportStatus,
-) {
-  return shouldUseHttpMultiplayerRoomTransport(transportStatus);
-}
-
 export function shouldPostMultiplayerRoomCommandOverHttp<
   Game extends GameId = GameId,
   Input = MultiplayerGameInputPayload<Game>,
 >(
   message: PrivateRoomClientMessage<Game, Input>,
+): message is HostOnlyRoomCommandMessage {
+  return message.type === "room.lifecycle" || message.type === "room.updateSettings";
+}
+
+export function getMultiplayerRoomStreamUnavailableMessage(
   transportStatus: MultiplayerRoomTransportStatus,
 ) {
-  return (
-    message.type === "room.lifecycle" ||
-    message.type === "room.updateSettings" ||
-    shouldUseHttpMultiplayerRoomTransport(transportStatus)
-  );
+  if (transportStatus === "unconfigured") {
+    return "Room stream is not configured. Live room commands require WebSockets.";
+  }
+
+  if (transportStatus === "unavailable") {
+    return "Room stream is unavailable. Live room commands require WebSockets.";
+  }
+
+  if (transportStatus === "reconnecting") {
+    return "Room stream is reconnecting. Try again once the WebSocket stream is ready.";
+  }
+
+  if (transportStatus === "connecting") {
+    return "Room stream is connecting. Try again once the WebSocket stream is ready.";
+  }
+
+  return "Room stream is connected.";
 }
 
 export function getPrivateRoomShareLink(
@@ -486,6 +470,19 @@ export function MultiplayerRoomLobby({
 
     return selectedSnapshot;
   }, [setRoomSnapshot]);
+  const handleRoomTransportSnapshot = useCallback(
+    (nextSnapshot: RoomApiPayload) => {
+      setLoadError(null);
+      return applyRoomSnapshot(nextSnapshot);
+    },
+    [applyRoomSnapshot, setLoadError],
+  );
+  const handleRoomTransportConnectionError = useCallback(
+    (error: Error) => {
+      setLoadError(getRequestErrorMessage(error));
+    },
+    [setLoadError],
+  );
   const transportLastSeq = useMemo(
     () => ({
       ...(roomSnapshot?.game?.seq === undefined
@@ -499,8 +496,9 @@ export function MultiplayerRoomLobby({
     displayName,
     enabled: normalizedRoomCode !== null,
     lastSeq: transportLastSeq,
+    onConnectionError: handleRoomTransportConnectionError,
     onParticipantId: setParticipantId,
-    onSnapshot: applyRoomSnapshot,
+    onSnapshot: handleRoomTransportSnapshot,
     participantId: activeParticipantId ?? participantId,
     roomCode: normalizedRoomCode,
   });
@@ -509,83 +507,6 @@ export function MultiplayerRoomLobby({
     sendRoomCommand: sendRoomTransportCommand,
     status: roomTransportStatus,
   } = roomTransport;
-  const pollingDelayMs = getMultiplayerRoomPollingDelayMs(roomSnapshot);
-  const shouldPollRoom = shouldScheduleMultiplayerRoomPolling(roomTransportStatus);
-
-  useEffect(() => {
-    if (normalizedRoomCode === null || !shouldPollRoom) {
-      return;
-    }
-
-    const roomCode = normalizedRoomCode;
-    let isCurrent = true;
-    let isPolling = false;
-    let pollTimeoutId: number | null = null;
-
-    function schedulePoll(delayMs: number) {
-      if (pollTimeoutId !== null) {
-        window.clearTimeout(pollTimeoutId);
-      }
-
-      pollTimeoutId = window.setTimeout(pollRoom, delayMs);
-    }
-
-    async function pollRoom() {
-      if (isPolling) {
-        return;
-      }
-
-      isPolling = true;
-
-      try {
-        const nextSnapshot = await fetchMultiplayerRoom(roomCode);
-
-        if (!isCurrent) {
-          return;
-        }
-
-        const selectedSnapshot = applyRoomSnapshot(nextSnapshot);
-
-        setLoadError(null);
-        schedulePoll(getMultiplayerRoomPollingDelayMs(selectedSnapshot));
-      } catch (error) {
-        if (!isCurrent) {
-          return;
-        }
-
-        setLoadError(getRequestErrorMessage(error));
-        schedulePoll(getMultiplayerRoomPollingDelayMs(roomSnapshotRef.current));
-      } finally {
-        isPolling = false;
-      }
-    }
-
-    function requestFreshPoll() {
-      schedulePoll(0);
-    }
-
-    function handleVisibilityChange() {
-      if (document.visibilityState === "visible") {
-        requestFreshPoll();
-      }
-    }
-
-    // Browser timer throttling can leave a backgrounded guest on an old Ready snapshot.
-    window.addEventListener("focus", requestFreshPoll);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    schedulePoll(getInitialMultiplayerRoomPollingDelayMs(roomSnapshotRef.current));
-
-    return () => {
-      isCurrent = false;
-      window.removeEventListener("focus", requestFreshPoll);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-
-      if (pollTimeoutId !== null) {
-        window.clearTimeout(pollTimeoutId);
-      }
-    };
-  }, [applyRoomSnapshot, normalizedRoomCode, pollingDelayMs, shouldPollRoom]);
 
   const handleCopyInviteLink = useCallback(() => {
     const currentInviteLink = getPrivateRoomShareLink(
@@ -616,9 +537,7 @@ export function MultiplayerRoomLobby({
         throw new MultiplayerRoomRequestError("Room code is not supported.", 400);
       }
 
-      if (
-        shouldPostMultiplayerRoomCommandOverHttp(message, roomTransportStatus)
-      ) {
+      if (shouldPostMultiplayerRoomCommandOverHttp(message)) {
         const result = await postMultiplayerRoomCommand(normalizedRoomCode, message);
 
         if (result.participantId !== undefined) {
@@ -647,7 +566,10 @@ export function MultiplayerRoomLobby({
         return ack;
       }
 
-      throw new MultiplayerRoomRequestError("Room stream is connecting.", 0);
+      throw new MultiplayerRoomRequestError(
+        getMultiplayerRoomStreamUnavailableMessage(roomTransportStatus),
+        0,
+      );
     },
     [
       applyRoomSnapshot,

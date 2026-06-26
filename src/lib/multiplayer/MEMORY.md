@@ -33,9 +33,10 @@ folder.
   multiplayer UI/runtime typed while the sidecar protocol is introduced. Future
   game integrations should narrow by `gameId` at the edge that understands that
   game, not in the room transport envelope itself.
-- Treat the old HTTP room-event polling fallback as temporary. Milestone task 13
-  removes it after WebSocket room events cover the active-room cases, so new
-  protocol work should not depend on polling-only message shapes.
+- Live browser room transport uses the WebSocket stream for snapshots,
+  guest-capable room commands, and game input. Public browser HTTP may still
+  create rooms and carry authenticated host-only commands, but new protocol work
+  should not depend on polling-only message shapes.
 - Protocol tests should remain deterministic data-shape checks using TypeScript
   `satisfies` objects and small runtime assertions unless a real parser or
   validator is added for the protocol boundary.

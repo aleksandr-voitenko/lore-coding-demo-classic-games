@@ -32,8 +32,8 @@ export type MultiplayerRoomWebSocketEventMap = {
 export type MultiplayerRoomTransportStatus =
   | "active"
   | "connecting"
-  | "fallback"
   | "reconnecting"
+  | "unavailable"
   | "unconfigured";
 
 export type MultiplayerRoomTransportSnapshot = {
@@ -246,12 +246,6 @@ export function createMultiplayerRoomGameInputMessage<
     roomCode,
     type: "game.input",
   };
-}
-
-export function shouldUseHttpMultiplayerRoomTransport(
-  status: MultiplayerRoomTransportStatus,
-) {
-  return status === "fallback" || status === "unconfigured";
 }
 
 export function createMultiplayerRoomWebSocketTransport({
@@ -578,7 +572,7 @@ export function useMultiplayerRoomWebSocketTransport({
         ? getBrowserWebSocketConstructor()
         : webSocketConstructor;
 
-    if (!enabled || roomCode === null || resolvedUrl === null) {
+    if (!enabled || roomCode === null) {
       hasBootstrappedRef.current = false;
       queueStatusUpdate("unconfigured");
       return () => {
@@ -586,9 +580,23 @@ export function useMultiplayerRoomWebSocketTransport({
       };
     }
 
+    if (resolvedUrl === null) {
+      hasBootstrappedRef.current = false;
+      queueStatusUpdate("unconfigured");
+      latestOptionsRef.current.onConnectionError?.(
+        new MultiplayerRoomTransportError("Room stream is not configured."),
+      );
+      return () => {
+        isCurrent = false;
+      };
+    }
+
     if (ResolvedWebSocket === null) {
       hasBootstrappedRef.current = false;
-      queueStatusUpdate("fallback");
+      queueStatusUpdate("unavailable");
+      latestOptionsRef.current.onConnectionError?.(
+        new MultiplayerRoomTransportError("Room stream is unavailable."),
+      );
       return () => {
         isCurrent = false;
       };
@@ -619,7 +627,7 @@ export function useMultiplayerRoomWebSocketTransport({
       setStatus(isReconnect ? "reconnecting" : "connecting");
 
       let connectionBootstrapped = false;
-      let selectedFallback = false;
+      let selectedUnavailable = false;
       const latestOptions = latestOptionsRef.current;
 
       try {
@@ -641,20 +649,20 @@ export function useMultiplayerRoomWebSocketTransport({
               return;
             }
 
-            selectedFallback = true;
+            selectedUnavailable = true;
             hasBootstrappedRef.current = false;
-            setStatus("fallback");
+            setStatus("unavailable");
             latestOptionsRef.current.onConnectionError?.(error);
           },
           onClose: () => {
-            if (!isCurrent || selectedFallback) {
+            if (!isCurrent || selectedUnavailable) {
               return;
             }
 
             transportRef.current = null;
 
             if (!connectionBootstrapped && !hasBootstrappedRef.current) {
-              setStatus("fallback");
+              setStatus("unavailable");
               return;
             }
 
@@ -685,7 +693,7 @@ export function useMultiplayerRoomWebSocketTransport({
         });
       } catch (error) {
         hasBootstrappedRef.current = false;
-        setStatus("fallback");
+        setStatus("unavailable");
         latestOptionsRef.current.onConnectionError?.(toTransportError(error));
       }
     }

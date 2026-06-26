@@ -101,10 +101,10 @@ This file covers Node-only server helpers and storage adapters under
 - Multiplayer results and scores stay mode-scoped, for example private-room
   Pong keys must remain separate from solo Pong keys. Do not write multiplayer
   outcomes through solo replay uploads or unscoped solo leaderboard keys.
-- The old HTTP room-event polling fallback is temporary. Milestone task 13
-  removes it after WebSocket room events cover active-room delivery, so server
-  runtime work should treat WebSocket fanout plus the ordered event path as the
-  target live architecture.
+- Browser live room delivery uses WebSocket fanout plus the ordered event path.
+  Keep public HTTP limited to room creation, invite snapshot reads, and
+  authenticated host-only commands; the sidecar HTTP room service remains an
+  internal bridge rather than a browser polling or live-command fallback.
 
 ## SQLite Assumptions
 

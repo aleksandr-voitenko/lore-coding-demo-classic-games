@@ -23,16 +23,17 @@ This file covers React component ownership and shared game UI conventions under
   component; it snapshots `window.scrollX` and `window.scrollY` before opening a
   game and restores the viewport when returning to the launcher.
 - `multiplayer-room-lobby.tsx` owns the generic private-room lobby/shell UI plus
-  HTTP helpers for room creation and temporary fallback snapshots/commands.
+  HTTP helpers for room creation and authenticated host-only commands.
   `multiplayer-room-transport.ts` owns the browser WebSocket room transport,
   URL derivation from `NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL`, generic
   non-host `room.command` and `game.input` envelope sending, and
   reconnect/bootstrap handling. Host-only lifecycle/settings commands stay on
   the Next HTTP route until the WebSocket sidecar has an authenticated host
-  session model. The old HTTP room-event polling fallback is temporary; milestone
-  task 13 removes it after WebSocket room events cover active-room delivery. Keep
-  both surfaces game-agnostic; actual game play, score submission, replay
-  derivation, and server transport authority belong outside the shell.
+  session model. Live room snapshots, guest-capable room commands, and game input
+  require the WebSocket stream; do not reintroduce browser HTTP polling or POST
+  fallback for those paths. Keep both surfaces game-agnostic; actual game play,
+  score submission, replay derivation, and server transport authority belong
+  outside the shell.
 - Active multiplayer game UI should be selected through a client
   renderer/input registry keyed by `gameId`. A renderer consumes authoritative
   server snapshots/events and emits adapter-owned intents through the generic

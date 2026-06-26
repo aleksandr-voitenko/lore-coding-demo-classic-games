@@ -92,11 +92,11 @@ Gameplay payloads are adapter-owned data inside the shared envelope: Pong can
 define paddle intents and state frames first, while Space Invaders and Asteroids
 only influence the adapter shape until they have their own runtime work.
 
-The old browser HTTP room-event polling path is a temporary compatibility
-fallback while WebSocket room coverage lands. The user preference for this
-milestone is that task 13 removes that fallback after WebSockets cover room
-events; future adapter work should treat the WebSocket stream as the target live
-transport rather than designing around a permanent polling path.
+The browser room UI requires the WebSocket stream for live room snapshots,
+guest-capable room commands, and game input. Public browser HTTP remains for
+room creation, invite snapshot lookups, and authenticated host-only
+lifecycle/settings commands, while the sidecar HTTP room service remains an
+internal Next-to-sidecar bridge rather than a browser live-transport fallback.
 
 The sidecar orders accepted client intents, applies the selected game adapter,
 and publishes authoritative snapshots/events to connected players and observers.

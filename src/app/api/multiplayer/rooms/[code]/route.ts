@@ -51,6 +51,15 @@ function isHostOnlyCommand(command: MultiplayerRoomStoreCommand) {
   return command.type === "room.lifecycle" || command.type === "room.updateSettings";
 }
 
+function isWebSocketOnlyCommandType(value: unknown) {
+  return (
+    value === "room.joinObserver" ||
+    value === "room.claimSeat" ||
+    value === "room.releaseSeat" ||
+    value === "game.input"
+  );
+}
+
 function parseRoomCommand(value: unknown): ParseRoomCommandResult {
   if (!isRecord(value)) {
     return {
@@ -59,54 +68,10 @@ function parseRoomCommand(value: unknown): ParseRoomCommandResult {
     };
   }
 
-  if (value.type === "room.joinObserver") {
+  if (isWebSocketOnlyCommandType(value.type)) {
     return {
-      command: {
-        displayName: value.displayName,
-        type: "room.joinObserver",
-      },
-      success: true,
-    };
-  }
-
-  if (value.type === "room.claimSeat") {
-    return {
-      command: {
-        participantId: value.participantId,
-        seatId: value.seatId,
-        type: "room.claimSeat",
-      },
-      success: true,
-    };
-  }
-
-  if (value.type === "room.releaseSeat") {
-    return {
-      command: {
-        participantId: value.participantId,
-        seatId: value.seatId,
-        type: "room.releaseSeat",
-      },
-      success: true,
-    };
-  }
-
-  if (value.type === "game.input") {
-    if (!isRecord(value.input)) {
-      return {
-        error: "Game input must be a JSON object.",
-        success: false,
-      };
-    }
-
-    return {
-      command: {
-        ...(value.gameId === undefined ? {} : { gameId: value.gameId }),
-        input: value.input,
-        participantId: value.participantId,
-        type: "game.input",
-      },
-      success: true,
+      error: "Live room commands require the WebSocket stream.",
+      success: false,
     };
   }
 
