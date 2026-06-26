@@ -19,15 +19,20 @@ import {
   SPACE_INVADERS_ALIEN_FREEZE_TICKS,
   SPACE_INVADERS_BONUS_SCORE_POINTS,
   SPACE_INVADERS_EXPLOSION_VARIANTS,
+  SPACE_INVADERS_PLAYER_SHIELD_TICKS,
   SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
   SPACE_INVADERS_POWER_UP_SHIELD_TICKS,
   SPACE_INVADERS_SCORE_POPUP_TICKS,
 } from "./space-invaders/constants";
+import { finalizeSpaceInvadersMultiKillCombo } from "./space-invaders/effects";
 import { clamp, rectanglesIntersect } from "./space-invaders/geometry";
+import { advanceSpaceInvadersPlayerShots } from "./space-invaders/player-shots";
 import {
+  advanceSpaceInvadersPlayerBurst,
   createInitialSpaceInvadersPlayerState,
   hasSpaceInvadersPlayerShield,
   isSpaceInvadersPlayerRespawning,
+  isSpaceInvadersPlayerVolleyFinished,
   type SpaceInvadersPlayerOwnedState,
 } from "./space-invaders/player-state";
 import {
@@ -36,6 +41,7 @@ import {
   isInvaderShotDangerous,
 } from "./space-invaders/projectiles";
 import { getRandomIndex } from "./space-invaders/random";
+import { resetSpaceInvadersHitStreak } from "./space-invaders/scoring";
 import type { SpaceInvadersScoreTarget } from "./space-invaders/types";
 
 export const SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS = [
@@ -121,6 +127,16 @@ export type SpaceInvadersMultiplayerGameSnapshot =
 
 export type SpaceInvadersMultiplayerRoomSnapshot =
   MultiplayerRealtimeRoomSnapshot<SpaceInvadersMultiplayerGameSnapshot>;
+
+export type SpaceInvadersMultiplayerHeldInput = {
+  fire?: boolean;
+  left?: boolean;
+  right?: boolean;
+};
+
+export type SpaceInvadersMultiplayerHeldInputs = Readonly<
+  Partial<Record<SpaceInvadersShipSeat, SpaceInvadersMultiplayerHeldInput>>
+>;
 
 export function createInitialSpaceInvadersMultiplayerGame(
   options: CreateSpaceInvadersMultiplayerGameOptions = {},
@@ -243,6 +259,61 @@ export function fireSpaceInvadersMultiplayerShipShot(
   };
 }
 
+export function applySpaceInvadersMultiplayerHeldInputs(
+  game: SpaceInvadersMultiplayerGameState,
+  inputs: SpaceInvadersMultiplayerHeldInputs = {},
+): SpaceInvadersMultiplayerGameState {
+  let nextGame = game;
+
+  for (const seat of SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS) {
+    const input = inputs[seat];
+
+    if (input?.left === true && input.right !== true) {
+      nextGame = moveSpaceInvadersMultiplayerShipLeft(nextGame, seat);
+    } else if (input?.right === true && input.left !== true) {
+      nextGame = moveSpaceInvadersMultiplayerShipRight(nextGame, seat);
+    }
+  }
+
+  for (const seat of SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS) {
+    if (inputs[seat]?.fire === true) {
+      nextGame = fireSpaceInvadersMultiplayerShipShot(nextGame, seat);
+    }
+  }
+
+  return nextGame;
+}
+
+export function advanceSpaceInvadersMultiplayerGameTick(
+  game: SpaceInvadersMultiplayerGameState,
+  inputs: SpaceInvadersMultiplayerHeldInputs = {},
+  random: SpaceInvadersRandomSource = Math.random,
+): SpaceInvadersMultiplayerGameState {
+  if (game.status !== "running") {
+    return game;
+  }
+
+  const gameAfterInput = applySpaceInvadersMultiplayerHeldInputs(game, inputs);
+  const gameAfterPowerUps = advanceSpaceInvadersMultiplayerPowerUps(
+    gameAfterInput,
+    random,
+  );
+  const gameAfterPlayerShots = advanceSpaceInvadersMultiplayerPlayerShots(
+    gameAfterPowerUps,
+    random,
+  );
+  const gameAfterPlayerBursts =
+    advanceSpaceInvadersMultiplayerPlayerBursts(gameAfterPlayerShots);
+  const gameAfterMultiKillCombo =
+    finalizeSpaceInvadersMultiplayerMultiKillComboIfVolleysEnded(
+      gameAfterPlayerBursts,
+    );
+  const gameAfterPlayerVolleys =
+    finalizeSpaceInvadersMultiplayerPlayerVolleys(gameAfterMultiKillCombo);
+
+  return advanceSpaceInvadersMultiplayerShipRecovery(gameAfterPlayerVolleys);
+}
+
 export function resolveSpaceInvadersMultiplayerInvaderShotHits(
   game: SpaceInvadersMultiplayerGameState,
   random: SpaceInvadersRandomSource = Math.random,
@@ -341,6 +412,271 @@ export function resolveSpaceInvadersMultiplayerPowerUpPickup(
   return {
     ...nextGame,
     powerUps: remainingPowerUps,
+  };
+}
+
+function advanceSpaceInvadersMultiplayerPowerUps(
+  game: SpaceInvadersMultiplayerGameState,
+  random: SpaceInvadersRandomSource,
+): SpaceInvadersMultiplayerGameState {
+  if (game.powerUps.length === 0) {
+    return game;
+  }
+
+  let nextGame = game;
+  const activePowerUps: SpaceInvadersPowerUp[] = [];
+
+  for (const powerUp of game.powerUps) {
+    const movedPowerUp = {
+      ...powerUp,
+      y: powerUp.y + powerUp.velocityY,
+    };
+    const recipient = getSpaceInvadersMultiplayerPowerUpRecipient(
+      nextGame,
+      movedPowerUp,
+      random,
+    );
+
+    if (recipient !== null) {
+      nextGame = applySpaceInvadersMultiplayerPowerUp(
+        nextGame,
+        recipient,
+        movedPowerUp,
+      );
+      continue;
+    }
+
+    if (movedPowerUp.y <= game.boardHeight) {
+      activePowerUps.push(movedPowerUp);
+    }
+  }
+
+  return {
+    ...nextGame,
+    powerUps: activePowerUps,
+  };
+}
+
+function advanceSpaceInvadersMultiplayerPlayerShots(
+  game: SpaceInvadersMultiplayerGameState,
+  random: SpaceInvadersRandomSource,
+): SpaceInvadersMultiplayerGameState {
+  let nextGame = game;
+
+  for (const seat of SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS) {
+    if (nextGame.ships[seat].playerShots.length === 0) {
+      continue;
+    }
+
+    nextGame = applySpaceInvadersSoloProjection(
+      nextGame,
+      seat,
+      advanceSpaceInvadersPlayerShots(
+        createSpaceInvadersSoloProjection(nextGame, seat),
+        random,
+      ),
+    );
+  }
+
+  return nextGame;
+}
+
+function advanceSpaceInvadersMultiplayerPlayerBursts(
+  game: SpaceInvadersMultiplayerGameState,
+): SpaceInvadersMultiplayerGameState {
+  let nextGame = game;
+
+  for (const seat of SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS) {
+    const ship = nextGame.ships[seat];
+
+    if (!ship.isActive || ship.playerBurst === null) {
+      continue;
+    }
+
+    nextGame = applySpaceInvadersSoloProjection(
+      nextGame,
+      seat,
+      advanceSpaceInvadersPlayerBurst(
+        createSpaceInvadersSoloProjection(nextGame, seat),
+      ),
+    );
+  }
+
+  return nextGame;
+}
+
+function finalizeSpaceInvadersMultiplayerMultiKillComboIfVolleysEnded(
+  game: SpaceInvadersMultiplayerGameState,
+): SpaceInvadersMultiplayerGameState {
+  if (
+    game.multiKillCombo === null ||
+    !areSpaceInvadersMultiplayerPlayerVolleysFinished(game)
+  ) {
+    return game;
+  }
+
+  return applySpaceInvadersSoloSharedState(
+    game,
+    finalizeSpaceInvadersMultiKillCombo(
+      createSpaceInvadersSoloProjection(game, "ship-a"),
+    ),
+  );
+}
+
+function finalizeSpaceInvadersMultiplayerPlayerVolleys(
+  game: SpaceInvadersMultiplayerGameState,
+): SpaceInvadersMultiplayerGameState {
+  let nextGame = game;
+
+  for (const seat of SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS) {
+    const ship = nextGame.ships[seat];
+
+    if (!isSpaceInvadersPlayerVolleyFinished(ship)) {
+      continue;
+    }
+
+    const shouldResetHitStreak =
+      ship.playerVolleyHasUnscoredExit &&
+      !ship.playerVolleyHasScored &&
+      !ship.playerVolleyHasArmoredHit;
+
+    if (shouldResetHitStreak) {
+      nextGame = applySpaceInvadersSoloSharedState(
+        nextGame,
+        resetSpaceInvadersHitStreak(
+          createSpaceInvadersSoloProjection(nextGame, seat),
+        ),
+      );
+    }
+
+    if (
+      !ship.playerVolleyHasArmoredHit &&
+      !ship.playerVolleyHasScored &&
+      !ship.playerVolleyHasUnscoredExit
+    ) {
+      continue;
+    }
+
+    nextGame = updateSpaceInvadersMultiplayerShip(nextGame, seat, {
+      ...nextGame.ships[seat],
+      playerVolleyHasArmoredHit: false,
+      playerVolleyHasScored: false,
+      playerVolleyHasUnscoredExit: false,
+    });
+  }
+
+  return nextGame;
+}
+
+function areSpaceInvadersMultiplayerPlayerVolleysFinished(
+  game: SpaceInvadersMultiplayerGameState,
+) {
+  return SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS.every((seat) =>
+    isSpaceInvadersPlayerVolleyFinished(game.ships[seat]),
+  );
+}
+
+function advanceSpaceInvadersMultiplayerShipRecovery(
+  game: SpaceInvadersMultiplayerGameState,
+): SpaceInvadersMultiplayerGameState {
+  let nextShips = game.ships;
+
+  for (const seat of SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS) {
+    const ship = nextShips[seat];
+
+    if (!ship.isActive) {
+      continue;
+    }
+
+    if (isSpaceInvadersPlayerRespawning(ship)) {
+      const playerRespawnTicks = ship.playerRespawnTicks - 1;
+
+      nextShips = {
+        ...nextShips,
+        [seat]: {
+          ...ship,
+          playerRespawnTicks,
+          playerShieldTicks:
+            playerRespawnTicks === 0
+              ? SPACE_INVADERS_PLAYER_SHIELD_TICKS
+              : ship.playerShieldTicks,
+        },
+      };
+      continue;
+    }
+
+    if (hasSpaceInvadersPlayerShield(ship)) {
+      nextShips = {
+        ...nextShips,
+        [seat]: {
+          ...ship,
+          playerShieldTicks: ship.playerShieldTicks - 1,
+        },
+      };
+    }
+  }
+
+  return nextShips === game.ships
+    ? game
+    : {
+        ...game,
+        ships: nextShips,
+      };
+}
+
+function createSpaceInvadersSoloProjection(
+  game: SpaceInvadersMultiplayerGameState,
+  seat: SpaceInvadersShipSeat,
+): SpaceInvadersGameState {
+  const { ships, ...sharedGame } = game;
+  const ship = ships[seat];
+
+  return {
+    ...sharedGame,
+    pendingShotPowerUp: ship.pendingShotPowerUp,
+    player: ship.player,
+    playerBurst: ship.playerBurst,
+    playerRespawnTicks: ship.playerRespawnTicks,
+    playerShieldTicks: ship.playerShieldTicks,
+    playerShots: ship.playerShots,
+    playerVolleyHasArmoredHit: ship.playerVolleyHasArmoredHit,
+    playerVolleyHasScored: ship.playerVolleyHasScored,
+    playerVolleyHasUnscoredExit: ship.playerVolleyHasUnscoredExit,
+  };
+}
+
+function applySpaceInvadersSoloProjection(
+  game: SpaceInvadersMultiplayerGameState,
+  seat: SpaceInvadersShipSeat,
+  projectedGame: SpaceInvadersGameState,
+): SpaceInvadersMultiplayerGameState {
+  return {
+    ...applySpaceInvadersSoloSharedState(game, projectedGame),
+    ships: {
+      ...game.ships,
+      [seat]: {
+        ...game.ships[seat],
+        pendingShotPowerUp: projectedGame.pendingShotPowerUp,
+        player: projectedGame.player,
+        playerBurst: projectedGame.playerBurst,
+        playerRespawnTicks: projectedGame.playerRespawnTicks,
+        playerShieldTicks: projectedGame.playerShieldTicks,
+        playerShots: projectedGame.playerShots,
+        playerVolleyHasArmoredHit: projectedGame.playerVolleyHasArmoredHit,
+        playerVolleyHasScored: projectedGame.playerVolleyHasScored,
+        playerVolleyHasUnscoredExit: projectedGame.playerVolleyHasUnscoredExit,
+      },
+    },
+  };
+}
+
+function applySpaceInvadersSoloSharedState(
+  game: SpaceInvadersMultiplayerGameState,
+  projectedGame: SpaceInvadersGameState,
+): SpaceInvadersMultiplayerGameState {
+  return {
+    ...game,
+    ...pickSpaceInvadersMultiplayerSharedState(projectedGame),
   };
 }
 
