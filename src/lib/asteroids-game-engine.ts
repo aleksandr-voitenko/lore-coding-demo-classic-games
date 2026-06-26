@@ -66,6 +66,7 @@ import {
 } from "./asteroids/saucers";
 import {
   advanceShip,
+  createInitialAsteroidsShipOwnedState,
   createCenteredShip,
   createShipExplosion,
 } from "./asteroids/ship";
@@ -78,6 +79,8 @@ import type {
   AsteroidsGameState,
   AsteroidsRandom,
   AsteroidsSaucer,
+  AsteroidsSharedWorldState,
+  AsteroidsShipOwnedState,
   CreateAsteroidsGameOptions,
 } from "./asteroids/types";
 
@@ -95,8 +98,10 @@ export type {
   AsteroidsSaucer,
   AsteroidsSaucerKind,
   AsteroidsSaucerShot,
+  AsteroidsSharedWorldState,
   AsteroidsShip,
   AsteroidsShipExplosion,
+  AsteroidsShipOwnedState,
   AsteroidsStatus,
   AsteroidSize,
   CreateAsteroidsGameOptions,
@@ -121,10 +126,11 @@ export function createInitialAsteroidsGame({
     asteroids: spawned.asteroids,
     boardHeight: ASTEROIDS_BOARD_HEIGHT,
     boardWidth: ASTEROIDS_BOARD_WIDTH,
-    bulletSpeedMultiplier: 1,
-    bullets: [],
+    ...createInitialAsteroidsShipOwnedState(
+      ASTEROIDS_BOARD_WIDTH,
+      ASTEROIDS_BOARD_HEIGHT,
+    ),
     difficulty: normalizedDifficulty,
-    engineSpeedMultiplier: 1,
     lives: difficultySettings.lives,
     nextAsteroidId: spawned.nextAsteroidId,
     nextBulletId: 0,
@@ -133,15 +139,10 @@ export function createInitialAsteroidsGame({
     nextSaucerId: 0,
     powerUp: null,
     powerUpSpawnCooldownTicks: ASTEROIDS_POWER_UP_MIN_SPAWN_TICKS,
-    respawnInvulnerabilityTicks: 0,
     saucer: null,
     saucerBullets: [],
     saucerSpawnCooldownTicks: difficultySettings.saucerInitialSpawnTicks,
     score: 0,
-    ship: createCenteredShip(ASTEROIDS_BOARD_WIDTH, ASTEROIDS_BOARD_HEIGHT),
-    shipExplosion: null,
-    shotCooldownTicks: 0,
-    shotIntervalMultiplier: 1,
     startingAsteroidCount: difficultySettings.asteroidCount,
     status: "ready",
     wave: 1,
@@ -238,11 +239,10 @@ export function getAsteroidsTickDelay() {
 
 function advanceAsteroidsWorld(
   game: Pick<
-    AsteroidsGameState,
+    AsteroidsSharedWorldState,
     | "asteroids"
     | "boardHeight"
     | "boardWidth"
-    | "bullets"
     | "difficulty"
     | "nextAsteroidId"
     | "nextSaucerBulletId"
@@ -250,12 +250,13 @@ function advanceAsteroidsWorld(
     | "saucer"
     | "saucerBullets"
     | "saucerSpawnCooldownTicks"
-    | "shotCooldownTicks"
-    | "ship"
-    | "shipExplosion"
     | "startingAsteroidCount"
     | "wave"
-  >,
+  > &
+    Pick<
+      AsteroidsShipOwnedState,
+      "bullets" | "shotCooldownTicks" | "ship" | "shipExplosion"
+    >,
   { random }: AdvanceAsteroidsGameOptions = {},
 ) {
   const bullets = advanceBullets(game);

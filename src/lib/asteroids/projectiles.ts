@@ -6,29 +6,59 @@ import {
   SHOT_COOLDOWN_TICKS,
 } from "./constants";
 import { getAngleVector, wrapCoordinate } from "./geometry";
+import {
+  applyAsteroidsShipOwnedState,
+  getAsteroidsShipOwnedState,
+} from "./ship";
 import type {
   AsteroidsBullet,
   AsteroidsGameState,
+  AsteroidsSharedWorldState,
   AsteroidsSaucerShot,
+  AsteroidsShipOwnedState,
 } from "./types";
 
+type AsteroidsShipBulletFireResult = {
+  nextBulletId: number;
+  shipState: AsteroidsShipOwnedState;
+};
+
 export function fireAsteroidsBullet(game: AsteroidsGameState): AsteroidsGameState {
-  if (
-    game.status !== "running" ||
-    game.shipExplosion !== null ||
-    game.shotCooldownTicks > 0 ||
-    game.bullets.length >= MAX_ACTIVE_BULLETS
-  ) {
+  const fired = fireAsteroidsShipBullet(game, getAsteroidsShipOwnedState(game));
+
+  if (fired === null) {
     return game;
   }
 
-  const heading = getAngleVector(game.ship.angle);
+  return {
+    ...applyAsteroidsShipOwnedState(game, fired.shipState),
+    nextBulletId: fired.nextBulletId,
+  };
+}
+
+export function fireAsteroidsShipBullet(
+  game: Pick<
+    AsteroidsGameState,
+    "boardHeight" | "boardWidth" | "nextBulletId" | "status"
+  >,
+  shipState: AsteroidsShipOwnedState,
+): AsteroidsShipBulletFireResult | null {
+  if (
+    game.status !== "running" ||
+    shipState.shipExplosion !== null ||
+    shipState.shotCooldownTicks > 0 ||
+    shipState.bullets.length >= MAX_ACTIVE_BULLETS
+  ) {
+    return null;
+  }
+
+  const heading = getAngleVector(shipState.ship.angle);
   const bulletX = wrapCoordinate(
-    game.ship.x + heading.x * (game.ship.radius + BULLET_RADIUS + 1),
+    shipState.ship.x + heading.x * (shipState.ship.radius + BULLET_RADIUS + 1),
     game.boardWidth,
   );
   const bulletY = wrapCoordinate(
-    game.ship.y + heading.y * (game.ship.radius + BULLET_RADIUS + 1),
+    shipState.ship.y + heading.y * (shipState.ship.radius + BULLET_RADIUS + 1),
     game.boardHeight,
   );
   const bullet: AsteroidsBullet = {
@@ -36,31 +66,36 @@ export function fireAsteroidsBullet(game: AsteroidsGameState): AsteroidsGameStat
     radius: BULLET_RADIUS,
     ttl: BULLET_TTL_TICKS,
     velocity: {
-      x: game.ship.velocity.x + heading.x * getBulletSpeed(game),
-      y: game.ship.velocity.y + heading.y * getBulletSpeed(game),
+      x: shipState.ship.velocity.x + heading.x * getBulletSpeed(shipState),
+      y: shipState.ship.velocity.y + heading.y * getBulletSpeed(shipState),
     },
     x: bulletX,
     y: bulletY,
   };
 
   return {
-    ...game,
-    bullets: [...game.bullets, bullet],
     nextBulletId: game.nextBulletId + 1,
-    shotCooldownTicks: getShotCooldownTicks(game),
+    shipState: {
+      ...shipState,
+      bullets: [...shipState.bullets, bullet],
+      shotCooldownTicks: getShotCooldownTicks(shipState),
+    },
   };
 }
 
-function getBulletSpeed(game: Pick<AsteroidsGameState, "bulletSpeedMultiplier">) {
+function getBulletSpeed(game: Pick<AsteroidsShipOwnedState, "bulletSpeedMultiplier">) {
   return BULLET_SPEED * game.bulletSpeedMultiplier;
 }
 
-function getShotCooldownTicks(game: Pick<AsteroidsGameState, "shotIntervalMultiplier">) {
+function getShotCooldownTicks(
+  game: Pick<AsteroidsShipOwnedState, "shotIntervalMultiplier">,
+) {
   return Math.max(1, Math.round(SHOT_COOLDOWN_TICKS * game.shotIntervalMultiplier));
 }
 
 export function advanceBullets(
-  game: Pick<AsteroidsGameState, "boardHeight" | "boardWidth" | "bullets">,
+  game: Pick<AsteroidsSharedWorldState, "boardHeight" | "boardWidth"> &
+    Pick<AsteroidsShipOwnedState, "bullets">,
 ) {
   return game.bullets
     .map((bullet) => ({
@@ -73,7 +108,10 @@ export function advanceBullets(
 }
 
 export function advanceSaucerBullets(
-  game: Pick<AsteroidsGameState, "boardHeight" | "boardWidth" | "saucerBullets">,
+  game: Pick<
+    AsteroidsSharedWorldState,
+    "boardHeight" | "boardWidth" | "saucerBullets"
+  >,
 ): AsteroidsSaucerShot[] {
   return game.saucerBullets
     .map((bullet) => ({

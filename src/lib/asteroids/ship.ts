@@ -15,15 +15,14 @@ import {
 import type {
   AsteroidsControlInput,
   AsteroidsGameState,
+  AsteroidsShipOwnedState,
   AsteroidsShip,
   AsteroidsShipExplosion,
 } from "./types";
 
 export function advanceShip(
-  game: Pick<
-    AsteroidsGameState,
-    "boardHeight" | "boardWidth" | "engineSpeedMultiplier" | "ship"
-  >,
+  game: Pick<AsteroidsGameState, "boardHeight" | "boardWidth"> &
+    Pick<AsteroidsShipOwnedState, "engineSpeedMultiplier" | "ship">,
   controls: AsteroidsControlInput,
 ): AsteroidsShip {
   const shouldRotateLeft = controls.rotateLeft === true && controls.rotateRight !== true;
@@ -62,12 +61,60 @@ export function advanceShip(
   };
 }
 
-function getShipMaxSpeed(game: Pick<AsteroidsGameState, "engineSpeedMultiplier">) {
+function getShipMaxSpeed(game: Pick<AsteroidsShipOwnedState, "engineSpeedMultiplier">) {
   return SHIP_MAX_SPEED * game.engineSpeedMultiplier;
 }
 
-function getShipThrust(game: Pick<AsteroidsGameState, "engineSpeedMultiplier">) {
+function getShipThrust(game: Pick<AsteroidsShipOwnedState, "engineSpeedMultiplier">) {
   return SHIP_THRUST * game.engineSpeedMultiplier;
+}
+
+export function createInitialAsteroidsShipOwnedState(
+  boardWidth: number,
+  boardHeight: number,
+): AsteroidsShipOwnedState {
+  return {
+    bulletSpeedMultiplier: 1,
+    bullets: [],
+    engineSpeedMultiplier: 1,
+    respawnInvulnerabilityTicks: 0,
+    ship: createCenteredShip(boardWidth, boardHeight),
+    shipExplosion: null,
+    shotCooldownTicks: 0,
+    shotIntervalMultiplier: 1,
+  };
+}
+
+export function getAsteroidsShipOwnedState(
+  game: AsteroidsShipOwnedState,
+): AsteroidsShipOwnedState {
+  return {
+    bulletSpeedMultiplier: game.bulletSpeedMultiplier,
+    bullets: game.bullets,
+    engineSpeedMultiplier: game.engineSpeedMultiplier,
+    respawnInvulnerabilityTicks: game.respawnInvulnerabilityTicks,
+    ship: game.ship,
+    shipExplosion: game.shipExplosion,
+    shotCooldownTicks: game.shotCooldownTicks,
+    shotIntervalMultiplier: game.shotIntervalMultiplier,
+  };
+}
+
+export function applyAsteroidsShipOwnedState(
+  game: AsteroidsGameState,
+  shipState: AsteroidsShipOwnedState,
+): AsteroidsGameState {
+  return {
+    ...game,
+    bulletSpeedMultiplier: shipState.bulletSpeedMultiplier,
+    bullets: shipState.bullets,
+    engineSpeedMultiplier: shipState.engineSpeedMultiplier,
+    respawnInvulnerabilityTicks: shipState.respawnInvulnerabilityTicks,
+    ship: shipState.ship,
+    shipExplosion: shipState.shipExplosion,
+    shotCooldownTicks: shipState.shotCooldownTicks,
+    shotIntervalMultiplier: shipState.shotIntervalMultiplier,
+  };
 }
 
 export function createShipExplosion(ship: AsteroidsShip): AsteroidsShipExplosion {

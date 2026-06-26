@@ -23,6 +23,10 @@ import {
   getWrappedDelta,
 } from "./geometry";
 import { getBonusLivesAwarded } from "./scoring";
+import {
+  applyAsteroidsShipOwnedState,
+  getAsteroidsShipOwnedState,
+} from "./ship";
 import type {
   AdvanceAsteroidsGameOptions,
   AsteroidsGameState,
@@ -92,31 +96,31 @@ function applyAsteroidsPowerUpEffect(
       };
     }
     case "bullet-speed":
-      return {
-        ...game,
+      return applyAsteroidsShipOwnedState(game, {
+        ...getAsteroidsShipOwnedState(game),
         bulletSpeedMultiplier:
           game.bulletSpeedMultiplier * ASTEROIDS_POWER_UP_SPEED_MULTIPLIER,
-      };
+      });
     case "engine-speed":
-      return {
-        ...game,
+      return applyAsteroidsShipOwnedState(game, {
+        ...getAsteroidsShipOwnedState(game),
         engineSpeedMultiplier:
           game.engineSpeedMultiplier * ASTEROIDS_POWER_UP_SPEED_MULTIPLIER,
-      };
+      });
     case "shield":
-      return {
-        ...game,
+      return applyAsteroidsShipOwnedState(game, {
+        ...getAsteroidsShipOwnedState(game),
         respawnInvulnerabilityTicks: Math.max(
           game.respawnInvulnerabilityTicks,
           ASTEROIDS_POWER_UP_SHIELD_TICKS,
         ),
-      };
+      });
     case "shot-interval":
-      return {
-        ...game,
+      return applyAsteroidsShipOwnedState(game, {
+        ...getAsteroidsShipOwnedState(game),
         shotIntervalMultiplier:
           game.shotIntervalMultiplier * ASTEROIDS_POWER_UP_SHOT_INTERVAL_MULTIPLIER,
-      };
+      });
   }
 }
 

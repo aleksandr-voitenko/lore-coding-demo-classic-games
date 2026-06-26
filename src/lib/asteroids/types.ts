@@ -112,6 +112,23 @@ export type AsteroidsGameState = {
   wave: number;
 };
 
+export type AsteroidsShipOwnedState = Pick<
+  AsteroidsGameState,
+  | "bulletSpeedMultiplier"
+  | "bullets"
+  | "engineSpeedMultiplier"
+  | "respawnInvulnerabilityTicks"
+  | "ship"
+  | "shipExplosion"
+  | "shotCooldownTicks"
+  | "shotIntervalMultiplier"
+>;
+
+export type AsteroidsSharedWorldState = Omit<
+  AsteroidsGameState,
+  keyof AsteroidsShipOwnedState
+>;
+
 export type CreateAsteroidsGameOptions = {
   difficulty?: AsteroidsDifficulty | string;
   random?: AsteroidsRandom;
