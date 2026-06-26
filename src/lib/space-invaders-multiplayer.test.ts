@@ -7,18 +7,33 @@ import {
   createPowerUpFixture,
   createScorePopupFixture,
   SPACE_INVADERS_COLUMNS,
+  SPACE_INVADERS_PLAYER_BURST_SHOT_COUNT,
+  SPACE_INVADERS_PLAYER_BURST_SHOT_DELAY_TICKS,
   SPACE_INVADERS_ROWS,
   SPACE_INVADERS_STARTING_LIVES,
 } from "./space-invaders-game-engine.test-helpers";
 import {
   cloneSpaceInvadersMultiplayerGame,
   createInitialSpaceInvadersMultiplayerGame,
+  fireSpaceInvadersMultiplayerShipShot,
   isSpaceInvadersShipSeat,
+  moveSpaceInvadersMultiplayerShip,
   SPACE_INVADERS_MULTIPLAYER_ROOM_SEATS,
   SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS,
   type SpaceInvadersMultiplayerGameSnapshot,
+  type SpaceInvadersMultiplayerGameState,
   type SpaceInvadersMultiplayerRoomSnapshot,
 } from "./space-invaders-multiplayer";
+
+function createRunningSpaceInvadersMultiplayerGame(
+  overrides: Partial<SpaceInvadersMultiplayerGameState> = {},
+): SpaceInvadersMultiplayerGameState {
+  return {
+    ...createInitialSpaceInvadersMultiplayerGame({ random: () => 0 }),
+    status: "running",
+    ...overrides,
+  };
+}
 
 describe("space invaders multiplayer state model", () => {
   it("creates a separate two-ship state from the shared solo wave defaults", () => {
@@ -90,6 +105,207 @@ describe("space invaders multiplayer state model", () => {
     expect(shipB.playerVolleyHasScored).toBe(false);
     expect(shipA.playerVolleyHasUnscoredExit).toBe(false);
     expect(shipB.playerVolleyHasUnscoredExit).toBe(false);
+  });
+
+  it("moves each ship independently and clamps to the side walls", () => {
+    const game = createInitialSpaceInvadersMultiplayerGame();
+    const movedA = moveSpaceInvadersMultiplayerShip(game, "ship-a", -1_000);
+    const invalidSeatMove = moveSpaceInvadersMultiplayerShip(movedA, "left", -1_000);
+    const movedB = moveSpaceInvadersMultiplayerShip(movedA, "ship-b", 1_000);
+    const unchangedAtWall = moveSpaceInvadersMultiplayerShip(movedB, "ship-b", 1_000);
+
+    expect(movedA.ships["ship-a"].player.x).toBe(0);
+    expect(movedA.ships["ship-a"]).not.toBe(game.ships["ship-a"]);
+    expect(movedA.ships["ship-b"]).toBe(game.ships["ship-b"]);
+    expect(invalidSeatMove).toBe(movedA);
+    expect(movedB.ships["ship-b"].player.x).toBe(
+      movedB.boardWidth - movedB.ships["ship-b"].player.width,
+    );
+    expect(movedB.ships["ship-a"]).toBe(movedA.ships["ship-a"]);
+    expect(unchangedAtWall).toBe(movedB);
+  });
+
+  it("does not treat the other ship as a movement obstacle", () => {
+    const initialGame = createInitialSpaceInvadersMultiplayerGame();
+    const shipB = initialGame.ships["ship-b"];
+    const overlappingGame: SpaceInvadersMultiplayerGameState = {
+      ...initialGame,
+      ships: {
+        ...initialGame.ships,
+        "ship-a": {
+          ...initialGame.ships["ship-a"],
+          player: {
+            ...initialGame.ships["ship-a"].player,
+            x: shipB.player.x - 4,
+          },
+        },
+      },
+    };
+    const moved = moveSpaceInvadersMultiplayerShip(overlappingGame, "ship-a", 8);
+
+    expect(moved.ships["ship-a"].player.x).toBe(shipB.player.x + 4);
+    expect(moved.ships["ship-a"].player.x).toBeLessThan(
+      shipB.player.x + shipB.player.width,
+    );
+    expect(moved.ships["ship-b"]).toBe(overlappingGame.ships["ship-b"]);
+  });
+
+  it("fires each ship independently with globally unique player shot ids", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame();
+    const shotgunReadyGame: SpaceInvadersMultiplayerGameState = {
+      ...initialGame,
+      ships: {
+        ...initialGame.ships,
+        "ship-a": {
+          ...initialGame.ships["ship-a"],
+          pendingShotPowerUp: "shotgun-shot",
+        },
+      },
+    };
+    const firedA = fireSpaceInvadersMultiplayerShipShot(
+      shotgunReadyGame,
+      "ship-a",
+    );
+    const invalidSeatFire = fireSpaceInvadersMultiplayerShipShot(firedA, "left");
+    const firedB = fireSpaceInvadersMultiplayerShipShot(firedA, "ship-b");
+
+    expect(firedA.ships["ship-a"].pendingShotPowerUp).toBeNull();
+    expect(firedA.ships["ship-a"].playerShots.map((shot) => shot.id)).toEqual([
+      "player-shot-0",
+      "player-shot-1",
+      "player-shot-2",
+      "player-shot-3",
+      "player-shot-4",
+    ]);
+    expect(firedA.ships["ship-a"].playerShots.map((shot) => shot.kind)).toEqual([
+      "shotgun",
+      "shotgun",
+      "shotgun",
+      "shotgun",
+      "shotgun",
+    ]);
+    expect(firedA.ships["ship-b"].playerShots).toEqual([]);
+    expect(firedA.nextPlayerShotId).toBe(5);
+    expect(invalidSeatFire).toBe(firedA);
+    expect(firedB.ships["ship-a"]).toBe(firedA.ships["ship-a"]);
+    expect(firedB.ships["ship-b"].playerShots).toHaveLength(1);
+    expect(firedB.ships["ship-b"].playerShots[0]).toMatchObject({
+      id: "player-shot-5",
+      kind: "standard",
+    });
+    expect(firedB.nextPlayerShotId).toBe(6);
+  });
+
+  it("blocks only the firing ship when that ship already has a shot or burst", () => {
+    const game = createRunningSpaceInvadersMultiplayerGame();
+    const firedA = fireSpaceInvadersMultiplayerShipShot(game, "ship-a");
+    const blockedByActiveShot = fireSpaceInvadersMultiplayerShipShot(
+      firedA,
+      "ship-a",
+    );
+    const firedBAfterActiveShot = fireSpaceInvadersMultiplayerShipShot(
+      blockedByActiveShot,
+      "ship-b",
+    );
+    const burstBlockedGame: SpaceInvadersMultiplayerGameState = {
+      ...game,
+      nextPlayerShotId: 10,
+      ships: {
+        ...game.ships,
+        "ship-a": {
+          ...game.ships["ship-a"],
+          playerBurst: {
+            cooldownTicks: 1,
+            remainingShots: 1,
+          },
+        },
+      },
+    };
+    const blockedByBurst = fireSpaceInvadersMultiplayerShipShot(
+      burstBlockedGame,
+      "ship-a",
+    );
+    const firedBAfterBurst = fireSpaceInvadersMultiplayerShipShot(
+      blockedByBurst,
+      "ship-b",
+    );
+
+    expect(blockedByActiveShot).toBe(firedA);
+    expect(firedBAfterActiveShot.ships["ship-b"].playerShots[0]).toMatchObject({
+      id: "player-shot-1",
+      kind: "standard",
+    });
+    expect(firedBAfterActiveShot.nextPlayerShotId).toBe(2);
+    expect(blockedByBurst).toBe(burstBlockedGame);
+    expect(firedBAfterBurst.ships["ship-a"]).toBe(burstBlockedGame.ships["ship-a"]);
+    expect(firedBAfterBurst.ships["ship-b"].playerShots[0]).toMatchObject({
+      id: "player-shot-10",
+      kind: "standard",
+    });
+    expect(firedBAfterBurst.nextPlayerShotId).toBe(11);
+  });
+
+  it("respects game status and per-ship respawn gates", () => {
+    const readyGame = createInitialSpaceInvadersMultiplayerGame();
+    const runningGame = createRunningSpaceInvadersMultiplayerGame();
+    const respawningGame: SpaceInvadersMultiplayerGameState = {
+      ...runningGame,
+      ships: {
+        ...runningGame.ships,
+        "ship-a": {
+          ...runningGame.ships["ship-a"],
+          playerRespawnTicks: 2,
+        },
+      },
+    };
+    const movedB = moveSpaceInvadersMultiplayerShip(respawningGame, "ship-b", 10);
+    const firedB = fireSpaceInvadersMultiplayerShipShot(respawningGame, "ship-b");
+
+    expect(fireSpaceInvadersMultiplayerShipShot(readyGame, "ship-a")).toBe(
+      readyGame,
+    );
+    expect(moveSpaceInvadersMultiplayerShip(respawningGame, "ship-a", 10)).toBe(
+      respawningGame,
+    );
+    expect(fireSpaceInvadersMultiplayerShipShot(respawningGame, "ship-a")).toBe(
+      respawningGame,
+    );
+    expect(movedB.ships["ship-b"].player.x).toBe(
+      respawningGame.ships["ship-b"].player.x + 10,
+    );
+    expect(firedB.ships["ship-b"].playerShots[0]).toMatchObject({
+      id: "player-shot-0",
+      kind: "standard",
+    });
+  });
+
+  it("sets up pending burst shots for only the firing ship", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame();
+    const burstReadyGame: SpaceInvadersMultiplayerGameState = {
+      ...initialGame,
+      nextPlayerShotId: 7,
+      ships: {
+        ...initialGame.ships,
+        "ship-b": {
+          ...initialGame.ships["ship-b"],
+          pendingShotPowerUp: "burst-shot",
+        },
+      },
+    };
+    const fired = fireSpaceInvadersMultiplayerShipShot(burstReadyGame, "ship-b");
+    const firedShot = fired.ships["ship-b"].playerShots[0]!;
+
+    expect(fired.ships["ship-a"]).toBe(burstReadyGame.ships["ship-a"]);
+    expect(fired.ships["ship-b"].pendingShotPowerUp).toBeNull();
+    expect(fired.ships["ship-b"].playerBurst).toEqual({
+      cooldownTicks: SPACE_INVADERS_PLAYER_BURST_SHOT_DELAY_TICKS,
+      remainingShots: SPACE_INVADERS_PLAYER_BURST_SHOT_COUNT - 1,
+    });
+    expect(firedShot).toMatchObject({
+      id: "player-shot-7",
+      kind: "burst",
+    });
+    expect(fired.nextPlayerShotId).toBe(8);
   });
 
   it("exposes stable room seat metadata and snapshot-friendly types", () => {

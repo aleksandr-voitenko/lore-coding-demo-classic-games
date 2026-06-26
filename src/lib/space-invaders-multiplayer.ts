@@ -8,10 +8,17 @@ import {
   type SpaceInvadersGameState,
   type SpaceInvadersPlayerShot,
 } from "./space-invaders-game-engine";
+import { PLAYER_SPEED } from "./space-invaders/constants";
+import { clamp } from "./space-invaders/geometry";
 import {
   createInitialSpaceInvadersPlayerState,
+  isSpaceInvadersPlayerRespawning,
   type SpaceInvadersPlayerOwnedState,
 } from "./space-invaders/player-state";
+import {
+  createInitialPlayerBurstState,
+  createPlayerShots,
+} from "./space-invaders/projectiles";
 
 export const SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS = [
   "ship-a",
@@ -139,6 +146,84 @@ export function isSpaceInvadersShipSeat(
   );
 }
 
+export function moveSpaceInvadersMultiplayerShip(
+  game: SpaceInvadersMultiplayerGameState,
+  seat: unknown,
+  deltaX: number,
+): SpaceInvadersMultiplayerGameState {
+  if (!isSpaceInvadersShipSeat(seat)) {
+    return game;
+  }
+
+  const ship = game.ships[seat];
+
+  if (!canMoveSpaceInvadersMultiplayerShip(game, ship)) {
+    return game;
+  }
+
+  const nextX = clamp(ship.player.x + deltaX, 0, game.boardWidth - ship.player.width);
+
+  if (nextX === ship.player.x) {
+    return game;
+  }
+
+  return updateSpaceInvadersMultiplayerShip(game, seat, {
+    ...ship,
+    player: {
+      ...ship.player,
+      x: nextX,
+    },
+  });
+}
+
+export function moveSpaceInvadersMultiplayerShipLeft(
+  game: SpaceInvadersMultiplayerGameState,
+  seat: unknown,
+): SpaceInvadersMultiplayerGameState {
+  return moveSpaceInvadersMultiplayerShip(game, seat, -PLAYER_SPEED);
+}
+
+export function moveSpaceInvadersMultiplayerShipRight(
+  game: SpaceInvadersMultiplayerGameState,
+  seat: unknown,
+): SpaceInvadersMultiplayerGameState {
+  return moveSpaceInvadersMultiplayerShip(game, seat, PLAYER_SPEED);
+}
+
+export function fireSpaceInvadersMultiplayerShipShot(
+  game: SpaceInvadersMultiplayerGameState,
+  seat: unknown,
+): SpaceInvadersMultiplayerGameState {
+  if (!isSpaceInvadersShipSeat(seat)) {
+    return game;
+  }
+
+  const ship = game.ships[seat];
+
+  if (!canFireSpaceInvadersMultiplayerShipShot(game, ship)) {
+    return game;
+  }
+
+  const createdShots = createPlayerShots(
+    ship.player,
+    game.nextPlayerShotId,
+    ship.pendingShotPowerUp,
+  );
+
+  return {
+    ...updateSpaceInvadersMultiplayerShip(game, seat, {
+      ...ship,
+      pendingShotPowerUp: null,
+      playerBurst:
+        ship.pendingShotPowerUp === "burst-shot"
+          ? createInitialPlayerBurstState(createdShots.length)
+          : null,
+      playerShots: createdShots,
+    }),
+    nextPlayerShotId: game.nextPlayerShotId + createdShots.length,
+  };
+}
+
 function createInitialSpaceInvadersMultiplayerShips(
   boardWidth: number,
   boardHeight: number,
@@ -174,6 +259,43 @@ function getInitialSpaceInvadersShipX(
   const centerX = seat === "ship-a" ? boardWidth / 3 : (boardWidth * 2) / 3;
 
   return centerX - shipWidth / 2;
+}
+
+function canMoveSpaceInvadersMultiplayerShip(
+  game: Pick<SpaceInvadersMultiplayerGameState, "status">,
+  ship: SpaceInvadersShipState,
+) {
+  return (
+    game.status !== "lost" &&
+    game.status !== "won" &&
+    !isSpaceInvadersPlayerRespawning(ship)
+  );
+}
+
+function canFireSpaceInvadersMultiplayerShipShot(
+  game: Pick<SpaceInvadersMultiplayerGameState, "status">,
+  ship: SpaceInvadersShipState,
+) {
+  return (
+    game.status === "running" &&
+    !isSpaceInvadersPlayerRespawning(ship) &&
+    ship.playerBurst === null &&
+    ship.playerShots.length === 0
+  );
+}
+
+function updateSpaceInvadersMultiplayerShip(
+  game: SpaceInvadersMultiplayerGameState,
+  seat: SpaceInvadersShipSeat,
+  ship: SpaceInvadersShipState,
+): SpaceInvadersMultiplayerGameState {
+  return {
+    ...game,
+    ships: {
+      ...game.ships,
+      [seat]: ship,
+    },
+  };
 }
 
 function pickSpaceInvadersMultiplayerSharedState(
