@@ -7,6 +7,8 @@ import {
   SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS,
   type SpaceInvadersGameState,
   type SpaceInvaderKind,
+  type SpaceInvadersPlayer,
+  type SpaceInvadersPlayerShot,
 } from "@/lib/space-invaders-game-engine";
 import {
   getExplosionSpriteSrc,
@@ -23,7 +25,6 @@ import {
   explosionSpriteClassNames,
   getBoardEntityStyle,
   getInvaderShotRenderStyle,
-  getPlayerShieldStyle,
   getScorePopupNumberStyle,
   getScorePopupTextStyle,
   getShieldTethers,
@@ -40,9 +41,43 @@ export {
   spaceInvaderSprites,
 } from "@/components/space-invaders-board-assets";
 
+export type SpaceInvadersBoardShip = {
+  id: string;
+  isActive?: boolean;
+  player: SpaceInvadersPlayer;
+  playerRespawnTicks: number;
+  playerShieldTicks: number;
+  playerShots: readonly SpaceInvadersPlayerShot[];
+};
+
+type SpaceInvadersBoardGame = Pick<
+  SpaceInvadersGameState,
+  | "baseY"
+  | "boardHeight"
+  | "boardWidth"
+  | "explosions"
+  | "invaderShots"
+  | "invaders"
+  | "lives"
+  | "powerUps"
+  | "revengeVolleys"
+  | "score"
+  | "scorePopups"
+  | "status"
+  | "ufo"
+> &
+  Partial<
+    Pick<
+      SpaceInvadersGameState,
+      "player" | "playerRespawnTicks" | "playerShieldTicks" | "playerShots"
+    >
+  >;
+
 type SpaceInvadersBoardProps = {
   children?: ReactNode;
-  game: SpaceInvadersGameState;
+  fillViewport?: boolean;
+  game: SpaceInvadersBoardGame;
+  ships?: readonly SpaceInvadersBoardShip[];
   statusLabel: string;
 };
 
@@ -67,9 +102,57 @@ function getInvaderModifier(kind: SpaceInvaderKind) {
   return null;
 }
 
+function getSoloSpaceInvadersBoardShips(
+  game: SpaceInvadersBoardGame,
+): SpaceInvadersBoardShip[] {
+  if (
+    game.player === undefined ||
+    game.playerRespawnTicks === undefined ||
+    game.playerShieldTicks === undefined ||
+    game.playerShots === undefined
+  ) {
+    return [];
+  }
+
+  return [
+    {
+      id: "player",
+      player: game.player,
+      playerRespawnTicks: game.playerRespawnTicks,
+      playerShieldTicks: game.playerShieldTicks,
+      playerShots: game.playerShots,
+    },
+  ];
+}
+
+function isSpaceInvadersBoardShipVisible(
+  game: SpaceInvadersBoardGame,
+  ship: SpaceInvadersBoardShip,
+) {
+  return (ship.isActive ?? true) && game.status !== "lost" && ship.playerRespawnTicks === 0;
+}
+
+function getSpaceInvadersBoardShipShieldStyle(
+  game: SpaceInvadersBoardGame,
+  ship: SpaceInvadersBoardShip,
+) {
+  const diameter = Math.max(ship.player.width, ship.player.height) + 24;
+
+  return getBoardEntityStyle({
+    boardHeight: game.boardHeight,
+    boardWidth: game.boardWidth,
+    height: diameter,
+    width: diameter,
+    x: ship.player.x + ship.player.width / 2 - diameter / 2,
+    y: ship.player.y + ship.player.height / 2 - diameter / 2,
+  });
+}
+
 export function SpaceInvadersBoard({
   children,
+  fillViewport = true,
   game,
+  ships,
   statusLabel,
 }: SpaceInvadersBoardProps) {
   const activeInvaderCount = game.invaders.filter((invader) => invader.isActive).length;
@@ -78,11 +161,13 @@ export function SpaceInvadersBoard({
     activePowerUpCount === 1
       ? "1 power up falling"
       : `${activePowerUpCount} power ups falling`;
-  const isPlayerVisible = game.status !== "lost" && game.playerRespawnTicks === 0;
-  const isPlayerShieldVisible = isPlayerVisible && game.playerShieldTicks > 0;
-  const isPlayerShieldFlashing =
-    isPlayerShieldVisible &&
-    game.playerShieldTicks <= SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS;
+  const boardShips = ships ?? getSoloSpaceInvadersBoardShips(game);
+  const boardPlayerShots = boardShips.flatMap((ship) =>
+    ship.playerShots.map((shot) => ({
+      ship,
+      shot,
+    })),
+  );
   const revengeAuraInvaderIds = new Set(
     game.revengeVolleys.flatMap((volley) => volley.invaderIds),
   );
@@ -91,7 +176,10 @@ export function SpaceInvadersBoard({
   return (
     <div
       data-testid="space-invaders-board-frame"
-      className="relative h-svh w-full overflow-hidden rounded-md border border-[var(--invaders-board-border)] bg-[var(--invaders-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--invaders-board)_26%,transparent)]"
+      className={cn(
+        "relative w-full overflow-hidden rounded-md border border-[var(--invaders-board-border)] bg-[var(--invaders-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--invaders-board)_26%,transparent)]",
+        fillViewport && "h-svh",
+      )}
       style={{ aspectRatio: `${game.boardWidth} / ${game.boardHeight}` }}
     >
       <div
@@ -243,13 +331,14 @@ export function SpaceInvadersBoard({
           />
         ) : null}
 
-        {game.playerShots.map((shot) => (
+        {boardPlayerShots.map(({ ship, shot }) => (
           <span
             aria-hidden="true"
             className="absolute left-0 top-0 bg-contain bg-center bg-no-repeat drop-shadow-[0_0_12px_color-mix(in_oklch,var(--invaders-shot)_72%,transparent)] will-change-transform [image-rendering:pixelated]"
             data-player-shot-kind={shot.kind}
+            data-ship-id={ship.id}
             data-testid="space-invaders-player-shot"
-            key={shot.id}
+            key={`${ship.id}:${shot.id}`}
             style={{
               backgroundImage: `url("${getPlayerShotSpriteSrc(shot.kind)}")`,
               ...getBoardEntityStyle({
@@ -299,41 +388,60 @@ export function SpaceInvadersBoard({
           />
         ))}
 
-        {isPlayerShieldVisible ? (
-          <span
-            aria-hidden="true"
-            className="space-invaders-player-shield absolute left-0 top-0 will-change-transform"
-            data-shield-flashing={isPlayerShieldFlashing ? "true" : "false"}
-            data-testid="space-invaders-player-shield"
-            style={getPlayerShieldStyle(game)}
-          >
-            <span
-              className={cn(
-                "space-invaders-player-shield__surface",
-                isPlayerShieldFlashing && "space-invaders-player-shield__surface--flashing",
-              )}
-            />
-          </span>
-        ) : null}
+        {boardShips.map((ship) => {
+          const isPlayerVisible = isSpaceInvadersBoardShipVisible(game, ship);
+          const isPlayerShieldVisible = isPlayerVisible && ship.playerShieldTicks > 0;
+          const isPlayerShieldFlashing =
+            isPlayerShieldVisible &&
+            ship.playerShieldTicks <= SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS;
 
-        {isPlayerVisible ? (
-          <span
-            aria-hidden="true"
-            className="absolute left-0 top-0 bg-contain bg-center bg-no-repeat drop-shadow-[0_0_18px_color-mix(in_oklch,var(--invaders-player)_56%,transparent)] will-change-transform [image-rendering:pixelated]"
-            data-testid="space-invaders-player"
-            style={{
-              backgroundImage: `url("${playerShipSpriteSrc}")`,
-              ...getBoardEntityStyle({
-                boardHeight: game.boardHeight,
-                boardWidth: game.boardWidth,
-                height: game.player.height,
-                width: game.player.width,
-                x: game.player.x,
-                y: game.player.y,
-              }),
-            }}
-          />
-        ) : null}
+          return isPlayerShieldVisible ? (
+            <span
+              aria-hidden="true"
+              className="space-invaders-player-shield absolute left-0 top-0 will-change-transform"
+              data-shield-flashing={isPlayerShieldFlashing ? "true" : "false"}
+              data-ship-id={ship.id}
+              data-testid="space-invaders-player-shield"
+              key={`${ship.id}:shield`}
+              style={getSpaceInvadersBoardShipShieldStyle(game, ship)}
+            >
+              <span
+                className={cn(
+                  "space-invaders-player-shield__surface",
+                  isPlayerShieldFlashing &&
+                    "space-invaders-player-shield__surface--flashing",
+                )}
+              />
+            </span>
+          ) : null;
+        })}
+
+        {boardShips.map((ship) => {
+          if (!isSpaceInvadersBoardShipVisible(game, ship)) {
+            return null;
+          }
+
+          return (
+            <span
+              aria-hidden="true"
+              className="absolute left-0 top-0 bg-contain bg-center bg-no-repeat drop-shadow-[0_0_18px_color-mix(in_oklch,var(--invaders-player)_56%,transparent)] will-change-transform [image-rendering:pixelated]"
+              data-ship-id={ship.id}
+              data-testid="space-invaders-player"
+              key={ship.id}
+              style={{
+                backgroundImage: `url("${playerShipSpriteSrc}")`,
+                ...getBoardEntityStyle({
+                  boardHeight: game.boardHeight,
+                  boardWidth: game.boardWidth,
+                  height: ship.player.height,
+                  width: ship.player.width,
+                  x: ship.player.x,
+                  y: ship.player.y,
+                }),
+              }}
+            />
+          );
+        })}
 
         {game.explosions.map((explosion) => (
           <span

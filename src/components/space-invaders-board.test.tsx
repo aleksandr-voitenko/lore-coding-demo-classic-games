@@ -9,6 +9,10 @@ import {
   SPACE_INVADERS_POWER_UP_SIZE,
   SPACE_INVADERS_SCORE_POPUP_TICKS,
 } from "@/lib/space-invaders-game-engine";
+import {
+  createInitialSpaceInvadersMultiplayerGame,
+  SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS,
+} from "@/lib/space-invaders-multiplayer";
 
 describe("SpaceInvadersBoard", () => {
   it("renders Space Invaders formation, player shot, and remaining count", () => {
@@ -665,5 +669,63 @@ describe("SpaceInvadersBoard", () => {
     expect(respawningMarkup).not.toContain(
       'data-testid="space-invaders-player-shield"',
     );
+  });
+
+  it("renders multiplayer ships, per-ship shots, and shields", () => {
+    const game = createInitialSpaceInvadersMultiplayerGame();
+    const shipA = game.ships["ship-a"];
+    const shipB = game.ships["ship-b"];
+    const multiplayerGame = {
+      ...game,
+      ships: {
+        "ship-a": {
+          ...shipA,
+          playerShieldTicks: SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS + 1,
+        },
+        "ship-b": {
+          ...shipB,
+          playerShots: [
+            {
+              height: 14,
+              id: "ship-b-shot",
+              kind: "standard" as const,
+              velocityX: 0,
+              velocityY: -16,
+              width: 4,
+              x: shipB.player.x + shipB.player.width / 2,
+              y: shipB.player.y - 16,
+            },
+          ],
+        },
+      },
+      status: "running" as const,
+    };
+    const markup = renderToStaticMarkup(
+      <SpaceInvadersBoard
+        fillViewport={false}
+        game={multiplayerGame}
+        ships={SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS.map((seat) => {
+          const ship = multiplayerGame.ships[seat];
+
+          return {
+            id: seat,
+            isActive: ship.isActive,
+            player: ship.player,
+            playerRespawnTicks: ship.playerRespawnTicks,
+            playerShieldTicks: ship.playerShieldTicks,
+            playerShots: ship.playerShots,
+          };
+        })}
+        statusLabel="Running"
+      />,
+    );
+
+    expect(markup.match(/data-testid="space-invaders-player"/g)).toHaveLength(2);
+    expect(markup).toContain('data-ship-id="ship-a"');
+    expect(markup).toContain('data-ship-id="ship-b"');
+    expect(markup).toContain('data-testid="space-invaders-player-shield"');
+    expect(markup).toContain('data-testid="space-invaders-player-shot"');
+    expect(markup).toContain('data-player-shot-kind="standard"');
+    expect(markup).not.toContain("h-svh");
   });
 });

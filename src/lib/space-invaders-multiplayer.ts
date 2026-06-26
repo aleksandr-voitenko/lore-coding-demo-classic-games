@@ -186,6 +186,17 @@ export type SpaceInvadersMultiplayerGameSnapshot =
 export type SpaceInvadersMultiplayerRoomSnapshot =
   MultiplayerRealtimeRoomSnapshot<SpaceInvadersMultiplayerGameSnapshot>;
 
+export type SpaceInvadersMultiplayerShipDirection = "left" | "right";
+
+export type SpaceInvadersMultiplayerClientInput =
+  | {
+      direction: SpaceInvadersMultiplayerShipDirection | null;
+      type: "space-invaders.setShipDirection";
+    }
+  | {
+      type: "space-invaders.fire";
+    };
+
 export type SpaceInvadersMultiplayerHeldInput = {
   fire?: boolean;
   left?: boolean;

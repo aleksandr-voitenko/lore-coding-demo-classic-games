@@ -3,6 +3,7 @@
 import type { ReactElement, ReactNode } from "react";
 
 import { PongMultiplayerRoom } from "@/components/pong-multiplayer-room";
+import { SpaceInvadersMultiplayerRoom } from "@/components/space-invaders-multiplayer-room";
 import type { GameId } from "@/lib/game-catalog";
 import type {
   PrivateRoom,
@@ -16,6 +17,10 @@ import type {
   PongMultiplayerClientInput,
   PongMultiplayerGameSnapshot,
 } from "@/lib/pong-multiplayer";
+import type {
+  SpaceInvadersMultiplayerClientInput,
+  SpaceInvadersMultiplayerGameSnapshot,
+} from "@/lib/space-invaders-multiplayer";
 
 export type MultiplayerRoomGameInputSender = <
   Game extends GameId,
@@ -55,6 +60,12 @@ function isPongMultiplayerGameSnapshot(
   return game?.gameId === "pong";
 }
 
+function isSpaceInvadersMultiplayerGameSnapshot(
+  game: MultiplayerRoomGameSnapshot | null | undefined,
+): game is SpaceInvadersMultiplayerGameSnapshot {
+  return game?.gameId === "space-invaders";
+}
+
 function renderPongMultiplayerRoom({
   activeParticipant,
   game,
@@ -81,12 +92,42 @@ function renderPongMultiplayerRoom({
   );
 }
 
+function renderSpaceInvadersMultiplayerRoom({
+  activeParticipant,
+  game,
+  lifecycleControls,
+  room,
+  sendGameInput,
+}: MultiplayerRoomGameRendererProps) {
+  if (!isSpaceInvadersMultiplayerGameSnapshot(game)) {
+    return null;
+  }
+
+  function handleSpaceInvadersInput(input: SpaceInvadersMultiplayerClientInput) {
+    return sendGameInput("space-invaders", input);
+  }
+
+  return (
+    <SpaceInvadersMultiplayerRoom
+      activeParticipant={activeParticipant}
+      game={game}
+      lifecycleControls={lifecycleControls}
+      onGameInput={handleSpaceInvadersInput}
+      room={room}
+    />
+  );
+}
+
 const MULTIPLAYER_ROOM_GAME_RENDERERS: Partial<
   Record<GameId, MultiplayerRoomGameRenderer>
 > = {
   pong: {
     gameId: "pong",
     render: renderPongMultiplayerRoom,
+  },
+  "space-invaders": {
+    gameId: "space-invaders",
+    render: renderSpaceInvadersMultiplayerRoom,
   },
 };
 
