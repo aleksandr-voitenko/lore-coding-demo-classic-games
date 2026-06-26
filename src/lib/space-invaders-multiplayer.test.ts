@@ -1162,6 +1162,289 @@ describe("space invaders multiplayer state model", () => {
     expect(ticked.explosions).toEqual([]);
   });
 
+  it("detonates a direct-contact mine before damaging one vulnerable ship", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame({
+      invaderBurst: {
+        remainingShots: 2,
+        sourceInvaderId: "1:5",
+      },
+    });
+    const hittingMine = createInvaderShotMovingIntoShip(initialGame, "ship-a", {
+      height: 18,
+      id: "direct-mine-ship-a",
+      kind: "mine",
+      velocityY: 1.55,
+      width: 18,
+    });
+    const ticked = advanceSpaceInvadersMultiplayerGameTick(
+      {
+        ...initialGame,
+        invaderShotCooldownTicks: 1_000,
+        invaderShots: [hittingMine],
+        ships: {
+          ...initialGame.ships,
+          "ship-a": {
+            ...initialGame.ships["ship-a"],
+            playerBurst: {
+              cooldownTicks: 2,
+              remainingShots: 1,
+            },
+          },
+        },
+      },
+      {},
+      () => 0,
+    );
+
+    expect(ticked.lives).toBe(SPACE_INVADERS_STARTING_LIVES - 1);
+    expect(ticked.invaderBurst).toBeNull();
+    expect(ticked.invaderShots).toEqual([]);
+    expect(ticked.ships["ship-a"].playerBurst).toBeNull();
+    expect(ticked.ships["ship-a"].playerRespawnTicks).toBe(
+      SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
+    );
+    expect(ticked.ships["ship-b"]).toBe(initialGame.ships["ship-b"]);
+    expect(ticked.explosions.map((explosion) => explosion.kind)).toEqual([
+      "mine",
+      "player",
+    ]);
+  });
+
+  it("detonates a direct-contact mine against overlapping vulnerable ships", () => {
+    const overlappingGame = withOverlappingShips(
+      createRunningSpaceInvadersMultiplayerGame(),
+    );
+    const sharedMine = createInvaderShotMovingIntoShip(overlappingGame, "ship-a", {
+      height: 18,
+      id: "direct-mine-double-hit",
+      kind: "mine",
+      velocityY: 1.55,
+      width: 18,
+    });
+    const ticked = advanceSpaceInvadersMultiplayerGameTick(
+      {
+        ...overlappingGame,
+        invaderShotCooldownTicks: 1_000,
+        invaderShots: [sharedMine],
+      },
+      {},
+      () => 0,
+    );
+    const scarceLivesTick = advanceSpaceInvadersMultiplayerGameTick(
+      {
+        ...overlappingGame,
+        invaderShotCooldownTicks: 1_000,
+        invaderShots: [sharedMine],
+        lives: 1,
+      },
+      {},
+      createRandomSequence([0, 0.99, 0, 0]),
+    );
+
+    expect(ticked.lives).toBe(SPACE_INVADERS_STARTING_LIVES - 2);
+    expect(ticked.invaderShots).toEqual([]);
+    expect(ticked.ships["ship-a"].playerRespawnTicks).toBe(
+      SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
+    );
+    expect(ticked.ships["ship-b"].playerRespawnTicks).toBe(
+      SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
+    );
+    expect(ticked.explosions.map((explosion) => explosion.kind)).toEqual([
+      "mine",
+      "player",
+      "player",
+    ]);
+    expect(scarceLivesTick.lives).toBe(0);
+    expect(scarceLivesTick.status).toBe("running");
+    expect(scarceLivesTick.ships["ship-a"].isActive).toBe(false);
+    expect(scarceLivesTick.ships["ship-a"].playerRespawnTicks).toBe(0);
+    expect(scarceLivesTick.ships["ship-b"].isActive).toBe(true);
+    expect(scarceLivesTick.ships["ship-b"].playerRespawnTicks).toBe(
+      SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
+    );
+  });
+
+  it("keeps shielded, respawning, and inactive ships immune to direct-contact mines", () => {
+    const overlappingGame = withOverlappingShips(
+      createRunningSpaceInvadersMultiplayerGame(),
+    );
+    const sharedMine = createInvaderShotMovingIntoShip(overlappingGame, "ship-a", {
+      height: 18,
+      id: "direct-mine-shield-respawn",
+      kind: "mine",
+      velocityY: 1.55,
+      width: 18,
+    });
+    const shieldRespawnTick = advanceSpaceInvadersMultiplayerGameTick(
+      {
+        ...overlappingGame,
+        invaderShotCooldownTicks: 1_000,
+        invaderShots: [sharedMine],
+        ships: {
+          ...overlappingGame.ships,
+          "ship-a": {
+            ...overlappingGame.ships["ship-a"],
+            playerShieldTicks: 4,
+          },
+          "ship-b": {
+            ...overlappingGame.ships["ship-b"],
+            playerRespawnTicks: 4,
+          },
+        },
+      },
+      {},
+      () => 0,
+    );
+    const inactiveGame = createRunningSpaceInvadersMultiplayerGame();
+    const inactiveMine = createInvaderShotMovingIntoShip(inactiveGame, "ship-b", {
+      height: 18,
+      id: "direct-mine-inactive",
+      kind: "mine",
+      velocityY: 1.55,
+      width: 18,
+    });
+    const inactiveTick = advanceSpaceInvadersMultiplayerGameTick({
+      ...inactiveGame,
+      invaderShotCooldownTicks: 1_000,
+      invaderShots: [inactiveMine],
+      ships: {
+        ...inactiveGame.ships,
+        "ship-b": {
+          ...inactiveGame.ships["ship-b"],
+          isActive: false,
+        },
+      },
+    });
+
+    expect(shieldRespawnTick.lives).toBe(SPACE_INVADERS_STARTING_LIVES);
+    expect(shieldRespawnTick.invaderShots).toEqual([]);
+    expect(shieldRespawnTick.ships["ship-a"].playerShieldTicks).toBe(3);
+    expect(shieldRespawnTick.ships["ship-b"].playerRespawnTicks).toBe(3);
+    expect(shieldRespawnTick.explosions.map((explosion) => explosion.kind)).toEqual([
+      "mine",
+    ]);
+    expect(inactiveTick.lives).toBe(SPACE_INVADERS_STARTING_LIVES);
+    expect(inactiveTick.invaderShots).toEqual([
+      {
+        ...inactiveMine,
+        ageTicks: inactiveMine.ageTicks + 1,
+        y: inactiveMine.y + inactiveMine.velocityY,
+      },
+    ]);
+    expect(inactiveTick.ships["ship-b"].isActive).toBe(false);
+    expect(inactiveTick.explosions).toEqual([]);
+  });
+
+  it("chains direct-contact mine detonations through nearby mines", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame();
+    const firstMine = createInvaderShotMovingIntoShip(initialGame, "ship-a", {
+      height: 18,
+      id: "direct-chain-first-mine",
+      kind: "mine",
+      velocityY: 1.55,
+      width: 18,
+    });
+    const secondMine = createInvaderShotFixture({
+      height: 18,
+      id: "direct-chain-second-mine",
+      kind: "mine",
+      velocityY: 1.55,
+      width: 18,
+      x: firstMine.x + 40,
+      y: firstMine.y + firstMine.velocityY,
+    });
+    const ticked = advanceSpaceInvadersMultiplayerGameTick(
+      {
+        ...initialGame,
+        invaderShotCooldownTicks: 1_000,
+        invaderShots: [firstMine, secondMine],
+      },
+      {},
+      () => 0,
+    );
+
+    expect(ticked.lives).toBe(SPACE_INVADERS_STARTING_LIVES - 1);
+    expect(ticked.invaderShots).toEqual([]);
+    expect(ticked.explosions.filter((explosion) => explosion.kind === "mine")).toHaveLength(
+      2,
+    );
+    expect(ticked.ships["ship-a"].playerRespawnTicks).toBe(
+      SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
+    );
+  });
+
+  it("applies direct-contact mine blast damage to nearby invaders", () => {
+    const initialGame = withShipPlayer(
+      createRunningSpaceInvadersMultiplayerGame(),
+      "ship-a",
+      {
+        x: 260,
+        y: 300,
+      },
+    );
+    const [targetSource, survivorSource] = initialGame.invaders;
+    const hittingMine = createInvaderShotMovingIntoShip(initialGame, "ship-a", {
+      height: 18,
+      id: "direct-mine-invader-damage",
+      kind: "mine",
+      velocityY: 1.55,
+      width: 18,
+    });
+    const target = {
+      ...targetSource!,
+      hitPoints: 1,
+      isActive: true,
+      kind: "standard" as const,
+      x: hittingMine.x - 4,
+      y: hittingMine.y + hittingMine.velocityY - 24,
+    };
+    const survivor = {
+      ...survivorSource!,
+      hitPoints: 1,
+      isActive: true,
+      kind: "standard" as const,
+      x: hittingMine.x + 160,
+      y: hittingMine.y + hittingMine.velocityY - 24,
+    };
+    const ticked = advanceSpaceInvadersMultiplayerGameTick(
+      {
+        ...initialGame,
+        invaderShotCooldownTicks: 1_000,
+        invaderShots: [hittingMine],
+        invaders: initialGame.invaders.map((invader) => {
+          if (invader.id === target.id) {
+            return target;
+          }
+
+          if (invader.id === survivor.id) {
+            return survivor;
+          }
+
+          return {
+            ...invader,
+            isActive: false,
+          };
+        }),
+      },
+      {},
+      () => 0,
+    );
+    const damagedTarget = ticked.invaders.find((invader) => invader.id === target.id);
+    const activeSurvivor = ticked.invaders.find((invader) => invader.id === survivor.id);
+
+    expect(ticked.score).toBe(target.points);
+    expect(damagedTarget).toMatchObject({
+      hitPoints: 0,
+      isActive: false,
+    });
+    expect(activeSurvivor).toMatchObject({
+      isActive: true,
+    });
+    expect(ticked.explosions.map((explosion) => explosion.kind)).toEqual(
+      expect.arrayContaining(["mine", "invader", "player"]),
+    );
+  });
+
   it("removes expired and out-of-bounds invader shots through solo movement", () => {
     const initialGame = createRunningSpaceInvadersMultiplayerGame();
     const outOfBoundsShot = createInvaderShotFixture({

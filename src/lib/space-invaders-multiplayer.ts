@@ -423,6 +423,25 @@ export function resolveSpaceInvadersMultiplayerInvaderShotHits(
     return game;
   }
 
+  const directMineHits = getSpaceInvadersMultiplayerDirectMineHitShots(game);
+
+  if (directMineHits.length > 0) {
+    const mineBlastResolution = detonateSpaceInvadersMultiplayerMineShots(
+      game,
+      directMineHits,
+      random,
+    );
+
+    if (mineBlastResolution.didDamageShips) {
+      return mineBlastResolution.game;
+    }
+
+    return resolveSpaceInvadersMultiplayerInvaderShotHits(
+      mineBlastResolution.game,
+      random,
+    );
+  }
+
   const consumedShotIds = new Set<string>();
   const destroyedSeats = new Set<SpaceInvadersShipSeat>();
 
@@ -1774,6 +1793,17 @@ function getSpaceInvadersMultiplayerInvaderShotHitSeats(
 
     return ship.isActive && rectanglesIntersect(shot, ship.player);
   });
+}
+
+function getSpaceInvadersMultiplayerDirectMineHitShots(
+  game: SpaceInvadersMultiplayerGameState,
+) {
+  return game.invaderShots.filter(
+    (shot) =>
+      shot.kind === "mine" &&
+      isInvaderShotDangerous(shot) &&
+      getSpaceInvadersMultiplayerInvaderShotHitSeats(game, shot).length > 0,
+  );
 }
 
 function canSpaceInvadersMultiplayerShipAbsorbHit(
