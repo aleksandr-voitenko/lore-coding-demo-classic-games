@@ -21,6 +21,10 @@ import {
   SPACE_INVADERS_STARTING_LIVES,
   startSpaceInvadersGame,
 } from "./space-invaders-game-engine.test-helpers";
+import {
+  advanceSpaceInvadersPlayerRecovery,
+  damageSpaceInvadersPlayer,
+} from "./space-invaders/player-state";
 
 describe("space invaders lifecycle engine", () => {
   it("starts, pauses, and resumes without replacing the formation", () => {
@@ -92,6 +96,81 @@ describe("space invaders lifecycle engine", () => {
     expect(advanced.playerRespawnTicks).toBe(0);
     expect(advanced.playerShieldTicks).toBe(SPACE_INVADERS_PLAYER_SHIELD_TICKS);
     expect(advanced.explosions).toEqual([]);
+  });
+
+
+  it("keeps solo player damage cleanup inside the player-state boundary", () => {
+    const game = createInitialSpaceInvadersGame();
+    const damaged = damageSpaceInvadersPlayer(
+      createRunningGame({
+        hitStreak: 3,
+        invaderBurst: {
+          remainingShots: 2,
+          sourceInvaderId: "1:5",
+        },
+        invaderShots: [createInvaderShotFixture()],
+        pendingShotPowerUp: "piercing-laser",
+        playerBurst: {
+          cooldownTicks: 2,
+          remainingShots: 3,
+        },
+        playerShots: [
+          {
+            height: 14,
+            id: "player-shot-test",
+            kind: "standard" as const,
+            velocityX: 0,
+            velocityY: -16,
+            width: 4,
+            x: 10,
+            y: 10,
+          },
+        ],
+        playerVolleyHasArmoredHit: true,
+        playerVolleyHasScored: true,
+        playerVolleyHasUnscoredExit: true,
+      }),
+      () => 0,
+    );
+
+    expect(damaged.status).toBe("running");
+    expect(damaged.lives).toBe(SPACE_INVADERS_STARTING_LIVES - 1);
+    expect(damaged.pendingShotPowerUp).toBe("piercing-laser");
+    expect(damaged.invaderBurst).toBeNull();
+    expect(damaged.invaderShots).toEqual([]);
+    expect(damaged.hitStreak).toBe(0);
+    expect(damaged.playerBurst).toBeNull();
+    expect(damaged.playerShots).toEqual([]);
+    expect(damaged.playerVolleyHasArmoredHit).toBe(false);
+    expect(damaged.playerVolleyHasScored).toBe(false);
+    expect(damaged.playerVolleyHasUnscoredExit).toBe(false);
+    expect(damaged.playerRespawnTicks).toBe(SPACE_INVADERS_PLAYER_RESPAWN_TICKS);
+    expect(damaged.playerShieldTicks).toBe(0);
+    expect(damaged.player.x + damaged.player.width / 2).toBe(game.boardWidth / 2);
+    expect(damaged.explosions[0]).toMatchObject({
+      id: "explosion-0",
+      kind: "player",
+      variant: 1,
+    });
+  });
+
+
+  it("advances singleton respawn and shield timers through the player-state boundary", () => {
+    const respawned = advanceSpaceInvadersPlayerRecovery(
+      createRunningGame({
+        playerRespawnTicks: 1,
+      }),
+    );
+    const shieldTick = advanceSpaceInvadersPlayerRecovery(
+      createRunningGame({
+        playerShieldTicks: 2,
+      }),
+    );
+
+    expect(respawned.playerRespawnTicks).toBe(0);
+    expect(respawned.playerShieldTicks).toBe(SPACE_INVADERS_PLAYER_SHIELD_TICKS);
+    expect(shieldTick.playerRespawnTicks).toBe(0);
+    expect(shieldTick.playerShieldTicks).toBe(1);
   });
 
 

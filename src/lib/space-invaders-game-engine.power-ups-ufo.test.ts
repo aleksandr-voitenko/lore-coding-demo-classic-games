@@ -19,6 +19,7 @@ import {
   SPACE_INVADERS_SCORE_POPUP_TICKS,
   SPACE_INVADERS_STARTING_LIVES,
 } from "./space-invaders-game-engine.test-helpers";
+import { advanceSpaceInvadersPlayerPowerUps } from "./space-invaders/player-state";
 
 describe("space invaders power-up and ufo engine", () => {
   it("keeps falling power-ups slower than player lasers", () => {
@@ -207,6 +208,26 @@ describe("space invaders power-up and ufo engine", () => {
 
     expect(caught.lives).toBe(SPACE_INVADERS_STARTING_LIVES + 1);
     expect(caught.powerUps).toEqual([]);
+  });
+
+
+  it("keeps catchable power-ups falling while the singleton player respawns", () => {
+    const game = createInitialSpaceInvadersGame();
+    const catchableFreeze = createCatchablePowerUp(game, { kind: "freeze" });
+    const advanced = advanceSpaceInvadersPlayerPowerUps(
+      createRunningGame({
+        powerUps: [catchableFreeze],
+        playerRespawnTicks: 2,
+      }),
+    );
+
+    expect(advanced.alienFreezeTicks).toBe(0);
+    expect(advanced.powerUps).toEqual([
+      {
+        ...catchableFreeze,
+        y: catchableFreeze.y + catchableFreeze.velocityY,
+      },
+    ]);
   });
 
 

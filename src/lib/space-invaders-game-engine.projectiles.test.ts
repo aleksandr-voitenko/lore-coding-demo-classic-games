@@ -19,6 +19,7 @@ import {
   SPACE_INVADERS_ROWS,
   withOnlyActiveInvader,
 } from "./space-invaders-game-engine.test-helpers";
+import { fireSpaceInvadersPlayerShot } from "./space-invaders/player-state";
 
 describe("space invaders projectile engine", () => {
   it("fires one player shot while running", () => {
@@ -42,6 +43,27 @@ describe("space invaders projectile engine", () => {
     expect(firedShot.y).toBeLessThan(firedGame.player.y);
     expect(firedGame.nextPlayerShotId).toBe(1);
     expect(secondFireGame.playerShots).toBe(firedGame.playerShots);
+  });
+
+
+  it("fires pending burst shots through the player-state boundary", () => {
+    const firedGame = fireSpaceInvadersPlayerShot(
+      createRunningGame({
+        pendingShotPowerUp: "burst-shot",
+      }),
+    );
+    const firedShot = firedGame.playerShots[0]!;
+
+    expect(firedGame.pendingShotPowerUp).toBeNull();
+    expect(firedGame.nextPlayerShotId).toBe(1);
+    expect(firedGame.playerBurst).toEqual({
+      cooldownTicks: SPACE_INVADERS_PLAYER_BURST_SHOT_DELAY_TICKS,
+      remainingShots: SPACE_INVADERS_PLAYER_BURST_SHOT_COUNT - 1,
+    });
+    expect(firedShot).toMatchObject({
+      id: "player-shot-0",
+      kind: "burst",
+    });
   });
 
 

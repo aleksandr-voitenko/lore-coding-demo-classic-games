@@ -1,7 +1,6 @@
 import {
   EXPLOSION_PADDING_BY_KIND,
   EXPLOSION_TTL_TICKS,
-  INVADER_HIT_RECOVERY_TICKS,
   PLAYER_BOTTOM_MARGIN,
   PLAYER_HEIGHT,
   PLAYER_WIDTH,
@@ -11,7 +10,6 @@ import {
   SPACE_INVADERS_EXPLOSION_VARIANTS,
   SPACE_INVADERS_EXTRA_LIFE_DROP_CHANCE,
   SPACE_INVADERS_MULTI_KILL_COMBO_TICKS,
-  SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
   SPACE_INVADERS_POWER_UP_SIZE,
   SPACE_INVADERS_POWER_UP_SPEED,
   SPACE_INVADERS_PROJECTILE_EXPLOSION_HEIGHT,
@@ -152,37 +150,6 @@ export function finalizeSpaceInvadersMultiKillCombo(
     points: combo.points + multiKillBonus,
     scoreScale: combo.scoreScale,
   });
-}
-
-export function damageSpaceInvadersPlayer(
-  game: SpaceInvadersGameState,
-  random: SpaceInvadersRandomSource,
-): SpaceInvadersGameState {
-  const lives = game.lives - 1;
-  const gameWithExplosion = createSpaceInvadersExplosion(
-    game,
-    "player",
-    game.player,
-    random,
-  );
-
-  return {
-    ...gameWithExplosion,
-    invaderBurst: null,
-    invaderShotCooldownTicks: INVADER_HIT_RECOVERY_TICKS,
-    invaderShots: [],
-    hitStreak: 0,
-    lives,
-    player: createCenteredSpaceInvadersPlayer(game.boardWidth, game.boardHeight),
-    playerBurst: null,
-    playerRespawnTicks: lives <= 0 ? 0 : SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
-    playerShieldTicks: 0,
-    playerShots: [],
-    playerVolleyHasArmoredHit: false,
-    playerVolleyHasScored: false,
-    playerVolleyHasUnscoredExit: false,
-    status: lives <= 0 ? "lost" : game.status,
-  };
 }
 
 export function getProjectileCollisionExplosionTarget(
