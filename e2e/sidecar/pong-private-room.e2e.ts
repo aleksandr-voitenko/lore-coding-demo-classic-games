@@ -14,8 +14,27 @@ type RoomHttpGetTracker = {
 
 type RoomWebSocketTracker = {
   bootstrapCount: () => number;
+  latestGameSeq: (gameId: string) => number | null;
   openedCount: () => number;
+  sawSpaceInvadersHeldInput: (
+    seat: SpaceInvadersShipSeat,
+    direction: SpaceInvadersHeldDirection,
+  ) => boolean;
 };
+
+type SpaceInvadersHeldDirection = "left" | "right";
+
+type SpaceInvadersShipSeat = "ship-a" | "ship-b";
+
+const SPACE_INVADERS_HELD_INPUT_DIRECTIONS = [
+  "left",
+  "right",
+] as const satisfies readonly SpaceInvadersHeldDirection[];
+
+const SPACE_INVADERS_SHIP_SEATS = [
+  "ship-a",
+  "ship-b",
+] as const satisfies readonly SpaceInvadersShipSeat[];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -84,12 +103,52 @@ function parseJsonFramePayload(payload: Buffer | string) {
   }
 }
 
+function getRealtimeMessageGame(message: unknown) {
+  if (!isRecord(message) || !isRecord(message.snapshot)) {
+    return null;
+  }
+
+  return isRecord(message.snapshot.game) ? message.snapshot.game : null;
+}
+
+function createSpaceInvadersHeldInputKey(
+  seat: SpaceInvadersShipSeat,
+  direction: SpaceInvadersHeldDirection,
+) {
+  return `${seat}:${direction}`;
+}
+
+function collectSpaceInvadersHeldInputs(
+  game: Record<string, unknown>,
+  heldInputKeys: Set<string>,
+) {
+  if (game.gameId !== "space-invaders" || !isRecord(game.heldInputs)) {
+    return;
+  }
+
+  for (const seat of SPACE_INVADERS_SHIP_SEATS) {
+    const heldInput = game.heldInputs[seat];
+
+    if (!isRecord(heldInput)) {
+      continue;
+    }
+
+    for (const direction of SPACE_INVADERS_HELD_INPUT_DIRECTIONS) {
+      if (heldInput[direction] === true) {
+        heldInputKeys.add(createSpaceInvadersHeldInputKey(seat, direction));
+      }
+    }
+  }
+}
+
 function trackRoomWebSockets(
   page: Page,
   roomWebSocketUrl: string,
 ): RoomWebSocketTracker {
   let openedCount = 0;
   let bootstrapCount = 0;
+  const latestGameSeqByGameId = new Map<string, number>();
+  const spaceInvadersHeldInputKeys = new Set<string>();
 
   page.on("websocket", (webSocket) => {
     if (webSocket.url() !== roomWebSocketUrl) {
@@ -104,12 +163,29 @@ function trackRoomWebSockets(
       if (isRecord(message) && message.type === "connection.bootstrap") {
         bootstrapCount += 1;
       }
+
+      const game =
+        isRecord(message) && message.type === "room.snapshot"
+          ? getRealtimeMessageGame(message)
+          : null;
+
+      if (
+        game !== null &&
+        typeof game.gameId === "string" &&
+        typeof game.seq === "number"
+      ) {
+        latestGameSeqByGameId.set(game.gameId, game.seq);
+        collectSpaceInvadersHeldInputs(game, spaceInvadersHeldInputKeys);
+      }
     });
   });
 
   return {
     bootstrapCount: () => bootstrapCount,
+    latestGameSeq: (gameId) => latestGameSeqByGameId.get(gameId) ?? null,
     openedCount: () => openedCount,
+    sawSpaceInvadersHeldInput: (seat, direction) =>
+      spaceInvadersHeldInputKeys.has(createSpaceInvadersHeldInputKey(seat, direction)),
   };
 }
 
@@ -220,6 +296,134 @@ test("Pong private room reaches guest over the sidecar WebSocket path", async ({
     await guestPage.keyboard.press("Enter");
 
     await expect(guestPage.getByTestId("pong-multiplayer-status")).toHaveText("Running");
+
+    await expectNoRepeatedRoomGetPolling({
+      guestHttpGets,
+      hostHttpGets,
+      page,
+      roomCode,
+    });
+    expect(guestBrowserIssues).toEqual([]);
+  } finally {
+    await guestContext.close();
+  }
+});
+
+test("Space Invaders private room reaches guest over the sidecar WebSocket path", async ({
+  baseURL,
+  browser,
+  page,
+}, testInfo) => {
+  const appBaseURL = baseURL ?? "http://127.0.0.1:3110";
+  const roomWebSocketUrl =
+    process.env.NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL ??
+    "ws://127.0.0.1:3111/multiplayer/rooms";
+  const hostName = createPlayerName(
+    "SI Host",
+    testInfo.workerIndex,
+    testInfo.retry,
+  );
+  const guestName = createPlayerName(
+    "SI Guest",
+    testInfo.workerIndex,
+    testInfo.retry,
+  );
+  const hostHttpGets = trackRoomHttpGets(page);
+  const hostWebSockets = trackRoomWebSockets(page, roomWebSocketUrl);
+
+  await openLauncher(page);
+  await signUpFromLauncher(page, hostName);
+
+  await page.getByTestId("private-room-host-space-invaders-button").click();
+  await expect(page.getByTestId("multiplayer-room-lobby")).toBeVisible();
+  await expect(page.getByTestId("multiplayer-room-game")).toHaveText(
+    "Space Invaders",
+  );
+  await expect(page.getByTestId("multiplayer-room-status")).toHaveText("Lobby");
+
+  const roomCode = (await page.getByTestId("multiplayer-room-code").innerText()).trim();
+
+  expect(roomCode).toMatch(/^[A-F0-9-]+$/);
+  await expectRoomWebSocketBootstrapped(hostWebSockets, "host");
+
+  await page.getByTestId("multiplayer-room-claim-seat-ship-a").click();
+  await expect(page.getByTestId("multiplayer-room-seat-ship-a")).toContainText(
+    hostName,
+  );
+
+  const guestContext = await browser.newContext();
+  const guestPage = await guestContext.newPage();
+  const guestBrowserIssues = collectBrowserIssues(guestPage);
+  const guestHttpGets = trackRoomHttpGets(guestPage);
+  const guestWebSockets = trackRoomWebSockets(guestPage, roomWebSocketUrl);
+
+  try {
+    await guestPage.goto(new URL(`/?room=${roomCode}`, appBaseURL).toString());
+    await expect(guestPage.getByTestId("multiplayer-room-lobby")).toBeVisible();
+    await expect(guestPage.getByTestId("multiplayer-room-game")).toHaveText(
+      "Space Invaders",
+    );
+    await expectRoomWebSocketBootstrapped(guestWebSockets, "guest");
+
+    await guestPage.getByTestId("multiplayer-room-display-name-input").fill(guestName);
+    await guestPage.getByTestId("multiplayer-room-join-button").click();
+    await expect(guestPage.getByTestId("multiplayer-room-current-participant")).toContainText(
+      guestName,
+    );
+
+    await guestPage.getByTestId("multiplayer-room-claim-seat-ship-b").click();
+    await expect(guestPage.getByTestId("multiplayer-room-seat-ship-b")).toContainText(
+      guestName,
+    );
+    await expect(page.getByTestId("multiplayer-room-seat-ship-b")).toContainText(
+      guestName,
+    );
+
+    await page.getByTestId("multiplayer-room-start-button").click();
+
+    await expect(page.getByTestId("space-invaders-multiplayer-room")).toBeVisible();
+    await expect(guestPage.getByTestId("space-invaders-multiplayer-room")).toBeVisible();
+    await expect(page.getByTestId("space-invaders-multiplayer-status")).toHaveText(
+      "Running",
+    );
+    await expect(
+      guestPage.getByTestId("space-invaders-multiplayer-status"),
+    ).toHaveText("Running");
+    await expect(page.getByTestId("space-invaders-multiplayer-role")).toContainText(
+      `${hostName} · Ship A`,
+    );
+    await expect(
+      guestPage.getByTestId("space-invaders-multiplayer-role"),
+    ).toContainText(`${guestName} · Ship B`);
+    await expect(page.getByTestId("space-invaders-player")).toHaveCount(2);
+
+    await page.keyboard.press("ArrowLeft");
+    await guestPage.keyboard.press("ArrowRight");
+
+    await expect
+      .poll(() => hostWebSockets.sawSpaceInvadersHeldInput("ship-a", "left"), {
+        message: "host should receive a Space Invaders snapshot for Ship A movement",
+        timeout: 5_000,
+      })
+      .toBe(true);
+    await expect
+      .poll(() => guestWebSockets.sawSpaceInvadersHeldInput("ship-b", "right"), {
+        message: "guest should receive a Space Invaders snapshot for Ship B movement",
+        timeout: 5_000,
+      })
+      .toBe(true);
+    await expect
+      .poll(() => hostWebSockets.latestGameSeq("space-invaders"), {
+        message: "host should receive Space Invaders game snapshots",
+        timeout: 5_000,
+      })
+      .not.toBeNull();
+    await expect
+      .poll(() => guestWebSockets.latestGameSeq("space-invaders"), {
+        message: "guest should receive Space Invaders game snapshots",
+        timeout: 5_000,
+      })
+      .not.toBeNull();
 
     await expectNoRepeatedRoomGetPolling({
       guestHttpGets,
