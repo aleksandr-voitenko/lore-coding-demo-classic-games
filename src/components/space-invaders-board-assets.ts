@@ -22,6 +22,7 @@ const explosionSpriteSrcByVariant: Record<SpaceInvadersExplosionVariant, string>
   4: getSpaceInvadersAssetSrc("explosion-4"),
 };
 const shieldExplosionSpriteSrc = getSpaceInvadersAssetSrc("explosion-shield");
+export const playerBShipSpriteSrc = getSpaceInvadersAssetSrc("player-b-ship");
 export const playerShipSpriteSrc = getSpaceInvadersAssetSrc("player-ship");
 const playerShotSpriteSrc = getSpaceInvadersAssetSrc("player-shot");
 const playerPiercingShotSpriteSrc = getSpaceInvadersAssetSrc("player-piercing-shot");

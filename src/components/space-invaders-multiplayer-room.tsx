@@ -22,6 +22,7 @@ import {
   SpaceInvadersBoard,
   type SpaceInvadersBoardShip,
 } from "@/components/space-invaders-board";
+import { playerBShipSpriteSrc } from "@/components/space-invaders-board-assets";
 import {
   createSpaceInvadersPlayerMovementState,
   getSpaceInvadersPlayerMovementKey,
@@ -411,6 +412,7 @@ function getSpaceInvadersMultiplayerBoardShips(
       playerRespawnTicks: ship.playerRespawnTicks,
       playerShieldTicks: ship.playerShieldTicks,
       playerShots: ship.playerShots,
+      spriteSrc: seat === "ship-b" ? playerBShipSpriteSrc : undefined,
     };
   });
 }

@@ -726,6 +726,7 @@ describe("SpaceInvadersBoard", () => {
     expect(markup).toContain('data-testid="space-invaders-player-shield"');
     expect(markup).toContain('data-testid="space-invaders-player-shot"');
     expect(markup).toContain('data-player-shot-kind="standard"');
+    expect(markup).toContain("/images/space-invaders/player-ship.png?v=sprite-art-v2");
     expect(markup).not.toContain("h-svh");
   });
 });

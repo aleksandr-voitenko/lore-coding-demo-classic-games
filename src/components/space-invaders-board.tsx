@@ -48,6 +48,7 @@ export type SpaceInvadersBoardShip = {
   playerRespawnTicks: number;
   playerShieldTicks: number;
   playerShots: readonly SpaceInvadersPlayerShot[];
+  spriteSrc?: string;
 };
 
 type SpaceInvadersBoardGame = Pick<
@@ -429,7 +430,7 @@ export function SpaceInvadersBoard({
               data-testid="space-invaders-player"
               key={ship.id}
               style={{
-                backgroundImage: `url("${playerShipSpriteSrc}")`,
+                backgroundImage: `url("${ship.spriteSrc ?? playerShipSpriteSrc}")`,
                 ...getBoardEntityStyle({
                   boardHeight: game.boardHeight,
                   boardWidth: game.boardWidth,

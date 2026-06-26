@@ -127,6 +127,8 @@ describe("SpaceInvadersMultiplayerRoom", () => {
       "Ada · Ship A",
       'data-ship-id="ship-a"',
       'data-ship-id="ship-b"',
+      "/images/space-invaders/player-ship.png?v=sprite-art-v2",
+      "/images/space-invaders/player-b-ship.png?v=sprite-art-v2",
     ]);
     expect(markup.match(/data-testid="space-invaders-player"/g)).toHaveLength(2);
     expect(markup).not.toContain('data-testid="space-invaders-multiplayer-readonly"');
