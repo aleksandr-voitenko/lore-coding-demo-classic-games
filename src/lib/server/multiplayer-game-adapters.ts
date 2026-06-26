@@ -1,9 +1,11 @@
 import type { GameId } from "../game-catalog";
 import type { MultiplayerServerGameRuntimeAdapter } from "./multiplayer-game-adapter-contract";
+import { asteroidsMultiplayerRuntimeAdapter } from "./asteroids-multiplayer-game-adapter";
 import { pongMultiplayerRuntimeAdapter } from "./pong-multiplayer-game-adapter";
 import { spaceInvadersMultiplayerRuntimeAdapter } from "./space-invaders-multiplayer-game-adapter";
 
 export type {
+  AsteroidsMultiplayerGameSnapshot,
   MultiplayerServerGameInputCommand,
   MultiplayerServerGameLifecycleCommand,
   MultiplayerServerGameReleaseSeatCommand,
@@ -16,6 +18,7 @@ export type {
   MultiplayerServerGameSnapshot,
   SpaceInvadersMultiplayerServerGameSnapshot,
 } from "./multiplayer-game-adapter-contract";
+export { DEFAULT_ASTEROIDS_PRIVATE_ROOM_SEATS } from "./asteroids-multiplayer-game-adapter";
 export {
   DEFAULT_PONG_PRIVATE_ROOM_SEATS,
   PONG_RUNTIME_CATCH_UP_TICK_LIMIT,
@@ -26,6 +29,7 @@ const defaultMultiplayerServerGameAdapter = pongMultiplayerRuntimeAdapter;
 const multiplayerServerGameAdapters: Partial<
   Record<GameId, MultiplayerServerGameRuntimeAdapter>
 > = {
+  asteroids: asteroidsMultiplayerRuntimeAdapter,
   pong: pongMultiplayerRuntimeAdapter,
   "space-invaders": spaceInvadersMultiplayerRuntimeAdapter,
 };

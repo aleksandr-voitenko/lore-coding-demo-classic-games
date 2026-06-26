@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket, type RawData } from "ws";
 
 import type { MultiplayerRealtimeServerMessage } from "@/lib/multiplayer/protocol";
+import { getAsteroidsTickDelay } from "@/lib/asteroids-game-engine";
+import type { AsteroidsMultiplayerGameSnapshot } from "@/lib/asteroids-multiplayer";
 import type { PongGameState } from "@/lib/pong-game-engine";
 import type { PongMultiplayerGameSnapshot } from "@/lib/pong-multiplayer";
 import { getSpaceInvadersTickDelay } from "@/lib/space-invaders-game-engine";
@@ -69,6 +71,12 @@ function expectPongGame(snapshot: MultiplayerRoomSnapshot) {
   expect(snapshot.game?.gameId).toBe("pong");
 
   return snapshot.game as PongMultiplayerGameSnapshot;
+}
+
+function expectAsteroidsGame(snapshot: MultiplayerRoomSnapshot) {
+  expect(snapshot.game?.gameId).toBe("asteroids");
+
+  return snapshot.game as AsteroidsMultiplayerGameSnapshot;
 }
 
 function expectSpaceInvadersGame(snapshot: MultiplayerRoomSnapshot) {
@@ -139,6 +147,43 @@ function createStartedSpaceInvadersRoom(store: InProcessMultiplayerRoomStore) {
     store.createRoom({
       host: HOST_USER,
       settings: { gameId: "space-invaders" },
+    }),
+  );
+  expectStoreSuccess(
+    store.applyCommand("ROOM1", {
+      displayName: "Guest Hero",
+      type: "room.joinObserver",
+    }),
+  );
+  expectStoreSuccess(
+    store.applyCommand("ROOM1", {
+      participantId: "host-1",
+      seatId: "ship-a",
+      type: "room.claimSeat",
+    }),
+  );
+  expectStoreSuccess(
+    store.applyCommand("ROOM1", {
+      participantId: "guest-1",
+      seatId: "ship-b",
+      type: "room.claimSeat",
+    }),
+  );
+
+  return expectStoreSuccess(
+    store.applyCommand("ROOM1", {
+      command: "start",
+      participantId: "host-1",
+      type: "room.lifecycle",
+    }),
+  );
+}
+
+function createStartedAsteroidsRoom(store: InProcessMultiplayerRoomStore) {
+  expectStoreSuccess(
+    store.createRoom({
+      host: HOST_USER,
+      settings: { gameId: "asteroids" },
     }),
   );
   expectStoreSuccess(
@@ -372,6 +417,7 @@ describe("multiplayer room WebSocket gateway", () => {
     const store = createTestRoomStore();
     const readySnapshot = createStartedPongRoom(store);
     const runningSnapshot = serveStartedPongRoom(store);
+    const asteroidsRunningSnapshot = createStartedAsteroidsRoom(createTestRoomStore());
     const pausedSnapshot = createPongSnapshotWithStatus(readySnapshot, "paused");
     const wonSnapshot = createPongSnapshotWithStatus(readySnapshot, "won");
     const lostSnapshot = createPongSnapshotWithStatus(readySnapshot, "lost");
@@ -389,7 +435,7 @@ describe("multiplayer room WebSocket gateway", () => {
     const unsupportedGameSnapshot = {
       ...readySnapshot,
       game: {
-        gameId: "asteroids",
+        gameId: "snake",
         seq: 1,
         serverTimeMs: 1_000,
         snapshot: {
@@ -399,13 +445,14 @@ describe("multiplayer room WebSocket gateway", () => {
       room: {
         ...readySnapshot.room,
         settings: {
-          gameId: "asteroids",
+          gameId: "snake",
         },
       },
     } as unknown as MultiplayerRoomSnapshot;
 
     expect(shouldAdvanceRoomGameSnapshot(readySnapshot)).toBe(true);
     expect(shouldAdvanceRoomGameSnapshot(runningSnapshot)).toBe(true);
+    expect(shouldAdvanceRoomGameSnapshot(asteroidsRunningSnapshot)).toBe(true);
     expect(shouldAdvanceRoomGameSnapshot(pausedSnapshot)).toBe(false);
     expect(shouldAdvanceRoomGameSnapshot(wonSnapshot)).toBe(false);
     expect(shouldAdvanceRoomGameSnapshot(lostSnapshot)).toBe(false);
@@ -811,6 +858,102 @@ describe("multiplayer room WebSocket gateway", () => {
     }
   });
 
+  it("acks game input and broadcasts updated Asteroids snapshots", async () => {
+    const store = createTestRoomStore();
+    const started = createStartedAsteroidsRoom(store);
+    const { url } = await createGatewayFixture(store);
+    const sender = await connectClient(url);
+    const observer = await connectClient(url);
+
+    await bootstrapClient(sender);
+    await bootstrapClient(observer);
+
+    const expectedGameSeq = started.game!.seq + 1;
+    const ackPromise = waitForServerMessage(
+      sender,
+      (message) =>
+        message.type === "room.commandAck" &&
+        message.requestId === "asteroids-input-1",
+    );
+    const senderSnapshotPromise = waitForServerMessage(
+      sender,
+      (message) =>
+        message.type === "room.snapshot" &&
+        message.snapshot.game?.gameId === "asteroids" &&
+        message.snapshot.game.seq === expectedGameSeq,
+    );
+    const observerSnapshotPromise = waitForServerMessage(
+      observer,
+      (message) =>
+        message.type === "room.snapshot" &&
+        message.snapshot.game?.gameId === "asteroids" &&
+        message.snapshot.game.seq === expectedGameSeq,
+    );
+
+    sendClientMessage(sender, {
+      gameId: "asteroids",
+      input: {
+        controls: {
+          rotateLeft: true,
+          rotateRight: false,
+          thrust: true,
+        },
+        type: "asteroids.setShipControls",
+      },
+      participantId: "guest-1",
+      requestId: "asteroids-input-1",
+      roomCode: "ROOM1",
+      type: "game.input",
+    });
+
+    const ack = await ackPromise;
+    const snapshots = await Promise.all([
+      senderSnapshotPromise,
+      observerSnapshotPromise,
+    ]);
+
+    expect(ack).toMatchObject({
+      gameSeq: expectedGameSeq,
+      participantId: "guest-1",
+      requestId: "asteroids-input-1",
+      roomCode: "ROOM1",
+      seq: started.seq,
+      type: "room.commandAck",
+    });
+
+    for (const snapshotMessage of snapshots) {
+      expect(snapshotMessage.type).toBe("room.snapshot");
+
+      if (snapshotMessage.type !== "room.snapshot") {
+        throw new Error("Expected a room snapshot message.");
+      }
+
+      expect(snapshotMessage.snapshot).not.toHaveProperty("participant");
+      expect(snapshotMessage.snapshot).toMatchObject({
+        game: {
+          gameId: "asteroids",
+          heldInputs: {
+            "ship-b": {
+              rotateLeft: true,
+              thrust: true,
+            },
+          },
+          seq: expectedGameSeq,
+          snapshot: {
+            status: "running",
+          },
+        },
+        room: {
+          code: "ROOM1",
+          settings: {
+            gameId: "asteroids",
+          },
+        },
+        seq: started.seq,
+      });
+    }
+  });
+
   it("pushes fresh running Pong snapshots without waiting for client input", async () => {
     let nowMs = 0;
     const store = createTestRoomStore({ getNowMs: () => nowMs });
@@ -876,6 +1019,42 @@ describe("multiplayer room WebSocket gateway", () => {
 
     expect(runningSnapshot.snapshot.game).toMatchObject({
       gameId: "space-invaders",
+      snapshot: {
+        status: "running",
+      },
+    });
+  });
+
+  it("pushes fresh running Asteroids snapshots without waiting for client input", async () => {
+    let nowMs = 0;
+    const store = createTestRoomStore({ getNowMs: () => nowMs });
+    const started = createStartedAsteroidsRoom(store);
+    const startedGame = expectAsteroidsGame(started);
+    const { url } = await createGatewayFixture(store, { snapshotIntervalMs: 10 });
+    const observer = await connectClient(url);
+
+    await bootstrapClient(observer);
+
+    const runningSnapshotPromise = waitForServerMessage(
+      observer,
+      (message) =>
+        message.type === "room.snapshot" &&
+        message.snapshot.game?.gameId === "asteroids" &&
+        (message.snapshot.game?.seq ?? 0) > startedGame.seq,
+    );
+
+    nowMs += getAsteroidsTickDelay() * 2;
+
+    const runningSnapshot = await runningSnapshotPromise;
+
+    expect(runningSnapshot.type).toBe("room.snapshot");
+
+    if (runningSnapshot.type !== "room.snapshot") {
+      throw new Error("Expected a room snapshot message.");
+    }
+
+    expect(runningSnapshot.snapshot.game).toMatchObject({
+      gameId: "asteroids",
       snapshot: {
         status: "running",
       },
@@ -960,7 +1139,7 @@ describe("multiplayer room WebSocket gateway", () => {
     expectStoreSuccess(
       store.createRoom({
         host: HOST_USER,
-        settings: { gameId: "asteroids" },
+        settings: { gameId: "snake" },
       }),
     );
     const { url } = await createGatewayFixture(store);
@@ -969,25 +1148,25 @@ describe("multiplayer room WebSocket gateway", () => {
       client,
       (message) =>
         message.type === "room.commandRejected" &&
-        message.requestId === "asteroids-1",
+        message.requestId === "snake-1",
     );
 
     sendClientMessage(client, {
-      gameId: "asteroids",
+      gameId: "snake",
       input: {
-        thrust: true,
-        type: "asteroids.setControls",
+        direction: "up",
+        type: "snake.setDirection",
       },
       participantId: "host-1",
-      requestId: "asteroids-1",
+      requestId: "snake-1",
       roomCode: "ROOM1",
       type: "game.input",
     });
 
     await expect(rejectionPromise).resolves.toEqual({
       code: "invalid-command",
-      error: "Game input is not supported for asteroids rooms.",
-      requestId: "asteroids-1",
+      error: "Game input is not supported for snake rooms.",
+      requestId: "snake-1",
       roomCode: "ROOM1",
       type: "room.commandRejected",
     });

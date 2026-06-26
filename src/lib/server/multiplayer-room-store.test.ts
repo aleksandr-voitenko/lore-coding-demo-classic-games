@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_ASTEROIDS_PRIVATE_ROOM_SEATS,
   DEFAULT_PONG_PRIVATE_ROOM_SEATS,
   DEFAULT_SPACE_INVADERS_PRIVATE_ROOM_SEATS,
   InProcessMultiplayerRoomStore,
@@ -10,6 +11,11 @@ import {
   type MultiplayerRoomSnapshot,
   type MultiplayerRoomStoreResult,
 } from "./multiplayer-room-runtime";
+import { getAsteroidsTickDelay } from "../asteroids-game-engine";
+import type {
+  AsteroidsMultiplayerGameSnapshot,
+  AsteroidsMultiplayerGameState,
+} from "../asteroids-multiplayer";
 import type { PrivateRoomSettings } from "../multiplayer/room";
 import {
   getPongMaximumScore,
@@ -18,6 +24,7 @@ import {
 } from "../pong-game-engine";
 import type { PongMultiplayerGameSnapshot } from "../pong-multiplayer";
 import { getSpaceInvadersTickDelay } from "../space-invaders-game-engine";
+import { asteroidsMultiplayerRuntimeAdapter } from "./asteroids-multiplayer-game-adapter";
 import type { SpaceInvadersMultiplayerServerGameSnapshot } from "./multiplayer-game-adapters";
 
 const HOST_USER = {
@@ -59,6 +66,12 @@ function expectPongGame(snapshot: MultiplayerRoomSnapshot) {
   expect(snapshot.game?.gameId).toBe("pong");
 
   return snapshot.game as PongMultiplayerGameSnapshot;
+}
+
+function expectAsteroidsGame(snapshot: MultiplayerRoomSnapshot) {
+  expect(snapshot.game?.gameId).toBe("asteroids");
+
+  return snapshot.game as AsteroidsMultiplayerGameSnapshot;
 }
 
 function expectSpaceInvadersGame(snapshot: MultiplayerRoomSnapshot) {
@@ -105,6 +118,46 @@ function createStartedPongRoom(
 function createStartedSpaceInvadersRoom(
   store: InProcessMultiplayerRoomStore,
   settings: PrivateRoomSettings = { gameId: "space-invaders" },
+) {
+  expectStoreSuccess(
+    store.createRoom({
+      host: HOST_USER,
+      settings,
+    }),
+  );
+  expectStoreSuccess(
+    store.applyCommand("ROOM1", {
+      displayName: "Guest One",
+      type: "room.joinObserver",
+    }),
+  );
+  expectStoreSuccess(
+    store.applyCommand("ROOM1", {
+      participantId: "host-1",
+      seatId: "ship-a",
+      type: "room.claimSeat",
+    }),
+  );
+  expectStoreSuccess(
+    store.applyCommand("ROOM1", {
+      participantId: "guest-1",
+      seatId: "ship-b",
+      type: "room.claimSeat",
+    }),
+  );
+
+  return expectStoreSuccess(
+    store.applyCommand("ROOM1", {
+      command: "start",
+      participantId: "host-1",
+      type: "room.lifecycle",
+    }),
+  );
+}
+
+function createStartedAsteroidsRoom(
+  store: InProcessMultiplayerRoomStore,
+  settings: PrivateRoomSettings = { gameId: "asteroids" },
 ) {
   expectStoreSuccess(
     store.createRoom({
@@ -218,6 +271,28 @@ describe("in-process multiplayer room store", () => {
       })),
       settings: {
         gameId: "space-invaders",
+      },
+      status: "lobby",
+    });
+  });
+
+  it("creates Asteroids rooms with default ship seats", () => {
+    const store = createTestRoomStore();
+    const snapshot = expectStoreSuccess(
+      store.createRoom({
+        host: HOST_USER,
+        settings: { gameId: "asteroids" },
+      }),
+    );
+
+    expect(snapshot.room).toMatchObject({
+      code: "ROOM1",
+      seats: DEFAULT_ASTEROIDS_PRIVATE_ROOM_SEATS.map((seat) => ({
+        ...seat,
+        occupiedByParticipantId: null,
+      })),
+      settings: {
+        gameId: "asteroids",
       },
       status: "lobby",
     });
@@ -734,6 +809,89 @@ describe("in-process multiplayer room store", () => {
     });
   });
 
+  it("initializes Asteroids only after both ship seats are occupied", () => {
+    let nowMs = 1_000;
+    const store = createTestRoomStore({ getNowMs: () => nowMs });
+
+    expectStoreSuccess(
+      store.createRoom({
+        host: HOST_USER,
+        settings: { gameId: "asteroids" },
+      }),
+    );
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        displayName: "Guest One",
+        type: "room.joinObserver",
+      }),
+    );
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        participantId: "host-1",
+        seatId: "ship-a",
+        type: "room.claimSeat",
+      }),
+    );
+
+    expect(
+      store.applyCommand("ROOM1", {
+        command: "start",
+        participantId: "host-1",
+        type: "room.lifecycle",
+      }),
+    ).toMatchObject({
+      code: "required-seats-empty",
+      success: false,
+    });
+    expect(expectStoreSuccess(store.getRoom("ROOM1")).game).toBeUndefined();
+
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        participantId: "guest-1",
+        seatId: "ship-b",
+        type: "room.claimSeat",
+      }),
+    );
+
+    nowMs = 1_500;
+    const started = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        command: "start",
+        participantId: "host-1",
+        type: "room.lifecycle",
+      }),
+    );
+
+    expect(started.room).toMatchObject({
+      settings: {
+        gameId: "asteroids",
+      },
+      status: "running",
+    });
+    expect(started.game).toMatchObject({
+      gameId: "asteroids",
+      heldInputs: {},
+      seq: 1,
+      serverTimeMs: 1_500,
+      snapshot: {
+        lives: expect.any(Number),
+        score: 0,
+        status: "running",
+        wave: 1,
+        ships: {
+          "ship-a": {
+            isActive: true,
+            seat: "ship-a",
+          },
+          "ship-b": {
+            isActive: true,
+            seat: "ship-b",
+          },
+        },
+      },
+    });
+  });
+
   it("starts and restarts Space Invaders with launcher-style room parameters", () => {
     let nowMs = 1_000;
     const store = createTestRoomStore({ getNowMs: () => nowMs });
@@ -795,6 +953,70 @@ describe("in-process multiplayer room store", () => {
     expect(restartedGame.ships["ship-a"].player.x).toBe(
       startedGame.ships["ship-a"].player.x,
     );
+  });
+
+  it("starts and restarts Asteroids with launcher-style room difficulty", () => {
+    let nowMs = 1_000;
+    const store = createTestRoomStore({ getNowMs: () => nowMs });
+    const started = createStartedAsteroidsRoom(store, {
+      gameId: "asteroids",
+      parameters: {
+        "asteroids-difficulty": "hard",
+      },
+    });
+    const startedGame = expectAsteroidsGame(started).snapshot;
+
+    expect(startedGame).toMatchObject({
+      difficulty: "hard",
+      lives: 2,
+      score: 0,
+      status: "running",
+      wave: 1,
+    });
+    expect(startedGame.asteroids).toHaveLength(5);
+
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        input: {
+          controls: {
+            rotateLeft: false,
+            rotateRight: false,
+            thrust: true,
+          },
+          type: "asteroids.setShipControls",
+        },
+        participantId: "host-1",
+        type: "game.input",
+      }),
+    );
+    nowMs += getAsteroidsTickDelay();
+    const advanced = expectStoreSuccess(store.getRoom("ROOM1"));
+
+    expect(
+      expectAsteroidsGame(advanced).snapshot.ships["ship-a"].ship.y,
+    ).toBeLessThan(startedGame.ships["ship-a"].ship.y);
+
+    const restarted = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        command: "restart",
+        participantId: "host-1",
+        type: "room.lifecycle",
+      }),
+    );
+    const restartedGame = expectAsteroidsGame(restarted);
+
+    expect(restartedGame.heldInputs).toEqual({});
+    expect(restartedGame.snapshot).toMatchObject({
+      asteroids: expect.arrayContaining([expect.any(Object)]),
+      difficulty: "hard",
+      lives: 2,
+      score: 0,
+      status: "running",
+      wave: 1,
+    });
+    expect(restartedGame.snapshot.asteroids).toHaveLength(5);
+    expect(restartedGame.snapshot.ships["ship-a"].bullets).toEqual([]);
+    expect(restartedGame.snapshot.ships["ship-b"].bullets).toEqual([]);
   });
 
   it("maps Pong input participants to seats and advances the matching paddle", () => {
@@ -886,6 +1108,78 @@ describe("in-process multiplayer room store", () => {
 
     expect(firedGame.ships["ship-a"].playerShots).toHaveLength(0);
     expect(firedGame.ships["ship-b"].playerShots).toHaveLength(1);
+
+    const released = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        participantId: "host-1",
+        seatId: "ship-a",
+        type: "room.releaseSeat",
+      }),
+    );
+
+    expect(released.game?.heldInputs).toEqual({});
+  });
+
+  it("maps Asteroids input participants to ships and advances held controls", () => {
+    let nowMs = 1_000;
+    const store = createTestRoomStore({ getNowMs: () => nowMs });
+    const started = createStartedAsteroidsRoom(store);
+    const initialGame = expectAsteroidsGame(started).snapshot;
+    const initialShipA = initialGame.ships["ship-a"].ship;
+    const initialShipB = initialGame.ships["ship-b"].ship;
+
+    const inputSnapshot = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        input: {
+          controls: {
+            rotateLeft: true,
+            rotateRight: false,
+            thrust: true,
+          },
+          type: "asteroids.setShipControls",
+        },
+        participantId: "host-1",
+        type: "game.input",
+      }),
+    );
+
+    expect(inputSnapshot.seq).toBe(started.seq);
+    expect(inputSnapshot.game?.seq).toBe(started.game!.seq + 1);
+    expect(inputSnapshot.game?.heldInputs).toEqual({
+      "ship-a": {
+        rotateLeft: true,
+        thrust: true,
+      },
+    });
+
+    nowMs += getAsteroidsTickDelay();
+    const advanced = expectStoreSuccess(store.getRoom("ROOM1"));
+    const advancedGame = expectAsteroidsGame(advanced).snapshot;
+
+    expect(advanced.game?.heldInputs).toEqual({
+      "ship-a": {
+        rotateLeft: true,
+        thrust: true,
+      },
+    });
+    expect(advancedGame.ships["ship-a"].ship.angle).not.toBe(initialShipA.angle);
+    expect(advancedGame.ships["ship-a"].ship.y).toBeLessThan(initialShipA.y);
+    expect(advancedGame.ships["ship-b"].ship.x).toBe(initialShipB.x);
+    expect(advancedGame.ships["ship-b"].ship.y).toBe(initialShipB.y);
+
+    const fired = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        input: {
+          type: "asteroids.fire",
+        },
+        participantId: "guest-1",
+        type: "game.input",
+      }),
+    );
+    const firedGame = expectAsteroidsGame(fired).snapshot;
+
+    expect(firedGame.ships["ship-a"].bullets).toHaveLength(0);
+    expect(firedGame.ships["ship-b"].bullets).toHaveLength(1);
 
     const released = expectStoreSuccess(
       store.applyCommand("ROOM1", {
@@ -1097,11 +1391,89 @@ describe("in-process multiplayer room store", () => {
     });
   });
 
+  it("adds a server-derived Asteroids terminal summary to terminal game snapshots", () => {
+    const store = createTestRoomStore();
+    const started = createStartedAsteroidsRoom(store, {
+      gameId: "asteroids",
+      parameters: {
+        "asteroids-difficulty": "easy",
+      },
+    });
+    const runtimeResult = asteroidsMultiplayerRuntimeAdapter.createRuntime({
+      nowMs: 1_000,
+      room: started.room,
+    });
+
+    expect(runtimeResult.success).toBe(true);
+
+    if (!runtimeResult.success) {
+      throw new Error(runtimeResult.error);
+    }
+
+    const runtime = runtimeResult.runtime as {
+      game: AsteroidsMultiplayerGameState;
+    };
+
+    runtime.game = {
+      ...runtime.game,
+      lives: 0,
+      score: 4_200,
+      status: "lost",
+      wave: 4,
+    };
+
+    const terminalGame = asteroidsMultiplayerRuntimeAdapter.createSnapshot({
+      room: started.room,
+      runtime,
+      serverTimeMs: 1_500,
+    });
+
+    expect(terminalGame.summary).toEqual({
+      key: "asteroids|mode=private-room|difficulty=easy",
+      mode: "private-room",
+      outcome: {
+        livesRemaining: 0,
+        score: 4_200,
+        wave: 4,
+      },
+      seats: [
+        {
+          id: "ship-a",
+          label: "Ship A",
+          participant: {
+            displayName: "Ada Host",
+            id: "host-1",
+            role: "host",
+            userId: "user-1",
+          },
+        },
+        {
+          id: "ship-b",
+          label: "Ship B",
+          participant: {
+            displayName: "Guest One",
+            id: "guest-1",
+            role: "player",
+            userId: null,
+          },
+        },
+      ],
+      settings: {
+        gameId: "asteroids",
+        parameters: {
+          "asteroids-difficulty": "easy",
+        },
+      },
+      status: "lost",
+    });
+  });
+
   it("keeps multiplayer summaries separate from solo result mechanisms", async () => {
     const sources = await Promise.all(
       [
         "src/components/pong-multiplayer-room.tsx",
         "src/components/space-invaders-multiplayer-room.tsx",
+        "src/lib/server/asteroids-multiplayer-game-adapter.ts",
         "src/lib/server/multiplayer-game-adapters.ts",
         "src/lib/server/multiplayer-room-runtime.ts",
       ].map((path) => readFile(path, "utf8")),
@@ -1114,9 +1486,11 @@ describe("in-process multiplayer room store", () => {
       "@/components/game-replay-save-action",
       "@/hooks/use-game-session",
       "@/lib/leaderboard",
+      "@/lib/asteroids-replay",
       "@/lib/pong-replay",
       "@/lib/space-invaders-replay",
       "@/lib/user-profile",
+      "../asteroids-replay",
       "../leaderboard",
       "../pong-replay",
       "../space-invaders-replay",
@@ -1250,6 +1624,65 @@ describe("in-process multiplayer room store", () => {
     ).toEqual({
       code: "invalid-command",
       error: "Game input is not supported for snake rooms.",
+      success: false,
+    });
+  });
+
+  it("rejects invalid, observer, and mismatched Asteroids game input", () => {
+    const store = createTestRoomStore();
+
+    createStartedAsteroidsRoom(store);
+
+    expect(
+      store.applyCommand("ROOM1", {
+        input: {
+          controls: {
+            rotateLeft: "yes",
+            rotateRight: false,
+            thrust: true,
+          },
+          type: "asteroids.setShipControls",
+        },
+        participantId: "host-1",
+        type: "game.input",
+      }),
+    ).toEqual({
+      code: "invalid-command",
+      error: "Asteroids ship control values must be booleans when provided.",
+      success: false,
+    });
+    expect(
+      store.applyCommand("ROOM1", {
+        gameId: "pong",
+        input: {
+          type: "asteroids.fire",
+        },
+        participantId: "host-1",
+        type: "game.input",
+      }),
+    ).toEqual({
+      code: "invalid-command",
+      error: "Game input game id must match the room game.",
+      success: false,
+    });
+
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        displayName: "Late Observer",
+        type: "room.joinObserver",
+      }),
+    );
+    expect(
+      store.applyCommand("ROOM1", {
+        input: {
+          type: "asteroids.fire",
+        },
+        participantId: "guest-2",
+        type: "game.input",
+      }),
+    ).toEqual({
+      code: "participant-not-seated",
+      error: "Participant does not occupy an Asteroids ship seat.",
       success: false,
     });
   });
@@ -1431,6 +1864,95 @@ describe("in-process multiplayer room store", () => {
     expect(finishedGame.snapshot.status).toBe("paused");
   });
 
+  it("pauses, resumes, and finishes the Asteroids runtime", () => {
+    let nowMs = 1_000;
+    const store = createTestRoomStore({ getNowMs: () => nowMs });
+
+    createStartedAsteroidsRoom(store);
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        input: {
+          controls: {
+            rotateLeft: false,
+            rotateRight: false,
+            thrust: true,
+          },
+          type: "asteroids.setShipControls",
+        },
+        participantId: "host-1",
+        type: "game.input",
+      }),
+    );
+
+    nowMs += getAsteroidsTickDelay();
+    const moved = expectStoreSuccess(store.getRoom("ROOM1"));
+    const movedGame = expectAsteroidsGame(moved);
+    const movedShipY = movedGame.snapshot.ships["ship-a"].ship.y;
+
+    const paused = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        command: "pause",
+        participantId: "host-1",
+        type: "room.lifecycle",
+      }),
+    );
+
+    expect(paused.room.status).toBe("paused");
+    expect(expectAsteroidsGame(paused).snapshot.status).toBe("paused");
+
+    nowMs += getAsteroidsTickDelay() * 5;
+    const stillPaused = expectStoreSuccess(store.getRoom("ROOM1"));
+    const stillPausedGame = expectAsteroidsGame(stillPaused);
+
+    expect(stillPausedGame.snapshot.ships["ship-a"].ship.y).toBe(movedShipY);
+    expect(stillPausedGame.seq).toBe(expectAsteroidsGame(paused).seq);
+
+    const resumed = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        command: "resume",
+        participantId: "host-1",
+        type: "room.lifecycle",
+      }),
+    );
+
+    expect(resumed.room.status).toBe("running");
+    expect(expectAsteroidsGame(resumed).snapshot.status).toBe("running");
+
+    nowMs += getAsteroidsTickDelay();
+    const advancedAfterResume = expectStoreSuccess(store.getRoom("ROOM1"));
+
+    expect(
+      expectAsteroidsGame(advancedAfterResume).snapshot.ships["ship-a"].ship.y,
+    ).toBeLessThan(movedShipY);
+
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        input: {
+          controls: {
+            rotateLeft: true,
+            rotateRight: false,
+            thrust: false,
+          },
+          type: "asteroids.setShipControls",
+        },
+        participantId: "guest-1",
+        type: "game.input",
+      }),
+    );
+    const finished = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        command: "finish",
+        participantId: "host-1",
+        type: "room.lifecycle",
+      }),
+    );
+    const finishedGame = expectAsteroidsGame(finished);
+
+    expect(finished.room.status).toBe("finished");
+    expect(finishedGame.heldInputs).toEqual({});
+    expect(finishedGame.snapshot.status).toBe("paused");
+  });
+
   it("caps request-driven Pong catch-up deterministically", () => {
     let nowMs = 0;
     const store = createTestRoomStore({ getNowMs: () => nowMs });
@@ -1560,6 +2082,48 @@ describe("in-process multiplayer room store", () => {
     expect(nextSpaceInvadersGame.heldInputs).toEqual({
       "ship-a": {
         right: true,
+      },
+    });
+  });
+
+  it("returns immutable Asteroids game snapshots", () => {
+    const store = createTestRoomStore({ getNowMs: () => 1_000 });
+
+    createStartedAsteroidsRoom(store);
+    const snapshot = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        input: {
+          controls: {
+            rotateLeft: false,
+            rotateRight: true,
+            thrust: true,
+          },
+          type: "asteroids.setShipControls",
+        },
+        participantId: "host-1",
+        type: "game.input",
+      }),
+    );
+    const asteroidsGame = expectAsteroidsGame(snapshot);
+
+    asteroidsGame.snapshot.ships["ship-a"].ship.x = 0;
+    asteroidsGame.snapshot.score = 99;
+    asteroidsGame.snapshot.asteroids[0]!.shape[0] = 99;
+    const mutableHeldInputs = asteroidsGame.heldInputs as {
+      "ship-a"?: { rotateLeft?: boolean };
+    };
+    mutableHeldInputs["ship-a"] = { rotateLeft: true };
+
+    const nextSnapshot = expectStoreSuccess(store.getRoom("ROOM1"));
+    const nextAsteroidsGame = expectAsteroidsGame(nextSnapshot);
+
+    expect(nextAsteroidsGame.snapshot.ships["ship-a"].ship.x).not.toBe(0);
+    expect(nextAsteroidsGame.snapshot.score).toBe(0);
+    expect(nextAsteroidsGame.snapshot.asteroids[0]?.shape[0]).not.toBe(99);
+    expect(nextAsteroidsGame.heldInputs).toEqual({
+      "ship-a": {
+        rotateRight: true,
+        thrust: true,
       },
     });
   });

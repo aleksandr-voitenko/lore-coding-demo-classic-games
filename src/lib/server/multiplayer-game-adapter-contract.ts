@@ -7,10 +7,13 @@ import type {
   PrivateRoomSettings,
 } from "../multiplayer/room";
 import type { PongMultiplayerGameSnapshot } from "../pong-multiplayer";
+import type { AsteroidsMultiplayerGameSnapshot } from "../asteroids-multiplayer";
 import type {
   SpaceInvadersMultiplayerGameSnapshot,
   SpaceInvadersMultiplayerHeldInputs,
 } from "../space-invaders-multiplayer";
+
+export type { AsteroidsMultiplayerGameSnapshot } from "../asteroids-multiplayer";
 
 export type MultiplayerServerGameInputCommand<Input = unknown> = {
   gameId?: unknown;
@@ -37,6 +40,7 @@ export type SpaceInvadersMultiplayerServerGameSnapshot =
   };
 
 export type MultiplayerServerGameSnapshot =
+  | AsteroidsMultiplayerGameSnapshot
   | PongMultiplayerGameSnapshot
   | SpaceInvadersMultiplayerServerGameSnapshot;
 

@@ -1,3 +1,7 @@
+import type {
+  MultiplayerRealtimeGameSnapshot,
+  MultiplayerTerminalSummary,
+} from "./multiplayer/protocol";
 import {
   ASTEROIDS_DEFAULT_DIFFICULTY,
   ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
@@ -134,6 +138,24 @@ export type AsteroidsMultiplayerHeldInput = AsteroidsControlInput & {
 
 export type AsteroidsMultiplayerHeldInputs = Readonly<
   Partial<Record<AsteroidsShipSeat, AsteroidsMultiplayerHeldInput>>
+>;
+
+export type AsteroidsMultiplayerTerminalSummary = MultiplayerTerminalSummary<
+  Extract<AsteroidsMultiplayerGameState["status"], "lost">,
+  {
+    livesRemaining: number;
+    score: number;
+    wave: number;
+  }
+>;
+
+export type AsteroidsMultiplayerGameSnapshot = MultiplayerRealtimeGameSnapshot<
+  "asteroids",
+  AsteroidsMultiplayerGameState,
+  {
+    heldInputs: AsteroidsMultiplayerHeldInputs;
+    summary?: AsteroidsMultiplayerTerminalSummary;
+  }
 >;
 
 const ASTEROIDS_MULTIPLAYER_INITIAL_SHIP_POSITIONS = {
