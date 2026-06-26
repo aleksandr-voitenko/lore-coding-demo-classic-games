@@ -37,6 +37,12 @@ browser does not simulate the canonical game for the room. Clients send
 validated intents; the server orders them, applies the selected game adapter, and
 publishes authoritative state/events back to players and observers.
 
+The durable multiplayer shape is one reusable private-room shell, one generic
+realtime protocol/transport, one server runtime game-adapter registry, and one
+client renderer/input registry. Pong is the first registered adapter and proof
+point for the contract; it must not become the architecture that later games have
+to route through.
+
 ## Participants
 
 - `Host`: the signed-in room owner. The host can change room settings, start the
@@ -86,6 +92,12 @@ Gameplay payloads are adapter-owned data inside the shared envelope: Pong can
 define paddle intents and state frames first, while Space Invaders and Asteroids
 only influence the adapter shape until they have their own runtime work.
 
+The old browser HTTP room-event polling path is a temporary compatibility
+fallback while WebSocket room coverage lands. The user preference for this
+milestone is that task 13 removes that fallback after WebSockets cover room
+events; future adapter work should treat the WebSocket stream as the target live
+transport rather than designing around a permanent polling path.
+
 The sidecar orders accepted client intents, applies the selected game adapter,
 and publishes authoritative snapshots/events to connected players and observers.
 Observers connect to the same room stream and receive lobby/game state, but the
@@ -96,6 +108,28 @@ rejoin through the room identity established by bootstrap, resume from the last
 acknowledged server sequence when the event log can satisfy it, or receive a
 fresh authoritative snapshot before continuing on the live stream. Clients must
 not reconstruct canonical multiplayer state by replaying local browser input.
+
+## Shared Game Adapter Contract
+
+The private-room shell owns invite resolution, lobby state, participant lists,
+observer presentation, host controls, shared room status, and the active-room
+container. It should render game-specific surfaces through a client registry
+keyed by `gameId`, not by branching the shell around Pong.
+
+The server runtime should route game-specific behavior through an adapter
+registry keyed by `gameId`. Each adapter owns its settings defaults and
+validation, required seats and role mapping, accepted input payloads, initial
+state creation, deterministic application of ordered intents and server ticks,
+authoritative snapshot projection, terminal result data, and any match-summary
+fields. The room service owns room identity, membership, sequencing, admission,
+host authorization, observer permissions, and dispatch to the selected adapter.
+
+The client renderer/input registry should pair each `gameId` with a renderer
+that consumes authoritative server snapshots/events and an input mapper that
+emits adapter-owned intents through the generic transport envelope. Client
+renderers may keep local UI affordance state such as pressed keys, but canonical
+game state, score authority, replay derivation, and result ordering stay on the
+server path.
 
 ## Server Authority And Event Logs
 
@@ -129,6 +163,12 @@ solo leaderboard keys. A private-room Pong result should use a key that includes
 the multiplayer mode, for example `pong|mode=private-room|board=420x560|target=5`,
 instead of the current solo-style `pong|board=420x560|target=5` key.
 
+Terminal multiplayer results should be mode-scoped before they are exposed to
+leaderboards, profiles, replays, or match summaries. A game adapter may compute
+game-specific result fields, but the room service should attach room mode,
+participants, roles, settings, and the authoritative final event order so solo
+and multiplayer outcomes remain separate.
+
 Guest player display names may appear in room summaries and multiplayer
 leaderboards, but they do not create profile sessions. Profile stats remain
 signed-in and server-derived. If multiplayer profile history is added, it should
@@ -145,6 +185,8 @@ lobby state components to support Pong, Space Invaders, and Asteroids.
 
 Pong-specific components may exist for the first rollout, but they should avoid
 owning generic room concepts that would later need to be extracted wholesale.
+Treat Pong as the first client renderer/input adapter registered into the shared
+room shell, not as the component hierarchy that other multiplayer games copy.
 Where the existing game shell and board-action conventions fit, multiplayer
 components should extend those patterns rather than introducing a parallel game
 chrome.
@@ -161,6 +203,8 @@ The first implementation should target private Pong rooms only:
 - observers can join waiting or active rooms;
 - host controls settings, start, pause/resume, and restart;
 - server orders inputs and owns canonical Pong state;
+- Pong is wired as the first server and client game adapter, while generic room
+  behavior stays outside Pong-specific modules;
 - multiplayer scores use mode-scoped keys;
 - shared room/lobby/shell pieces are shaped for later reuse.
 

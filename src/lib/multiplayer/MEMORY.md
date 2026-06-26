@@ -22,10 +22,20 @@ folder.
   or snapshot payloads behind the generic `game.input` and game-snapshot
   envelopes so Pong, Space Invaders, Asteroids, and later games can share the
   same realtime room service.
+- Keep the protocol aligned with a `gameId`-keyed server adapter registry and a
+  matching client renderer/input registry. The envelope carries room identity,
+  participant/session context, message kind, and server ordering; adapter-owned
+  payloads remain nested behind the game boundary.
+- Server sequence fields are the live-stream view of the future room event log.
+  Replays and match summaries should be derived from that server-ordered path,
+  not from client-uploaded multiplayer histories.
 - Current Pong aliases in `protocol.ts` exist to keep the existing Pong
   multiplayer UI/runtime typed while the sidecar protocol is introduced. Future
   game integrations should narrow by `gameId` at the edge that understands that
   game, not in the room transport envelope itself.
+- Treat the old HTTP room-event polling fallback as temporary. Milestone task 13
+  removes it after WebSocket room events cover the active-room cases, so new
+  protocol work should not depend on polling-only message shapes.
 - Protocol tests should remain deterministic data-shape checks using TypeScript
   `satisfies` objects and small runtime assertions unless a real parser or
   validator is added for the protocol boundary.

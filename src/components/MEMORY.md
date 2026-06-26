@@ -22,21 +22,28 @@ This file covers React component ownership and shared game UI conventions under
   `UserAccountControls`. Keep browser-only `window` access in this client
   component; it snapshots `window.scrollX` and `window.scrollY` before opening a
   game and restores the viewport when returning to the launcher.
-- `multiplayer-room-lobby.tsx` owns the generic private-room lobby UI plus HTTP
-  helpers for room creation and fallback snapshots/commands.
+- `multiplayer-room-lobby.tsx` owns the generic private-room lobby/shell UI plus
+  HTTP helpers for room creation and temporary fallback snapshots/commands.
   `multiplayer-room-transport.ts` owns the browser WebSocket room transport,
   URL derivation from `NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL`, generic
   non-host `room.command` and `game.input` envelope sending, and
   reconnect/bootstrap handling. Host-only lifecycle/settings commands stay on
   the Next HTTP route until the WebSocket sidecar has an authenticated host
-  session model. Keep both surfaces game-agnostic; actual Pong gameplay, score
-  submission, replay recording, and server transport authority belong outside
-  the lobby component.
-- `pong-multiplayer-room.tsx` owns the private-room Pong play surface fed by
-  server snapshots. It may render `PongBoard` and post committed room
-  `game.input` commands for seated participants, but it must not import
+  session model. The old HTTP room-event polling fallback is temporary; milestone
+  task 13 removes it after WebSocket room events cover active-room delivery. Keep
+  both surfaces game-agnostic; actual game play, score submission, replay
+  derivation, and server transport authority belong outside the shell.
+- Active multiplayer game UI should be selected through a client
+  renderer/input registry keyed by `gameId`. A renderer consumes authoritative
+  server snapshots/events and emits adapter-owned intents through the generic
+  transport envelope; it does not own canonical game state, result ordering,
+  solo replay saving, or solo leaderboard submission.
+- `pong-multiplayer-room.tsx` owns the first private-room Pong renderer/input
+  adapter fed by server snapshots. It may render `PongBoard` and post committed
+  room `game.input` commands for seated participants, but it must not import
   `PongGame`, solo replay/session hooks, leaderboard presenters, or local Pong
-  engine tick ownership.
+  engine tick ownership, and it should not become the template for generic room
+  shell behavior.
 - `game-card-artwork-frame.tsx` owns the shared launcher-style key-art frame
   used by launcher cards and the global leaderboard cards. Keep the blurred
   background, dark overlay, centered rounded foreground image, direct versioned

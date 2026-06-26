@@ -84,10 +84,11 @@ Browser room streams are enabled with
 `ws://127.0.0.1:3001/multiplayer/rooms` for local sidecar testing, or a
 same-origin path such as `/multiplayer/rooms` when a proxy routes WebSocket
 upgrades beside the Next app. When this value is unset, the room UI keeps using
-the existing Next HTTP polling and command fallback. Host lifecycle and settings
-commands continue to use the Next HTTP API so signed-in-host authorization stays
-on the authenticated route until the WebSocket sidecar has its own authenticated
-host session model.
+the existing Next HTTP polling and command fallback. That room-event polling
+fallback is temporary: milestone task 13 removes it after WebSocket room events
+cover the active-room paths. Host lifecycle and settings commands continue to
+use the Next HTTP API so signed-in-host authorization stays on the authenticated
+route until the WebSocket sidecar has its own authenticated host session model.
 
 The sidecar room service endpoints are internal service endpoints; public HTTP
 room creation and host authorization should still flow through the Next API

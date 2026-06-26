@@ -76,6 +76,31 @@ This file covers Node-only server helpers and storage adapters under
 - Keep this adapter boundary small so a future Postgres store can replace SQLite
   without changing the client API or game components.
 
+## Multiplayer Adapter Target
+
+- The long-term multiplayer runtime is a `gameId`-keyed adapter registry, not a
+  Pong-owned room architecture. Pong is the first adapter; later games should
+  plug into the same room service, sidecar, protocol envelopes, and result
+  pipeline.
+- A server game adapter owns game settings defaults/validation, seat and role
+  mapping, accepted input payloads, initial state, deterministic application of
+  server-ordered intents and ticks, authoritative snapshot projection, terminal
+  result data, and game-specific match-summary fields. The room service owns
+  room identity, membership, admission, host authorization, observer permissions,
+  sequencing, and dispatch to the selected adapter.
+- The server-ordered room event log is the source of truth for future
+  multiplayer replay and match-summary derivation. It should cover lifecycle,
+  membership, settings versions, accepted gameplay intents, ticks, snapshots or
+  snapshot references, and terminal results before anything durable is exposed
+  to profiles or leaderboards.
+- Multiplayer results and scores stay mode-scoped, for example private-room
+  Pong keys must remain separate from solo Pong keys. Do not write multiplayer
+  outcomes through solo replay uploads or unscoped solo leaderboard keys.
+- The old HTTP room-event polling fallback is temporary. Milestone task 13
+  removes it after WebSocket room events cover active-room delivery, so server
+  runtime work should treat WebSocket fanout plus the ordered event path as the
+  target live architecture.
+
 ## SQLite Assumptions
 
 - `GAME_LEADERBOARD_SQLITE_PATH` is the preferred durable override.

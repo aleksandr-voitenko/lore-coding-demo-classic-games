@@ -36,3 +36,8 @@ This file covers Playwright browser-flow coverage under `e2e/`.
   discovers `e2e/sidecar/**/*.e2e.ts`.
 - Sidecar e2e files intentionally use the `.e2e.ts` suffix rather than
   `.spec.ts` so `npm run test:e2e` remains the default Next-only smoke suite.
+- Sidecar e2e coverage is the acceptance path for replacing the old HTTP
+  room-event polling fallback. Before milestone task 13 removes that fallback,
+  the isolated sidecar suite should prove that WebSocket room events cover the
+  host, guest, observer, lifecycle, and active-game delivery paths needed by the
+  shared room shell and first Pong adapter.
