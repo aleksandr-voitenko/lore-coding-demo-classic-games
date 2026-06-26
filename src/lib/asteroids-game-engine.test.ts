@@ -250,6 +250,35 @@ describe("asteroids game engine", () => {
     expect(Math.hypot(game.ship.velocity.x, game.ship.velocity.y)).toBeCloseTo(2.48);
   });
 
+  it("coasts with friction while opposing rotation inputs cancel out", () => {
+    const ship = {
+      ...createInitialAsteroidsGame().ship,
+      angle: 33,
+      velocity: { x: 2, y: -1 },
+      x: 200,
+      y: 150,
+    };
+    const advanced = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [],
+        respawnInvulnerabilityTicks: 1_000,
+        ship,
+      }),
+      { rotateLeft: true, rotateRight: true },
+    );
+
+    expect(advanced.ship).toMatchObject({
+      angle: 33,
+      isThrusting: false,
+      velocity: {
+        x: 1.984,
+        y: -0.992,
+      },
+      x: 201.984,
+      y: 149.008,
+    });
+  });
+
   it("wraps moving ships and bullets across board edges", () => {
     const runningGame = createRunningGame({
       asteroids: [],
@@ -310,6 +339,45 @@ describe("asteroids game engine", () => {
     expect(saturated.bullets).toHaveLength(4);
   });
 
+  it("fires from the ship nose, adds ship velocity, and cools shots down on ticks", () => {
+    const ship = {
+      ...createInitialAsteroidsGame().ship,
+      angle: 0,
+      velocity: { x: 1.5, y: -0.5 },
+      x: 120,
+      y: 90,
+    };
+    const fired = fireAsteroidsBullet(
+      createRunningGame({
+        asteroids: [],
+        ship,
+      }),
+    );
+    const cooled = advanceAsteroidsGame(fired);
+
+    expect(fired.bullets).toEqual([
+      {
+        id: "bullet-0",
+        radius: 2.5,
+        ttl: 58,
+        velocity: { x: 5.8, y: -0.5 },
+        x: 137.5,
+        y: 90,
+      },
+    ]);
+    expect(fired.nextBulletId).toBe(1);
+    expect(fired.shotCooldownTicks).toBe(19);
+    expect(cooled.shotCooldownTicks).toBe(18);
+    expect(cooled.bullets).toEqual([
+      {
+        ...fired.bullets[0]!,
+        ttl: 57,
+        x: 143.3,
+        y: 89.5,
+      },
+    ]);
+  });
+
   it("spawns one persistent power-up after a fifteen-to-thirty second cooldown", () => {
     const waiting = advanceAsteroidsGame(
       createRunningGame({
@@ -340,6 +408,40 @@ describe("asteroids game engine", () => {
     expect(ASTEROIDS_POWER_UP_SHIELD_TICKS).toBe(
       Math.ceil(20_000 / getAsteroidsTickDelay()),
     );
+  });
+
+  it("uses injected randomness to spawn power-ups at the first unblocked sampled point", () => {
+    const spawned = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [
+          createAsteroid({
+            radius: 42,
+            x: ASTEROIDS_BOARD_WIDTH / 2,
+            y: ASTEROIDS_BOARD_HEIGHT / 2,
+          }),
+        ],
+        nextPowerUpId: 7,
+        powerUpSpawnCooldownTicks: 0,
+        saucerSpawnCooldownTicks: 1_000,
+        ship: {
+          ...createInitialAsteroidsGame().ship,
+          x: 80,
+          y: 80,
+        },
+      }),
+      {},
+      { random: createLoopingRandom([0.75, 0.5, 0.5, 0.9, 0.1]) },
+    );
+
+    expect(spawned.powerUp).toEqual({
+      id: "power-up-7",
+      kind: "bonus-score",
+      radius: 12,
+      x: 696,
+      y: 84,
+    });
+    expect(spawned.nextPowerUpId).toBe(8);
+    expect(spawned.powerUpSpawnCooldownTicks).toBe(0);
   });
 
   it("schedules the next power-up only after the active one is picked up", () => {
@@ -595,6 +697,58 @@ describe("asteroids game engine", () => {
     expect(cleared.asteroids.every((asteroid) => asteroid.size === "large")).toBe(true);
   });
 
+  it("uses injected randomness when creating the next wave asteroid field", () => {
+    const randomValues = [
+      0.3, 0.65, 0.2, 0.7, 0.11, 0.42, 0.83, 0.24, 0.55, 0.96, 0.37, 0.68,
+      0.09, 0.5,
+    ];
+    const firstWave = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [],
+        nextAsteroidId: 20,
+        powerUpSpawnCooldownTicks: 1_000,
+        saucerSpawnCooldownTicks: 1_000,
+        wave: 3,
+      }),
+      {},
+      { random: createLoopingRandom(randomValues) },
+    );
+    const secondWave = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [],
+        nextAsteroidId: 20,
+        powerUpSpawnCooldownTicks: 1_000,
+        saucerSpawnCooldownTicks: 1_000,
+        wave: 3,
+      }),
+      {},
+      { random: createLoopingRandom(randomValues) },
+    );
+    const defaultWave = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [],
+        nextAsteroidId: 20,
+        powerUpSpawnCooldownTicks: 1_000,
+        saucerSpawnCooldownTicks: 1_000,
+        wave: 3,
+      }),
+    );
+
+    expect(firstWave.wave).toBe(4);
+    expect(firstWave.asteroids).toHaveLength(ASTEROIDS_STARTING_ASTEROID_COUNT + 3);
+    expect(firstWave.nextAsteroidId).toBe(27);
+    expect(firstWave.asteroids).toEqual(secondWave.asteroids);
+    expect(firstWave.asteroids[0]).toMatchObject({
+      id: "asteroid-20",
+      size: "large",
+      x: 752,
+    });
+    expect(firstWave.asteroids[0]?.y).toBeCloseTo(368.4);
+    expect(firstWave.asteroids[0]?.velocity.x).toBeCloseTo(-1.2368);
+    expect(firstWave.asteroids[0]?.velocity.y).toBeCloseTo(-0.48);
+    expect(firstWave.asteroids[0]?.shape).not.toEqual(defaultWave.asteroids[0]?.shape);
+  });
+
   it("spawns, moves, and retires UFO saucers from alternating edges", () => {
     const safeAsteroid = createAsteroid({ radius: 14, size: "small", x: 48, y: 48 });
     const spawned = advanceAsteroidsGame(
@@ -737,6 +891,50 @@ describe("asteroids game engine", () => {
     });
   });
 
+  it("spends one life for simultaneous saucer, asteroid, and saucer-shot hazards", () => {
+    const ship = {
+      ...createInitialAsteroidsGame().ship,
+      x: 240,
+      y: 160,
+    };
+    const damaged = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [
+          createAsteroid({
+            x: ship.x,
+            y: ship.y,
+          }),
+        ],
+        bullets: [createBullet({ id: "active-player-shot" })],
+        lives: 3,
+        saucer: createSaucer({
+          shotCooldownTicks: 12,
+          velocity: { x: 0, y: 0 },
+          x: ship.x,
+          y: ship.y,
+        }),
+        saucerBullets: [
+          createSaucerShot({ id: "hitting-shot", x: ship.x, y: ship.y }),
+          createSaucerShot({ id: "nearby-shot", x: ship.x + 4, y: ship.y }),
+        ],
+        ship,
+      }),
+    );
+
+    expect(damaged).toMatchObject({
+      lives: 2,
+      respawnInvulnerabilityTicks: 0,
+      status: "running",
+    });
+    expect(damaged.bullets).toEqual([]);
+    expect(damaged.saucerBullets).toEqual([]);
+    expect(damaged.saucer).not.toBeNull();
+    expect(damaged.shipExplosion).toMatchObject({
+      x: ship.x,
+      y: ship.y,
+    });
+  });
+
   it("lets respawn shields absorb saucer shots without losing a life", () => {
     const ship = createInitialAsteroidsGame().ship;
     const shielded = advanceAsteroidsGame(
@@ -773,6 +971,40 @@ describe("asteroids game engine", () => {
     expect(lostGame.status).toBe("lost");
     expect(lostGame.saucer).toBeNull();
     expect(lostGame.saucerBullets).toEqual([]);
+  });
+
+  it("continues scoring and wave advancement while the ship explosion countdown runs", () => {
+    const ship = createInitialAsteroidsGame().ship;
+    const exploding = advanceAsteroidsGame(
+      createRunningGame({
+        asteroids: [createAsteroid({ radius: 14, size: "small" })],
+        bullets: [createBullet()],
+        lives: 1,
+        powerUpSpawnCooldownTicks: 1_000,
+        saucerSpawnCooldownTicks: 1_000,
+        ship,
+        shipExplosion: {
+          durationTicks: ASTEROIDS_SHIP_EXPLOSION_TICKS,
+          radius: ship.radius,
+          ticksRemaining: 2,
+          x: ship.x,
+          y: ship.y,
+        },
+      }),
+    );
+
+    expect(exploding).toMatchObject({
+      lives: 1,
+      score: getAsteroidsAsteroidScore("small"),
+      status: "running",
+      wave: 2,
+    });
+    expect(exploding.asteroids).toHaveLength(ASTEROIDS_STARTING_ASTEROID_COUNT + 1);
+    expect(exploding.shipExplosion).toMatchObject({
+      ticksRemaining: 1,
+      x: ship.x,
+      y: ship.y,
+    });
   });
 
   it("animates ship collisions before respawning a shielded ship or ending the run", () => {
@@ -907,6 +1139,46 @@ describe("asteroids game engine", () => {
     expect(respawned.status).toBe("running");
     expect(respawned.shipExplosion).toBeNull();
     expect(respawned.respawnInvulnerabilityTicks).toBe(
+      ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
+    );
+  });
+
+  it("keeps lost games inert until starting a difficulty-preserving restart", () => {
+    const lostGame = createRunningGame({
+      asteroids: [createAsteroid()],
+      bullets: [createBullet()],
+      difficulty: "hard",
+      lives: 0,
+      powerUp: createPowerUp({ kind: "engine-speed" }),
+      saucer: createSaucer(),
+      saucerBullets: [createSaucerShot()],
+      score: 12_340,
+      status: "lost",
+      wave: 7,
+    });
+    const advanced = advanceAsteroidsGame(lostGame, { rotateRight: true, thrust: true });
+    const restarted = startAsteroidsGame(lostGame);
+
+    expect(advanced).toBe(lostGame);
+    expect(fireAsteroidsBullet(lostGame)).toBe(lostGame);
+    expect(restarted).toMatchObject({
+      difficulty: "hard",
+      lives: 2,
+      powerUp: null,
+      saucer: null,
+      saucerBullets: [],
+      score: 0,
+      status: "running",
+      wave: 1,
+    });
+    expect(restarted.asteroids).toHaveLength(5);
+    expect(restarted.ship).toMatchObject({
+      angle: -90,
+      velocity: { x: 0, y: 0 },
+      x: ASTEROIDS_BOARD_WIDTH / 2,
+      y: ASTEROIDS_BOARD_HEIGHT / 2,
+    });
+    expect(restarted.respawnInvulnerabilityTicks).toBe(
       ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
     );
   });
