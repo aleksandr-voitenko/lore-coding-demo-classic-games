@@ -52,6 +52,7 @@ describe("pong replay route", () => {
   it("saves valid signed-in Pong replay uploads and labels save errors", async () => {
     const user = { displayName: "Ada", id: "user-1" };
     const replay = createReplayPayload();
+    const normalizedReplay = { ...replay, initialServeSide: "left" };
     const replayStore = {
       getReplay: vi.fn(),
       saveReplay: vi
@@ -86,7 +87,7 @@ describe("pong replay route", () => {
     );
 
     expect(saveResponse.status).toBe(201);
-    expect(replayStore.saveReplay).toHaveBeenCalledWith(user, replay);
+    expect(replayStore.saveReplay).toHaveBeenCalledWith(user, normalizedReplay);
     await expect(saveResponse.json()).resolves.toEqual({ saved: true });
     expect(mismatchResponse.status).toBe(400);
     await expect(mismatchResponse.json()).resolves.toEqual({
