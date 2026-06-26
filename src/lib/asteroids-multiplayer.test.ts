@@ -256,14 +256,30 @@ describe("asteroids multiplayer state model", () => {
     const soloGame = createInitialAsteroidsGame();
     const readyGame = createInitialAsteroidsMultiplayerGame();
     const started = startAsteroidsMultiplayerGame(readyGame);
+    const alreadyStarted = startAsteroidsMultiplayerGame(started);
     const paused = pauseAsteroidsMultiplayerGame(started);
+    const alreadyPaused = pauseAsteroidsMultiplayerGame(paused);
     const resumed = startAsteroidsMultiplayerGame(paused);
+    const lostRestarted = startAsteroidsMultiplayerGame({
+      ...resumed,
+      lives: 0,
+      score: 600,
+      status: "lost",
+      wave: 3,
+    });
+    const startedWithInactiveShip = startAsteroidsMultiplayerGame(
+      withShip(createInitialAsteroidsMultiplayerGame(), "ship-b", {
+        isActive: false,
+      }),
+    );
     const restarted = restartAsteroidsMultiplayerGame({
       ...resumed,
       difficulty: "hard",
     });
+    const defaultRestarted = restartAsteroidsMultiplayerGame();
 
     expect(started.status).toBe("running");
+    expect(alreadyStarted).toBe(started);
     expect(started.ships["ship-a"].respawnInvulnerabilityTicks).toBe(
       ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
     );
@@ -271,7 +287,17 @@ describe("asteroids multiplayer state model", () => {
       ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
     );
     expect(paused.status).toBe("paused");
+    expect(alreadyPaused).toBe(paused);
     expect(resumed.status).toBe("running");
+    expect(lostRestarted).toMatchObject({
+      score: 0,
+      status: "running",
+      wave: 1,
+    });
+    expect(startedWithInactiveShip.ships["ship-a"].respawnInvulnerabilityTicks).toBe(
+      ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
+    );
+    expect(startedWithInactiveShip.ships["ship-b"].respawnInvulnerabilityTicks).toBe(0);
     expect(restarted).toMatchObject({
       difficulty: "hard",
       lives: 2,
@@ -280,6 +306,8 @@ describe("asteroids multiplayer state model", () => {
       wave: 1,
     });
     expect(restarted.asteroids).toHaveLength(5);
+    expect(defaultRestarted.difficulty).toBe("medium");
+    expect(advanceAsteroidsMultiplayerGameTick(paused)).toBe(paused);
     expect("ships" in soloGame).toBe(false);
     expect(soloGame.ship.x).toBe(ASTEROIDS_BOARD_WIDTH / 2);
   });
@@ -350,6 +378,42 @@ describe("asteroids multiplayer state model", () => {
     expect(firedBAfterAIsCapped.nextBulletId).toBe(11);
   });
 
+  it("ignores fire for inactive ships while held fire is per playable ship", () => {
+    const runningGame = createRunningMultiplayerGame({
+      asteroids: [createSafeAsteroid()],
+    });
+    const inactiveShipA = withShip(runningGame, "ship-a", {
+      isActive: false,
+    });
+    const explodingShipB = withShip(runningGame, "ship-b", {
+      shipExplosion: {
+        durationTicks: ASTEROIDS_SHIP_EXPLOSION_TICKS,
+        radius: runningGame.ships["ship-b"].ship.radius,
+        ticksRemaining: ASTEROIDS_SHIP_EXPLOSION_TICKS,
+        x: runningGame.ships["ship-b"].ship.x,
+        y: runningGame.ships["ship-b"].ship.y,
+      },
+    });
+    const heldFireGame = advanceAsteroidsMultiplayerGameTick(runningGame, {
+      "ship-a": { fire: true },
+      "ship-b": { fire: true },
+    });
+
+    expect(fireAsteroidsMultiplayerShipBullet(inactiveShipA, "ship-a")).toBe(
+      inactiveShipA,
+    );
+    expect(fireAsteroidsMultiplayerShipBullet(explodingShipB, "ship-b")).toBe(
+      explodingShipB,
+    );
+    expect(heldFireGame.ships["ship-a"].bullets.map((bullet) => bullet.id)).toEqual([
+      "bullet-0",
+    ]);
+    expect(heldFireGame.ships["ship-b"].bullets.map((bullet) => bullet.id)).toEqual([
+      "bullet-1",
+    ]);
+    expect(heldFireGame.nextBulletId).toBe(2);
+  });
+
   it("does not apply friendly fire, ship collision, or player bullet-bullet collisions", () => {
     const overlappedShips = withBothShipsAt(
       createRunningMultiplayerGame({
@@ -414,6 +478,105 @@ describe("asteroids multiplayer state model", () => {
     expect(Math.abs(saucerShot.velocity.y)).toBeLessThan(0.001);
     expect(advanced.nextSaucerBulletId).toBe(1);
     expect(advanced.saucer?.shotCooldownTicks).toBeGreaterThan(0);
+  });
+
+  it("lets player bullets destroy saucers and advance an empty wave", () => {
+    const game = withShip(
+      createRunningMultiplayerGame({
+        asteroids: [],
+        saucer: createSaucer({
+          kind: "small",
+          shotCooldownTicks: 99,
+          x: 320,
+          y: 300,
+        }),
+        saucerSpawnCooldownTicks: 0,
+      }),
+      "ship-a",
+      {
+        bullets: [
+          createBullet({
+            id: "saucer-hit-shot",
+            x: 320,
+            y: 300,
+          }),
+        ],
+      },
+    );
+    const advanced = advanceAsteroidsMultiplayerGameTick(game, {}, {
+      random: createRandomSequence([0.25, 0.5, 0.75, 0.1]),
+    });
+
+    expect(advanced.saucer).toBeNull();
+    expect(advanced.saucerSpawnCooldownTicks).toBeGreaterThan(0);
+    expect(advanced.ships["ship-a"].bullets).toEqual([]);
+    expect(advanced.score).toBeGreaterThan(game.score);
+    expect(advanced.wave).toBe(2);
+    expect(advanced.asteroids.length).toBeGreaterThan(0);
+  });
+
+  it("does not fire saucer shots when no playable ship can be targeted", () => {
+    const game = withShip(
+      withShip(
+        createRunningMultiplayerGame({
+          asteroids: [createSafeAsteroid()],
+          saucer: createSaucer({
+            shotCooldownTicks: 0,
+            x: 400,
+            y: 300,
+          }),
+        }),
+        "ship-a",
+        { isActive: false },
+      ),
+      "ship-b",
+      {
+        shipExplosion: {
+          durationTicks: ASTEROIDS_SHIP_EXPLOSION_TICKS,
+          radius: 14,
+          ticksRemaining: ASTEROIDS_SHIP_EXPLOSION_TICKS,
+          x: 550,
+          y: 300,
+        },
+      },
+    );
+    const advanced = advanceAsteroidsMultiplayerGameTick(game);
+
+    expect(advanced.saucerBullets).toEqual([]);
+    expect(advanced.nextSaucerBulletId).toBe(game.nextSaucerBulletId);
+    expect(advanced.saucer).toMatchObject({
+      id: "saucer-test",
+      shotCooldownTicks: 0,
+    });
+  });
+
+  it("spawns and preserves power-ups without forcing collection", () => {
+    const spawnReady = createRunningMultiplayerGame({
+      asteroids: [createSafeAsteroid({ x: 760, y: 560 })],
+      nextPowerUpId: 7,
+      powerUpSpawnCooldownTicks: 0,
+    });
+    const spawned = advanceAsteroidsMultiplayerGameTick(spawnReady, {}, {
+      random: createRandomSequence([Number.NaN, 0.98, 0.98]),
+    });
+    const uncollected = advanceAsteroidsMultiplayerGameTick({
+      ...spawnReady,
+      powerUp: createPowerUp({
+        x: 40,
+        y: 40,
+      }),
+    });
+
+    expect(spawned.nextPowerUpId).toBe(8);
+    expect(spawned.powerUp).toMatchObject({
+      id: "power-up-7",
+      kind: "shield",
+    });
+    expect(uncollected.powerUp).toMatchObject({
+      id: "power-up-test",
+      x: 40,
+      y: 40,
+    });
   });
 
   it("lets asteroid body hazards destroy both ships and spend two shared lives", () => {
@@ -529,6 +692,38 @@ describe("asteroids multiplayer state model", () => {
     expect(damaged.ships["ship-b"].respawnOnExplosionEnd).toBe(true);
   });
 
+  it("consumes saucer shots blocked by invulnerability without spending lives", () => {
+    const game = withShip(
+      withShip(
+        withBothShipsAt(
+          createRunningMultiplayerGame({
+            asteroids: [createSafeAsteroid()],
+            lives: 2,
+            saucerBullets: [
+              createSaucerShot({
+                id: "shielded-double-hit-shot",
+                x: 320,
+                y: 300,
+              }),
+            ],
+          }),
+          320,
+          300,
+        ),
+        "ship-a",
+        { respawnInvulnerabilityTicks: 5 },
+      ),
+      "ship-b",
+      { respawnInvulnerabilityTicks: 8 },
+    );
+    const advanced = advanceAsteroidsMultiplayerGameTick(game);
+
+    expect(advanced.lives).toBe(2);
+    expect(advanced.saucerBullets).toEqual([]);
+    expect(advanced.ships["ship-a"].shipExplosion).toBeNull();
+    expect(advanced.ships["ship-b"].shipExplosion).toBeNull();
+  });
+
   it("applies power-up ship upgrades only to the collecting ship", () => {
     const game = createRunningMultiplayerGame({
       asteroids: [createSafeAsteroid()],
@@ -574,6 +769,42 @@ describe("asteroids multiplayer state model", () => {
     expect(pickedUp.powerUp).toBeNull();
     expect(pickedUp.ships["ship-a"].engineSpeedMultiplier).toBe(1);
     expect(pickedUp.ships["ship-b"].engineSpeedMultiplier).toBeCloseTo(1.2);
+  });
+
+  it("chooses the first simultaneous power-up collector without injected randomness", () => {
+    const game = withBothShipsAt(
+      createRunningMultiplayerGame({
+        asteroids: [createSafeAsteroid()],
+      }),
+      320,
+      300,
+    );
+    const pickedUp = advanceAsteroidsMultiplayerGameTick({
+      ...game,
+      powerUp: createPowerUp({
+        kind: "shot-interval",
+        x: 320,
+        y: 300,
+      }),
+    });
+    const pickedUpWithNonFiniteRandom = advanceAsteroidsMultiplayerGameTick(
+      {
+        ...game,
+        powerUp: createPowerUp({
+          kind: "engine-speed",
+          x: 320,
+          y: 300,
+        }),
+      },
+      {},
+      { random: createRandomSequence([Number.NaN, 0]) },
+    );
+
+    expect(pickedUp.powerUp).toBeNull();
+    expect(pickedUp.ships["ship-a"].shotIntervalMultiplier).toBeLessThan(1);
+    expect(pickedUp.ships["ship-b"].shotIntervalMultiplier).toBe(1);
+    expect(pickedUpWithNonFiniteRandom.ships["ship-a"].engineSpeedMultiplier).toBeGreaterThan(1);
+    expect(pickedUpWithNonFiniteRandom.ships["ship-b"].engineSpeedMultiplier).toBe(1);
   });
 
   it("keeps score and bonus-life power-up effects shared", () => {
