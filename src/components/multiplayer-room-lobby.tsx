@@ -18,7 +18,10 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import { renderMultiplayerRoomGame } from "@/components/multiplayer-room-game-registry";
+import {
+  MultiplayerRoomGameRendererView,
+  getMultiplayerRoomGameRenderer,
+} from "@/components/multiplayer-room-game-registry";
 import {
   MultiplayerRoomTransportError,
   type MultiplayerRoomTransportStatus,
@@ -735,22 +738,32 @@ export function MultiplayerRoomLobby({
       setFormError(getRequestErrorMessage(error));
     }
   }
-  const activeRoomGame =
+  const activeRoomGameRenderer =
     room !== null && room.status !== "lobby"
-      ? renderMultiplayerRoomGame({
-          activeParticipant,
-          game,
-          lifecycleControls: isHost ? (
+      ? getMultiplayerRoomGameRenderer(room, game)
+      : null;
+  const activeRoomGame =
+    room !== null &&
+    game !== null &&
+    game !== undefined &&
+    activeRoomGameRenderer !== null ? (
+      <MultiplayerRoomGameRendererView
+        activeParticipant={activeParticipant}
+        game={game}
+        lifecycleControls={
+          isHost ? (
             <HostLifecycleControls
               onLifecycleCommand={handleLifecycleCommand}
               pendingAction={pendingAction}
               status={room.status}
             />
-          ) : null,
-          room,
-          sendGameInput: handleGameInput,
-        })
-      : null;
+          ) : null
+        }
+        renderer={activeRoomGameRenderer}
+        room={room}
+        sendGameInput={handleGameInput}
+      />
+    ) : null;
 
   return (
     <main

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactElement, ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 import { PongMultiplayerRoom } from "@/components/pong-multiplayer-room";
 import { SpaceInvadersMultiplayerRoom } from "@/components/space-invaders-multiplayer-room";
@@ -42,16 +42,11 @@ export type MultiplayerRoomGameRendererProps<
 
 export type MultiplayerRoomGameRenderer = {
   gameId: GameId;
-  render: (
-    props: MultiplayerRoomGameRendererProps,
-  ) => ReactElement | null;
+  View: ComponentType<MultiplayerRoomGameRendererProps>;
 };
 
-type RenderMultiplayerRoomGameOptions = Omit<
-  MultiplayerRoomGameRendererProps,
-  "game"
-> & {
-  game: MultiplayerRoomGameSnapshot | null | undefined;
+type MultiplayerRoomGameRendererViewProps = MultiplayerRoomGameRendererProps & {
+  renderer: MultiplayerRoomGameRenderer;
 };
 
 function isPongMultiplayerGameSnapshot(
@@ -66,7 +61,7 @@ function isSpaceInvadersMultiplayerGameSnapshot(
   return game?.gameId === "space-invaders";
 }
 
-function renderPongMultiplayerRoom({
+function PongMultiplayerRoomRendererView({
   activeParticipant,
   game,
   lifecycleControls,
@@ -92,7 +87,7 @@ function renderPongMultiplayerRoom({
   );
 }
 
-function renderSpaceInvadersMultiplayerRoom({
+function SpaceInvadersMultiplayerRoomRendererView({
   activeParticipant,
   game,
   lifecycleControls,
@@ -123,11 +118,11 @@ const MULTIPLAYER_ROOM_GAME_RENDERERS: Partial<
 > = {
   pong: {
     gameId: "pong",
-    render: renderPongMultiplayerRoom,
+    View: PongMultiplayerRoomRendererView,
   },
   "space-invaders": {
     gameId: "space-invaders",
-    render: renderSpaceInvadersMultiplayerRoom,
+    View: SpaceInvadersMultiplayerRoomRendererView,
   },
 };
 
@@ -142,24 +137,23 @@ export function getMultiplayerRoomGameRenderer(
   return MULTIPLAYER_ROOM_GAME_RENDERERS[room.settings.gameId] ?? null;
 }
 
-export function renderMultiplayerRoomGame({
+export function MultiplayerRoomGameRendererView({
   activeParticipant,
   game,
   lifecycleControls,
+  renderer,
   room,
   sendGameInput,
-}: RenderMultiplayerRoomGameOptions) {
-  const renderer = getMultiplayerRoomGameRenderer(room, game);
+}: MultiplayerRoomGameRendererViewProps) {
+  const RendererView = renderer.View;
 
-  if (renderer === null || game === null || game === undefined) {
-    return null;
-  }
-
-  return renderer.render({
-    activeParticipant,
-    game,
-    lifecycleControls,
-    room,
-    sendGameInput,
-  });
+  return (
+    <RendererView
+      activeParticipant={activeParticipant}
+      game={game}
+      lifecycleControls={lifecycleControls}
+      room={room}
+      sendGameInput={sendGameInput}
+    />
+  );
 }

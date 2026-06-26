@@ -9,8 +9,8 @@ import {
 
 import { expectMarkup } from "./game-board-test-utils";
 import {
+  MultiplayerRoomGameRendererView,
   getMultiplayerRoomGameRenderer,
-  renderMultiplayerRoomGame,
 } from "./multiplayer-room-game-registry";
 import {
   SpaceInvadersMultiplayerRoom,
@@ -245,21 +245,26 @@ describe("SpaceInvadersMultiplayerRoom", () => {
   });
 
   it("registers and renders through the multiplayer game renderer registry", () => {
-    expect(
-      getMultiplayerRoomGameRenderer(
-        ACTIVE_SPACE_INVADERS_ROOM,
-        RUNNING_SPACE_INVADERS_GAME,
-      )?.gameId,
-    ).toBe("space-invaders");
+    const renderer = getMultiplayerRoomGameRenderer(
+      ACTIVE_SPACE_INVADERS_ROOM,
+      RUNNING_SPACE_INVADERS_GAME,
+    );
+
+    expect(renderer?.gameId).toBe("space-invaders");
+
+    if (renderer === null) {
+      throw new Error("Expected Space Invaders to have a room game renderer");
+    }
 
     const markup = renderToStaticMarkup(
-      renderMultiplayerRoomGame({
-        activeParticipant: ACTIVE_SPACE_INVADERS_ROOM.participants[0]!,
-        game: RUNNING_SPACE_INVADERS_GAME,
-        lifecycleControls: null,
-        room: ACTIVE_SPACE_INVADERS_ROOM,
-        sendGameInput: vi.fn(),
-      }),
+      <MultiplayerRoomGameRendererView
+        activeParticipant={ACTIVE_SPACE_INVADERS_ROOM.participants[0]!}
+        game={RUNNING_SPACE_INVADERS_GAME}
+        lifecycleControls={null}
+        renderer={renderer}
+        room={ACTIVE_SPACE_INVADERS_ROOM}
+        sendGameInput={vi.fn()}
+      />,
     );
 
     expect(markup).toContain('data-testid="space-invaders-multiplayer-room"');
