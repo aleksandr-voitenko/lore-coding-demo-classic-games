@@ -14,6 +14,11 @@ import {
   registerGameKeyUp,
   shouldIgnoreGameKeyDown,
 } from "@/components/game-input";
+import {
+  MultiplayerActiveRoomShell,
+  getMultiplayerActiveRoomParticipantSeat,
+  type MultiplayerActiveRoomSidePanel,
+} from "@/components/multiplayer-active-room-shell";
 import { PongBoard } from "@/components/pong-board";
 import {
   createPongPaddleMovementState,
@@ -27,7 +32,6 @@ import {
 import type {
   PrivateRoom,
   PrivateRoomParticipant,
-  PrivateRoomSeat,
 } from "@/lib/multiplayer/room";
 import type { PongGameState, PongSide, PongStatus } from "@/lib/pong-game-engine";
 import {
@@ -250,15 +254,25 @@ export function PongMultiplayerRoom({
   const inputStateRef = useRef(createPongMultiplayerInputState());
   const gameState = game.snapshot;
   const activeSeat = useMemo(
-    () => getParticipantSeat(room.seats, activeParticipant?.id ?? null),
+    () =>
+      getMultiplayerActiveRoomParticipantSeat(
+        room.seats,
+        activeParticipant?.id ?? null,
+      ),
     [activeParticipant?.id, room.seats],
   );
   const canSendGameInput = activeSeat !== null;
   const canServeGameInput = canSendGameInput && activeSeat.id === gameState.serveSide;
   const statusLabel = getPongMultiplayerStatusLabel(gameState.status);
   const boardFrameMaxWidth = getPongMultiplayerBoardFrameMaxWidth(game);
-  const readOnlyMessage = getReadOnlyMessage(activeParticipant, activeSeat);
-  const roleLabel = getParticipantRoleLabel(activeParticipant, activeSeat);
+  const sidePanels = [
+    {
+      content: (
+        <PongMultiplayerStatsPanel gameState={gameState} statusLabel={statusLabel} />
+      ),
+      id: "pong-stats",
+    },
+  ] satisfies MultiplayerActiveRoomSidePanel[];
 
   useEffect(() => {
     onGameInputRef.current = onGameInput;
@@ -367,130 +381,111 @@ export function PongMultiplayerRoom({
   }, [canSendGameInput, canServeGameInput, gameState.status, submitGameInput]);
 
   return (
-    <div
-      className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.42fr)]"
-      data-testid="pong-multiplayer-room"
-    >
-      <section className="min-w-0">
-        <div
-          className="mx-auto w-full"
-          data-testid="pong-multiplayer-board-frame"
-          style={{ maxWidth: boardFrameMaxWidth }}
-        >
-          <PongMultiplayerProjectedBoard
-            game={game}
-            statusLabel={statusLabel}
-          >
-            {gameState.status === "ready" ? (
-              <div
-                className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--pong-board)_62%,transparent)] px-4 py-5 text-center text-[var(--pong-ball)] backdrop-blur-[1px]"
-                data-testid="pong-multiplayer-ready-message"
-              >
-                <div className="flex max-w-72 flex-col items-center gap-3 rounded-md border border-[color-mix(in_oklch,var(--pong-ball)_20%,transparent)] bg-[color-mix(in_oklch,var(--pong-board)_88%,white_12%)] p-5 shadow-[0_18px_48px_rgba(0,0,0,0.28)] dark:bg-[color-mix(in_oklch,var(--pong-board)_88%,black_12%)]">
-                  <p className="text-2xl font-semibold tracking-normal">
-                    Ready to serve
-                  </p>
-                  <p
-                    className="rounded-md border border-[color-mix(in_oklch,var(--pong-ball)_20%,transparent)] bg-[color-mix(in_oklch,var(--pong-board)_78%,white_18%)] px-4 py-3 text-sm font-semibold text-[var(--pong-ball)] dark:bg-[color-mix(in_oklch,var(--pong-board)_84%,black_10%)]"
-                    data-testid="pong-multiplayer-serve-key-hint"
-                  >
-                    {canServeGameInput
-                      ? "Press Space or Enter to serve"
-                      : `${formatPongServeSide(gameState.serveSide)} paddle serves`}
-                  </p>
-                </div>
-              </div>
-            ) : null}
-
-            {gameState.status === "paused" ? (
-              <div
-                className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--pong-board)_76%,transparent)] text-center text-[var(--pong-ball)] backdrop-blur-[2px]"
-                data-testid="pong-multiplayer-paused-message"
-              >
-                <p className="text-2xl font-semibold tracking-normal">Paused</p>
-              </div>
-            ) : null}
-
-            {gameState.status === "won" || gameState.status === "lost" ? (
-              <div
-                className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--pong-board)_76%,transparent)] px-4 text-center text-[var(--pong-ball)] backdrop-blur-[2px]"
-                data-testid="pong-multiplayer-terminal-message"
-              >
+    <MultiplayerActiveRoomShell
+      activeParticipant={activeParticipant}
+      activeSeat={activeSeat}
+      board={
+        <PongMultiplayerProjectedBoard game={game} statusLabel={statusLabel}>
+          {gameState.status === "ready" ? (
+            <div
+              className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--pong-board)_62%,transparent)] px-4 py-5 text-center text-[var(--pong-ball)] backdrop-blur-[1px]"
+              data-testid="pong-multiplayer-ready-message"
+            >
+              <div className="flex max-w-72 flex-col items-center gap-3 rounded-md border border-[color-mix(in_oklch,var(--pong-ball)_20%,transparent)] bg-[color-mix(in_oklch,var(--pong-board)_88%,white_12%)] p-5 shadow-[0_18px_48px_rgba(0,0,0,0.28)] dark:bg-[color-mix(in_oklch,var(--pong-board)_88%,black_12%)]">
                 <p className="text-2xl font-semibold tracking-normal">
-                  {terminalSummaries[gameState.status]}
+                  Ready to serve
+                </p>
+                <p
+                  className="rounded-md border border-[color-mix(in_oklch,var(--pong-ball)_20%,transparent)] bg-[color-mix(in_oklch,var(--pong-board)_78%,white_18%)] px-4 py-3 text-sm font-semibold text-[var(--pong-ball)] dark:bg-[color-mix(in_oklch,var(--pong-board)_84%,black_10%)]"
+                  data-testid="pong-multiplayer-serve-key-hint"
+                >
+                  {canServeGameInput
+                    ? "Press Space or Enter to serve"
+                    : `${formatPongServeSide(gameState.serveSide)} paddle serves`}
                 </p>
               </div>
-            ) : null}
-          </PongMultiplayerProjectedBoard>
-        </div>
-      </section>
-
-      <aside className="flex min-w-0 flex-col gap-4">
-        <section className="rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] p-4 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold tracking-normal">Pong</h2>
-            <span
-              className="rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-accent-faint)] px-2 py-1 text-xs font-semibold uppercase tracking-normal text-[var(--chrome-ink)]"
-              data-testid="pong-multiplayer-status"
-            >
-              {statusLabel}
-            </span>
-          </div>
-
-          <dl className="mt-4 grid grid-cols-2 gap-3">
-            <PongRoomStat
-              label="Left"
-              testId="pong-multiplayer-score-left"
-              value={gameState.score.player}
-            />
-            <PongRoomStat
-              label="Right"
-              testId="pong-multiplayer-score-right"
-              value={gameState.score.cpu}
-            />
-            <PongRoomStat
-              label="Target"
-              testId="pong-multiplayer-target"
-              value={gameState.targetScore}
-            />
-            <PongRoomStat
-              label="Score"
-              testId="pong-multiplayer-remaining-score"
-              value={gameState.remainingScore}
-            />
-          </dl>
-        </section>
-
-        <section className="rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] p-4 shadow-sm">
-          <h2 className="text-lg font-semibold tracking-normal">Your Role</h2>
-          <p
-            className="mt-1 text-sm font-medium text-[var(--chrome-muted)]"
-            data-testid="pong-multiplayer-role"
-          >
-            {roleLabel}
-          </p>
-          {readOnlyMessage !== null ? (
-            <p
-              className="mt-3 rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-accent-faint)] p-3 text-sm font-semibold text-[var(--chrome-ink)]"
-              data-testid="pong-multiplayer-readonly"
-            >
-              {readOnlyMessage}
-            </p>
+            </div>
           ) : null}
-        </section>
 
-        {lifecycleControls !== null ? (
-          <section className="rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] p-4 shadow-sm">
-            {lifecycleControls}
-          </section>
-        ) : null}
-      </aside>
-    </div>
+          {gameState.status === "paused" ? (
+            <div
+              className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--pong-board)_76%,transparent)] text-center text-[var(--pong-ball)] backdrop-blur-[2px]"
+              data-testid="pong-multiplayer-paused-message"
+            >
+              <p className="text-2xl font-semibold tracking-normal">Paused</p>
+            </div>
+          ) : null}
+
+          {gameState.status === "won" || gameState.status === "lost" ? (
+            <div
+              className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--pong-board)_76%,transparent)] px-4 text-center text-[var(--pong-ball)] backdrop-blur-[2px]"
+              data-testid="pong-multiplayer-terminal-message"
+            >
+              <p className="text-2xl font-semibold tracking-normal">
+                {terminalSummaries[gameState.status]}
+              </p>
+            </div>
+          ) : null}
+        </PongMultiplayerProjectedBoard>
+      }
+      boardFrameMaxWidth={boardFrameMaxWidth}
+      boardFrameTestId="pong-multiplayer-board-frame"
+      lifecycleControls={lifecycleControls}
+      readOnlyTestId="pong-multiplayer-readonly"
+      roleLabelTestId="pong-multiplayer-role"
+      rootTestId="pong-multiplayer-room"
+      sidePanels={sidePanels}
+    />
   );
 }
 
 function formatPongServeSide(serveSide: PongSide) {
   return serveSide === "left" ? "Left" : "Right";
+}
+
+function PongMultiplayerStatsPanel({
+  gameState,
+  statusLabel,
+}: {
+  gameState: PongGameState;
+  statusLabel: string;
+}) {
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold tracking-normal">Pong</h2>
+        <span
+          className="rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-accent-faint)] px-2 py-1 text-xs font-semibold uppercase tracking-normal text-[var(--chrome-ink)]"
+          data-testid="pong-multiplayer-status"
+        >
+          {statusLabel}
+        </span>
+      </div>
+
+      <dl className="mt-4 grid grid-cols-2 gap-3">
+        <PongRoomStat
+          label="Left"
+          testId="pong-multiplayer-score-left"
+          value={gameState.score.player}
+        />
+        <PongRoomStat
+          label="Right"
+          testId="pong-multiplayer-score-right"
+          value={gameState.score.cpu}
+        />
+        <PongRoomStat
+          label="Target"
+          testId="pong-multiplayer-target"
+          value={gameState.targetScore}
+        />
+        <PongRoomStat
+          label="Score"
+          testId="pong-multiplayer-remaining-score"
+          value={gameState.remainingScore}
+        />
+      </dl>
+    </>
+  );
 }
 
 function PongRoomStat({
@@ -512,47 +507,4 @@ function PongRoomStat({
       </dd>
     </div>
   );
-}
-
-function getParticipantSeat(
-  seats: PrivateRoomSeat[],
-  participantId: string | null,
-) {
-  if (participantId === null) {
-    return null;
-  }
-
-  return (
-    seats.find((seat) => seat.occupiedByParticipantId === participantId) ?? null
-  );
-}
-
-function getParticipantRoleLabel(
-  participant: PrivateRoomParticipant | null,
-  seat: PrivateRoomSeat | null,
-) {
-  if (participant === null) {
-    return "Guest · Observer";
-  }
-
-  if (seat !== null) {
-    return `${participant.displayName} · ${seat.label}`;
-  }
-
-  return `${participant.displayName} · Observer`;
-}
-
-function getReadOnlyMessage(
-  participant: PrivateRoomParticipant | null,
-  seat: PrivateRoomSeat | null,
-) {
-  if (seat !== null) {
-    return null;
-  }
-
-  if (participant === null) {
-    return "Watching read-only";
-  }
-
-  return "Observer view";
 }
