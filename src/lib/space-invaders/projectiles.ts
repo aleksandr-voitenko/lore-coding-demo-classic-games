@@ -478,12 +478,17 @@ export function advanceInvaderShotPositions(
     | "nextInvaderShotId"
     | "player"
   >,
+  options: {
+    getTargetPlayer?: (shot: SpaceInvadersInvaderShot) => SpaceInvadersPlayer;
+  } = {},
 ) {
   const movedShots: SpaceInvadersInvaderShot[] = [];
   let nextInvaderShotId = game.nextInvaderShotId;
 
   for (const shot of game.invaderShots) {
-    const movedShot = advanceInvaderShot(shot, game);
+    const movedShot = advanceInvaderShot(shot, {
+      player: options.getTargetPlayer?.(shot) ?? game.player,
+    });
 
     if (!isInvaderShotActive(movedShot, game)) {
       continue;

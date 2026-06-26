@@ -7,6 +7,7 @@ import {
   type CreateSpaceInvadersGameOptions,
   type SpaceInvadersGameState,
   type SpaceInvadersInvaderShot,
+  type SpaceInvadersPlayer,
   type SpaceInvadersPlayerShot,
   type SpaceInvadersPowerUp,
   type SpaceInvadersRandomSource,
@@ -25,7 +26,11 @@ import {
   SPACE_INVADERS_SCORE_POPUP_TICKS,
 } from "./space-invaders/constants";
 import { finalizeSpaceInvadersMultiKillCombo } from "./space-invaders/effects";
-import { clamp, rectanglesIntersect } from "./space-invaders/geometry";
+import {
+  clamp,
+  getEntityCenterX,
+  rectanglesIntersect,
+} from "./space-invaders/geometry";
 import { advanceSpaceInvadersPlayerShots } from "./space-invaders/player-shots";
 import {
   advanceSpaceInvadersPlayerBurst,
@@ -36,6 +41,7 @@ import {
   type SpaceInvadersPlayerOwnedState,
 } from "./space-invaders/player-state";
 import {
+  advanceInvaderShotPositions,
   createInitialPlayerBurstState,
   createPlayerShots,
   isInvaderShotDangerous,
@@ -310,8 +316,19 @@ export function advanceSpaceInvadersMultiplayerGameTick(
     );
   const gameAfterPlayerVolleys =
     finalizeSpaceInvadersMultiplayerPlayerVolleys(gameAfterMultiKillCombo);
+  const gameAfterInvaderShots = advanceSpaceInvadersMultiplayerInvaderShots(
+    gameAfterPlayerVolleys,
+    random,
+  );
 
-  return advanceSpaceInvadersMultiplayerShipRecovery(gameAfterPlayerVolleys);
+  if (
+    gameAfterInvaderShots.status !== gameAfterPlayerVolleys.status ||
+    gameAfterInvaderShots.lives < gameAfterPlayerVolleys.lives
+  ) {
+    return gameAfterInvaderShots;
+  }
+
+  return advanceSpaceInvadersMultiplayerShipRecovery(gameAfterInvaderShots);
 }
 
 export function resolveSpaceInvadersMultiplayerInvaderShotHits(
@@ -503,6 +520,32 @@ function advanceSpaceInvadersMultiplayerPlayerBursts(
   }
 
   return nextGame;
+}
+
+function advanceSpaceInvadersMultiplayerInvaderShots(
+  game: SpaceInvadersMultiplayerGameState,
+  random: SpaceInvadersRandomSource,
+): SpaceInvadersMultiplayerGameState {
+  if (game.status !== "running" || game.invaderShots.length === 0) {
+    return game;
+  }
+
+  const { invaderShots, nextInvaderShotId } = advanceInvaderShotPositions(
+    createSpaceInvadersSoloProjection(game, "ship-a"),
+    {
+      getTargetPlayer: (shot) =>
+        getSpaceInvadersMultiplayerInvaderShotTargetPlayer(game, shot),
+    },
+  );
+
+  return resolveSpaceInvadersMultiplayerInvaderShotHits(
+    {
+      ...game,
+      invaderShots,
+      nextInvaderShotId,
+    },
+    random,
+  );
 }
 
 function finalizeSpaceInvadersMultiplayerMultiKillComboIfVolleysEnded(
@@ -741,6 +784,50 @@ function canFireSpaceInvadersMultiplayerShipShot(
     ship.playerBurst === null &&
     ship.playerShots.length === 0
   );
+}
+
+function getSpaceInvadersMultiplayerInvaderShotTargetPlayer(
+  game: SpaceInvadersMultiplayerGameState,
+  shot: SpaceInvadersInvaderShot,
+): SpaceInvadersPlayer {
+  const seat = getSpaceInvadersMultiplayerInvaderShotTargetSeat(game, shot);
+
+  return game.ships[seat].player;
+}
+
+function getSpaceInvadersMultiplayerInvaderShotTargetSeat(
+  game: SpaceInvadersMultiplayerGameState,
+  shot: SpaceInvadersInvaderShot,
+): SpaceInvadersShipSeat {
+  const targetableSeats = SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS.filter((seat) => {
+    const ship = game.ships[seat];
+
+    return ship.isActive && !isSpaceInvadersPlayerRespawning(ship);
+  });
+
+  if (targetableSeats.length === 0) {
+    return "ship-a";
+  }
+
+  const shotCenterX = getEntityCenterX(shot);
+
+  return [...targetableSeats].sort((firstSeat, secondSeat) => {
+    const firstDistance = Math.abs(
+      getEntityCenterX(game.ships[firstSeat].player) - shotCenterX,
+    );
+    const secondDistance = Math.abs(
+      getEntityCenterX(game.ships[secondSeat].player) - shotCenterX,
+    );
+
+    if (firstDistance !== secondDistance) {
+      return firstDistance - secondDistance;
+    }
+
+    return (
+      SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS.indexOf(firstSeat) -
+      SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS.indexOf(secondSeat)
+    );
+  })[0]!;
 }
 
 function updateSpaceInvadersMultiplayerShip(
