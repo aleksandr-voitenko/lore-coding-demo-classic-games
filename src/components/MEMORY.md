@@ -38,6 +38,10 @@ This file covers React component ownership and shared game UI conventions under
   server snapshots/events and emits adapter-owned intents through the generic
   transport envelope; it does not own canonical game state, result ordering,
   solo replay saving, or solo leaderboard submission.
+- The future Space Invaders multiplayer renderer should present two independent
+  ship seats, `ship-a` and `ship-b`, on one shared alien wave with shared score
+  and lives. It should display server-owned outcomes for simultaneous hits and
+  power-up awards rather than resolving those ambiguities locally.
 - `pong-multiplayer-room.tsx` owns the first private-room Pong renderer/input
   adapter fed by server snapshots. It may render `PongBoard` and post committed
   room `game.input` commands for seated participants, but it must not import

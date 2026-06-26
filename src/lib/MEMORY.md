@@ -18,6 +18,13 @@ This file covers deterministic game engines and shared source logic under
   effect helpers are extracted; keep lifecycle ordering and mine-blast handling
   in the facade unless a later refactor can move them without obscuring
   cross-system behavior.
+- The Space Invaders private-room co-op milestone is two independent ships, not
+  a shared cannon. Seats are `ship-a` and `ship-b`; each player controls one
+  ship; score, alien wave, and lives are shared. Player ships do not collide
+  with each other. A simultaneous enemy-shot hit on both ships destroys both and
+  spends two shared lives; if only one shared life remains, authoritative
+  randomness chooses the respawning ship. If a power-up touches both ships on
+  the same tick, authoritative randomness chooses the recipient.
 - Asteroids uses `src/lib/asteroids/` internals behind
   `asteroids-game-engine.ts`: `types.ts`, `constants.ts`, `difficulty.ts`,
   `asteroids.ts`, `projectiles.ts`, `saucers.ts`, `power-ups.ts`, `scoring.ts`,

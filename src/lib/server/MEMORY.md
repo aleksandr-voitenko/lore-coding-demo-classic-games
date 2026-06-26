@@ -88,6 +88,11 @@ This file covers Node-only server helpers and storage adapters under
   result data, and game-specific match-summary fields. The room service owns
   room identity, membership, admission, host authorization, observer permissions,
   sequencing, and dispatch to the selected adapter.
+- The Space Invaders co-op adapter milestone should expose required `ship-a` and
+  `ship-b` seats. It owns server-side random choices for simultaneous ambiguous
+  outcomes: choosing the respawning ship when a double hit has only one shared
+  life left, and choosing the power-up recipient when both ships collect the
+  same power-up on one tick. Tests should inject deterministic randomness.
 - The server-ordered room event log is the source of truth for future
   multiplayer replay and match-summary derivation. It should cover lifecycle,
   membership, settings versions, accepted gameplay intents, ticks, snapshots or

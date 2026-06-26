@@ -131,6 +131,30 @@ renderers may keep local UI affordance state such as pressed keys, but canonical
 game state, score authority, replay derivation, and result ordering stay on the
 server path.
 
+## Space Invaders Two-Ship Co-op Rules
+
+The Space Invaders co-op milestone should implement two independent player
+ships, not a shared cannon. The private room has two required player seats:
+`ship-a` and `ship-b`. Each seated player controls exactly one ship. Observers
+can watch the shared board but cannot control either ship.
+
+Both ships fight the same alien wave and contribute to one shared score. Lives
+are also a shared team pool in this version, while ship positions, respawn
+state, active power-ups, shots, and control input are player-specific where the
+engine needs ownership.
+
+Player ships do not collide with each other. They may overlap or pass through
+each other without displacement or damage. Enemy shots can hit either ship. If a
+single enemy shot collides with both ships on the same tick, both ships are
+destroyed and the shared lives pool loses two lives. If only one shared life
+remains in that simultaneous-hit case, the server chooses randomly which ship is
+eligible to respawn from that last life.
+
+Power-ups are awarded to the first ship that collects them. If a power-up touches
+both ships on the same tick, the server chooses the recipient randomly. That
+random choice is part of the authoritative server-ordered game state and must be
+deterministic in tests.
+
 ## Server Authority And Event Logs
 
 The authoritative multiplayer stream is a server-ordered room event log plus
