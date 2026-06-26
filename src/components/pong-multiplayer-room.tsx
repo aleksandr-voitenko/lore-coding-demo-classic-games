@@ -19,6 +19,7 @@ import {
   getMultiplayerActiveRoomParticipantSeat,
   type MultiplayerActiveRoomSidePanel,
 } from "@/components/multiplayer-active-room-shell";
+import { MultiplayerTerminalSummaryPanel } from "@/components/multiplayer-terminal-summary-panel";
 import { PongBoard } from "@/components/pong-board";
 import {
   createPongPaddleMovementState,
@@ -547,50 +548,26 @@ function PongMultiplayerTerminalSummaryPanel({
   summary: PongMultiplayerTerminalSummary;
 }) {
   return (
-    <section
-      className="mt-4 rounded-md border border-[var(--chrome-border)] p-3"
-      data-testid="pong-multiplayer-terminal-summary"
-    >
-      <h3 className="text-sm font-semibold tracking-normal">Match summary</h3>
-      <dl className="mt-3 grid gap-2 text-sm">
-        <PongSummaryRow
-          label="Winner"
-          testId="pong-multiplayer-summary-winner"
-          value={getPongSummaryWinnerLabel(summary)}
-        />
-        <PongSummaryRow
-          label="Final"
-          testId="pong-multiplayer-summary-score"
-          value={`${summary.outcome.leftScore}-${summary.outcome.rightScore}`}
-        />
-        <PongSummaryRow
-          label="Key"
-          testId="pong-multiplayer-summary-key"
-          value={summary.key}
-        />
-      </dl>
-    </section>
-  );
-}
-
-function PongSummaryRow({
-  label,
-  testId,
-  value,
-}: {
-  label: string;
-  testId: string;
-  value: string;
-}) {
-  return (
-    <div>
-      <dt className="text-xs font-semibold uppercase tracking-normal text-[var(--chrome-muted)]">
-        {label}
-      </dt>
-      <dd className="mt-1 break-all font-semibold tracking-normal" data-testid={testId}>
-        {value}
-      </dd>
-    </div>
+    <MultiplayerTerminalSummaryPanel
+      rows={[
+        {
+          label: "Winner",
+          testId: "pong-multiplayer-summary-winner",
+          value: getPongSummaryWinnerLabel(summary),
+        },
+        {
+          label: "Final",
+          testId: "pong-multiplayer-summary-score",
+          value: `${summary.outcome.leftScore}-${summary.outcome.rightScore}`,
+        },
+        {
+          label: "Key",
+          testId: "pong-multiplayer-summary-key",
+          value: summary.key,
+        },
+      ]}
+      testId="pong-multiplayer-terminal-summary"
+    />
   );
 }
 

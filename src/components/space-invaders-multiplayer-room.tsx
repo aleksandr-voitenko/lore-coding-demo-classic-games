@@ -18,6 +18,7 @@ import {
   getMultiplayerActiveRoomParticipantSeat,
   type MultiplayerActiveRoomSidePanel,
 } from "@/components/multiplayer-active-room-shell";
+import { MultiplayerTerminalSummaryPanel } from "@/components/multiplayer-terminal-summary-panel";
 import {
   SpaceInvadersBoard,
   type SpaceInvadersBoardShip,
@@ -500,39 +501,36 @@ function SpaceInvadersMultiplayerTerminalSummaryPanel({
   summary: SpaceInvadersMultiplayerTerminalSummary;
 }) {
   return (
-    <section
-      className="mt-4 rounded-md border border-[var(--chrome-border)] p-3"
-      data-testid="space-invaders-multiplayer-terminal-summary"
-    >
-      <h3 className="text-sm font-semibold tracking-normal">Match summary</h3>
-      <dl className="mt-3 grid gap-2 text-sm">
-        <SpaceInvadersSummaryRow
-          label="Outcome"
-          testId="space-invaders-multiplayer-summary-outcome"
-          value={summary.status === "won" ? "Won" : "Lost"}
-        />
-        <SpaceInvadersSummaryRow
-          label="Crew"
-          testId="space-invaders-multiplayer-summary-crew"
-          value={getSpaceInvadersSummaryCrewLabel(summary)}
-        />
-        <SpaceInvadersSummaryRow
-          label="Score"
-          testId="space-invaders-multiplayer-summary-score"
-          value={String(summary.outcome.score)}
-        />
-        <SpaceInvadersSummaryRow
-          label="Lives"
-          testId="space-invaders-multiplayer-summary-lives"
-          value={String(summary.outcome.livesRemaining)}
-        />
-        <SpaceInvadersSummaryRow
-          label="Key"
-          testId="space-invaders-multiplayer-summary-key"
-          value={summary.key}
-        />
-      </dl>
-    </section>
+    <MultiplayerTerminalSummaryPanel
+      rows={[
+        {
+          label: "Outcome",
+          testId: "space-invaders-multiplayer-summary-outcome",
+          value: summary.status === "won" ? "Won" : "Lost",
+        },
+        {
+          label: "Crew",
+          testId: "space-invaders-multiplayer-summary-crew",
+          value: getSpaceInvadersSummaryCrewLabel(summary),
+        },
+        {
+          label: "Score",
+          testId: "space-invaders-multiplayer-summary-score",
+          value: String(summary.outcome.score),
+        },
+        {
+          label: "Lives",
+          testId: "space-invaders-multiplayer-summary-lives",
+          value: String(summary.outcome.livesRemaining),
+        },
+        {
+          label: "Key",
+          testId: "space-invaders-multiplayer-summary-key",
+          value: summary.key,
+        },
+      ]}
+      testId="space-invaders-multiplayer-terminal-summary"
+    />
   );
 }
 
@@ -546,27 +544,6 @@ function getSpaceInvadersSummaryCrewLabel(
       return `${playerLabel} · ${seat.label}`;
     })
     .join(" / ");
-}
-
-function SpaceInvadersSummaryRow({
-  label,
-  testId,
-  value,
-}: {
-  label: string;
-  testId: string;
-  value: string;
-}) {
-  return (
-    <div>
-      <dt className="text-xs font-semibold uppercase tracking-normal text-[var(--chrome-muted)]">
-        {label}
-      </dt>
-      <dd className="mt-1 break-all font-semibold tracking-normal" data-testid={testId}>
-        {value}
-      </dd>
-    </div>
-  );
 }
 
 function SpaceInvadersRoomStat({
