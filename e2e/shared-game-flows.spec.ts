@@ -8,6 +8,9 @@ type RealtimeSharedFlowCase = {
   gameId: string;
   name: string;
   prefix: string;
+  restartKey?: string;
+  serveKey?: string;
+  serveReadyText?: string;
   serveButtonTestId?: string;
   serveScreenTestId?: string;
   startButtonTestId: string;
@@ -58,6 +61,10 @@ const realtimeSharedFlowCases: RealtimeSharedFlowCase[] = [
     gameId: "pong",
     name: "Pong",
     prefix: "pong",
+    restartKey: "Enter",
+    serveKey: "Enter",
+    serveReadyText: "Press Space or Enter to serve",
+    serveScreenTestId: "pong-serve-ready-message",
     startButtonTestId: "pong-start-button",
   },
   {
@@ -212,6 +219,19 @@ async function startRealtimeGame(page: Page, flowCase: RealtimeSharedFlowCase) {
     }
 
     await page.getByTestId(flowCase.serveButtonTestId).click();
+  } else if (flowCase.serveKey !== undefined) {
+    await expect(page.getByTestId(`${flowCase.prefix}-status`)).toHaveText("Ready");
+    if (flowCase.serveScreenTestId) {
+      const serveScreen = page.getByTestId(flowCase.serveScreenTestId);
+
+      await expect(serveScreen).toBeVisible();
+
+      if (flowCase.serveReadyText !== undefined) {
+        await expect(serveScreen).toContainText(flowCase.serveReadyText);
+      }
+    }
+    await page.locator("body").click({ position: { x: 1, y: 1 } });
+    await page.keyboard.press(flowCase.serveKey);
   }
 
   await expect(page.getByTestId(`${flowCase.prefix}-status`)).toHaveText(
@@ -429,6 +449,19 @@ for (const flowCase of realtimeSharedFlowCases) {
       }
 
       await page.getByTestId(flowCase.serveButtonTestId).click();
+    } else if (flowCase.restartKey !== undefined) {
+      await expect(status).toHaveText("Ready");
+      if (flowCase.serveScreenTestId) {
+        const serveScreen = page.getByTestId(flowCase.serveScreenTestId);
+
+        await expect(serveScreen).toBeVisible();
+
+        if (flowCase.serveReadyText !== undefined) {
+          await expect(serveScreen).toContainText(flowCase.serveReadyText);
+        }
+      }
+      await page.locator("body").click({ position: { x: 1, y: 1 } });
+      await page.keyboard.press(flowCase.restartKey);
     }
     await expect(status).toHaveText(flowCase.activeStatus);
 

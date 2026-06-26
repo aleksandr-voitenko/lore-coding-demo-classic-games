@@ -72,8 +72,10 @@ room service on `/_internal/multiplayer/rooms`:
 
 Override the bind address and path with `MULTIPLAYER_SIDECAR_HOST`,
 `MULTIPLAYER_SIDECAR_PORT`, `MULTIPLAYER_SIDECAR_WEBSOCKET_PATH`, and
-`MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH` when wiring it behind a local proxy. Next
-API routes continue using their local in-process room store unless
+`MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH` when wiring it behind a local proxy. The
+sidecar pushes fresh snapshots for subscribed running rooms every 50ms by
+default; tune that with `MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS` during
+latency testing. Next API routes continue using their local in-process room store unless
 `MULTIPLAYER_ROOM_SERVICE_URL` points at the sidecar room service base URL, for
 example `http://127.0.0.1:3001/_internal/multiplayer/rooms`.
 

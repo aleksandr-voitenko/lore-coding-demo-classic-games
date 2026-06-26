@@ -107,7 +107,7 @@ describe("PongMultiplayerRoom", () => {
         activeParticipant={ACTIVE_PONG_ROOM.participants[2]!}
         game={{
           ...RUNNING_PONG_GAME,
-          snapshot: createInitialPongGame(),
+          snapshot: createInitialPongGame({ initialServeSide: "left" }),
         }}
         onGameInput={vi.fn()}
         room={ACTIVE_PONG_ROOM}
@@ -140,7 +140,7 @@ describe("PongMultiplayerRoom", () => {
         activeParticipant={ACTIVE_PONG_ROOM.participants[0]!}
         game={{
           ...RUNNING_PONG_GAME,
-          snapshot: createInitialPongGame(),
+          snapshot: createInitialPongGame({ initialServeSide: "left" }),
         }}
         onGameInput={vi.fn()}
         room={ACTIVE_PONG_ROOM}
@@ -173,7 +173,8 @@ describe("PongMultiplayerRoom", () => {
     );
 
     expect(readyMarkup).toContain('data-testid="pong-multiplayer-ready-message"');
-    expect(readyMarkup).toContain('data-testid="pong-multiplayer-serve-button"');
+    expect(readyMarkup).toContain('data-testid="pong-multiplayer-serve-key-hint"');
+    expect(readyMarkup).toContain("Press Space or Enter to serve");
     expect(readyMarkup).not.toContain("transition-property:left, top");
     expect(pausedMarkup).toContain('data-testid="pong-multiplayer-paused-message"');
     expect(terminalMarkup).toContain('data-testid="pong-multiplayer-terminal-message"');

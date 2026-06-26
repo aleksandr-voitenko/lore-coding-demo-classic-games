@@ -128,7 +128,7 @@ describe("multiplayer room route", () => {
         heldInputs: {},
         serverTimeMs: 1_100,
         snapshot: {
-          status: "running",
+          status: "ready",
         },
       },
       room: {
@@ -228,7 +228,7 @@ describe("multiplayer room route", () => {
           },
         },
         snapshot: {
-          status: "running",
+          status: "ready",
         },
       },
       seq: 5,

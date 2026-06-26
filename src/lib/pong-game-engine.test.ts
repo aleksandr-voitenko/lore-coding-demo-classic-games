@@ -20,6 +20,7 @@ import {
   movePongPlayerDown,
   movePongPlayerUp,
   pausePongGame,
+  pickRandomPongServeSide,
   PONG_BOARD_HEIGHT,
   PONG_BOARD_WIDTH,
   PONG_TARGET_SCORE,
@@ -43,25 +44,36 @@ function getVelocitySpeed(velocity: { x: number; y: number }) {
 }
 
 describe("pong game engine", () => {
-  it("creates a ready game with centered paddles, centered ball, and maximum score", () => {
-    const game = createInitialPongGame();
+  it("creates a ready game with centered paddles, attached serve ball, and maximum score", () => {
+    const game = createInitialPongGame({ initialServeSide: "left" });
+    const ballRadius = getPongBallRadius();
 
     expect(game.status).toBe("ready");
     expect(game.score).toEqual({ cpu: 0, player: 0 });
     expect(game.remainingScore).toBe(getPongMaximumScore(PONG_TARGET_SCORE));
+    expect(game.serveSide).toBe("left");
     expect(game.ball.position).toEqual({
-      x: PONG_BOARD_WIDTH / 2,
-      y: PONG_BOARD_HEIGHT / 2,
+      x: game.playerPaddle.x + game.playerPaddle.width + ballRadius + 1,
+      y: game.playerPaddle.y + game.playerPaddle.height / 2,
     });
+    expect(game.ball.velocity.x).toBeGreaterThan(0);
+    expect(game.ball.velocity.y).toBe(0);
     expect(game.playerPaddle.y + game.playerPaddle.height / 2).toBe(PONG_BOARD_HEIGHT / 2);
     expect(game.cpuPaddle.y + game.cpuPaddle.height / 2).toBe(PONG_BOARD_HEIGHT / 2);
     expect(game.playerPaddle.x).toBeLessThan(game.cpuPaddle.x);
+  });
+
+  it("chooses the first serving side from the configured random source", () => {
+    expect(pickRandomPongServeSide(() => 0.49)).toBe("left");
+    expect(pickRandomPongServeSide(() => 0.5)).toBe("right");
+    expect(createInitialPongGame({ random: () => 0.75 }).serveSide).toBe("right");
   });
 
   it("creates configurable board sizes and target scores", () => {
     const game = createInitialPongGame({
       boardHeight: 640,
       boardWidth: 480,
+      initialServeSide: "right",
       targetScore: 7,
     });
     const restarted = restartPongGame(game);
@@ -70,22 +82,29 @@ describe("pong game engine", () => {
     expect(game.boardWidth).toBe(480);
     expect(game.targetScore).toBe(7);
     expect(game.remainingScore).toBe(1_400);
-    expect(game.ball.position).toEqual({ x: 240, y: 320 });
+    expect(game.serveSide).toBe("right");
+    expect(game.ball.position).toEqual({
+      x: game.cpuPaddle.x - getPongBallRadius() - 1,
+      y: game.cpuPaddle.y + game.cpuPaddle.height / 2,
+    });
     expect(game.playerPaddle.y + game.playerPaddle.height / 2).toBe(320);
     expect(restarted.boardHeight).toBe(640);
     expect(restarted.boardWidth).toBe(480);
     expect(restarted.targetScore).toBe(7);
     expect(restarted.remainingScore).toBe(1_400);
-    expect(restarted.status).toBe("running");
+    expect(restarted.status).toBe("ready");
   });
 
   it("starts, pauses, and resumes without replacing the active rally", () => {
-    const readyGame = createInitialPongGame();
+    const readyGame = createInitialPongGame({ initialServeSide: "left" });
     const runningGame = startPongGame(readyGame);
     const pausedGame = pausePongGame(runningGame);
     const resumedGame = startPongGame(pausedGame);
 
     expect(runningGame.status).toBe("running");
+    expect(runningGame.ball.position).toEqual(readyGame.ball.position);
+    expect(runningGame.ball.velocity.x).toBeGreaterThan(0);
+    expect(runningGame.ball.velocity.y).toBe(0);
     expect(pausedGame.status).toBe("paused");
     expect(resumedGame.status).toBe("running");
     expect(resumedGame.ball).toBe(pausedGame.ball);
@@ -106,20 +125,24 @@ describe("pong game engine", () => {
     expect(decrementPongRemainingScore(pausedGame)).toBe(pausedGame);
   });
 
-  it("moves the player paddle within the top and bottom walls", () => {
-    const game = createInitialPongGame();
+  it("moves the player paddle and attached serve ball within the top and bottom walls", () => {
+    const game = createInitialPongGame({ initialServeSide: "left" });
     const movedToTop = movePongPlayer(game, -1_000);
     const movedToBottom = movePongPlayer(movedToTop, 1_000);
 
     expect(movedToTop.playerPaddle.y).toBe(0);
+    expect(movedToTop.ball.position.y).toBe(movedToTop.playerPaddle.height / 2);
     expect(movedToBottom.playerPaddle.y).toBe(
       PONG_BOARD_HEIGHT - movedToBottom.playerPaddle.height,
+    );
+    expect(movedToBottom.ball.position.y).toBe(
+      movedToBottom.playerPaddle.y + movedToBottom.playerPaddle.height / 2,
     );
     expect(getPongPlayerSpeed()).toBeGreaterThan(0);
   });
 
   it("moves and clamps either paddle by side while preserving player helpers as left aliases", () => {
-    const game = createInitialPongGame();
+    const game = createInitialPongGame({ initialServeSide: "right" });
     const speed = getPongPlayerSpeed();
     const leftUp = movePongPaddleUp(game, "left");
     const leftDown = movePongPaddleDown(game, "left");
@@ -133,6 +156,9 @@ describe("pong game engine", () => {
     expect(leftUp.playerPaddle.y).toBe(game.playerPaddle.y - speed);
     expect(leftUp.cpuPaddle).toEqual(game.cpuPaddle);
     expect(rightUp.cpuPaddle.y).toBe(game.cpuPaddle.y - speed);
+    expect(rightUp.ball.position.y).toBe(
+      rightUp.cpuPaddle.y + rightUp.cpuPaddle.height / 2,
+    );
     expect(rightDown.cpuPaddle.y).toBe(game.cpuPaddle.y + speed);
     expect(rightDown.playerPaddle).toEqual(game.playerPaddle);
     expect(rightClampedTop.cpuPaddle.y).toBe(0);
@@ -279,11 +305,13 @@ describe("pong game engine", () => {
     expect(advanced.status).toBe("ready");
     expect(advanced.score).toEqual({ cpu: 1, player: 3 });
     expect(advanced.remainingScore).toBe(runningGame.remainingScore);
+    expect(advanced.serveSide).toBe("right");
     expect(advanced.ball.position).toEqual({
-      x: PONG_BOARD_WIDTH / 2,
-      y: PONG_BOARD_HEIGHT / 2,
+      x: advanced.cpuPaddle.x - ballRadius - 1,
+      y: advanced.cpuPaddle.y + advanced.cpuPaddle.height / 2,
     });
-    expect(advanced.ball.velocity.x).toBeGreaterThan(0);
+    expect(advanced.ball.velocity.x).toBeLessThan(0);
+    expect(advanced.ball.velocity.y).toBe(0);
   });
 
   it("subtracts points when the computer wins a rally", () => {
@@ -301,6 +329,7 @@ describe("pong game engine", () => {
     expect(advanced.status).toBe("ready");
     expect(advanced.score).toEqual({ cpu: 2, player: 2 });
     expect(advanced.remainingScore).toBe(650);
+    expect(advanced.serveSide).toBe("left");
   });
 
   it("pauses remaining score between rallies and clamps running countdown at zero", () => {
@@ -392,19 +421,15 @@ describe("pong game engine", () => {
     );
   });
 
-  it("restarts from an ended match with a fresh running game", () => {
+  it("restarts from an ended match with a fresh ready serve", () => {
     const endedGame = createRunningGame({
       score: { cpu: PONG_TARGET_SCORE, player: 1 },
       status: "lost",
     });
     const restartedGame = startPongGame(endedGame);
 
-    expect(restartedGame.status).toBe("running");
+    expect(restartedGame.status).toBe("ready");
     expect(restartedGame.score).toEqual({ cpu: 0, player: 0 });
     expect(restartedGame.remainingScore).toBe(getPongMaximumScore(PONG_TARGET_SCORE));
-    expect(restartedGame.ball.position).toEqual({
-      x: PONG_BOARD_WIDTH / 2,
-      y: PONG_BOARD_HEIGHT / 2,
-    });
   });
 });

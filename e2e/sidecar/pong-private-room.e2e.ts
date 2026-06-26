@@ -211,8 +211,15 @@ test("Pong private room reaches guest over the sidecar WebSocket path", async ({
     await page.getByTestId("multiplayer-room-start-button").click();
 
     await expect(guestPage.getByTestId("pong-multiplayer-room")).toBeVisible();
-    await expect(guestPage.getByTestId("pong-multiplayer-status")).toHaveText("Running");
+    await expect(guestPage.getByTestId("pong-multiplayer-status")).toHaveText(
+      "Ready to serve",
+    );
     await expect(guestPage.getByTestId("pong-multiplayer-role")).toContainText("Right");
+
+    await page.keyboard.press("Enter");
+    await guestPage.keyboard.press("Enter");
+
+    await expect(guestPage.getByTestId("pong-multiplayer-status")).toHaveText("Running");
 
     await expectNoRepeatedRoomGetPolling({
       guestHttpGets,

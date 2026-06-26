@@ -1,6 +1,5 @@
 "use client";
 
-import { PlayIcon } from "lucide-react";
 import {
   type ReactNode,
   useCallback,
@@ -25,7 +24,6 @@ import {
   type PongPaddleMovementDirection,
   type PongPaddleMovementState,
 } from "@/components/pong-paddle-input";
-import { Button } from "@/components/ui/button";
 import type {
   MultiplayerRoomGameSnapshot,
   PongMultiplayerClientInput,
@@ -35,7 +33,7 @@ import type {
   PrivateRoomParticipant,
   PrivateRoomSeat,
 } from "@/lib/multiplayer/room";
-import type { PongGameState, PongStatus } from "@/lib/pong-game-engine";
+import type { PongGameState, PongSide, PongStatus } from "@/lib/pong-game-engine";
 import {
   getPongMultiplayerProjectionTicks,
   projectPongMultiplayerGame,
@@ -229,6 +227,10 @@ export function resetPongMultiplayerInputState(
   };
 }
 
+function isPongMultiplayerServeKey(key: string) {
+  return key === " " || key === "Enter";
+}
+
 export function getPongMultiplayerStatusLabel(status: PongStatus) {
   return statusLabels[status];
 }
@@ -254,6 +256,7 @@ export function PongMultiplayerRoom({
     [activeParticipant?.id, room.seats],
   );
   const canSendGameInput = activeSeat !== null;
+  const canServeGameInput = canSendGameInput && activeSeat.id === gameState.serveSide;
   const statusLabel = getPongMultiplayerStatusLabel(gameState.status);
   const boardFrameMaxWidth = getPongMultiplayerBoardFrameMaxWidth(game);
   const readOnlyMessage = getReadOnlyMessage(activeParticipant, activeSeat);
@@ -303,10 +306,10 @@ export function PongMultiplayerRoom({
         return;
       }
 
-      if (event.key === "Enter" && gameState.status === "ready") {
+      if (isPongMultiplayerServeKey(event.key) && gameState.status === "ready") {
         event.preventDefault();
 
-        if (!event.repeat) {
+        if (!event.repeat && canServeGameInput) {
           submitGameInput({ type: "pong.serve" });
         }
 
@@ -363,7 +366,7 @@ export function PongMultiplayerRoom({
       unregisterKeyDown();
       unregisterKeyUp();
     };
-  }, [canSendGameInput, gameState.status, submitGameInput]);
+  }, [canSendGameInput, canServeGameInput, gameState.status, submitGameInput]);
 
   return (
     <div
@@ -389,19 +392,14 @@ export function PongMultiplayerRoom({
                   <p className="text-2xl font-semibold tracking-normal">
                     Ready to serve
                   </p>
-                  {canSendGameInput ? (
-                    <Button
-                      className="min-w-32"
-                      data-testid="pong-multiplayer-serve-button"
-                      onClick={() => submitGameInput({ type: "pong.serve" })}
-                      size="lg"
-                      type="button"
-                      variant="secondary"
-                    >
-                      <PlayIcon data-icon="inline-start" />
-                      Serve
-                    </Button>
-                  ) : null}
+                  <p
+                    className="rounded-md border border-[color-mix(in_oklch,var(--pong-ball)_20%,transparent)] bg-[color-mix(in_oklch,var(--pong-board)_78%,white_18%)] px-4 py-3 text-sm font-semibold text-[var(--pong-ball)] dark:bg-[color-mix(in_oklch,var(--pong-board)_84%,black_10%)]"
+                    data-testid="pong-multiplayer-serve-key-hint"
+                  >
+                    {canServeGameInput
+                      ? "Press Space or Enter to serve"
+                      : `${formatPongServeSide(gameState.serveSide)} paddle serves`}
+                  </p>
                 </div>
               </div>
             ) : null}
@@ -491,6 +489,10 @@ export function PongMultiplayerRoom({
       </aside>
     </div>
   );
+}
+
+function formatPongServeSide(serveSide: PongSide) {
+  return serveSide === "left" ? "Left" : "Right";
 }
 
 function PongRoomStat({

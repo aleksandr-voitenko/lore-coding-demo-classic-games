@@ -112,6 +112,10 @@ function appendPongReplayEvent(
   });
 }
 
+function isPongServeKey(key: string) {
+  return key === " " || key === "Enter";
+}
+
 function createPongHelpSections(
   maximumScore: number,
   targetScore: number,
@@ -121,7 +125,10 @@ function createPongHelpSections(
       title: "Controls",
       controls: [
         {
-          buttons: [{ text: "Enter", label: "Enter key" }],
+          buttons: [
+            { text: "Space", label: "Space key" },
+            { text: "Enter", label: "Enter key" },
+          ],
           label: "Start or serve",
         },
         {
@@ -192,7 +199,9 @@ function PongLiveGame({
       targetScore: initialTargetScore,
     }),
   );
+  const [hasEnteredGame, setHasEnteredGame] = useState(false);
   const gameRef = useRef(game);
+  const replayInitialServeSideRef = useRef(game.serveSide);
   const preStartReplayEventsRef = useRef<PongReplayEventInput[]>([]);
   const {
     captureFinishedReplay,
@@ -221,8 +230,8 @@ function PongLiveGame({
   const isUnfinishedMatch = isPongMatchInProgress(game);
   const statusLabel = isBetweenRounds ? "Next rally" : statusLabels[game.status];
   const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
-  const showStartScreen = game.status === "ready" && !isBetweenRounds;
-  const showRoundReadyScreen = isBetweenRounds;
+  const showStartScreen = !hasEnteredGame && game.status === "ready" && !isBetweenRounds;
+  const showServeReadyMessage = hasEnteredGame && game.status === "ready";
   const showEndScreen = game.status === "lost" || game.status === "won";
   const showPauseScreen = game.status === "paused";
   const leaderboardKey = createGameLeaderboardKey("pong", [
@@ -236,7 +245,7 @@ function PongLiveGame({
     finalScore: game.remainingScore,
     gameId: "pong",
     leaderboardKey,
-    started: isUnfinishedMatch || showEndScreen,
+    started: hasEnteredGame || isUnfinishedMatch || showEndScreen,
   });
   const {
     finalLeaderboardProps,
@@ -270,9 +279,9 @@ function PongLiveGame({
     [commitGame],
   );
 
-  const startReplayRun = useCallback(async ({ restart = false }: { restart?: boolean } = {}) => {
+  const prepareReplayRun = useCallback(async () => {
     if (isReplayRunPendingRef.current) {
-      return;
+      return false;
     }
 
     resetLeaderboardForm();
@@ -285,20 +294,32 @@ function PongLiveGame({
     });
 
     if (recording === null) {
-      return;
+      return false;
     }
 
+    replayInitialServeSideRef.current = gameRef.current.serveSide;
     preStartReplayEventsRef.current.forEach((event) => {
       appendPongReplayEvent(recording, event);
     });
-    appendPongReplayEvent(recording, { type: "start" });
     preStartReplayEventsRef.current = [];
-    commitGame(
-      restart ? restartPongGame(gameRef.current) : startPongGame(gameRef.current),
-    );
-  }, [commitGame, isReplayRunPendingRef, resetLeaderboardForm, startReplayRecording]);
 
-  const startGame = useCallback(() => {
+    return true;
+  }, [isReplayRunPendingRef, resetLeaderboardForm, startReplayRecording]);
+
+  const enterGame = useCallback(() => {
+    if (isReplayRunPendingRef.current) {
+      return;
+    }
+
+    setHasEnteredGame(true);
+    void prepareReplayRun();
+  }, [isReplayRunPendingRef, prepareReplayRun]);
+
+  const serveBall = useCallback(() => {
+    if (!hasEnteredGame || isReplayRunPendingRef.current) {
+      return;
+    }
+
     resetLeaderboardForm();
 
     const recording = replayRecordingRef.current;
@@ -309,9 +330,13 @@ function PongLiveGame({
 
       return;
     }
-
-    void startReplayRun();
-  }, [replayRecordingRef, resetLeaderboardForm, startReplayRun, updateCommittedGame]);
+  }, [
+    hasEnteredGame,
+    isReplayRunPendingRef,
+    replayRecordingRef,
+    resetLeaderboardForm,
+    updateCommittedGame,
+  ]);
 
   const toggleRunState = useCallback(() => {
     const current = gameRef.current;
@@ -330,8 +355,8 @@ function PongLiveGame({
       return;
     }
 
-    startGame();
-  }, [pauseRecordingClock, resetLeaderboardForm, resumeRecordingClock, startGame, updateCommittedGame]);
+    serveBall();
+  }, [pauseRecordingClock, resetLeaderboardForm, resumeRecordingClock, serveBall, updateCommittedGame]);
 
   const movePaddle = useCallback(
     (direction: PongPaddleMovementDirection) => {
@@ -348,7 +373,7 @@ function PongLiveGame({
         } else if (
           movedPaddle &&
           current.status === "ready" &&
-          !isReplayRunPendingRef.current
+          hasEnteredGame
         ) {
           preStartReplayEventsRef.current.push(event);
         }
@@ -356,7 +381,7 @@ function PongLiveGame({
         return nextGame;
       });
     },
-    [isReplayRunPendingRef, replayRecordingRef, updateCommittedGame],
+    [hasEnteredGame, replayRecordingRef, updateCommittedGame],
   );
 
   const advancePong = useCallback(() => {
@@ -410,6 +435,7 @@ function PongLiveGame({
       finalStatus,
       finalTick: recording.tick,
       gameId: PONG_REPLAY_GAME_ID,
+      initialServeSide: replayInitialServeSideRef.current,
       leaderboardKey,
       runId: recording.run.id,
       schemaVersion: PONG_REPLAY_SCHEMA_VERSION,
@@ -418,6 +444,7 @@ function PongLiveGame({
       targetScore: game.targetScore,
     }));
     preStartReplayEventsRef.current = [];
+    replayInitialServeSideRef.current = gameRef.current.serveSide;
   }, [
     captureFinishedReplay,
     game.boardHeight,
@@ -437,7 +464,7 @@ function PongLiveGame({
   });
   const { abandonDialogProps, requestBackToMenu } = useGameEscapeToMenu({
     isDisabled: isHelpVisible,
-    isGameStarted: isUnfinishedMatch,
+    isGameStarted: hasEnteredGame || isUnfinishedMatch,
     onBackToMenu,
     onPauseGame: pauseGameForHelp,
     onResumeGame: resumeGameAfterHelp,
@@ -455,7 +482,7 @@ function PongLiveGame({
     isMovementDisabled:
       isHelpVisible ||
       isAbandonDialogVisible ||
-      isReplayRunPending ||
+      !hasEnteredGame ||
       pendingLeaderboardEntry !== null ||
       game.status === "lost" ||
       game.status === "won",
@@ -469,9 +496,19 @@ function PongLiveGame({
 
     resetPaddleMovement();
     preStartReplayEventsRef.current = [];
+    resetLeaderboardForm();
     resetReplayRecording();
-    void startReplayRun({ restart: true });
-  }, [isReplayRunPendingRef, resetPaddleMovement, resetReplayRecording, startReplayRun]);
+    setHasEnteredGame(true);
+    commitGame(restartPongGame(gameRef.current));
+    void prepareReplayRun();
+  }, [
+    commitGame,
+    isReplayRunPendingRef,
+    prepareReplayRun,
+    resetLeaderboardForm,
+    resetPaddleMovement,
+    resetReplayRecording,
+  ]);
 
   useEffect(() => {
     if (tickDelay === null) {
@@ -520,15 +557,19 @@ function PongLiveGame({
         return;
       }
 
-      if (event.key === "Enter" && game.status !== "running" && game.status !== "paused") {
+      if (isPongServeKey(event.key) && game.status === "ready") {
         event.preventDefault();
-        startGame();
+        if (!event.repeat) {
+          serveBall();
+        }
         return;
       }
 
       if (isGamePauseKey(event.key)) {
         event.preventDefault();
-        toggleRunState();
+        if (game.status === "running" || game.status === "paused") {
+          toggleRunState();
+        }
       }
     }
 
@@ -555,10 +596,11 @@ function PongLiveGame({
     beginPaddleMovement,
     endPaddleMovement,
     game.status,
+    hasEnteredGame,
     isAbandonDialogVisible,
     isHelpVisible,
     pendingLeaderboardEntry,
-    startGame,
+    serveBall,
     toggleRunState,
   ]);
 
@@ -642,7 +684,7 @@ function PongLiveGame({
                   className="min-w-32"
                   data-testid="pong-start-button"
                   disabled={isReplayRunPending}
-                  onClick={startGame}
+                  onClick={() => void enterGame()}
                   size="lg"
                   type="button"
                   variant="secondary"
@@ -652,33 +694,17 @@ function PongLiveGame({
                 </Button>
                 <GameLeaderboardPanel {...leaderboardPanelProps} />
               </GameStartScreen>
-            ) : showRoundReadyScreen ? (
+            ) : showServeReadyMessage ? (
               <div
-                className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--pong-board)_58%,transparent)] px-4 py-5 text-center text-[var(--pong-ball)] backdrop-blur-[1px]"
-                data-testid="pong-round-ready-screen"
+                className="pointer-events-none absolute left-1/2 top-1/2 max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 text-center text-[var(--pong-ball)]"
+                data-testid="pong-serve-ready-message"
               >
-                <div className="flex max-w-72 flex-col items-center gap-3 rounded-md border border-[color-mix(in_oklch,var(--pong-ball)_20%,transparent)] bg-[color-mix(in_oklch,var(--pong-board)_88%,white_12%)] p-5 shadow-[0_18px_48px_rgba(0,0,0,0.28)] dark:bg-[color-mix(in_oklch,var(--pong-board)_88%,black_12%)]">
-                  <div className="flex flex-col items-center gap-1">
-                    <p className="text-2xl font-semibold tracking-normal text-balance">
-                      Rally complete
-                    </p>
-                    <p className="text-base font-medium text-[color-mix(in_oklch,var(--pong-ball)_72%,transparent)]">
-                      Player {game.score.player} - {game.score.cpu} Computer
-                    </p>
-                  </div>
-                  <Button
-                    className="min-w-32"
-                    data-testid="pong-next-rally-button"
-                    disabled={isReplayRunPending}
-                    onClick={startGame}
-                    size="lg"
-                    type="button"
-                    variant="secondary"
-                  >
-                    <PlayIcon data-icon="inline-start" />
-                    {isReplayRunPending ? "Starting" : "Serve"}
-                  </Button>
-                </div>
+                <p
+                  className="max-w-[calc(100vw-2rem)] whitespace-nowrap rounded-md border border-[color-mix(in_oklch,var(--pong-ball)_24%,transparent)] bg-[color-mix(in_oklch,var(--pong-board)_76%,white_18%)] px-4 py-3 text-sm font-semibold text-[var(--pong-ball)] shadow-[0_12px_32px_rgba(0,0,0,0.18)] dark:bg-[color-mix(in_oklch,var(--pong-board)_82%,black_10%)]"
+                  data-testid="pong-serve-key-hint"
+                >
+                  {isReplayRunPending ? "Preparing serve" : "Press Space or Enter to serve"}
+                </p>
               </div>
             ) : showEndScreen ? (
               <GameEndScreen testId="pong-end-screen">

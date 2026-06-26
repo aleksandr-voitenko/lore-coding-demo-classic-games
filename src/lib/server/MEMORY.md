@@ -54,13 +54,15 @@ This file covers Node-only server helpers and storage adapters under
   runtime, accepts an injectable `MultiplayerRoomStore`, rejects public
   WebSocket lifecycle/settings commands because signed-in host authorization
   lives on the authenticated HTTP room route, broadcasts authoritative room
-  snapshots after accepted WebSocket commands, exposes a narrow snapshot fanout
-  method for sidecar-owned mutations, and keeps game-specific payloads nested
-  behind `game.input` dispatch.
+  snapshots after accepted WebSocket commands, runs a subscribed-room snapshot
+  pump so server-owned games keep advancing when HTTP polling is disabled,
+  exposes a narrow snapshot fanout method for sidecar-owned mutations, and keeps
+  game-specific payloads nested behind `game.input` dispatch.
 - `multiplayer-room-sidecar.ts` owns the standalone Node HTTP/WebSocket process
   wrapper around the gateway. It parses `MULTIPLAYER_SIDECAR_HOST`,
   `MULTIPLAYER_SIDECAR_PORT`, `MULTIPLAYER_SIDECAR_WEBSOCKET_PATH`,
-  `MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH`, and optional
+  `MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH`,
+  `MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS`, and optional
   `MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN`. It exposes `/healthz`, keeps
   public WebSocket upgrades on `/multiplayer/rooms` by default, serves internal
   JSON room create/get/command endpoints on `/_internal/multiplayer/rooms` by

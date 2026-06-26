@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo, Server as HttpServer } from "node:net";
 
 import {
+  DEFAULT_MULTIPLAYER_ROOM_SNAPSHOT_INTERVAL_MS,
   createMultiplayerRoomWebSocketGateway,
   type MultiplayerRoomWebSocketGateway,
 } from "./multiplayer-room-websocket";
@@ -19,11 +20,15 @@ export const DEFAULT_MULTIPLAYER_SIDECAR_PORT = 3001;
 export const DEFAULT_MULTIPLAYER_SIDECAR_WEBSOCKET_PATH = "/multiplayer/rooms";
 export const DEFAULT_MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH =
   "/_internal/multiplayer/rooms";
+export const DEFAULT_MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS =
+  DEFAULT_MULTIPLAYER_ROOM_SNAPSHOT_INTERVAL_MS;
 export const MULTIPLAYER_SIDECAR_HEALTH_PATH = "/healthz";
 export const MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN_ENV =
   "MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN";
 export const MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH_ENV =
   "MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH";
+export const MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS_ENV =
+  "MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS";
 
 const MULTIPLAYER_SIDECAR_SERVICE_NAME = "multiplayer-room-sidecar";
 const MAX_ROOM_SERVICE_JSON_BODY_BYTES = 64 * 1024;
@@ -34,6 +39,7 @@ export type MultiplayerRoomSidecarConfig = {
   port: number;
   roomServiceBearerToken?: string;
   roomServicePath: string;
+  snapshotIntervalMs: number;
   websocketPath: string;
 };
 
@@ -78,6 +84,11 @@ export function parseMultiplayerRoomSidecarConfig(
     ),
     ...(roomServiceBearerToken === undefined ? {} : { roomServiceBearerToken }),
     roomServicePath,
+    snapshotIntervalMs: parsePositiveIntegerEnv(
+      env[MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS_ENV],
+      MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS_ENV,
+      DEFAULT_MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS,
+    ),
     websocketPath,
   };
 }
@@ -96,6 +107,7 @@ export function createMultiplayerRoomSidecar(
   const gateway = createMultiplayerRoomWebSocketGateway({
     path: config.websocketPath,
     server,
+    snapshotIntervalMs: config.snapshotIntervalMs,
     store,
   });
   let closePromise: Promise<void> | null = null;
@@ -128,7 +140,7 @@ export async function runMultiplayerRoomSidecarFromEnv(
       sidecar.config,
     )} with WebSocket path ${sidecar.config.websocketPath} and room service path ${
       sidecar.config.roomServicePath
-    }`,
+    } and snapshot interval ${sidecar.config.snapshotIntervalMs}ms`,
   );
 
   return sidecar;
@@ -681,6 +693,26 @@ function parsePortEnv(
   }
 
   return port;
+}
+
+function parsePositiveIntegerEnv(
+  value: string | undefined,
+  envName: string,
+  fallback: number,
+) {
+  const trimmedValue = getOptionalEnvString(value);
+
+  if (trimmedValue === undefined) {
+    return fallback;
+  }
+
+  const integer = Number(trimmedValue);
+
+  if (!Number.isInteger(integer) || integer <= 0) {
+    throw new Error(`${envName} must be a positive integer.`);
+  }
+
+  return integer;
 }
 
 function parsePathEnv(

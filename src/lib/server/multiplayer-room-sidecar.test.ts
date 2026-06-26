@@ -9,6 +9,7 @@ import {
   DEFAULT_MULTIPLAYER_SIDECAR_HOST,
   DEFAULT_MULTIPLAYER_SIDECAR_PORT,
   DEFAULT_MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH,
+  DEFAULT_MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS,
   DEFAULT_MULTIPLAYER_SIDECAR_WEBSOCKET_PATH,
   MULTIPLAYER_SIDECAR_HEALTH_PATH,
   createMultiplayerRoomSidecar,
@@ -32,6 +33,7 @@ function createTestConfig(
     host: "127.0.0.1",
     port: 0,
     roomServicePath: "/_internal/rooms",
+    snapshotIntervalMs: DEFAULT_MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS,
     websocketPath: "/rooms",
     ...overrides,
   };
@@ -194,6 +196,7 @@ describe("multiplayer room sidecar", () => {
       host: DEFAULT_MULTIPLAYER_SIDECAR_HOST,
       port: DEFAULT_MULTIPLAYER_SIDECAR_PORT,
       roomServicePath: DEFAULT_MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH,
+      snapshotIntervalMs: DEFAULT_MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS,
       websocketPath: DEFAULT_MULTIPLAYER_SIDECAR_WEBSOCKET_PATH,
     });
 
@@ -202,6 +205,7 @@ describe("multiplayer room sidecar", () => {
         MULTIPLAYER_SIDECAR_HOST: " 0.0.0.0 ",
         MULTIPLAYER_SIDECAR_PORT: "3002",
         MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH: " /_sidecar/rooms ",
+        MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS: "33",
         MULTIPLAYER_SIDECAR_WEBSOCKET_PATH: " /ws/rooms ",
         MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN: " service-secret ",
       }),
@@ -211,6 +215,7 @@ describe("multiplayer room sidecar", () => {
       port: 3002,
       roomServiceBearerToken: "service-secret",
       roomServicePath: "/_sidecar/rooms",
+      snapshotIntervalMs: 33,
       websocketPath: "/ws/rooms",
     });
   });
@@ -239,6 +244,12 @@ describe("multiplayer room sidecar", () => {
         MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH: "rooms",
       }),
     ).toThrow('MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH must start with "/"');
+
+    expect(() =>
+      parseMultiplayerRoomSidecarConfig({
+        MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS: "0",
+      }),
+    ).toThrow("MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS must be a positive integer");
   });
 
   it("serves health JSON and closes the HTTP server", async () => {

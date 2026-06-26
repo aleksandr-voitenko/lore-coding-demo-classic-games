@@ -259,6 +259,7 @@ function clonePongGameState(game: PongGameState): PongGameState {
     playerPaddle: { ...game.playerPaddle },
     remainingScore: game.remainingScore,
     score: { ...game.score },
+    serveSide: game.serveSide,
     status: game.status,
     targetScore: game.targetScore,
   };
@@ -455,7 +456,7 @@ function createPongRuntime(
   }
 
   return {
-    game: startPongMultiplayerGame(result.game),
+    game: result.game,
     heldInputs: {},
     lastMovementTickMs: nowMs,
     lastScoreTickMs: nowMs,
@@ -480,7 +481,9 @@ function advancePongRuntimeTo(
   if (
     runtime === undefined ||
     storedRoom.room.status !== "running" ||
-    runtime.game.status !== "running"
+    runtime.game.status === "paused" ||
+    runtime.game.status === "won" ||
+    runtime.game.status === "lost"
   ) {
     return;
   }
@@ -686,6 +689,13 @@ function applyPongInputCommand(
       return createStoreFailure(
         "invalid-status",
         "Pong serve is only available between rounds.",
+      );
+    }
+
+    if (sideResult.side !== runtime.game.serveSide) {
+      return createStoreFailure(
+        "invalid-command",
+        "Only the serving paddle can serve the ball.",
       );
     }
 

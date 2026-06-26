@@ -61,6 +61,7 @@ function createReplayPayload(
     finalStatus: "lost",
     finalTick: 1,
     gameId: "pong",
+    initialServeSide: "left",
     leaderboardKey: createPongReplayLeaderboardKey({
       boardHeight,
       boardWidth,
@@ -91,18 +92,23 @@ function createTerminalReplay() {
   const initialReplay = createInitialPongReplayGame({
     boardHeight,
     boardWidth,
+    initialServeSide: "right",
     targetScore,
   });
-  const events: PongReplayEvent[] = [
-    {
-      elapsedMs: 0,
-      seq: 0,
-      tick: 0,
-      type: "start",
-    },
-  ];
+  const events: PongReplayEvent[] = Array.from({ length: 40 }, (_, index) => ({
+    elapsedMs: 0,
+    seq: index,
+    tick: 0,
+    type: "moveUp",
+  }));
+  events.push({
+    elapsedMs: 0,
+    seq: events.length,
+    tick: 0,
+    type: "start",
+  });
   let advanceTick = 0;
-  let game = startPongGame(initialReplay.game);
+  let game = startPongGame(applyReplayEvents(initialReplay.game, events.slice(0, -1)));
 
   while (game.status !== "lost" && game.status !== "won" && events.length < 20_000) {
     if (game.status === "ready") {
@@ -149,6 +155,7 @@ function createTerminalReplay() {
     finalScore: game.remainingScore,
     finalStatus: game.status,
     finalTick: advanceTick,
+    initialServeSide: "right",
     leaderboardKey: createPongReplayLeaderboardKey({
       boardHeight,
       boardWidth,
@@ -178,6 +185,7 @@ describe("pong replay", () => {
         finalCpuScore: 3,
         finalPlayerScore: 1,
         gameId: "pong",
+        initialServeSide: "left",
         targetScore: 3,
       },
       success: true,
@@ -217,6 +225,16 @@ describe("pong replay", () => {
       ),
     ).toEqual({
       error: "Pong replay includes an unsupported event.",
+      success: false,
+    });
+    expect(
+      parsePongReplayPayload(
+        createReplayPayload({
+          initialServeSide: "center" as never,
+        }),
+      ),
+    ).toEqual({
+      error: "Pong replay initial serve side is not supported.",
       success: false,
     });
     expect(
@@ -282,8 +300,26 @@ describe("pong replay", () => {
     const result = applyReplayEvents(initialReplay.game, replay.events);
 
     expect(result.status).toBe("running");
+    expect(initialReplay.game.serveSide).toBe("left");
     expect(result.playerPaddle.y).toBeLessThan(initialReplay.game.playerPaddle.y);
     expect(result.remainingScore).toBe(initialReplay.game.remainingScore - 5);
+  });
+
+  it("replays the captured initial serving side", () => {
+    const replay = createReplayPayload({
+      initialServeSide: "right",
+    });
+    const initialReplay = createInitialPongReplayGame(replay);
+    const started = applyPongReplayEvent(initialReplay.game, {
+      elapsedMs: 0,
+      seq: 0,
+      tick: 0,
+      type: "start",
+    });
+
+    expect(initialReplay.game.serveSide).toBe("right");
+    expect(started.ball.velocity.x).toBeLessThan(0);
+    expect(started.ball.velocity.y).toBe(0);
   });
 
   it("parses and applies legacy and side-based paddle move events", () => {

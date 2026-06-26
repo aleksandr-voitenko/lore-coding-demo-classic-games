@@ -83,6 +83,21 @@ function createStartedPongRoom(
   );
 }
 
+function serveStartedPongRoom(store: InProcessMultiplayerRoomStore) {
+  const snapshot = expectStoreSuccess(store.getRoom("ROOM1"));
+  const serveSide = snapshot.game!.snapshot.serveSide;
+
+  return expectStoreSuccess(
+    store.applyCommand("ROOM1", {
+      input: {
+        type: "pong.serve",
+      },
+      participantId: serveSide === "left" ? "host-1" : "guest-1",
+      type: "game.input",
+    }),
+  );
+}
+
 describe("in-process multiplayer room store", () => {
   it("creates signed-in host rooms with deterministic ids and default Pong seats", () => {
     const store = createTestRoomStore();
@@ -370,7 +385,7 @@ describe("in-process multiplayer room store", () => {
           cpu: 0,
           player: 0,
         },
-        status: "running",
+        status: "ready",
       },
     });
   });
@@ -411,6 +426,44 @@ describe("in-process multiplayer room store", () => {
       initialGame.playerPaddle.y,
     );
     expect(advanced.game!.snapshot.cpuPaddle.y).toBe(initialGame.cpuPaddle.y);
+  });
+
+  it("only accepts Pong serve input from the current serving paddle", () => {
+    const store = createTestRoomStore();
+    const started = createStartedPongRoom(store);
+    const serveSide = started.game!.snapshot.serveSide;
+    const servingParticipantId = serveSide === "left" ? "host-1" : "guest-1";
+    const receivingParticipantId = serveSide === "left" ? "guest-1" : "host-1";
+
+    expect(
+      store.applyCommand("ROOM1", {
+        input: {
+          type: "pong.serve",
+        },
+        participantId: receivingParticipantId,
+        type: "game.input",
+      }),
+    ).toEqual({
+      code: "invalid-command",
+      error: "Only the serving paddle can serve the ball.",
+      success: false,
+    });
+
+    const served = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        input: {
+          type: "pong.serve",
+        },
+        participantId: servingParticipantId,
+        type: "game.input",
+      }),
+    );
+
+    expect(served.game!.snapshot.status).toBe("running");
+    expect(served.game!.snapshot.ball.velocity.y).toBe(0);
+    expect(Math.sign(served.game!.snapshot.ball.velocity.x)).toBe(
+      serveSide === "left" ? 1 : -1,
+    );
   });
 
   it("rejects invalid, observer, unseated, and non-Pong game input", () => {
@@ -505,6 +558,7 @@ describe("in-process multiplayer room store", () => {
         "pong-board-size": "1200x640",
       },
     });
+    serveStartedPongRoom(store);
     nowMs += getPongTickDelay();
 
     const paused = expectStoreSuccess(
@@ -555,19 +609,20 @@ describe("in-process multiplayer room store", () => {
         cpu: 0,
         player: 0,
       },
-      status: "running",
+      status: "ready",
     });
   });
 
   it("caps request-driven Pong catch-up deterministically", () => {
     let nowMs = 0;
     const store = createTestRoomStore({ getNowMs: () => nowMs });
-    const started = createStartedPongRoom(store, {
+    createStartedPongRoom(store, {
       gameId: "pong",
       parameters: {
         "pong-board-size": "1200x640",
       },
     });
+    const started = serveStartedPongRoom(store);
     const initialGame = started.game!.snapshot;
 
     nowMs += getPongScoreTickDelay() * (PONG_RUNTIME_CATCH_UP_TICK_LIMIT + 20);

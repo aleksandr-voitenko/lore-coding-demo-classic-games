@@ -18,6 +18,7 @@ import {
 } from "./multiplayer-room-runtime";
 
 export type CreateMultiplayerRoomWebSocketGatewayOptions = ServerOptions & {
+  snapshotIntervalMs?: number;
   store?: MultiplayerRoomStore;
 };
 
@@ -66,8 +67,10 @@ type GameInputStoreCommand = Extract<
 
 const HOST_ONLY_WEBSOCKET_COMMAND_ERROR =
   "Host-only room commands require the authenticated HTTP room route.";
+export const DEFAULT_MULTIPLAYER_ROOM_SNAPSHOT_INTERVAL_MS = 50;
 
 export function createMultiplayerRoomWebSocketGateway({
+  snapshotIntervalMs = DEFAULT_MULTIPLAYER_ROOM_SNAPSHOT_INTERVAL_MS,
   store = new InProcessMultiplayerRoomStore(),
   ...webSocketOptions
 }: CreateMultiplayerRoomWebSocketGatewayOptions = {}): MultiplayerRoomWebSocketGateway {
@@ -81,6 +84,16 @@ export function createMultiplayerRoomWebSocketGateway({
   );
   const roomCodeBySocket = new Map<WebSocket, string>();
   const socketsByRoomCode = new Map<string, Set<WebSocket>>();
+  const lastBroadcastCursorByRoomCode = new Map<string, string>();
+  const activeSnapshotRoomCodes = new Set<string>();
+  const normalizedSnapshotIntervalMs = normalizeSnapshotIntervalMs(snapshotIntervalMs);
+  let isSnapshotPumpRunning = false;
+  const snapshotIntervalId =
+    normalizedSnapshotIntervalMs === null
+      ? null
+      : setInterval(() => {
+          void pumpSubscribedRoomSnapshots();
+        }, normalizedSnapshotIntervalMs);
 
   function removeSocketFromRoom(socket: WebSocket) {
     const roomCode = roomCodeBySocket.get(socket);
@@ -101,6 +114,7 @@ export function createMultiplayerRoomWebSocketGateway({
 
     if (sockets.size === 0) {
       socketsByRoomCode.delete(roomCode);
+      activeSnapshotRoomCodes.delete(roomCode);
     }
   }
 
@@ -121,6 +135,9 @@ export function createMultiplayerRoomWebSocketGateway({
 
   function broadcastSnapshot(snapshot: MultiplayerRoomSnapshot) {
     const roomCode = snapshot.room.code;
+
+    rememberBroadcastSnapshot(snapshot);
+
     const sockets = socketsByRoomCode.get(roomCode);
 
     if (sockets === undefined) {
@@ -199,6 +216,7 @@ export function createMultiplayerRoomWebSocketGateway({
     );
 
     assignSocketToRoom(socket, result.snapshot.room.code);
+    rememberBroadcastSnapshot(result.snapshot);
     sendServerMessage(socket, {
       ...(getOptionalString(message.displayName) === undefined
         ? {}
@@ -384,10 +402,63 @@ export function createMultiplayerRoomWebSocketGateway({
 
   return {
     broadcastSnapshot,
-    close: () => closeWebSocketServer(webSocketServer),
+    close: async () => {
+      if (snapshotIntervalId !== null) {
+        clearInterval(snapshotIntervalId);
+      }
+
+      await closeWebSocketServer(webSocketServer);
+    },
     roomStore: store,
     webSocketServer,
   };
+
+  async function pumpSubscribedRoomSnapshots() {
+    if (isSnapshotPumpRunning || activeSnapshotRoomCodes.size === 0) {
+      return;
+    }
+
+    isSnapshotPumpRunning = true;
+
+    try {
+      for (const roomCode of activeSnapshotRoomCodes) {
+        if (!socketsByRoomCode.has(roomCode)) {
+          activeSnapshotRoomCodes.delete(roomCode);
+          continue;
+        }
+
+        const result = await store.getRoom(roomCode);
+
+        if (!result.success || !isFreshBroadcastSnapshot(result.snapshot)) {
+          continue;
+        }
+
+        broadcastSnapshot(result.snapshot);
+      }
+    } finally {
+      isSnapshotPumpRunning = false;
+    }
+  }
+
+  function rememberBroadcastSnapshot(snapshot: MultiplayerRoomSnapshot) {
+    lastBroadcastCursorByRoomCode.set(
+      snapshot.room.code,
+      getBroadcastSnapshotCursor(snapshot),
+    );
+
+    if (shouldPumpSnapshotRoom(snapshot)) {
+      activeSnapshotRoomCodes.add(snapshot.room.code);
+    } else {
+      activeSnapshotRoomCodes.delete(snapshot.room.code);
+    }
+  }
+
+  function isFreshBroadcastSnapshot(snapshot: MultiplayerRoomSnapshot) {
+    return (
+      lastBroadcastCursorByRoomCode.get(snapshot.room.code) !==
+      getBroadcastSnapshotCursor(snapshot)
+    );
+  }
 }
 
 function needsNoServerDefault(options: ServerOptions) {
@@ -475,6 +546,26 @@ function sendServerMessage(
   }
 
   socket.send(JSON.stringify(message));
+}
+
+function normalizeSnapshotIntervalMs(intervalMs: number) {
+  if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
+    return null;
+  }
+
+  return Math.max(16, Math.round(intervalMs));
+}
+
+function getBroadcastSnapshotCursor(snapshot: MultiplayerRoomSnapshot) {
+  return `${snapshot.seq}:${snapshot.game?.seq ?? "none"}`;
+}
+
+function shouldPumpSnapshotRoom(snapshot: MultiplayerRoomSnapshot) {
+  return (
+    snapshot.room.status === "running" &&
+    (snapshot.game?.snapshot.status === "ready" ||
+      snapshot.game?.snapshot.status === "running")
+  );
 }
 
 function createBroadcastSnapshot(

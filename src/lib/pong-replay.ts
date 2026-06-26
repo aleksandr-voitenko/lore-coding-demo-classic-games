@@ -76,6 +76,7 @@ export type PongReplayPayload = BaseGameReplayPayload<
   events: PongReplayEvent[];
   finalCpuScore: number;
   finalPlayerScore: number;
+  initialServeSide?: PongSide;
   targetScore: number;
 };
 
@@ -183,6 +184,15 @@ export function parsePongReplayPayload(value: unknown): ParsePongReplayPayloadRe
   const boardHeight = value.boardHeight;
   const boardWidth = value.boardWidth;
   const targetScore = value.targetScore;
+  const initialServeSide =
+    value.initialServeSide === undefined ? "left" : value.initialServeSide;
+
+  if (!isPongSide(initialServeSide)) {
+    return {
+      error: "Pong replay initial serve side is not supported.",
+      success: false,
+    };
+  }
 
   if (
     baseReplay.payload.leaderboardKey !==
@@ -234,6 +244,7 @@ export function parsePongReplayPayload(value: unknown): ParsePongReplayPayloadRe
       events: events.payload,
       finalCpuScore: value.finalCpuScore,
       finalPlayerScore: value.finalPlayerScore,
+      initialServeSide,
       targetScore,
     },
     success: true,
@@ -241,11 +252,15 @@ export function parsePongReplayPayload(value: unknown): ParsePongReplayPayloadRe
 }
 
 export function createInitialPongReplayGame(
-  payload: Pick<PongReplayPayload, "boardHeight" | "boardWidth" | "targetScore">,
+  payload: Pick<
+    PongReplayPayload,
+    "boardHeight" | "boardWidth" | "initialServeSide" | "targetScore"
+  >,
 ) {
   const game: PongGameState = createInitialPongGame({
     boardHeight: payload.boardHeight,
     boardWidth: payload.boardWidth,
+    initialServeSide: payload.initialServeSide ?? "left",
     targetScore: payload.targetScore,
   });
 

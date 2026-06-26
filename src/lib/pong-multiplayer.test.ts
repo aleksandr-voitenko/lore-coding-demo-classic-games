@@ -328,6 +328,7 @@ describe("pong multiplayer adapter", () => {
   it("starts, pauses, resumes, and restarts multiplayer game state", () => {
     const initialGame = createInitialPongGame({
       boardHeight: 640,
+      initialServeSide: "left",
       boardWidth: 480,
       targetScore: 7,
     });
@@ -354,7 +355,7 @@ describe("pong multiplayer adapter", () => {
         cpu: 0,
         player: 0,
       },
-      status: "running",
+      status: "ready",
       targetScore: 7,
     });
   });

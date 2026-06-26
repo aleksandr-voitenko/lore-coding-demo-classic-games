@@ -8,6 +8,8 @@ type KeyboardPauseCase = {
   gameId: string;
   name: string;
   prefix: string;
+  serveKey?: string;
+  serveReadyText?: string;
   serveButtonTestId?: string;
   serveScreenTestId?: string;
   startButtonTestId: string;
@@ -49,6 +51,9 @@ const keyboardPauseCases: KeyboardPauseCase[] = [
     gameId: "pong",
     name: "Pong",
     prefix: "pong",
+    serveKey: "Enter",
+    serveReadyText: "Press Space or Enter to serve",
+    serveScreenTestId: "pong-serve-ready-message",
     startButtonTestId: "pong-start-button",
   },
   {
@@ -215,6 +220,32 @@ test("Asteroids keyboard input starts, thrusts, rotates, fires, pauses, and resu
   await expect(page.getByTestId("asteroids-status")).toHaveText("Running");
 });
 
+test("Pong ready serve only starts from Space or Enter", async ({ page }) => {
+  await openLauncher(page);
+  await openGame(page, "pong");
+
+  const status = page.getByTestId("pong-status");
+
+  await expect(status).toHaveText("Ready");
+  await expect(page.getByTestId("pong-start-button")).toBeVisible();
+
+  await page.keyboard.press("Space");
+  await expect(status).toHaveText("Ready");
+
+  await page.getByTestId("pong-start-button").click();
+  await expect(page.getByTestId("pong-start-screen")).toBeHidden();
+  await expect(page.getByTestId("pong-serve-ready-message")).toBeVisible();
+  await expect(page.getByTestId("pong-serve-key-hint")).toHaveText(
+    "Press Space or Enter to serve",
+  );
+
+  await page.keyboard.press("p");
+  await expect(status).toHaveText("Ready");
+
+  await page.keyboard.press("Space");
+  await expect(status).toHaveText("Running");
+});
+
 for (const keyboardPauseCase of keyboardPauseCases) {
   test(`${keyboardPauseCase.name} direct keyboard pause only uses P`, async ({ page }) => {
     await openLauncher(page);
@@ -233,6 +264,19 @@ for (const keyboardPauseCase of keyboardPauseCases) {
       }
 
       await page.getByTestId(keyboardPauseCase.serveButtonTestId).click();
+    } else if (keyboardPauseCase.serveKey !== undefined) {
+      await expect(status).toHaveText("Ready");
+      if (keyboardPauseCase.serveScreenTestId) {
+        const serveScreen = page.getByTestId(keyboardPauseCase.serveScreenTestId);
+
+        await expect(serveScreen).toBeVisible();
+
+        if (keyboardPauseCase.serveReadyText !== undefined) {
+          await expect(serveScreen).toContainText(keyboardPauseCase.serveReadyText);
+        }
+      }
+      await page.locator("body").click({ position: { x: 1, y: 1 } });
+      await page.keyboard.press(keyboardPauseCase.serveKey);
     }
 
     await expect(status).toHaveText(keyboardPauseCase.activeStatus);

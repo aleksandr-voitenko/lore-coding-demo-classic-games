@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket, type RawData } from "ws";
 
 import type { MultiplayerRealtimeServerMessage } from "@/lib/multiplayer/protocol";
+import type { PongGameState } from "@/lib/pong-game-engine";
 import type { AuthenticatedUser } from "@/lib/user-profile";
 
 import {
@@ -95,9 +96,30 @@ function createStartedPongRoom(store: InProcessMultiplayerRoomStore) {
   );
 }
 
-async function createGatewayFixture(store = createTestRoomStore()) {
+function serveStartedPongRoom(store: InProcessMultiplayerRoomStore) {
+  const snapshot = expectStoreSuccess(store.getRoom("ROOM1"));
+  const serveSide = snapshot.game!.snapshot.serveSide;
+
+  return expectStoreSuccess(
+    store.applyCommand("ROOM1", {
+      input: {
+        type: "pong.serve",
+      },
+      participantId: serveSide === "left" ? "host-1" : "guest-1",
+      type: "game.input",
+    }),
+  );
+}
+
+async function createGatewayFixture(
+  store = createTestRoomStore(),
+  gatewayOptions: {
+    snapshotIntervalMs?: number;
+  } = {},
+) {
   const httpServer = createServer();
   const gateway = createMultiplayerRoomWebSocketGateway({
+    ...gatewayOptions,
     path: "/rooms",
     server: httpServer,
     store,
@@ -536,7 +558,7 @@ describe("multiplayer room WebSocket gateway", () => {
           },
           seq: expectedGameSeq,
           snapshot: {
-            status: "running",
+            status: "ready",
           },
         },
         room: {
@@ -545,6 +567,40 @@ describe("multiplayer room WebSocket gateway", () => {
         seq: started.seq,
       });
     }
+  });
+
+  it("pushes fresh running Pong snapshots without waiting for client input", async () => {
+    let nowMs = 0;
+    const store = createTestRoomStore({ getNowMs: () => nowMs });
+    createStartedPongRoom(store);
+    const started = serveStartedPongRoom(store);
+    const { url } = await createGatewayFixture(store, { snapshotIntervalMs: 10 });
+    const observer = await connectClient(url);
+
+    await bootstrapClient(observer);
+
+    const runningSnapshotPromise = waitForServerMessage(
+      observer,
+      (message) =>
+        message.type === "room.snapshot" &&
+        (message.snapshot.game?.seq ?? 0) > (started.game?.seq ?? 0),
+    );
+
+    nowMs += 80;
+
+    const runningSnapshot = await runningSnapshotPromise;
+
+    expect(runningSnapshot.type).toBe("room.snapshot");
+
+    if (runningSnapshot.type !== "room.snapshot") {
+      throw new Error("Expected a room snapshot message.");
+    }
+
+    const gameSnapshot = runningSnapshot.snapshot.game?.snapshot as
+      | PongGameState
+      | undefined;
+
+    expect(gameSnapshot?.ball.position.x).not.toBe(started.game!.snapshot.ball.position.x);
   });
 
   it("rejects malformed client messages", async () => {
