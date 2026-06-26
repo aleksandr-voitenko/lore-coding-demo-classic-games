@@ -254,19 +254,6 @@ export function getBoardEntityStyle({
   };
 }
 
-export function getPlayerShieldStyle(game: SpaceInvadersGameState): CSSProperties {
-  const diameter = Math.max(game.player.width, game.player.height) + 24;
-
-  return getBoardEntityStyle({
-    boardHeight: game.boardHeight,
-    boardWidth: game.boardWidth,
-    height: diameter,
-    width: diameter,
-    x: game.player.x + game.player.width / 2 - diameter / 2,
-    y: game.player.y + game.player.height / 2 - diameter / 2,
-  });
-}
-
 export function getScorePopupTextStyle(ttlTicks: number): CSSProperties {
   return {
     ...spaceInvadersScorePopupBaseStyle,
