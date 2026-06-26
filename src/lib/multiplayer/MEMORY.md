@@ -26,9 +26,13 @@ folder.
   matching client renderer/input registry. The envelope carries room identity,
   participant/session context, message kind, and server ordering; adapter-owned
   payloads remain nested behind the game boundary.
-- Server sequence fields are the live-stream view of the future room event log.
-  Replays and match summaries should be derived from that server-ordered path,
-  not from client-uploaded multiplayer histories.
+- Server sequence fields are the live-stream cursor for volatile in-process
+  room events, not a promise of durable replay storage. The sidecar may use a
+  bounded memory window for reconnect catch-up while the room exists, but
+  clients must fall back to a fresh server snapshot when that cursor is gone.
+  Replays or match summaries, if added later, should be compact terminal
+  summaries derived from server-owned final state, not client-uploaded
+  multiplayer histories or a SQLite-backed per-event log.
 - Current Pong aliases in `protocol.ts` exist to keep the existing Pong
   multiplayer UI/runtime typed while the sidecar protocol is introduced. Future
   game integrations should narrow by `gameId` at the edge that understands that

@@ -104,10 +104,14 @@ Observers connect to the same room stream and receive lobby/game state, but the
 server rejects observer gameplay controls and host lifecycle commands.
 
 Reconnect should be sequence-aware. A returning participant or observer should
-rejoin through the room identity established by bootstrap, resume from the last
-acknowledged server sequence when the event log can satisfy it, or receive a
-fresh authoritative snapshot before continuing on the live stream. Clients must
-not reconstruct canonical multiplayer state by replaying local browser input.
+rejoin through the room identity established by bootstrap and resume from the
+last acknowledged server sequence only when the sidecar still has the volatile
+in-process events needed to catch up that cursor. If that in-memory window cannot
+satisfy the cursor, the client receives a fresh authoritative snapshot before
+continuing on the live stream. If the sidecar process restarted and the room is
+gone, the in-progress game is abandoned and the room must be recreated. Clients
+must not reconstruct canonical multiplayer state by replaying local browser
+input.
 
 ## Shared Game Adapter Contract
 
@@ -155,30 +159,41 @@ both ships on the same tick, the server chooses the recipient randomly. That
 random choice is part of the authoritative server-ordered game state and must be
 deterministic in tests.
 
-## Server Authority And Event Logs
+## Server Authority And Volatile Room State
 
-The authoritative multiplayer stream is a server-ordered room event log plus
-current room snapshot. The log should record room lifecycle events, participant
-role changes, host commands, accepted gameplay intents, server ticks when a game
-requires ticks, settings version, and enough game-specific data to reconstruct
-or audit the canonical match.
+The authoritative multiplayer stream is the sidecar's in-process room state plus
+a server-ordered live event sequence while that room exists. The sidecar orders
+room lifecycle events, participant role changes, host commands, accepted gameplay
+intents, server ticks when a game requires ticks, settings versions, and
+game-specific state changes for live publication and short reconnect catch-up.
 
-Existing solo replay modules are useful examples because they record
-deterministic events instead of video or board snapshots. Multiplayer should not
-reuse the solo client-upload replay contract as authority. A multiplayer replay
-or match summary, if saved, should be derived from the server-ordered room log
-after the match and must preserve room mode, participant roles, settings, final
-state, and the authoritative event ordering.
+Room state and per-event history are intentionally volatile. The sidecar does not
+persist room inputs, ticks, power-up awards, lifecycle events, cursor windows, or
+replay logs to SQLite or another durable store. This avoids spamming the
+lightweight app database with high-frequency multiplayer traffic. If the sidecar
+process restarts, waiting and active rooms owned by that process are lost; the
+product accepts abandoning those in-progress games rather than reconstructing
+them from durable per-event storage.
+
+Existing solo replay modules remain examples of deterministic event capture for
+solo play, but multiplayer should not reuse the solo client-upload replay
+contract as authority and should not add a durable room replay log. A
+multiplayer replay or match summary, if saved later, should be a compact terminal
+summary derived from the authoritative server state before the room is discarded.
+That summary should preserve room mode, participant roles, settings, final
+state, and any final ordering data needed by profiles or leaderboards without
+storing every room event.
 
 Game adapters should expose deterministic state transition boundaries that the
 room service can call. Pong can start with paddle intents and server ticks;
 Space Invaders and Asteroids should be able to add richer input/control intents
 without changing room identity, invite, lobby, observer, or leaderboard rules.
 
-The sidecar should publish the same ordered room events that feed the live
-WebSocket stream into the event-log path. Durable storage, replay derivation, and
-match summaries should consume that server-ordered path instead of trusting
-client-uploaded multiplayer history.
+The sidecar should publish ordered room events to the live WebSocket stream and
+may retain a bounded in-memory window for cursor catch-up. Durable storage, if
+added for multiplayer at all, is limited to compact terminal summaries or
+mode-scoped results and must consume server-derived final state instead of
+trusting client-uploaded multiplayer history.
 
 ## Scores, Leaderboards, And Profiles
 

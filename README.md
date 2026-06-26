@@ -79,6 +79,13 @@ latency testing. Next API routes continue using their local in-process room stor
 `MULTIPLAYER_ROOM_SERVICE_URL` points at the sidecar room service base URL, for
 example `http://127.0.0.1:3001/_internal/multiplayer/rooms`.
 
+Multiplayer room state is intentionally volatile. The sidecar keeps room
+ordering, live cursor catch-up, and game state in process memory only; it does
+not write inputs, ticks, power-up awards, or other per-event room history into
+SQLite. Restarting the sidecar abandons waiting and active rooms owned by that
+process, so players should create a new room after a restart instead of
+expecting replay-log recovery.
+
 Browser room streams are enabled with
 `NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL`. Use an absolute endpoint such as
 `ws://127.0.0.1:3001/multiplayer/rooms` for local sidecar testing, or a

@@ -46,9 +46,9 @@ This file covers Node-only server helpers and storage adapters under
 - `multiplayer-room-runtime.ts` wraps the pure room model with process-local room
   state, deterministic id/code/time factories for tests, snapshot sequence
   numbers for API routes, and a process-local Pong runtime that exposes optional
-  server-owned game snapshots. Treat it as a replaceable development bridge
-  toward a durable realtime sidecar and event log, not as the final multiplayer
-  authority.
+  server-owned game snapshots. Room state is intentionally volatile: the
+  in-process store or sidecar owns server authority while the room exists, and
+  in-progress games may be abandoned if that process restarts.
 - `multiplayer-room-websocket.ts` owns the reusable Node WebSocket gateway for
   the realtime sidecar. It adapts the generic protocol envelopes to the room
   runtime, accepts an injectable `MultiplayerRoomStore`, rejects public
@@ -93,17 +93,19 @@ This file covers Node-only server helpers and storage adapters under
   outcomes: choosing the respawning ship when a double hit has only one shared
   life left, and choosing the power-up recipient when both ships collect the
   same power-up on one tick. Tests should inject deterministic randomness.
-- The server-ordered room event log is the source of truth for future
-  multiplayer replay and match-summary derivation. It should cover lifecycle,
-  membership, settings versions, accepted gameplay intents, ticks, snapshots or
-  snapshot references, and terminal results before anything durable is exposed
-  to profiles or leaderboards.
+- The server-ordered room event path is the live source of truth only while the
+  room exists. Keep lifecycle, membership, settings versions, accepted gameplay
+  intents, ticks, snapshots, power-up awards, and cursor catch-up windows
+  in-process; do not add SQLite tables or another durable per-event log for that
+  high-frequency traffic. If multiplayer persistence is needed later, persist
+  compact terminal summaries or mode-scoped results derived from server-owned
+  final state.
 - Multiplayer results and scores stay mode-scoped, for example private-room
   Pong keys must remain separate from solo Pong keys. Do not write multiplayer
   outcomes through solo replay uploads or unscoped solo leaderboard keys.
-- Browser live room delivery uses WebSocket fanout plus the ordered event path.
-  Keep public HTTP limited to room creation, invite snapshot reads, and
-  authenticated host-only commands; the sidecar HTTP room service remains an
+- Browser live room delivery uses WebSocket fanout plus the volatile ordered
+  event path. Keep public HTTP limited to room creation, invite snapshot reads,
+  and authenticated host-only commands; the sidecar HTTP room service remains an
   internal bridge rather than a browser polling or live-command fallback.
 
 ## SQLite Assumptions
