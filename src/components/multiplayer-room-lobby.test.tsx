@@ -14,6 +14,7 @@ import {
   MULTIPLAYER_ROOMS_API_PATH,
   MultiplayerRoomLobby,
   createMultiplayerRoom,
+  getMultiplayerRoomConnectionErrorState,
   getMultiplayerRoomStreamUnavailableMessage,
   getPrivateRoomShareLink,
   postMultiplayerRoomCommand,
@@ -21,6 +22,7 @@ import {
   shouldPostMultiplayerRoomCommandOverHttp,
 } from "./multiplayer-room-lobby";
 import { getMultiplayerRoomGameRenderer } from "./multiplayer-room-game-registry";
+import { MultiplayerRoomTransportError } from "./multiplayer-room-transport";
 
 type RoomFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -297,6 +299,29 @@ describe("multiplayer room lobby", () => {
     expect(getMultiplayerRoomStreamUnavailableMessage("connecting")).toBe(
       "Room stream is connecting. Try again once the WebSocket stream is ready.",
     );
+  });
+
+  it("marks missing rooms as abandoned after unrecoverable stream bootstrap rejection", () => {
+    expect(
+      getMultiplayerRoomConnectionErrorState(
+        new MultiplayerRoomTransportError("Room was not found.", {
+          code: "room-not-found",
+        }),
+      ),
+    ).toEqual({
+      abandonRoom: true,
+      message:
+        "Room connection lost. This room is no longer available, so the in-progress game cannot continue. Start or join a new room.",
+    });
+
+    expect(
+      getMultiplayerRoomConnectionErrorState(
+        new MultiplayerRoomTransportError("Room stream connection failed."),
+      ),
+    ).toEqual({
+      abandonRoom: false,
+      message: "Room stream connection failed.",
+    });
   });
 
   it("builds full private-room share links when a browser origin is available", () => {

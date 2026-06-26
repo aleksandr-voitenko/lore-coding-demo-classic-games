@@ -4,6 +4,7 @@ import type { MultiplayerRealtimeServerMessage } from "@/lib/multiplayer/protoco
 import type { PrivateRoom } from "@/lib/multiplayer/room";
 
 import {
+  MultiplayerRoomTransportError,
   type MultiplayerRoomTransportSnapshot,
   type MultiplayerRoomWebSocketEventMap,
   type MultiplayerRoomWebSocketLike,
@@ -396,5 +397,59 @@ describe("multiplayer room WebSocket message shapes", () => {
         seq: 1,
       },
     ]);
+  });
+
+  it("preserves unrecoverable bootstrap rejection codes for room-gone UX", () => {
+    const bootstrapErrors: MultiplayerRoomTransportError[] = [];
+    const transport = createMultiplayerRoomWebSocketTransport({
+      lastSeq: {
+        game: 4,
+        room: 3,
+      },
+      onBootstrap: () => {
+        throw new Error("Bootstrap should not succeed.");
+      },
+      onBootstrapRejected: (error) => bootstrapErrors.push(error),
+      onSnapshot: () => {
+        throw new Error("Snapshot should not arrive.");
+      },
+      participantId: "guest-1",
+      roomCode: "ROOM1",
+      url: "ws://127.0.0.1:3001/multiplayer/rooms",
+      webSocketConstructor: FakeWebSocket,
+    });
+    const socket = FakeWebSocket.instances[0]!;
+
+    socket.emitOpen();
+
+    const resumeMessage = JSON.parse(socket.sentMessages[0]!);
+
+    expect(resumeMessage).toMatchObject({
+      lastSeq: {
+        game: 4,
+        room: 3,
+      },
+      participantId: "guest-1",
+      roomCode: "ROOM1",
+      type: "connection.resume",
+    });
+
+    socket.emitMessage({
+      code: "room-not-found",
+      error: "Room was not found.",
+      requestId: resumeMessage.requestId,
+      roomCode: "ROOM1",
+      type: "room.commandRejected",
+    });
+
+    expect(bootstrapErrors).toHaveLength(1);
+    expect(bootstrapErrors[0]).toBeInstanceOf(MultiplayerRoomTransportError);
+    expect(bootstrapErrors[0]).toMatchObject({
+      code: "room-not-found",
+      message: "Room was not found.",
+    });
+    expect(socket.readyState).toBe(3);
+
+    transport.close();
   });
 });

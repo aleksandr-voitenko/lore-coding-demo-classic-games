@@ -11,6 +11,7 @@ import type {
   MultiplayerRealtimeConnectionCursor,
   MultiplayerRealtimeConnectionMessage,
   MultiplayerRealtimeGameInputMessage,
+  MultiplayerRealtimeRejectionCode,
   MultiplayerRealtimeRoomCommandMessage,
   MultiplayerRealtimeRoomSnapshot,
   MultiplayerRealtimeServerMessage,
@@ -124,9 +125,18 @@ type UseMultiplayerRoomWebSocketTransportResult = {
 let nextRequestId = 0;
 
 export class MultiplayerRoomTransportError extends Error {
-  constructor(message: string) {
+  readonly code?: MultiplayerRealtimeRejectionCode;
+
+  constructor(
+    message: string,
+    options: { code?: MultiplayerRealtimeRejectionCode } = {},
+  ) {
     super(message);
     this.name = "MultiplayerRoomTransportError";
+
+    if (options.code !== undefined) {
+      this.code = options.code;
+    }
   }
 }
 
@@ -353,7 +363,9 @@ export function createMultiplayerRoomWebSocketTransport({
     }
 
     if (message.type === "room.commandRejected") {
-      const error = new MultiplayerRoomTransportError(message.error);
+      const error = new MultiplayerRoomTransportError(message.error, {
+        code: message.code,
+      });
 
       if (!hasBootstrapped && message.requestId === connectionRequestId) {
         onBootstrapRejected?.(error);

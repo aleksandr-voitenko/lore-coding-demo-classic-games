@@ -440,6 +440,36 @@ describe("multiplayer room WebSocket gateway", () => {
     expect(bootstrap.snapshot).not.toHaveProperty("participant");
   });
 
+  it("rejects bootstrap when the volatile room is no longer in memory", async () => {
+    const { url } = await createGatewayFixture();
+    const client = await connectClient(url);
+    const rejectionPromise = waitForServerMessage(
+      client,
+      (message) =>
+        message.type === "room.commandRejected" &&
+        message.requestId === "resume-missing",
+    );
+
+    sendClientMessage(client, {
+      lastSeq: {
+        game: 4,
+        room: 3,
+      },
+      participantId: "guest-1",
+      requestId: "resume-missing",
+      roomCode: "ROOM1",
+      type: "connection.resume",
+    });
+
+    await expect(rejectionPromise).resolves.toEqual({
+      code: "room-not-found",
+      error: "Room was not found.",
+      requestId: "resume-missing",
+      roomCode: "ROOM1",
+      type: "room.commandRejected",
+    });
+  });
+
   it("acks room commands and broadcasts authoritative snapshots", async () => {
     const store = createTestRoomStore();
     createLobbyRoom(store);

@@ -22,6 +22,7 @@ export const DEFAULT_MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH =
   "/_internal/multiplayer/rooms";
 export const DEFAULT_MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS =
   DEFAULT_MULTIPLAYER_ROOM_SNAPSHOT_INTERVAL_MS;
+export const DEFAULT_MULTIPLAYER_SIDECAR_READINESS_PATH = "/readyz";
 export const MULTIPLAYER_SIDECAR_HEALTH_PATH = "/healthz";
 export const MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN_ENV =
   "MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN";
@@ -37,6 +38,7 @@ export type MultiplayerRoomSidecarConfig = {
   healthPath: string;
   host: string;
   port: number;
+  readinessPath: string;
   roomServiceBearerToken?: string;
   roomServicePath: string;
   snapshotIntervalMs: number;
@@ -83,6 +85,7 @@ export function parseMultiplayerRoomSidecarConfig(
       DEFAULT_MULTIPLAYER_SIDECAR_PORT,
     ),
     ...(roomServiceBearerToken === undefined ? {} : { roomServiceBearerToken }),
+    readinessPath: DEFAULT_MULTIPLAYER_SIDECAR_READINESS_PATH,
     roomServicePath,
     snapshotIntervalMs: parsePositiveIntegerEnv(
       env[MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS_ENV],
@@ -161,8 +164,31 @@ async function handleHttpRequest(
       response,
       200,
       {
+        readinessPath: config.readinessPath,
         service: MULTIPLAYER_SIDECAR_SERVICE_NAME,
         status: "ok",
+        websocketPath: config.websocketPath,
+      },
+    );
+    return;
+  }
+
+  if (pathname === config.readinessPath) {
+    sendJson(
+      request,
+      response,
+      200,
+      {
+        checks: {
+          http: "ok",
+          roomStore: "ok",
+          websocket: "ok",
+        },
+        roomServicePath: config.roomServicePath,
+        roomState: "volatile-memory",
+        service: MULTIPLAYER_SIDECAR_SERVICE_NAME,
+        snapshotIntervalMs: config.snapshotIntervalMs,
+        status: "ready",
         websocketPath: config.websocketPath,
       },
     );

@@ -8,6 +8,7 @@ import type { MultiplayerRoomStoreResult } from "./multiplayer-room-runtime";
 import {
   DEFAULT_MULTIPLAYER_SIDECAR_HOST,
   DEFAULT_MULTIPLAYER_SIDECAR_PORT,
+  DEFAULT_MULTIPLAYER_SIDECAR_READINESS_PATH,
   DEFAULT_MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH,
   DEFAULT_MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS,
   DEFAULT_MULTIPLAYER_SIDECAR_WEBSOCKET_PATH,
@@ -32,6 +33,7 @@ function createTestConfig(
     healthPath: MULTIPLAYER_SIDECAR_HEALTH_PATH,
     host: "127.0.0.1",
     port: 0,
+    readinessPath: DEFAULT_MULTIPLAYER_SIDECAR_READINESS_PATH,
     roomServicePath: "/_internal/rooms",
     snapshotIntervalMs: DEFAULT_MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS,
     websocketPath: "/rooms",
@@ -195,6 +197,7 @@ describe("multiplayer room sidecar", () => {
       healthPath: MULTIPLAYER_SIDECAR_HEALTH_PATH,
       host: DEFAULT_MULTIPLAYER_SIDECAR_HOST,
       port: DEFAULT_MULTIPLAYER_SIDECAR_PORT,
+      readinessPath: DEFAULT_MULTIPLAYER_SIDECAR_READINESS_PATH,
       roomServicePath: DEFAULT_MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH,
       snapshotIntervalMs: DEFAULT_MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS,
       websocketPath: DEFAULT_MULTIPLAYER_SIDECAR_WEBSOCKET_PATH,
@@ -213,6 +216,7 @@ describe("multiplayer room sidecar", () => {
       healthPath: MULTIPLAYER_SIDECAR_HEALTH_PATH,
       host: "0.0.0.0",
       port: 3002,
+      readinessPath: DEFAULT_MULTIPLAYER_SIDECAR_READINESS_PATH,
       roomServiceBearerToken: "service-secret",
       roomServicePath: "/_sidecar/rooms",
       snapshotIntervalMs: 33,
@@ -252,16 +256,32 @@ describe("multiplayer room sidecar", () => {
     ).toThrow("MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS must be a positive integer");
   });
 
-  it("serves health JSON and closes the HTTP server", async () => {
+  it("serves health and readiness JSON before closing the HTTP server", async () => {
     const sidecar = await createStartedSidecar();
     const origin = getOrigin(sidecar);
 
     const healthResponse = await fetch(`${origin}/healthz`);
+    const readinessResponse = await fetch(`${origin}/readyz`);
 
     expect(healthResponse.status).toBe(200);
     await expect(healthResponse.json()).resolves.toEqual({
+      readinessPath: "/readyz",
       service: "multiplayer-room-sidecar",
       status: "ok",
+      websocketPath: "/rooms",
+    });
+    expect(readinessResponse.status).toBe(200);
+    await expect(readinessResponse.json()).resolves.toEqual({
+      checks: {
+        http: "ok",
+        roomStore: "ok",
+        websocket: "ok",
+      },
+      roomServicePath: "/_internal/rooms",
+      roomState: "volatile-memory",
+      service: "multiplayer-room-sidecar",
+      snapshotIntervalMs: DEFAULT_MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS,
+      status: "ready",
       websocketPath: "/rooms",
     });
 

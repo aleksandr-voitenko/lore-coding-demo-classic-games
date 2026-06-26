@@ -20,6 +20,7 @@ import {
 
 import { renderMultiplayerRoomGame } from "@/components/multiplayer-room-game-registry";
 import {
+  MultiplayerRoomTransportError,
   type MultiplayerRoomTransportStatus,
   useMultiplayerRoomWebSocketTransport,
 } from "@/components/multiplayer-room-transport";
@@ -52,6 +53,9 @@ import {
 } from "@/lib/user-profile";
 
 export const MULTIPLAYER_ROOMS_API_PATH = "/api/multiplayer/rooms";
+
+const MULTIPLAYER_ROOM_ABANDONED_MESSAGE =
+  "Room connection lost. This room is no longer available, so the in-progress game cannot continue. Start or join a new room.";
 
 type RoomFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -247,6 +251,19 @@ export async function postMultiplayerRoomCommand(
 
 function getRequestErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Room request failed.";
+}
+
+export function getMultiplayerRoomConnectionErrorState(error: unknown) {
+  const abandonRoom =
+    error instanceof MultiplayerRoomTransportError &&
+    error.code === "room-not-found";
+
+  return {
+    abandonRoom,
+    message: abandonRoom
+      ? MULTIPLAYER_ROOM_ABANDONED_MESSAGE
+      : getRequestErrorMessage(error),
+  };
 }
 
 function getParticipantById(room: PrivateRoom | null, participantId: string | null) {
@@ -479,9 +496,18 @@ export function MultiplayerRoomLobby({
   );
   const handleRoomTransportConnectionError = useCallback(
     (error: Error) => {
-      setLoadError(getRequestErrorMessage(error));
+      const { abandonRoom, message } =
+        getMultiplayerRoomConnectionErrorState(error);
+
+      if (abandonRoom) {
+        roomSnapshotRef.current = null;
+        setRoomSnapshot(null);
+        setParticipantId(null);
+      }
+
+      setLoadError(message);
     },
-    [setLoadError],
+    [setLoadError, setParticipantId, setRoomSnapshot],
   );
   const transportLastSeq = useMemo(
     () => ({
