@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { CurrentUserProvider } from "@/hooks/use-current-user";
 import type { PrivateRoom } from "@/lib/multiplayer/room";
+import type { MultiplayerRoomGameSnapshot } from "@/lib/multiplayer/protocol";
 import {
   createInitialPongGame,
   pausePongGame,
@@ -23,6 +24,7 @@ import {
   shouldPostMultiplayerRoomCommandOverHttp,
   shouldScheduleMultiplayerRoomPolling,
 } from "./multiplayer-room-lobby";
+import { getMultiplayerRoomGameRenderer } from "./multiplayer-room-game-registry";
 
 type RoomFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -88,6 +90,13 @@ const ACTIVE_PONG_ROOM: PrivateRoom = {
   status: "running",
 };
 
+const ACTIVE_SNAKE_ROOM: PrivateRoom = {
+  ...ACTIVE_PONG_ROOM,
+  settings: {
+    gameId: "snake",
+  },
+};
+
 const RUNNING_PONG_GAME = {
   gameId: "pong",
   heldInputs: {},
@@ -95,6 +104,13 @@ const RUNNING_PONG_GAME = {
   serverTimeMs: 1_000,
   snapshot: startPongGame(createInitialPongGame()),
 } satisfies PongMultiplayerGameSnapshot;
+
+const RUNNING_SNAKE_GAME = {
+  gameId: "snake",
+  seq: 1,
+  serverTimeMs: 1_000,
+  snapshot: {},
+} satisfies MultiplayerRoomGameSnapshot<"snake", Record<string, never>>;
 
 describe("multiplayer room lobby", () => {
   it("renders loaded room details, seats, participants, and host controls", () => {
@@ -194,6 +210,39 @@ describe("multiplayer room lobby", () => {
     expect(markup).toContain("Ada · Left Paddle");
     expect(markup).toContain('data-testid="multiplayer-room-host-controls"');
     expect(markup).not.toContain('data-testid="multiplayer-room-seats"');
+  });
+
+  it("selects registered active game renderers only when room and snapshot game ids match", () => {
+    expect(
+      getMultiplayerRoomGameRenderer(ACTIVE_PONG_ROOM, RUNNING_PONG_GAME)?.gameId,
+    ).toBe("pong");
+    expect(getMultiplayerRoomGameRenderer(ACTIVE_PONG_ROOM, null)).toBeNull();
+    expect(
+      getMultiplayerRoomGameRenderer(ACTIVE_PONG_ROOM, RUNNING_SNAKE_GAME),
+    ).toBeNull();
+    expect(
+      getMultiplayerRoomGameRenderer(ACTIVE_SNAKE_ROOM, RUNNING_SNAKE_GAME),
+    ).toBeNull();
+  });
+
+  it("keeps the generic room shell for active rooms without a registered renderer", () => {
+    const markup = renderToStaticMarkup(
+      <CurrentUserProvider initialUser={{ displayName: "Ada", id: "user-1" }}>
+        <MultiplayerRoomLobby
+          initialGame={RUNNING_SNAKE_GAME}
+          initialParticipantId="host-participant"
+          initialRoom={ACTIVE_SNAKE_ROOM}
+          initialRoomCode="PONG-1"
+          initialSeq={4}
+          onBackToLibrary={vi.fn()}
+        />
+      </CurrentUserProvider>,
+    );
+
+    expect(markup).toContain('data-testid="multiplayer-room-game"');
+    expect(markup).toContain("Snake");
+    expect(markup).toContain('data-testid="multiplayer-room-seats"');
+    expect(markup).not.toContain('data-testid="pong-multiplayer-room"');
   });
 
   it("loads room snapshots from the committed room-code endpoint", async () => {

@@ -19,7 +19,7 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import { PongMultiplayerRoom } from "@/components/pong-multiplayer-room";
+import { renderMultiplayerRoomGame } from "@/components/multiplayer-room-game-registry";
 import {
   type MultiplayerRoomTransportStatus,
   shouldUseHttpMultiplayerRoomTransport,
@@ -41,15 +41,12 @@ import {
   type PrivateRoomStatus,
 } from "@/lib/multiplayer/room";
 import type {
+  MultiplayerGameInputPayload,
   MultiplayerRoomGameSnapshot,
   MultiplayerRoomSnapshot,
   PrivateRoomClientMessage,
   PrivateRoomLifecycleCommand,
 } from "@/lib/multiplayer/protocol";
-import type {
-  PongMultiplayerClientInput,
-  PongMultiplayerGameSnapshot,
-} from "@/lib/pong-multiplayer";
 import {
   MAX_USER_DISPLAY_NAME_LENGTH,
   type UserAuthMode,
@@ -129,12 +126,6 @@ export class MultiplayerRoomRequestError extends Error {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isPongMultiplayerGameSnapshot(
-  game: MultiplayerRoomGameSnapshot | null | undefined,
-): game is PongMultiplayerGameSnapshot {
-  return game?.gameId === "pong";
 }
 
 function getDefaultFetcher(fetcher: RoomFetch | undefined) {
@@ -242,9 +233,12 @@ export async function fetchMultiplayerRoom(roomCode: string, fetcher?: RoomFetch
   return readRoomApiPayload(response, "Load room");
 }
 
-export async function postMultiplayerRoomCommand(
+export async function postMultiplayerRoomCommand<
+  Game extends GameId = GameId,
+  Input = MultiplayerGameInputPayload<Game>,
+>(
   roomCode: string,
-  message: PrivateRoomClientMessage,
+  message: PrivateRoomClientMessage<Game, Input>,
   fetcher?: RoomFetch,
 ) {
   const response = await getDefaultFetcher(fetcher)(getRoomApiPath(roomCode), {
@@ -369,8 +363,11 @@ export function shouldScheduleMultiplayerRoomPolling(
   return shouldUseHttpMultiplayerRoomTransport(transportStatus);
 }
 
-export function shouldPostMultiplayerRoomCommandOverHttp(
-  message: PrivateRoomClientMessage,
+export function shouldPostMultiplayerRoomCommandOverHttp<
+  Game extends GameId = GameId,
+  Input = MultiplayerGameInputPayload<Game>,
+>(
+  message: PrivateRoomClientMessage<Game, Input>,
   transportStatus: MultiplayerRoomTransportStatus,
 ) {
   return (
@@ -460,7 +457,6 @@ export function MultiplayerRoomLobby({
   const roomSnapshotRef = useRef(roomSnapshot);
   const room = roomSnapshot?.room ?? null;
   const game = roomSnapshot?.game;
-  const pongGame = isPongMultiplayerGameSnapshot(game) ? game : null;
   const displayName = displayNameInput ?? user?.displayName ?? "";
   const inviteLink = getPrivateRoomShareLink(normalizedRoomCode, browserOrigin);
   const participantFromLocalId = getParticipantById(room, participantId);
@@ -613,7 +609,9 @@ export function MultiplayerRoomLobby({
   }, [browserOrigin, normalizedRoomCode, setCopyStatus]);
 
   const sendRoomClientMessage = useCallback(
-    async (message: PrivateRoomClientMessage) => {
+    async <Game extends GameId = GameId, Input = MultiplayerGameInputPayload<Game>>(
+      message: PrivateRoomClientMessage<Game, Input>,
+    ) => {
       if (normalizedRoomCode === null) {
         throw new MultiplayerRoomRequestError("Room code is not supported.", 400);
       }
@@ -770,14 +768,17 @@ export function MultiplayerRoomLobby({
     }
   }
 
-  async function handlePongInput(input: PongMultiplayerClientInput) {
+  async function handleGameInput<
+    Game extends GameId = GameId,
+    Input = MultiplayerGameInputPayload<Game>,
+  >(gameId: Game, input: Input) {
     if (normalizedRoomCode === null || activeParticipantId === null) {
       return;
     }
 
     try {
       await sendRoomClientMessage({
-        gameId: "pong",
+        gameId,
         input,
         participantId: activeParticipantId,
         type: "game.input",
@@ -786,11 +787,22 @@ export function MultiplayerRoomLobby({
       setFormError(getRequestErrorMessage(error));
     }
   }
-  const shouldRenderPongRoom =
-    room !== null &&
-    room.status !== "lobby" &&
-    room.settings.gameId === "pong" &&
-    pongGame !== null;
+  const activeRoomGame =
+    room !== null && room.status !== "lobby"
+      ? renderMultiplayerRoomGame({
+          activeParticipant,
+          game,
+          lifecycleControls: isHost ? (
+            <HostLifecycleControls
+              onLifecycleCommand={handleLifecycleCommand}
+              pendingAction={pendingAction}
+              status={room.status}
+            />
+          ) : null,
+          room,
+          sendGameInput: handleGameInput,
+        })
+      : null;
 
   return (
     <main
@@ -844,23 +856,9 @@ export function MultiplayerRoomLobby({
           />
         ) : null}
 
-        {shouldRenderPongRoom ? (
+        {activeRoomGame !== null ? (
           <>
-            <PongMultiplayerRoom
-              activeParticipant={activeParticipant}
-              game={pongGame}
-              lifecycleControls={
-                isHost ? (
-                  <HostLifecycleControls
-                    onLifecycleCommand={handleLifecycleCommand}
-                    pendingAction={pendingAction}
-                    status={room.status}
-                  />
-                ) : null
-              }
-              onGameInput={handlePongInput}
-              room={room}
-            />
+            {activeRoomGame}
             {formError !== null ? (
               <RoomMessage
                 message={formError}
