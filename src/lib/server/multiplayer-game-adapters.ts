@@ -124,6 +124,10 @@ export type MultiplayerServerGameRuntimeAdapter = {
     room: PrivateRoom;
     runtime: unknown;
   }) => boolean;
+  shouldAdvanceSnapshot: (options: {
+    room: PrivateRoom;
+    snapshot: MultiplayerServerGameSnapshot;
+  }) => boolean;
 };
 
 type StoredPongMultiplayerRuntime = {
@@ -182,6 +186,9 @@ const pongMultiplayerRuntimeAdapter: MultiplayerServerGameRuntimeAdapter = {
   gameId: "pong",
   isActive({ room, runtime }) {
     return isPongRuntimeActive(getPongRuntime(runtime), room);
+  },
+  shouldAdvanceSnapshot({ room, snapshot }) {
+    return shouldAdvancePongSnapshot(room, snapshot);
   },
 };
 
@@ -349,11 +356,25 @@ function advancePongRuntimeTo(
 }
 
 function isPongRuntimeActive(runtime: StoredPongMultiplayerRuntime, room: PrivateRoom) {
+  return isPongGameActive(room, runtime.game);
+}
+
+function shouldAdvancePongSnapshot(
+  room: PrivateRoom,
+  snapshot: PongMultiplayerGameSnapshot,
+) {
+  return snapshot.gameId === "pong" && isPongGameActive(room, snapshot.snapshot);
+}
+
+function isPongGameActive(
+  room: PrivateRoom,
+  game: Pick<PongGameState, "status">,
+) {
   return (
     room.status === "running" &&
-    runtime.game.status !== "paused" &&
-    runtime.game.status !== "won" &&
-    runtime.game.status !== "lost"
+    game.status !== "paused" &&
+    game.status !== "won" &&
+    game.status !== "lost"
   );
 }
 

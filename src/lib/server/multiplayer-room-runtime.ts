@@ -284,6 +284,25 @@ export function getMultiplayerRoomStoreErrorStatus(
   return 400;
 }
 
+export function shouldAdvanceRoomGameSnapshot(snapshot: MultiplayerRoomSnapshot) {
+  if (snapshot.game === undefined) {
+    return false;
+  }
+
+  if (snapshot.game.gameId !== snapshot.room.settings.gameId) {
+    return false;
+  }
+
+  const adapter = getMultiplayerServerGameAdapter(snapshot.game.gameId);
+
+  return (
+    adapter?.shouldAdvanceSnapshot({
+      room: snapshot.room,
+      snapshot: snapshot.game,
+    }) ?? false
+  );
+}
+
 function createStoredRoomSnapshot(
   storedRoom: StoredMultiplayerRoom,
   serverTimeMs: number,

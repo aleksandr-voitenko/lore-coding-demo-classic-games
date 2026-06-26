@@ -10,6 +10,8 @@ import type { AuthenticatedUser } from "@/lib/user-profile";
 
 import {
   InProcessMultiplayerRoomStore,
+  shouldAdvanceRoomGameSnapshot,
+  type MultiplayerRoomSnapshot,
   type MultiplayerRoomStoreResult,
 } from "./multiplayer-room-runtime";
 import { createMultiplayerRoomWebSocketGateway } from "./multiplayer-room-websocket";
@@ -62,6 +64,26 @@ function expectStoreSuccess(result: MultiplayerRoomStoreResult) {
 
 function createLobbyRoom(store: InProcessMultiplayerRoomStore) {
   return expectStoreSuccess(store.createRoom({ host: HOST_USER }));
+}
+
+function createPongSnapshotWithStatus(
+  snapshot: MultiplayerRoomSnapshot,
+  status: PongGameState["status"],
+): MultiplayerRoomSnapshot {
+  if (snapshot.game === undefined) {
+    throw new Error("Expected a Pong game snapshot.");
+  }
+
+  return {
+    ...snapshot,
+    game: {
+      ...snapshot.game,
+      snapshot: {
+        ...snapshot.game.snapshot,
+        status,
+      },
+    },
+  };
 }
 
 function createStartedPongRoom(store: InProcessMultiplayerRoomStore) {
@@ -293,6 +315,52 @@ async function bootstrapClient(client: WebSocket, roomCode = "ROOM1") {
 }
 
 describe("multiplayer room WebSocket gateway", () => {
+  it("uses the server game adapter to decide which room snapshots keep pumping", () => {
+    const store = createTestRoomStore();
+    const readySnapshot = createStartedPongRoom(store);
+    const runningSnapshot = serveStartedPongRoom(store);
+    const pausedSnapshot = createPongSnapshotWithStatus(readySnapshot, "paused");
+    const wonSnapshot = createPongSnapshotWithStatus(readySnapshot, "won");
+    const lostSnapshot = createPongSnapshotWithStatus(readySnapshot, "lost");
+    const finishedSnapshot = {
+      ...readySnapshot,
+      room: {
+        ...readySnapshot.room,
+        status: "finished" as const,
+      },
+    } satisfies MultiplayerRoomSnapshot;
+    const missingGameSnapshot = {
+      ...readySnapshot,
+      game: undefined,
+    } satisfies MultiplayerRoomSnapshot;
+    const unsupportedGameSnapshot = {
+      ...readySnapshot,
+      game: {
+        gameId: "asteroids",
+        seq: 1,
+        serverTimeMs: 1_000,
+        snapshot: {
+          status: "running",
+        },
+      },
+      room: {
+        ...readySnapshot.room,
+        settings: {
+          gameId: "asteroids",
+        },
+      },
+    } as unknown as MultiplayerRoomSnapshot;
+
+    expect(shouldAdvanceRoomGameSnapshot(readySnapshot)).toBe(true);
+    expect(shouldAdvanceRoomGameSnapshot(runningSnapshot)).toBe(true);
+    expect(shouldAdvanceRoomGameSnapshot(pausedSnapshot)).toBe(false);
+    expect(shouldAdvanceRoomGameSnapshot(wonSnapshot)).toBe(false);
+    expect(shouldAdvanceRoomGameSnapshot(lostSnapshot)).toBe(false);
+    expect(shouldAdvanceRoomGameSnapshot(finishedSnapshot)).toBe(false);
+    expect(shouldAdvanceRoomGameSnapshot(missingGameSnapshot)).toBe(false);
+    expect(shouldAdvanceRoomGameSnapshot(unsupportedGameSnapshot)).toBe(false);
+  });
+
   it("bootstraps existing room snapshots without joining the socket", async () => {
     const store = createTestRoomStore();
     createLobbyRoom(store);
@@ -601,6 +669,61 @@ describe("multiplayer room WebSocket gateway", () => {
       | undefined;
 
     expect(gameSnapshot?.ball.position.x).not.toBe(started.game!.snapshot.ball.position.x);
+  });
+
+  it("pushes fresh ready Pong snapshots after held paddle input", async () => {
+    let nowMs = 0;
+    const store = createTestRoomStore({ getNowMs: () => nowMs });
+    const started = createStartedPongRoom(store);
+    const { url } = await createGatewayFixture(store, { snapshotIntervalMs: 10 });
+    const observer = await connectClient(url);
+
+    await bootstrapClient(observer);
+
+    const inputAckPromise = waitForServerMessage(
+      observer,
+      (message) =>
+        message.type === "room.commandAck" && message.requestId === "hold-left-up",
+    );
+    const expectedHeldInputSeq = started.game!.seq + 1;
+    const readySnapshotPromise = waitForServerMessage(
+      observer,
+      (message) =>
+        message.type === "room.snapshot" &&
+        (message.snapshot.game?.seq ?? 0) > expectedHeldInputSeq,
+    );
+
+    sendClientMessage(observer, {
+      gameId: "pong",
+      input: {
+        direction: "up",
+        type: "pong.setPaddleDirection",
+      },
+      participantId: "host-1",
+      requestId: "hold-left-up",
+      roomCode: "ROOM1",
+      type: "game.input",
+    });
+
+    await inputAckPromise;
+    nowMs += 80;
+
+    const readySnapshot = await readySnapshotPromise;
+
+    expect(readySnapshot.type).toBe("room.snapshot");
+
+    if (readySnapshot.type !== "room.snapshot") {
+      throw new Error("Expected a room snapshot message.");
+    }
+
+    const gameSnapshot = readySnapshot.snapshot.game?.snapshot as
+      | PongGameState
+      | undefined;
+
+    expect(gameSnapshot?.status).toBe("ready");
+    expect(gameSnapshot?.playerPaddle.y).toBeLessThan(
+      started.game!.snapshot.playerPaddle.y,
+    );
   });
 
   it("rejects malformed client messages", async () => {

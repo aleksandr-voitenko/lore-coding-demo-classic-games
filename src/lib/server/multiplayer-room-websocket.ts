@@ -9,6 +9,7 @@ import { isGameId } from "../game-catalog";
 
 import {
   InProcessMultiplayerRoomStore,
+  shouldAdvanceRoomGameSnapshot,
   type MultiplayerRoomGameSnapshot,
   type MultiplayerRoomStore,
   type MultiplayerRoomStoreCommand,
@@ -446,7 +447,7 @@ export function createMultiplayerRoomWebSocketGateway({
       getBroadcastSnapshotCursor(snapshot),
     );
 
-    if (shouldPumpSnapshotRoom(snapshot)) {
+    if (shouldAdvanceRoomGameSnapshot(snapshot)) {
       activeSnapshotRoomCodes.add(snapshot.room.code);
     } else {
       activeSnapshotRoomCodes.delete(snapshot.room.code);
@@ -558,14 +559,6 @@ function normalizeSnapshotIntervalMs(intervalMs: number) {
 
 function getBroadcastSnapshotCursor(snapshot: MultiplayerRoomSnapshot) {
   return `${snapshot.seq}:${snapshot.game?.seq ?? "none"}`;
-}
-
-function shouldPumpSnapshotRoom(snapshot: MultiplayerRoomSnapshot) {
-  return (
-    snapshot.room.status === "running" &&
-    (snapshot.game?.snapshot.status === "ready" ||
-      snapshot.game?.snapshot.status === "running")
-  );
 }
 
 function createBroadcastSnapshot(
