@@ -29,12 +29,22 @@ import {
   type MultiplayerServerGameSnapshot,
   type PongMultiplayerInput,
 } from "./multiplayer-game-adapters";
+import {
+  InMemoryMultiplayerRoomEventLog,
+  type MultiplayerRoomEventLogEntry,
+  type MultiplayerRoomEventPayload,
+  type MultiplayerRoomEventType,
+} from "./multiplayer-room-event-log";
 
 export {
   DEFAULT_PONG_PRIVATE_ROOM_SEATS,
   PONG_RUNTIME_CATCH_UP_TICK_LIMIT,
 } from "./multiplayer-game-adapters";
 export type { PongMultiplayerInput } from "./multiplayer-game-adapters";
+export type {
+  MultiplayerRoomEventLogEntry,
+  MultiplayerRoomEventType,
+} from "./multiplayer-room-event-log";
 
 export type MultiplayerRoomStoreCommand =
   | {
@@ -118,6 +128,10 @@ export type MultiplayerRoomStoreOperationResult =
 type MultiplayerRoomStoreFailure = Extract<
   MultiplayerRoomStoreResult,
   { success: false }
+>;
+type MultiplayerRoomStoreSuccess = Extract<
+  MultiplayerRoomStoreResult,
+  { success: true }
 >;
 
 export type MultiplayerRoomStore = {
@@ -307,7 +321,7 @@ function createStoredRoomSnapshot(
   storedRoom: StoredMultiplayerRoom,
   serverTimeMs: number,
   participantId?: string,
-): MultiplayerRoomStoreResult {
+): MultiplayerRoomStoreSuccess {
   const room = clonePrivateRoom(storedRoom.room);
   const participant =
     participantId === undefined
@@ -330,6 +344,126 @@ function createStoredRoomSnapshot(
     },
     success: true,
   };
+}
+
+function createRoomCreatedEventPayload(
+  room: PrivateRoom,
+): MultiplayerRoomEventPayload {
+  const host = room.participants.find(
+    (participant) => participant.id === room.hostParticipantId,
+  );
+
+  return {
+    ...(host === undefined
+      ? {}
+      : {
+          displayName: host.displayName,
+          hasUserId: host.userId !== null,
+        }),
+    participantCount: room.participants.length,
+    requiredSeatCount: room.seats.filter((seat) => seat.required).length,
+    seatCount: room.seats.length,
+    settingsParameterKeys: getPrivateRoomSettingsParameterKeys(room.settings),
+    status: room.status,
+  };
+}
+
+function createObserverJoinedEventPayload(
+  participant: PrivateRoom["participants"][number] | undefined,
+): MultiplayerRoomEventPayload {
+  if (participant === undefined) {
+    return {};
+  }
+
+  return {
+    displayName: participant.displayName,
+    hasUserId: participant.userId !== null,
+    role: participant.role,
+  };
+}
+
+function createSeatEventPayload(
+  command: Extract<
+    MultiplayerRoomStoreCommand,
+    { type: "room.claimSeat" | "room.releaseSeat" }
+  >,
+): MultiplayerRoomEventPayload {
+  return typeof command.seatId === "string" ? { seatId: command.seatId } : {};
+}
+
+function createLifecycleEventPayload(
+  snapshot: MultiplayerRoomSnapshot,
+  command: Extract<MultiplayerRoomStoreCommand, { type: "room.lifecycle" }>,
+): MultiplayerRoomEventPayload {
+  return {
+    command: command.command,
+    status: snapshot.room.status,
+  };
+}
+
+function createSettingsUpdatedEventPayload(
+  settings: PrivateRoomSettings,
+): MultiplayerRoomEventPayload {
+  return {
+    parameterKeys: getPrivateRoomSettingsParameterKeys(settings),
+  };
+}
+
+function createGameInputEventPayload(
+  command: Extract<MultiplayerRoomStoreCommand, { type: "game.input" }>,
+): MultiplayerRoomEventPayload {
+  const inputType = getPayloadType(command.input);
+
+  return inputType === null ? {} : { inputType };
+}
+
+function createSnapshotAdvancedEventPayload(
+  snapshot: MultiplayerRoomSnapshot,
+): MultiplayerRoomEventPayload {
+  const snapshotStatus = getGameSnapshotStatus(snapshot.game);
+
+  return snapshotStatus === null ? {} : { snapshotStatus };
+}
+
+function getPrivateRoomSettingsParameterKeys(settings: PrivateRoomSettings) {
+  return Object.keys(settings.parameters ?? {}).sort();
+}
+
+function getGameSnapshotStatus(game: MultiplayerRoomGameSnapshot | undefined) {
+  const snapshot = game?.snapshot;
+
+  if (typeof snapshot !== "object" || snapshot === null) {
+    return null;
+  }
+
+  const status = (snapshot as { status?: unknown }).status;
+
+  return typeof status === "string" ? status : null;
+}
+
+function getPayloadType(payload: unknown) {
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+    return null;
+  }
+
+  const type = (payload as { type?: unknown }).type;
+
+  return typeof type === "string" ? type : null;
+}
+
+function getCommandParticipantIdValue(
+  command: Extract<
+    MultiplayerRoomStoreCommand,
+    | { type: "game.input" }
+    | { type: "room.claimSeat" }
+    | { type: "room.lifecycle" }
+    | { type: "room.releaseSeat" }
+    | { type: "room.updateSettings" }
+  >,
+) {
+  return typeof command.participantId === "string"
+    ? command.participantId
+    : undefined;
 }
 
 function getPrivateRoomOperationFailure(
@@ -383,10 +517,10 @@ function getGameRuntimeStoreFailure(
 
 function advanceGameRuntimeTo(storedRoom: StoredMultiplayerRoom, nowMs: number) {
   if (storedRoom.game === undefined) {
-    return;
+    return false;
   }
 
-  storedRoom.game.adapter.advanceRuntimeTo({
+  return storedRoom.game.adapter.advanceRuntimeTo({
     nowMs,
     room: storedRoom.room,
     runtime: storedRoom.game.runtime,
@@ -477,6 +611,7 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
     context: MultiplayerRoomParticipantIdFactoryContext,
   ) => string;
   readonly #createRoomCode: () => string;
+  readonly #eventLog = new InMemoryMultiplayerRoomEventLog();
   readonly #getNowMs: () => number;
   readonly #rooms = new Map<string, StoredMultiplayerRoom>();
 
@@ -488,6 +623,110 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
     this.#createParticipantId = createParticipantId;
     this.#createRoomCode = createRoomCode;
     this.#getNowMs = getNowMs;
+  }
+
+  // Internal inspection helper for runtime tests and future replay derivation.
+  // The shared store interface stays snapshot-only until a transport schema lands.
+  getRoomEventLog(roomCode: unknown): readonly MultiplayerRoomEventLogEntry[] {
+    const storedRoom = getStoredRoom(this.#rooms, roomCode);
+
+    if (!("room" in storedRoom)) {
+      return [];
+    }
+
+    return this.#eventLog.getRoomEvents(storedRoom.room.code);
+  }
+
+  #recordEvent(
+    snapshot: MultiplayerRoomSnapshot,
+    timestampMs: number,
+    type: MultiplayerRoomEventType,
+    payload: MultiplayerRoomEventPayload,
+    participantId?: string,
+  ) {
+    this.#eventLog.append({
+      gameId: snapshot.game?.gameId ?? snapshot.room.settings.gameId,
+      ...(snapshot.game === undefined ? {} : { gameSeq: snapshot.game.seq }),
+      ...(participantId === undefined ? {} : { participantId }),
+      payload,
+      roomCode: snapshot.room.code,
+      roomSeq: snapshot.seq,
+      timestampMs,
+      type,
+    });
+  }
+
+  #recordSnapshotAdvancedEvent(
+    storedRoom: StoredMultiplayerRoom,
+    timestampMs: number,
+  ) {
+    const snapshot = createStoredRoomSnapshot(storedRoom, timestampMs).snapshot;
+
+    this.#recordEvent(
+      snapshot,
+      timestampMs,
+      "game.snapshotAdvanced",
+      createSnapshotAdvancedEventPayload(snapshot),
+    );
+  }
+
+  #recordRoomCommandEvent(
+    snapshot: MultiplayerRoomSnapshot,
+    timestampMs: number,
+    command: Exclude<MultiplayerRoomStoreCommand, { type: "game.input" }>,
+    participantId?: string,
+  ) {
+    if (command.type === "room.joinObserver") {
+      this.#recordEvent(
+        snapshot,
+        timestampMs,
+        "participant.observerJoined",
+        createObserverJoinedEventPayload(snapshot.participant),
+        participantId,
+      );
+      return;
+    }
+
+    if (command.type === "room.claimSeat") {
+      this.#recordEvent(
+        snapshot,
+        timestampMs,
+        "seat.claimed",
+        createSeatEventPayload(command),
+        participantId,
+      );
+      return;
+    }
+
+    if (command.type === "room.releaseSeat") {
+      this.#recordEvent(
+        snapshot,
+        timestampMs,
+        "seat.released",
+        createSeatEventPayload(command),
+        participantId,
+      );
+      return;
+    }
+
+    if (command.type === "room.updateSettings") {
+      this.#recordEvent(
+        snapshot,
+        timestampMs,
+        "room.settingsUpdated",
+        createSettingsUpdatedEventPayload(snapshot.room.settings),
+        participantId,
+      );
+      return;
+    }
+
+    this.#recordEvent(
+      snapshot,
+      timestampMs,
+      "room.lifecycle",
+      createLifecycleEventPayload(snapshot, command),
+      participantId,
+    );
   }
 
   createRoom({
@@ -528,11 +767,22 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
 
     this.#rooms.set(result.room.code, storedRoom);
 
-    return createStoredRoomSnapshot(
+    const nowMs = this.#getNowMs();
+    const snapshotResult = createStoredRoomSnapshot(
       storedRoom,
-      this.#getNowMs(),
+      nowMs,
       result.room.hostParticipantId,
     );
+
+    this.#recordEvent(
+      snapshotResult.snapshot,
+      nowMs,
+      "room.created",
+      createRoomCreatedEventPayload(snapshotResult.snapshot.room),
+      result.room.hostParticipantId,
+    );
+
+    return snapshotResult;
   }
 
   getRoom(roomCode: unknown): MultiplayerRoomStoreResult {
@@ -543,7 +793,9 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
     }
 
     const nowMs = this.#getNowMs();
-    advanceGameRuntimeTo(storedRoom, nowMs);
+    if (advanceGameRuntimeTo(storedRoom, nowMs)) {
+      this.#recordSnapshotAdvancedEvent(storedRoom, nowMs);
+    }
 
     return createStoredRoomSnapshot(storedRoom, nowMs);
   }
@@ -559,7 +811,9 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
     }
 
     const nowMs = this.#getNowMs();
-    advanceGameRuntimeTo(storedRoom, nowMs);
+    if (advanceGameRuntimeTo(storedRoom, nowMs)) {
+      this.#recordSnapshotAdvancedEvent(storedRoom, nowMs);
+    }
 
     if (command.type === "game.input") {
       const inputResult = applyGameInputCommand(storedRoom, command, nowMs);
@@ -568,7 +822,21 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
         return inputResult;
       }
 
-      return createStoredRoomSnapshot(storedRoom, nowMs, inputResult.participantId);
+      const snapshotResult = createStoredRoomSnapshot(
+        storedRoom,
+        nowMs,
+        inputResult.participantId,
+      );
+
+      this.#recordEvent(
+        snapshotResult.snapshot,
+        nowMs,
+        "game.inputAccepted",
+        createGameInputEventPayload(command),
+        inputResult.participantId ?? getCommandParticipantIdValue(command),
+      );
+
+      return snapshotResult;
     }
 
     let participantId: string | undefined;
@@ -590,20 +858,16 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
         userId: command.userId,
       });
     } else if (command.type === "room.claimSeat") {
-      participantId =
-        typeof command.participantId === "string" ? command.participantId : undefined;
+      participantId = getCommandParticipantIdValue(command);
       result = claimPrivateRoomSeat(storedRoom.room, command);
     } else if (command.type === "room.releaseSeat") {
-      participantId =
-        typeof command.participantId === "string" ? command.participantId : undefined;
+      participantId = getCommandParticipantIdValue(command);
       result = releasePrivateRoomSeat(storedRoom.room, command);
     } else if (command.type === "room.updateSettings") {
-      participantId =
-        typeof command.participantId === "string" ? command.participantId : undefined;
+      participantId = getCommandParticipantIdValue(command);
       result = updatePrivateRoomSettings(storedRoom.room, command);
     } else {
-      participantId =
-        typeof command.participantId === "string" ? command.participantId : undefined;
+      participantId = getCommandParticipantIdValue(command);
       result = applyLifecycleCommand(storedRoom.room, command);
     }
 
@@ -624,6 +888,15 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
 
     storedRoom.seq += 1;
 
-    return createStoredRoomSnapshot(storedRoom, nowMs, participantId);
+    const snapshotResult = createStoredRoomSnapshot(storedRoom, nowMs, participantId);
+
+    this.#recordRoomCommandEvent(
+      snapshotResult.snapshot,
+      nowMs,
+      command,
+      participantId,
+    );
+
+    return snapshotResult;
   }
 }

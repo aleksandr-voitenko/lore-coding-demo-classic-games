@@ -92,7 +92,7 @@ export type MultiplayerServerGameRuntimeAdapter = {
     nowMs: number;
     room: PrivateRoom;
     runtime: unknown;
-  }) => void;
+  }) => boolean;
   applyInputCommand: (options: {
     command: MultiplayerServerGameInputCommand;
     nowMs: number;
@@ -164,7 +164,7 @@ export const PONG_RUNTIME_CATCH_UP_TICK_LIMIT = 60;
 
 const pongMultiplayerRuntimeAdapter: MultiplayerServerGameRuntimeAdapter = {
   advanceRuntimeTo({ nowMs, room, runtime }) {
-    advancePongRuntimeTo(getPongRuntime(runtime), room, nowMs);
+    return advancePongRuntimeTo(getPongRuntime(runtime), room, nowMs);
   },
   applyInputCommand({ command, nowMs, room, runtime }) {
     return applyPongInputCommand(room, runtime, command, nowMs);
@@ -302,7 +302,7 @@ function advancePongRuntimeTo(
   nowMs: number,
 ) {
   if (!isPongRuntimeActive(runtime, room)) {
-    return;
+    return false;
   }
 
   let changed = false;
@@ -353,6 +353,8 @@ function advancePongRuntimeTo(
   if (changed) {
     runtime.seq += 1;
   }
+
+  return changed;
 }
 
 function isPongRuntimeActive(runtime: StoredPongMultiplayerRuntime, room: PrivateRoom) {
