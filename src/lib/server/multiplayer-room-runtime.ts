@@ -22,35 +22,19 @@ import {
   updatePrivateRoomSettings,
 } from "../multiplayer/room";
 import {
-  decrementPongRemainingScore,
-  getPongScoreTickDelay,
-  getPongTickDelay,
-  type PongGameState,
-  type PongSide,
-} from "../pong-game-engine";
-import {
-  advancePongMultiplayerTick,
-  createInitialPongMultiplayerGame,
-  getPongMultiplayerParticipantSide,
-  pausePongMultiplayerGame,
-  restartPongMultiplayerGame,
-  resumePongMultiplayerGame,
-  startPongMultiplayerGame,
-  type PongMultiplayerError,
-  type PongMultiplayerGameSnapshot,
-  type PongMultiplayerHeldInput,
-  type PongMultiplayerHeldInputs,
-  type PongMultiplayerRoomSnapshot,
-} from "../pong-multiplayer";
+  getDefaultMultiplayerServerGameAdapter,
+  getMultiplayerServerGameAdapter,
+  type MultiplayerServerGameRuntimeAdapter,
+  type MultiplayerServerGameRuntimeFailure,
+  type MultiplayerServerGameSnapshot,
+  type PongMultiplayerInput,
+} from "./multiplayer-game-adapters";
 
-export type PongMultiplayerInput =
-  | {
-      direction: unknown;
-      type: "pong.setPaddleDirection";
-    }
-  | {
-      type: "pong.serve";
-    };
+export {
+  DEFAULT_PONG_PRIVATE_ROOM_SEATS,
+  PONG_RUNTIME_CATCH_UP_TICK_LIMIT,
+} from "./multiplayer-game-adapters";
+export type { PongMultiplayerInput } from "./multiplayer-game-adapters";
 
 export type MultiplayerRoomStoreCommand =
   | {
@@ -100,8 +84,13 @@ export type MultiplayerRoomHostUser = {
   id: string;
 };
 
-export type MultiplayerRoomGameSnapshot = PongMultiplayerGameSnapshot;
-export type MultiplayerRoomSnapshot = PongMultiplayerRoomSnapshot;
+export type MultiplayerRoomGameSnapshot = MultiplayerServerGameSnapshot;
+export type MultiplayerRoomSnapshot = {
+  game?: MultiplayerRoomGameSnapshot;
+  participant?: PrivateRoom["participants"][number];
+  room: PrivateRoom;
+  seq: number;
+};
 
 export type MultiplayerRoomStoreErrorCode =
   | PrivateRoomErrorCode
@@ -149,43 +138,17 @@ type CreateInProcessMultiplayerRoomStoreOptions = {
 };
 
 type StoredMultiplayerRoom = {
-  game?: StoredPongMultiplayerRuntime;
+  game?: StoredMultiplayerGameRuntime;
   room: PrivateRoom;
   seq: number;
 };
 
-type StoredPongMultiplayerRuntime = {
-  game: PongGameState;
-  heldInputs: WritablePongMultiplayerHeldInputs;
-  lastMovementTickMs: number;
-  lastScoreTickMs: number;
-  seq: number;
+type StoredMultiplayerGameRuntime = {
+  adapter: MultiplayerServerGameRuntimeAdapter;
+  runtime: unknown;
 };
 
-type WritablePongMultiplayerHeldInputs = Partial<
-  Record<PongSide, PongMultiplayerHeldInput>
->;
-
-export const DEFAULT_PONG_PRIVATE_ROOM_SEATS = [
-  {
-    id: "left",
-    label: "Left",
-    required: true,
-  },
-  {
-    id: "right",
-    label: "Right",
-    required: true,
-  },
-] as const satisfies readonly PrivateRoomSeatInput[];
-
-const DEFAULT_PRIVATE_ROOM_SETTINGS = {
-  gameId: "pong",
-} as const satisfies PrivateRoomSettings;
-
 const INITIAL_ROOM_SEQUENCE = 1;
-const INITIAL_GAME_SEQUENCE = 1;
-export const PONG_RUNTIME_CATCH_UP_TICK_LIMIT = 60;
 
 function createDefaultRoomCode() {
   return randomBytes(4).toString("hex").toLocaleUpperCase("en-US");
@@ -242,40 +205,6 @@ function clonePrivateRoom(room: PrivateRoom): PrivateRoom {
     settings: clonePrivateRoomSettings(room.settings),
     status: room.status,
   };
-}
-
-function clonePongGameState(game: PongGameState): PongGameState {
-  return {
-    ball: {
-      position: { ...game.ball.position },
-      velocity: { ...game.ball.velocity },
-    },
-    boardHeight: game.boardHeight,
-    boardWidth: game.boardWidth,
-    cpuPaddle: { ...game.cpuPaddle },
-    playerPaddle: { ...game.playerPaddle },
-    remainingScore: game.remainingScore,
-    score: { ...game.score },
-    serveSide: game.serveSide,
-    status: game.status,
-    targetScore: game.targetScore,
-  };
-}
-
-function clonePongHeldInputs(
-  inputs: WritablePongMultiplayerHeldInputs,
-): PongMultiplayerHeldInputs {
-  const heldInputs: WritablePongMultiplayerHeldInputs = {};
-
-  if (inputs.left !== undefined) {
-    heldInputs.left = { ...inputs.left };
-  }
-
-  if (inputs.right !== undefined) {
-    heldInputs.right = { ...inputs.right };
-  }
-
-  return heldInputs;
 }
 
 function createStoreFailure(
@@ -368,13 +297,10 @@ function createStoredRoomSnapshot(
   const game =
     storedRoom.game === undefined
       ? undefined
-      : {
-          gameId: "pong" as const,
-          heldInputs: clonePongHeldInputs(storedRoom.game.heldInputs),
-          seq: storedRoom.game.seq,
+      : storedRoom.game.adapter.createSnapshot({
+          runtime: storedRoom.game.runtime,
           serverTimeMs,
-          snapshot: clonePongGameState(storedRoom.game.game),
-        };
+        });
 
   return {
     snapshot: {
@@ -395,18 +321,6 @@ function getPrivateRoomOperationFailure(
     error: result.error,
     success: false,
   };
-}
-
-function getPongMultiplayerFailure(result: PongMultiplayerError): MultiplayerRoomStoreFailure {
-  if (result.code === "missing-required-seats") {
-    return createStoreFailure("invalid-status", result.error);
-  }
-
-  if (result.code === "unsupported-room-game") {
-    return createStoreFailure("invalid-command", result.error);
-  }
-
-  return createStoreFailure(result.code, result.error);
 }
 
 function getStoredRoom(
@@ -442,357 +356,101 @@ function applyLifecycleCommand(
   }
 }
 
-function createPongRuntime(
-  room: PrivateRoom,
-  nowMs: number,
-): MultiplayerRoomStoreFailure | StoredPongMultiplayerRuntime {
-  const result = createInitialPongMultiplayerGame(room);
-
-  if (!result.success) {
-    return getPongMultiplayerFailure(result);
-  }
-
-  return {
-    game: result.game,
-    heldInputs: {},
-    lastMovementTickMs: nowMs,
-    lastScoreTickMs: nowMs,
-    seq: INITIAL_GAME_SEQUENCE,
-  };
+function getGameRuntimeStoreFailure(
+  result: MultiplayerServerGameRuntimeFailure,
+): MultiplayerRoomStoreFailure {
+  return createStoreFailure(result.code, result.error);
 }
 
-function resetPongRuntimeClocks(
-  runtime: StoredPongMultiplayerRuntime,
-  nowMs: number,
-) {
-  runtime.lastMovementTickMs = nowMs;
-  runtime.lastScoreTickMs = nowMs;
-}
-
-function advancePongRuntimeTo(
-  storedRoom: StoredMultiplayerRoom,
-  nowMs: number,
-) {
-  const runtime = storedRoom.game;
-
-  if (
-    runtime === undefined ||
-    storedRoom.room.status !== "running" ||
-    runtime.game.status === "paused" ||
-    runtime.game.status === "won" ||
-    runtime.game.status === "lost"
-  ) {
+function advanceGameRuntimeTo(storedRoom: StoredMultiplayerRoom, nowMs: number) {
+  if (storedRoom.game === undefined) {
     return;
   }
 
-  let changed = false;
-  const movementTicks = getCappedElapsedTicks(
-    runtime.lastMovementTickMs,
+  storedRoom.game.adapter.advanceRuntimeTo({
     nowMs,
-    getPongTickDelay(),
-  );
-
-  for (let tickIndex = 0; tickIndex < movementTicks; tickIndex += 1) {
-    const nextGame = advancePongMultiplayerTick(
-      runtime.game,
-      runtime.heldInputs as PongMultiplayerHeldInputs,
-    );
-
-    if (nextGame !== runtime.game) {
-      runtime.game = nextGame;
-      changed = true;
-    }
-
-    runtime.lastMovementTickMs += getPongTickDelay();
-
-    if (runtime.game.status !== "running") {
-      resetPongRuntimeClocks(runtime, nowMs);
-      break;
-    }
-  }
-
-  if (runtime.game.status === "running") {
-    const scoreTicks = getCappedElapsedTicks(
-      runtime.lastScoreTickMs,
-      nowMs,
-      getPongScoreTickDelay(),
-    );
-
-    for (let tickIndex = 0; tickIndex < scoreTicks; tickIndex += 1) {
-      const nextGame = decrementPongRemainingScore(runtime.game);
-
-      if (nextGame !== runtime.game) {
-        runtime.game = nextGame;
-        changed = true;
-      }
-
-      runtime.lastScoreTickMs += getPongScoreTickDelay();
-    }
-  }
-
-  if (changed) {
-    runtime.seq += 1;
-  }
+    room: storedRoom.room,
+    runtime: storedRoom.game.runtime,
+  });
 }
 
-function getCappedElapsedTicks(lastTickMs: number, nowMs: number, tickDelayMs: number) {
-  if (tickDelayMs <= 0 || nowMs <= lastTickMs) {
-    return 0;
-  }
-
-  return Math.min(
-    Math.floor((nowMs - lastTickMs) / tickDelayMs),
-    PONG_RUNTIME_CATCH_UP_TICK_LIMIT,
-  );
-}
-
-function applyPongLifecycleCommand(
+function applyGameLifecycleCommand(
   storedRoom: StoredMultiplayerRoom,
   command: Extract<MultiplayerRoomStoreCommand, { type: "room.lifecycle" }>,
   nowMs: number,
 ): MultiplayerRoomStoreFailure | null {
-  const runtime = storedRoom.game;
+  const adapter = getMultiplayerServerGameAdapter(storedRoom.room.settings.gameId);
 
-  if (command.command === "start") {
-    if (storedRoom.room.settings.gameId !== "pong") {
-      return null;
-    }
-
-    const nextRuntime = createPongRuntime(storedRoom.room, nowMs);
-
-    if ("success" in nextRuntime) {
-      return nextRuntime;
-    }
-
-    storedRoom.game = nextRuntime;
+  if (adapter === null) {
     return null;
   }
 
-  if (runtime === undefined) {
-    return null;
+  const result = adapter.applyLifecycleCommand({
+    command,
+    nowMs,
+    room: storedRoom.room,
+    runtime: storedRoom.game?.runtime,
+  });
+
+  if (!result.success) {
+    return getGameRuntimeStoreFailure(result);
   }
 
-  if (command.command === "pause") {
-    const nextGame = pausePongMultiplayerGame(runtime.game);
-
-    if (nextGame !== runtime.game) {
-      runtime.game = nextGame;
-      runtime.seq += 1;
-    }
-
-    resetPongRuntimeClocks(runtime, nowMs);
-    return null;
-  }
-
-  if (command.command === "resume") {
-    const nextGame = resumePongMultiplayerGame(runtime.game);
-
-    if (nextGame !== runtime.game) {
-      runtime.game = nextGame;
-      runtime.seq += 1;
-    }
-
-    resetPongRuntimeClocks(runtime, nowMs);
-    return null;
-  }
-
-  if (command.command === "restart") {
-    runtime.game = restartPongMultiplayerGame(runtime.game);
-    runtime.heldInputs = {};
-    runtime.seq += 1;
-    resetPongRuntimeClocks(runtime, nowMs);
-    return null;
-  }
-
-  if (command.command === "finish") {
-    const nextGame = pausePongMultiplayerGame(runtime.game);
-
-    if (nextGame !== runtime.game) {
-      runtime.game = nextGame;
-      runtime.seq += 1;
-    }
-
-    runtime.heldInputs = {};
-    resetPongRuntimeClocks(runtime, nowMs);
+  if (result.runtime !== undefined) {
+    storedRoom.game = {
+      adapter,
+      runtime: result.runtime,
+    };
   }
 
   return null;
 }
 
-function applyPongInputCommand(
+function applyGameInputCommand(
   storedRoom: StoredMultiplayerRoom,
   command: Extract<MultiplayerRoomStoreCommand, { type: "game.input" }>,
   nowMs: number,
 ): MultiplayerRoomStoreFailure | { participantId?: string; success: true } {
-  const participantId =
-    typeof command.participantId === "string" ? command.participantId : undefined;
-  const input = command.input;
+  const adapter = getMultiplayerServerGameAdapter(storedRoom.room.settings.gameId);
 
-  if (!isObjectRecord(input)) {
-    return createStoreFailure("invalid-command", "Pong input must be a JSON object.");
-  }
-
-  if (storedRoom.room.settings.gameId !== "pong") {
+  if (adapter === null) {
     return createStoreFailure(
       "invalid-command",
       "Game input is only supported for Pong rooms.",
     );
   }
 
-  const runtime = storedRoom.game;
+  const result = adapter.applyInputCommand({
+    command,
+    nowMs,
+    room: storedRoom.room,
+    runtime: storedRoom.game?.runtime,
+  });
 
-  if (runtime === undefined) {
-    return createStoreFailure(
-      "invalid-status",
-      "Pong input is only accepted after the room has started.",
-    );
-  }
-
-  if (storedRoom.room.status === "finished") {
-    return createStoreFailure(
-      "invalid-status",
-      "Finished rooms cannot accept Pong input.",
-    );
-  }
-
-  const sideResult = getPongMultiplayerParticipantSide(
-    storedRoom.room,
-    command.participantId,
-  );
-
-  if (!sideResult.success) {
-    return getPongMultiplayerFailure(sideResult);
-  }
-
-  if (input.type === "pong.setPaddleDirection") {
-    const direction = parsePongPaddleDirection(input.direction);
-
-    if (!direction.success) {
-      return direction;
-    }
-
-    if (setPongHeldDirection(runtime, sideResult.side, direction.direction)) {
-      runtime.seq += 1;
-    }
-
-    return {
-      participantId,
-      success: true,
-    };
-  }
-
-  if (input.type === "pong.serve") {
-    if (runtime.game.status !== "ready") {
-      return createStoreFailure(
-        "invalid-status",
-        "Pong serve is only available between rounds.",
-      );
-    }
-
-    if (sideResult.side !== runtime.game.serveSide) {
-      return createStoreFailure(
-        "invalid-command",
-        "Only the serving paddle can serve the ball.",
-      );
-    }
-
-    runtime.game = startPongMultiplayerGame(runtime.game);
-    runtime.seq += 1;
-    resetPongRuntimeClocks(runtime, nowMs);
-
-    return {
-      participantId,
-      success: true,
-    };
-  }
-
-  return createStoreFailure("invalid-command", "Pong input type is not supported.");
+  return result.success ? result : getGameRuntimeStoreFailure(result);
 }
 
-function parsePongPaddleDirection(
-  direction: unknown,
-): MultiplayerRoomStoreFailure | {
-  direction: "down" | "up" | null;
-  success: true;
-} {
-  if (direction === "down" || direction === "up" || direction === null) {
-    return {
-      direction,
-      success: true,
-    };
-  }
-
-  return createStoreFailure(
-    "invalid-command",
-    "Pong paddle direction must be up, down, or null.",
-  );
-}
-
-function setPongHeldDirection(
-  runtime: StoredPongMultiplayerRuntime,
-  side: PongSide,
-  direction: "down" | "up" | null,
-) {
-  const currentInput = runtime.heldInputs[side];
-  const nextInput = getHeldInputForDirection(direction);
-
-  if (isSameHeldInput(currentInput, nextInput)) {
-    return false;
-  }
-
-  if (nextInput === undefined) {
-    delete runtime.heldInputs[side];
-  } else {
-    runtime.heldInputs[side] = nextInput;
-  }
-
-  return true;
-}
-
-function getHeldInputForDirection(direction: "down" | "up" | null) {
-  if (direction === "up") {
-    return {
-      up: true,
-    };
-  }
-
-  if (direction === "down") {
-    return {
-      down: true,
-    };
-  }
-
-  return undefined;
-}
-
-function isSameHeldInput(
-  left: PongMultiplayerHeldInput | undefined,
-  right: PongMultiplayerHeldInput | undefined,
-) {
-  return left?.up === right?.up && left?.down === right?.down;
-}
-
-function clearReleasedSeatHeldInput(
+function clearReleasedSeatGameInput(
   storedRoom: StoredMultiplayerRoom,
   command: Extract<MultiplayerRoomStoreCommand, { type: "room.releaseSeat" }>,
 ) {
-  if (storedRoom.game === undefined || typeof command.seatId !== "string") {
+  if (storedRoom.game === undefined) {
     return;
   }
 
-  const seatId = command.seatId.trim();
-
-  if (
-    (seatId === "left" || seatId === "right") &&
-    storedRoom.game.heldInputs[seatId] !== undefined
-  ) {
-    delete storedRoom.game.heldInputs[seatId];
-    storedRoom.game.seq += 1;
-  }
+  storedRoom.game.adapter.clearInputForReleasedSeat({
+    command,
+    runtime: storedRoom.game.runtime,
+  });
 }
 
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function getCreateRoomSeats(
+  settings: PrivateRoomSettings,
+  seats: readonly PrivateRoomSeatInput[] | undefined,
+) {
+  const adapter = getMultiplayerServerGameAdapter(settings.gameId);
+
+  return adapter?.defaultSeats ?? seats ?? getDefaultMultiplayerServerGameAdapter().defaultSeats;
 }
 
 export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
@@ -816,7 +474,7 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
   createRoom({
     host,
     seats,
-    settings = DEFAULT_PRIVATE_ROOM_SETTINGS,
+    settings = getDefaultMultiplayerServerGameAdapter().defaultSettings,
   }: CreateMultiplayerRoomOptions): MultiplayerRoomStoreResult {
     const roomCode = this.#createRoomCode();
     const normalizedRoomCode = normalizePrivateRoomCode(roomCode);
@@ -836,10 +494,7 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
         participantId: hostParticipantId,
         userId: host.id,
       },
-      seats:
-        settings.gameId === "pong" || seats === undefined
-          ? DEFAULT_PONG_PRIVATE_ROOM_SEATS
-          : seats,
+      seats: getCreateRoomSeats(settings, seats),
       settings,
     });
 
@@ -869,7 +524,7 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
     }
 
     const nowMs = this.#getNowMs();
-    advancePongRuntimeTo(storedRoom, nowMs);
+    advanceGameRuntimeTo(storedRoom, nowMs);
 
     return createStoredRoomSnapshot(storedRoom, nowMs);
   }
@@ -885,10 +540,10 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
     }
 
     const nowMs = this.#getNowMs();
-    advancePongRuntimeTo(storedRoom, nowMs);
+    advanceGameRuntimeTo(storedRoom, nowMs);
 
     if (command.type === "game.input") {
-      const inputResult = applyPongInputCommand(storedRoom, command, nowMs);
+      const inputResult = applyGameInputCommand(storedRoom, command, nowMs);
 
       if (!inputResult.success) {
         return inputResult;
@@ -939,13 +594,13 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
 
     storedRoom.room = result.room;
     if (command.type === "room.lifecycle") {
-      const pongLifecycleResult = applyPongLifecycleCommand(storedRoom, command, nowMs);
+      const gameLifecycleResult = applyGameLifecycleCommand(storedRoom, command, nowMs);
 
-      if (pongLifecycleResult !== null) {
-        return pongLifecycleResult;
+      if (gameLifecycleResult !== null) {
+        return gameLifecycleResult;
       }
     } else if (command.type === "room.releaseSeat") {
-      clearReleasedSeatHeldInput(storedRoom, command);
+      clearReleasedSeatGameInput(storedRoom, command);
     }
 
     storedRoom.seq += 1;
