@@ -5,11 +5,17 @@ import {
   createInitialSpaceInvadersGame,
   createInvaderShotFixture,
   createPowerUpFixture,
+  createRandomSequence,
+  SPACE_INVADERS_ALIEN_FREEZE_TICKS,
+  SPACE_INVADERS_BONUS_SCORE_POINTS,
   createScorePopupFixture,
   SPACE_INVADERS_COLUMNS,
   SPACE_INVADERS_PLAYER_BURST_SHOT_COUNT,
   SPACE_INVADERS_PLAYER_BURST_SHOT_DELAY_TICKS,
+  SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
+  SPACE_INVADERS_POWER_UP_SHIELD_TICKS,
   SPACE_INVADERS_ROWS,
+  SPACE_INVADERS_SCORE_POPUP_TICKS,
   SPACE_INVADERS_STARTING_LIVES,
 } from "./space-invaders-game-engine.test-helpers";
 import {
@@ -18,11 +24,14 @@ import {
   fireSpaceInvadersMultiplayerShipShot,
   isSpaceInvadersShipSeat,
   moveSpaceInvadersMultiplayerShip,
+  resolveSpaceInvadersMultiplayerInvaderShotHits,
+  resolveSpaceInvadersMultiplayerPowerUpPickup,
   SPACE_INVADERS_MULTIPLAYER_ROOM_SEATS,
   SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS,
   type SpaceInvadersMultiplayerGameSnapshot,
   type SpaceInvadersMultiplayerGameState,
   type SpaceInvadersMultiplayerRoomSnapshot,
+  type SpaceInvadersShipSeat,
 } from "./space-invaders-multiplayer";
 
 function createRunningSpaceInvadersMultiplayerGame(
@@ -33,6 +42,70 @@ function createRunningSpaceInvadersMultiplayerGame(
     status: "running",
     ...overrides,
   };
+}
+
+function withShipPlayer(
+  game: SpaceInvadersMultiplayerGameState,
+  seat: SpaceInvadersShipSeat,
+  playerOverrides: Partial<
+    SpaceInvadersMultiplayerGameState["ships"][SpaceInvadersShipSeat]["player"]
+  >,
+): SpaceInvadersMultiplayerGameState {
+  return {
+    ...game,
+    ships: {
+      ...game.ships,
+      [seat]: {
+        ...game.ships[seat],
+        player: {
+          ...game.ships[seat].player,
+          ...playerOverrides,
+        },
+      },
+    },
+  };
+}
+
+function withOverlappingShips(
+  game: SpaceInvadersMultiplayerGameState,
+): SpaceInvadersMultiplayerGameState {
+  return withShipPlayer(game, "ship-b", game.ships["ship-a"].player);
+}
+
+function createInvaderShotTouchingShip(
+  game: SpaceInvadersMultiplayerGameState,
+  seat: SpaceInvadersShipSeat,
+  overrides: Partial<ReturnType<typeof createInvaderShotFixture>> = {},
+) {
+  const ship = game.ships[seat].player;
+  const height = overrides.height ?? 20;
+  const width = overrides.width ?? 5;
+
+  return createInvaderShotFixture({
+    height,
+    width,
+    x: ship.x + ship.width / 2 - width / 2,
+    y: ship.y + ship.height / 2 - height / 2,
+    ...overrides,
+  });
+}
+
+function createPowerUpTouchingShip(
+  game: SpaceInvadersMultiplayerGameState,
+  seat: SpaceInvadersShipSeat,
+  overrides: Partial<ReturnType<typeof createPowerUpFixture>> = {},
+) {
+  const ship = game.ships[seat].player;
+  const height = overrides.height ?? 18;
+  const width = overrides.width ?? 18;
+
+  return createPowerUpFixture({
+    height,
+    width,
+    x: ship.x + ship.width / 2 - width / 2,
+    y: ship.y + ship.height / 2 - height / 2,
+    ...overrides,
+  });
 }
 
 describe("space invaders multiplayer state model", () => {
@@ -105,6 +178,8 @@ describe("space invaders multiplayer state model", () => {
     expect(shipB.playerVolleyHasScored).toBe(false);
     expect(shipA.playerVolleyHasUnscoredExit).toBe(false);
     expect(shipB.playerVolleyHasUnscoredExit).toBe(false);
+    expect(shipA.isActive).toBe(true);
+    expect(shipB.isActive).toBe(true);
   });
 
   it("moves each ship independently and clamps to the side walls", () => {
@@ -306,6 +381,302 @@ describe("space invaders multiplayer state model", () => {
       kind: "burst",
     });
     expect(fired.nextPlayerShotId).toBe(8);
+  });
+
+  it("destroys one vulnerable ship, spends one shared life, and consumes the hitting shot", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame({
+      hitStreak: 3,
+      invaderBurst: {
+        remainingShots: 2,
+        sourceInvaderId: "1:5",
+      },
+    });
+    const hittingShot = createInvaderShotTouchingShip(initialGame, "ship-a", {
+      id: "hit-ship-a",
+    });
+    const missedShot = createInvaderShotFixture({
+      id: "miss",
+      x: 0,
+      y: 0,
+    });
+    const game: SpaceInvadersMultiplayerGameState = {
+      ...initialGame,
+      invaderShots: [hittingShot, missedShot],
+      ships: {
+        ...initialGame.ships,
+        "ship-a": {
+          ...initialGame.ships["ship-a"],
+          pendingShotPowerUp: "piercing-laser",
+          playerBurst: {
+            cooldownTicks: 2,
+            remainingShots: 3,
+          },
+          playerShots: [
+            {
+              height: 14,
+              id: "player-shot-test",
+              kind: "standard",
+              velocityX: 0,
+              velocityY: -16,
+              width: 4,
+              x: 10,
+              y: 10,
+            },
+          ],
+          playerVolleyHasArmoredHit: true,
+          playerVolleyHasScored: true,
+          playerVolleyHasUnscoredExit: true,
+        },
+      },
+    };
+    const resolved = resolveSpaceInvadersMultiplayerInvaderShotHits(
+      game,
+      () => 0,
+    );
+
+    expect(resolved.lives).toBe(SPACE_INVADERS_STARTING_LIVES - 1);
+    expect(resolved.status).toBe("running");
+    expect(resolved.invaderShots).toEqual([missedShot]);
+    expect(resolved.invaderBurst).toBeNull();
+    expect(resolved.hitStreak).toBe(0);
+    expect(resolved.ships["ship-a"].isActive).toBe(true);
+    expect(resolved.ships["ship-a"].pendingShotPowerUp).toBe("piercing-laser");
+    expect(resolved.ships["ship-a"].playerBurst).toBeNull();
+    expect(resolved.ships["ship-a"].playerShots).toEqual([]);
+    expect(resolved.ships["ship-a"].playerRespawnTicks).toBe(
+      SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
+    );
+    expect(resolved.ships["ship-a"].playerShieldTicks).toBe(0);
+    expect(resolved.ships["ship-a"].playerVolleyHasArmoredHit).toBe(false);
+    expect(resolved.ships["ship-a"].playerVolleyHasScored).toBe(false);
+    expect(resolved.ships["ship-a"].playerVolleyHasUnscoredExit).toBe(false);
+    expect(resolved.ships["ship-a"].player.x).toBe(
+      initialGame.ships["ship-a"].player.x,
+    );
+    expect(resolved.ships["ship-b"]).toBe(game.ships["ship-b"]);
+    expect(resolved.explosions[0]).toMatchObject({
+      id: "explosion-0",
+      kind: "player",
+      variant: 1,
+    });
+  });
+
+  it("destroys both ships from one shared shot and spends two shared lives when available", () => {
+    const overlappingGame = withOverlappingShips(
+      createRunningSpaceInvadersMultiplayerGame(),
+    );
+    const sharedHit = createInvaderShotTouchingShip(overlappingGame, "ship-a", {
+      id: "double-hit",
+    });
+    const resolved = resolveSpaceInvadersMultiplayerInvaderShotHits(
+      {
+        ...overlappingGame,
+        invaderShots: [sharedHit],
+      },
+      () => 0,
+    );
+
+    expect(resolved.lives).toBe(SPACE_INVADERS_STARTING_LIVES - 2);
+    expect(resolved.invaderShots).toEqual([]);
+    expect(resolved.ships["ship-a"].isActive).toBe(true);
+    expect(resolved.ships["ship-b"].isActive).toBe(true);
+    expect(resolved.ships["ship-a"].playerRespawnTicks).toBe(
+      SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
+    );
+    expect(resolved.ships["ship-b"].playerRespawnTicks).toBe(
+      SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
+    );
+    expect(resolved.explosions).toHaveLength(2);
+  });
+
+  it("randomly chooses the only respawning ship when a double hit has one shared life", () => {
+    const overlappingGame = withOverlappingShips(
+      createRunningSpaceInvadersMultiplayerGame({
+        lives: 1,
+      }),
+    );
+    const sharedHit = createInvaderShotTouchingShip(overlappingGame, "ship-a", {
+      id: "double-hit",
+    });
+    const resolved = resolveSpaceInvadersMultiplayerInvaderShotHits(
+      {
+        ...overlappingGame,
+        invaderShots: [sharedHit],
+      },
+      createRandomSequence([0.99, 0, 0]),
+    );
+
+    expect(resolved.lives).toBe(0);
+    expect(resolved.status).toBe("running");
+    expect(resolved.ships["ship-a"].isActive).toBe(false);
+    expect(resolved.ships["ship-a"].playerRespawnTicks).toBe(0);
+    expect(resolved.ships["ship-b"].isActive).toBe(true);
+    expect(resolved.ships["ship-b"].playerRespawnTicks).toBe(
+      SPACE_INVADERS_PLAYER_RESPAWN_TICKS,
+    );
+    expect(resolved.invaderShots).toEqual([]);
+  });
+
+  it("prevents shielded and respawning ships from taking damage with solo-style shot handling", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame();
+    const game: SpaceInvadersMultiplayerGameState = {
+      ...initialGame,
+      invaderShots: [
+        createInvaderShotTouchingShip(initialGame, "ship-a", {
+          id: "shielded-hit",
+        }),
+        createInvaderShotTouchingShip(initialGame, "ship-b", {
+          id: "respawn-hit",
+        }),
+      ],
+      ships: {
+        ...initialGame.ships,
+        "ship-a": {
+          ...initialGame.ships["ship-a"],
+          playerShieldTicks: 4,
+        },
+        "ship-b": {
+          ...initialGame.ships["ship-b"],
+          playerRespawnTicks: 4,
+        },
+      },
+    };
+    const resolved = resolveSpaceInvadersMultiplayerInvaderShotHits(game);
+
+    expect(resolved.lives).toBe(SPACE_INVADERS_STARTING_LIVES);
+    expect(resolved.explosions).toEqual([]);
+    expect(resolved.ships).toBe(game.ships);
+    expect(resolved.invaderShots).toEqual([game.invaderShots[1]]);
+  });
+
+  it("blocks movement and firing for ships that no longer have a respawn life", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame();
+    const game: SpaceInvadersMultiplayerGameState = {
+      ...initialGame,
+      ships: {
+        ...initialGame.ships,
+        "ship-a": {
+          ...initialGame.ships["ship-a"],
+          isActive: false,
+        },
+      },
+    };
+
+    expect(moveSpaceInvadersMultiplayerShip(game, "ship-a", 10)).toBe(game);
+    expect(fireSpaceInvadersMultiplayerShipShot(game, "ship-a")).toBe(game);
+    expect(moveSpaceInvadersMultiplayerShip(game, "ship-b", 10)).not.toBe(game);
+  });
+
+  it("awards a touched shot power-up to the collecting ship only", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame();
+    const powerUp = createPowerUpTouchingShip(initialGame, "ship-a", {
+      kind: "piercing-laser",
+    });
+    const resolved = resolveSpaceInvadersMultiplayerPowerUpPickup({
+      ...initialGame,
+      powerUps: [powerUp],
+    });
+
+    expect(resolved.powerUps).toEqual([]);
+    expect(resolved.ships["ship-a"].pendingShotPowerUp).toBe("piercing-laser");
+    expect(resolved.ships["ship-b"].pendingShotPowerUp).toBeNull();
+  });
+
+  it("randomly chooses the recipient when both ships touch the same power-up", () => {
+    const overlappingGame = withOverlappingShips(
+      createRunningSpaceInvadersMultiplayerGame(),
+    );
+    const powerUp = createPowerUpTouchingShip(overlappingGame, "ship-a", {
+      kind: "shield",
+    });
+    const resolved = resolveSpaceInvadersMultiplayerPowerUpPickup(
+      {
+        ...overlappingGame,
+        powerUps: [powerUp],
+      },
+      () => 0.99,
+    );
+
+    expect(resolved.powerUps).toEqual([]);
+    expect(resolved.ships["ship-a"].playerShieldTicks).toBe(0);
+    expect(resolved.ships["ship-b"].playerShieldTicks).toBe(
+      SPACE_INVADERS_POWER_UP_SHIELD_TICKS,
+    );
+  });
+
+  it("applies power-ups to shared state or the receiving ship state", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame();
+    const bonusPowerUp = createPowerUpTouchingShip(initialGame, "ship-a", {
+      kind: "bonus-score",
+    });
+    const extraLifePowerUp = createPowerUpTouchingShip(initialGame, "ship-a", {
+      kind: "extra-life",
+    });
+    const freezePowerUp = createPowerUpTouchingShip(initialGame, "ship-a", {
+      kind: "freeze",
+    });
+    const shieldPowerUp = createPowerUpTouchingShip(initialGame, "ship-a", {
+      kind: "shield",
+    });
+    const bonusScored = resolveSpaceInvadersMultiplayerPowerUpPickup({
+      ...initialGame,
+      powerUps: [bonusPowerUp],
+      score: 40,
+    });
+    const extraLife = resolveSpaceInvadersMultiplayerPowerUpPickup({
+      ...initialGame,
+      lives: 2,
+      powerUps: [extraLifePowerUp],
+    });
+    const frozen = resolveSpaceInvadersMultiplayerPowerUpPickup({
+      ...initialGame,
+      alienFreezeTicks: 1,
+      powerUps: [freezePowerUp],
+    });
+    const shielded = resolveSpaceInvadersMultiplayerPowerUpPickup({
+      ...initialGame,
+      powerUps: [shieldPowerUp],
+      ships: {
+        ...initialGame.ships,
+        "ship-a": {
+          ...initialGame.ships["ship-a"],
+          playerShieldTicks: 1,
+        },
+      },
+    });
+
+    expect(bonusScored.score).toBe(40 + SPACE_INVADERS_BONUS_SCORE_POINTS);
+    expect(bonusScored.scorePopups).toEqual([
+      {
+        ageTicks: 0,
+        height: bonusPowerUp.height,
+        id: "score-popup-0",
+        points: SPACE_INVADERS_BONUS_SCORE_POINTS,
+        ttlTicks: SPACE_INVADERS_SCORE_POPUP_TICKS,
+        width: bonusPowerUp.width,
+        x: bonusPowerUp.x,
+        y: bonusPowerUp.y,
+      },
+    ]);
+    expect(extraLife.lives).toBe(3);
+    expect(frozen.alienFreezeTicks).toBe(SPACE_INVADERS_ALIEN_FREEZE_TICKS);
+    expect(shielded.ships["ship-a"].playerShieldTicks).toBe(
+      SPACE_INVADERS_POWER_UP_SHIELD_TICKS,
+    );
+
+    for (const kind of ["burst-shot", "piercing-laser", "shotgun-shot"] as const) {
+      const powered = resolveSpaceInvadersMultiplayerPowerUpPickup({
+        ...initialGame,
+        powerUps: [
+          createPowerUpTouchingShip(initialGame, "ship-b", {
+            kind,
+          }),
+        ],
+      });
+
+      expect(powered.ships["ship-a"].pendingShotPowerUp).toBeNull();
+      expect(powered.ships["ship-b"].pendingShotPowerUp).toBe(kind);
+    }
   });
 
   it("exposes stable room seat metadata and snapshot-friendly types", () => {
