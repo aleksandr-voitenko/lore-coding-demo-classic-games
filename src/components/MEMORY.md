@@ -43,6 +43,12 @@ This file covers React component ownership and shared game UI conventions under
   ship seats, `ship-a` and `ship-b`, on one shared alien wave with shared score
   and lives. It should display server-owned outcomes for simultaneous hits and
   power-up awards rather than resolving those ambiguities locally.
+- The future Asteroids multiplayer renderer should present two independent
+  `ship-a` and `ship-b` seats on one shared asteroid field with shared score,
+  wave, lives, saucer state, and power-up spawn state. It should render
+  server-owned per-ship position, explosion/respawn, invulnerability, shot
+  cooldown, and upgrade outcomes rather than resolving collisions, saucer-shot
+  hits, saucer target choice, respawn choice, or power-up ownership locally.
 - `pong-multiplayer-room.tsx` owns the first private-room Pong renderer/input
   adapter fed by server snapshots. It may render `PongBoard` and post committed
   room `game.input` commands for seated participants, but it must not import

@@ -93,6 +93,13 @@ This file covers Node-only server helpers and storage adapters under
   outcomes: choosing the respawning ship when a double hit has only one shared
   life left, and choosing the power-up recipient when both ships collect the
   same power-up on one tick. Tests should inject deterministic randomness.
+- The Asteroids co-op adapter milestone should expose required `ship-a` and
+  `ship-b` seats and keep the room service game-agnostic. It owns server-side
+  random choices for saucer targeting, asteroid double-hit final-life
+  resolution, saucer-shot double-hit resolution, and simultaneous power-up
+  pickup. The adapter should project compact terminal summaries with shared
+  score, wave, lives, and occupied seats; per-ship contribution stats are out of
+  scope for the first Asteroids co-op slice.
 - The server-ordered room event path is the live source of truth only while the
   room exists. Keep lifecycle, membership, settings versions, accepted gameplay
   intents, ticks, snapshots, power-up awards, and cursor catch-up windows

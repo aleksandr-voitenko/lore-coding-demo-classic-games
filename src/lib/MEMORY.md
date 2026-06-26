@@ -31,6 +31,22 @@ This file covers deterministic game engines and shared source logic under
   `geometry.ts`, and `ship.ts`. Keep lifecycle/world tick orchestration in the
   facade so ship, bullet, asteroid, saucer, power-up, scoring, and respawn
   ordering stays easy to audit.
+- The Asteroids private-room co-op milestone is two independent ships in one
+  shared asteroid field. Seats are `ship-a` and `ship-b`; each player controls
+  one ship; score, wave, asteroid field, saucer state, and lives are shared.
+  Ship position, velocity, explosion/respawn state, shot cooldown, and ship
+  upgrade effects are per-ship. Player ships pass through each other, friendly
+  fire is disabled, and player bullets do not collide with each other. An
+  asteroid can destroy both ships on the same tick and spend two shared lives;
+  if only one life remains in that case, authoritative randomness chooses the
+  ship that receives the final respawn path. Saucer targeting chooses a random
+  active ship, and each saucer shot is consumed after destroying at most one
+  randomly chosen hit ship. Power-up ship upgrades apply to the collecting ship,
+  shared score/life effects apply to the team, and simultaneous pickup by both
+  ships is resolved by authoritative randomness. Ships respawn independently at
+  separated safe-ish positions with invulnerability. Game over waits for the
+  final explosion to finish. Terminal summaries initially include only shared
+  score, wave, lives, and occupied seats.
 - Engines that expose launcher presets keep those values in game state so
   restart, terminal replay, board rendering, accessibility labels, and leaderboard
   keys preserve the selected board size, difficulty, target, lives, alien

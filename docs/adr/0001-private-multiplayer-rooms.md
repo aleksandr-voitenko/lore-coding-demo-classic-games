@@ -159,6 +159,50 @@ both ships on the same tick, the server chooses the recipient randomly. That
 random choice is part of the authoritative server-ordered game state and must be
 deterministic in tests.
 
+## Asteroids Two-Ship Co-op Rules
+
+The Asteroids co-op milestone should implement two independent player ships in
+one shared asteroid field. The private room has two required player seats:
+`ship-a` and `ship-b`. Each seated player controls exactly one ship. Observers
+can watch the shared board but cannot control either ship.
+
+Both ships share one score, one wave progression, one asteroid field, one saucer
+state, and one lives pool. Ship position, heading, velocity, thrust state,
+explosion state, respawn invulnerability, shot cooldown, and ship-specific
+power-up upgrades are owned per ship.
+
+Player ships pass through each other. They do not collide, bounce, block, damage
+each other, or trigger friendly-fire outcomes. Player bullets do not hit
+friendly ships, and player bullets do not collide with each other.
+
+Asteroids can destroy either ship. If an asteroid overlaps both ships on the
+same tick, both ships are destroyed and the shared lives pool loses two lives.
+If only one shared life remains when both ships would otherwise spend a life on
+the same tick, the server chooses randomly which ship receives that final
+respawn path.
+
+Saucers choose a random active ship as their firing target, using authoritative
+server randomness that can be deterministic in tests. A saucer shot is consumed
+by a collision and can destroy only one ship. If a saucer shot overlaps both
+ships on the same tick, the server chooses randomly which hit ship is destroyed
+and removes the shot after that single collision.
+
+Power-up ownership is split by effect. Ship upgrades such as engine speed,
+bullet speed, shield, and shot interval apply only to the ship that collects the
+power-up. Team effects such as score and shared lives apply to the shared game
+state. If both active ships touch the same power-up on one tick, the server
+chooses one active touching ship randomly as the collector.
+
+Ships respawn independently while the other ship can continue playing. Respawn
+positions should be separated and safe-ish rather than stacking both ships on
+the same point. Respawned ships receive invulnerability. The game ends only
+after the final explosion finishes, matching the solo Asteroids feel, rather
+than immediately when the shared lives pool reaches zero.
+
+The initial terminal summary should stay compact: shared score, wave, remaining
+lives, and occupied seats. Per-ship stats such as shots fired, deaths, pickups,
+or contribution can be added later without changing the co-op rules above.
+
 ## Server Authority And Volatile Room State
 
 The authoritative multiplayer stream is the sidecar's in-process room state plus
