@@ -62,6 +62,8 @@ type PrivateRoomHostActionProps = {
   onCreatePrivateRoom: () => void;
 };
 
+const PRIVATE_ROOM_HOSTABLE_GAME_IDS = new Set<GameId>(["pong", "space-invaders"]);
+
 export function GameLauncher({
   initialAuthMode = null,
   initialReplayGameId = null,
@@ -280,7 +282,7 @@ export function GameLauncher({
               key={game.id}
               onSelectGame={() => selectGame(game.id)}
               privateRoomHostAction={
-                game.id === "pong" ? (
+                isPrivateRoomHostableGame(game.id) ? (
                   <PrivateRoomHostAction
                     error={privateRoomCreateError}
                     gameId={game.id}
@@ -309,6 +311,10 @@ export function GameLauncher({
       </section>
     </main>
   );
+}
+
+function isPrivateRoomHostableGame(gameId: GameId) {
+  return PRIVATE_ROOM_HOSTABLE_GAME_IDS.has(gameId);
 }
 
 type GameCardArticleProps = {
@@ -462,7 +468,7 @@ function GameParameterSelect({
   );
 }
 
-function createLauncherPrivateRoomSettings(
+export function createLauncherPrivateRoomSettings(
   game: GameCard,
   parameterValues: GameParameterValues,
 ): PrivateRoomSettings {

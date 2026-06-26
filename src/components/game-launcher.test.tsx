@@ -4,9 +4,11 @@ import { describe, expect, it } from "vitest";
 import { CurrentUserProvider } from "@/hooks/use-current-user";
 import { GAME_CATALOG } from "@/lib/game-catalog";
 
-import { GameLauncher } from "./game-launcher";
-import { GAME_CARDS } from "./game-launcher-config";
+import { GameLauncher, createLauncherPrivateRoomSettings } from "./game-launcher";
+import { GAME_CARDS, createDefaultParameterValues } from "./game-launcher-config";
 import { PLAYABLE_GAME_COMPONENTS } from "./game-launcher-playables";
+
+const PRIVATE_ROOM_HOSTABLE_GAME_IDS = ["pong", "space-invaders"] as const;
 
 const EXPECTED_PARAMETER_SELECTS = [
   {
@@ -137,28 +139,65 @@ describe("game launcher", () => {
     expect(getSelectMarkup(markup, "minesweeper-difficulty").match(/<option/g)).toHaveLength(3);
   });
 
-  it("shows a signed-out prompt for Pong private-room hosting", () => {
+  it("shows signed-out prompts for hostable private-room games", () => {
     const markup = renderToStaticMarkup(<GameLauncher />);
-    const hostButtonMarkup = getButtonMarkup(markup, "private-room-host-pong-button");
 
-    expect(hostButtonMarkup).toContain('disabled=""');
-    expect(hostButtonMarkup).toContain("Sign in to host");
-    expect(markup).toContain('data-testid="private-room-host-pong-status"');
-    expect(markup).toContain("Account required");
-    expect(markup).not.toContain('data-testid="private-room-host-snake-button"');
+    for (const gameId of PRIVATE_ROOM_HOSTABLE_GAME_IDS) {
+      const hostButtonMarkup = getButtonMarkup(markup, `private-room-host-${gameId}-button`);
+      const statusMarkup = getParagraphMarkup(markup, `private-room-host-${gameId}-status`);
+
+      expect(hostButtonMarkup).toContain('disabled=""');
+      expect(hostButtonMarkup).toContain("Sign in to host");
+      expect(statusMarkup).toContain("Account required");
+    }
+
+    for (const game of GAME_CARDS) {
+      if (PRIVATE_ROOM_HOSTABLE_GAME_IDS.some((gameId) => gameId === game.id)) {
+        continue;
+      }
+
+      expect(markup).not.toContain(`data-testid="private-room-host-${game.id}-button"`);
+      expect(markup).not.toContain(`data-testid="private-room-host-${game.id}-status"`);
+    }
   });
 
-  it("enables Pong private-room hosting for signed-in users", () => {
+  it("enables hostable private-room games for signed-in users", () => {
     const markup = renderToStaticMarkup(
       <CurrentUserProvider initialUser={{ displayName: "Ada", id: "user-1" }}>
         <GameLauncher />
       </CurrentUserProvider>,
     );
-    const hostButtonMarkup = getButtonMarkup(markup, "private-room-host-pong-button");
 
-    expect(hostButtonMarkup).not.toContain('disabled=""');
-    expect(hostButtonMarkup).toContain("Host room");
-    expect(markup).toContain("Private room");
+    for (const gameId of PRIVATE_ROOM_HOSTABLE_GAME_IDS) {
+      const hostButtonMarkup = getButtonMarkup(markup, `private-room-host-${gameId}-button`);
+      const statusMarkup = getParagraphMarkup(markup, `private-room-host-${gameId}-status`);
+
+      expect(hostButtonMarkup).not.toContain('disabled=""');
+      expect(hostButtonMarkup).toContain("Host room");
+      expect(statusMarkup).toContain("Private room");
+    }
+  });
+
+  it("creates Space Invaders private-room settings from selected launcher parameters", () => {
+    const spaceInvaders = GAME_CARDS.find((game) => game.id === "space-invaders");
+
+    if (spaceInvaders === undefined) {
+      throw new Error("Space Invaders launcher card is missing.");
+    }
+
+    const parameterValues = {
+      ...createDefaultParameterValues(),
+      "space-invaders-board-size": "480x640",
+      "space-invaders-aliens": "24",
+    };
+
+    expect(createLauncherPrivateRoomSettings(spaceInvaders, parameterValues)).toEqual({
+      gameId: "space-invaders",
+      parameters: {
+        "space-invaders-aliens": "24",
+        "space-invaders-board-size": "480x640",
+      },
+    });
   });
 
   it("renders the room lobby instead of the launcher grid when a room code is present", () => {
@@ -193,6 +232,16 @@ function getSelectMarkup(markup: string, testId: string) {
 function getButtonMarkup(markup: string, testId: string) {
   const elementMatch = markup.match(
     new RegExp('<button(?=[^>]*data-testid="' + testId + '")[\\s\\S]*?</button>'),
+  );
+
+  expect(elementMatch).not.toBeNull();
+
+  return elementMatch?.[0] ?? "";
+}
+
+function getParagraphMarkup(markup: string, testId: string) {
+  const elementMatch = markup.match(
+    new RegExp('<p(?=[^>]*data-testid="' + testId + '")[\\s\\S]*?</p>'),
   );
 
   expect(elementMatch).not.toBeNull();
