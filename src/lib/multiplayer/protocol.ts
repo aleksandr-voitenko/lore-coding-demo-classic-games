@@ -136,6 +136,12 @@ export type MultiplayerRealtimeConnectionMessage =
       type: "connection.hello";
     }
   | {
+      clientTimeMs: number;
+      requestId?: string;
+      roomCode: string;
+      type: "connection.ping";
+    }
+  | {
       displayName?: string;
       lastSeq?: MultiplayerRealtimeConnectionCursor;
       participantId?: string;
@@ -230,6 +236,13 @@ export type MultiplayerRealtimeServerMessage<
       nonce?: string;
       serverTimeMs: number;
       type: "connection.ping";
+    }
+  | {
+      clientTimeMs: number;
+      requestId?: string;
+      roomCode?: string;
+      serverTimeMs: number;
+      type: "connection.pong";
     };
 
 export type PrivateRoomServerMessage<GameSnapshot = MultiplayerRoomGameSnapshot> =

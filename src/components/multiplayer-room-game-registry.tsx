@@ -41,6 +41,7 @@ export type MultiplayerRoomGameRendererProps<
   activeParticipant: PrivateRoomParticipant | null;
   game: GameSnapshot;
   lifecycleControls: ReactNode;
+  onProjectionReconcile?: () => void;
   room: PrivateRoom;
   sendGameInput: MultiplayerRoomGameInputSender;
 };
@@ -76,6 +77,7 @@ function PongMultiplayerRoomRendererView({
   activeParticipant,
   game,
   lifecycleControls,
+  onProjectionReconcile,
   room,
   sendGameInput,
 }: MultiplayerRoomGameRendererProps) {
@@ -92,6 +94,7 @@ function PongMultiplayerRoomRendererView({
       activeParticipant={activeParticipant}
       game={game}
       lifecycleControls={lifecycleControls}
+      onProjectionReconcile={onProjectionReconcile}
       onGameInput={handlePongInput}
       room={room}
     />
@@ -102,6 +105,7 @@ function SpaceInvadersMultiplayerRoomRendererView({
   activeParticipant,
   game,
   lifecycleControls,
+  onProjectionReconcile,
   room,
   sendGameInput,
 }: MultiplayerRoomGameRendererProps) {
@@ -118,6 +122,7 @@ function SpaceInvadersMultiplayerRoomRendererView({
       activeParticipant={activeParticipant}
       game={game}
       lifecycleControls={lifecycleControls}
+      onProjectionReconcile={onProjectionReconcile}
       onGameInput={handleSpaceInvadersInput}
       room={room}
     />
@@ -128,6 +133,7 @@ function AsteroidsMultiplayerRoomRendererView({
   activeParticipant,
   game,
   lifecycleControls,
+  onProjectionReconcile,
   room,
   sendGameInput,
 }: MultiplayerRoomGameRendererProps) {
@@ -144,6 +150,7 @@ function AsteroidsMultiplayerRoomRendererView({
       activeParticipant={activeParticipant}
       game={game}
       lifecycleControls={lifecycleControls}
+      onProjectionReconcile={onProjectionReconcile}
       onGameInput={handleAsteroidsInput}
       room={room}
     />
@@ -182,6 +189,7 @@ export function MultiplayerRoomGameRendererView({
   activeParticipant,
   game,
   lifecycleControls,
+  onProjectionReconcile,
   renderer,
   room,
   sendGameInput,
@@ -193,6 +201,7 @@ export function MultiplayerRoomGameRendererView({
       activeParticipant={activeParticipant}
       game={game}
       lifecycleControls={lifecycleControls}
+      onProjectionReconcile={onProjectionReconcile}
       room={room}
       sendGameInput={sendGameInput}
     />

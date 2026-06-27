@@ -60,6 +60,7 @@ type SpaceInvadersMultiplayerRoomProps = {
   onGameInput: (
     input: SpaceInvadersMultiplayerClientInput,
   ) => void | Promise<void>;
+  onProjectionReconcile?: () => void;
   room: PrivateRoom;
 };
 
@@ -211,6 +212,7 @@ function useProjectedSpaceInvadersMultiplayerGame(
   game: SpaceInvadersMultiplayerGameSnapshot,
   activeShipSeat: SpaceInvadersShipSeat | null,
   localMovementDirection: SpaceInvadersPlayerMovementDirection | null,
+  onProjectionReconcile: (() => void) | undefined,
 ) {
   const projectionSnapshot = useMemo(
     () => ({
@@ -225,6 +227,7 @@ function useProjectedSpaceInvadersMultiplayerGame(
     baseValue: game.snapshot,
     getProjectionFrameKey: getSpaceInvadersMultiplayerProjectionFrameKey,
     isProjectionEnabled: isSpaceInvadersMultiplayerProjectionEnabled,
+    onReconcile: onProjectionReconcile,
     project: projectSpaceInvadersMultiplayerProjectionSnapshot,
     seq: game.seq,
     serverTimeMs: game.serverTimeMs,
@@ -242,18 +245,21 @@ function SpaceInvadersMultiplayerProjectedBoard({
   children,
   game,
   localMovementDirection,
+  onProjectionReconcile,
   statusLabel,
 }: {
   activeShipSeat: SpaceInvadersShipSeat | null;
   children?: ReactNode;
   game: SpaceInvadersMultiplayerGameSnapshot;
   localMovementDirection: SpaceInvadersPlayerMovementDirection | null;
+  onProjectionReconcile?: () => void;
   statusLabel: string;
 }) {
   const projectedGame = useProjectedSpaceInvadersMultiplayerGame(
     game,
     activeShipSeat,
     localMovementDirection,
+    onProjectionReconcile,
   );
 
   return (
@@ -427,6 +433,7 @@ export function SpaceInvadersMultiplayerRoom({
   game,
   lifecycleControls = null,
   onGameInput,
+  onProjectionReconcile,
   room,
 }: SpaceInvadersMultiplayerRoomProps) {
   const onGameInputRef = useRef(onGameInput);
@@ -571,6 +578,7 @@ export function SpaceInvadersMultiplayerRoom({
           activeShipSeat={activeShipSeat}
           game={game}
           localMovementDirection={projectedLocalMovementDirection}
+          onProjectionReconcile={onProjectionReconcile}
           statusLabel={statusLabel}
         >
           {gameState.status === "paused" ? (

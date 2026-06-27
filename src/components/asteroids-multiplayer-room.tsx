@@ -63,6 +63,7 @@ type AsteroidsMultiplayerRoomProps = {
   onGameInput: (
     input: AsteroidsMultiplayerClientInput,
   ) => void | Promise<void>;
+  onProjectionReconcile?: () => void;
   room: PrivateRoom;
 };
 
@@ -156,11 +157,13 @@ export function projectAsteroidsMultiplayerSnapshot(
 
 function useProjectedAsteroidsMultiplayerGame(
   projectionSnapshot: AsteroidsMultiplayerProjectionSnapshot,
+  onProjectionReconcile: (() => void) | undefined,
 ) {
   return useClientProjectionClock({
     baseValue: projectionSnapshot.game.snapshot,
     getProjectionFrameKey: getAsteroidsMultiplayerProjectionFrameKey,
     isProjectionEnabled: isAsteroidsMultiplayerProjectionEnabled,
+    onReconcile: onProjectionReconcile,
     project: projectAsteroidsMultiplayerSnapshot,
     seq: projectionSnapshot.game.seq,
     serverTimeMs: projectionSnapshot.game.serverTimeMs,
@@ -400,6 +403,7 @@ export function AsteroidsMultiplayerRoom({
   game,
   lifecycleControls = null,
   onGameInput,
+  onProjectionReconcile,
   room,
 }: AsteroidsMultiplayerRoomProps) {
   const onGameInputRef = useRef(onGameInput);
@@ -518,6 +522,7 @@ export function AsteroidsMultiplayerRoom({
           activeShipSeat={activeShipSeat}
           game={game}
           getLocalControls={getLocalControls}
+          onProjectionReconcile={onProjectionReconcile}
           primaryBoardSeat={primaryBoardSeat}
           statusLabel={statusLabel}
         >
@@ -561,6 +566,7 @@ function AsteroidsMultiplayerProjectedBoard({
   children,
   game,
   getLocalControls,
+  onProjectionReconcile,
   primaryBoardSeat,
   statusLabel,
 }: {
@@ -568,6 +574,7 @@ function AsteroidsMultiplayerProjectedBoard({
   children?: ReactNode;
   game: AsteroidsMultiplayerGameSnapshot;
   getLocalControls: () => AsteroidsControlInput;
+  onProjectionReconcile?: () => void;
   primaryBoardSeat: AsteroidsShipSeat;
   statusLabel: string;
 }) {
@@ -579,7 +586,10 @@ function AsteroidsMultiplayerProjectedBoard({
     }),
     [activeShipSeat, game, getLocalControls],
   );
-  const projectedGame = useProjectedAsteroidsMultiplayerGame(projectionSnapshot);
+  const projectedGame = useProjectedAsteroidsMultiplayerGame(
+    projectionSnapshot,
+    onProjectionReconcile,
+  );
   const boardGame = getAsteroidsMultiplayerBoardGame(
     projectedGame,
     primaryBoardSeat,

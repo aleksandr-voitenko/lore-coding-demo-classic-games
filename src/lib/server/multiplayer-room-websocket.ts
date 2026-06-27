@@ -55,6 +55,7 @@ type GameInputMessage = Record<string, unknown> & {
 };
 
 type ConnectionMessage = Record<string, unknown> & {
+  clientTimeMs?: unknown;
   displayName?: unknown;
   participantId?: unknown;
   requestId?: unknown;
@@ -352,6 +353,11 @@ export function createMultiplayerRoomWebSocketGateway({
       return;
     }
 
+    if (message.type === "connection.ping") {
+      handleDiagnosticsPing(socket, message);
+      return;
+    }
+
     if (message.type === "connection.pong") {
       return;
     }
@@ -371,6 +377,20 @@ export function createMultiplayerRoomWebSocketGateway({
       error: "Client message type is not supported.",
       requestId: getOptionalString(message.requestId),
       roomCode: getOptionalString(message.roomCode) ?? roomCodeBySocket.get(socket),
+    });
+  }
+
+  function handleDiagnosticsPing(socket: WebSocket, message: ConnectionMessage) {
+    const requestId = getOptionalString(message.requestId);
+    const roomCode = getOptionalString(message.roomCode);
+    const serverTimeMs = Date.now();
+
+    sendServerMessage(socket, {
+      clientTimeMs: getOptionalNumber(message.clientTimeMs) ?? serverTimeMs,
+      ...(requestId === undefined ? {} : { requestId }),
+      ...(roomCode === undefined ? {} : { roomCode }),
+      serverTimeMs,
+      type: "connection.pong",
     });
   }
 
@@ -665,6 +685,10 @@ function rawDataToText(data: RawData) {
 
 function getOptionalString(value: unknown) {
   return typeof value === "string" ? value : undefined;
+}
+
+function getOptionalNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {

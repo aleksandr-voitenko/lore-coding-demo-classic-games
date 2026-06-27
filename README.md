@@ -92,6 +92,11 @@ SQLite. Restarting the sidecar abandons waiting and active rooms owned by that
 process, so players should create a new room after a restart instead of
 expecting replay-log recovery.
 
+Append `multiplayerDiagnostics=1` to a room URL to show a small client-side
+diagnostics overlay with snapshot rate, jitter, ping, sequence gaps, and
+projection reconciliations. Use `multiplayerDiagnostics=log` to also emit the
+same summary to the browser console while testing real network conditions.
+
 Browser room streams are enabled with
 `NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL`. Use an absolute endpoint such as
 `ws://127.0.0.1:3001/multiplayer/rooms` for local sidecar testing, or a

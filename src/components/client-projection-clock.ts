@@ -16,6 +16,7 @@ export type ClientProjectionClockOptions<TSnapshot, TValue, TStatus> = {
     elapsedMs: number,
   ) => ClientProjectionFrameKey;
   isProjectionEnabled: (snapshot: TSnapshot) => boolean;
+  onReconcile?: () => void;
   project: (snapshot: TSnapshot, elapsedMs: number) => TValue;
   seq: number;
   serverTimeMs: number;
@@ -38,6 +39,7 @@ export function useClientProjectionClock<TSnapshot, TValue, TStatus>({
   baseValue,
   getProjectionFrameKey,
   isProjectionEnabled,
+  onReconcile,
   project,
   seq,
   serverTimeMs,
@@ -45,6 +47,11 @@ export function useClientProjectionClock<TSnapshot, TValue, TStatus>({
   status,
 }: ClientProjectionClockOptions<TSnapshot, TValue, TStatus>) {
   const snapshotRef = useRef(snapshot);
+  const projectedSinceAuthoritativeSnapshotRef = useRef(false);
+  const authoritativeSnapshotRef = useRef({
+    seq,
+    serverTimeMs,
+  });
   const [projection, setProjection] = useState<ClientProjection<TValue, TStatus>>(
     () => ({
       seq,
@@ -57,6 +64,26 @@ export function useClientProjectionClock<TSnapshot, TValue, TStatus>({
   useEffect(() => {
     snapshotRef.current = snapshot;
   }, [snapshot]);
+
+  useEffect(() => {
+    const previousAuthoritativeSnapshot = authoritativeSnapshotRef.current;
+    const changedAuthoritativeSnapshot =
+      previousAuthoritativeSnapshot.seq !== seq ||
+      previousAuthoritativeSnapshot.serverTimeMs !== serverTimeMs;
+
+    if (
+      changedAuthoritativeSnapshot &&
+      projectedSinceAuthoritativeSnapshotRef.current
+    ) {
+      onReconcile?.();
+    }
+
+    projectedSinceAuthoritativeSnapshotRef.current = false;
+    authoritativeSnapshotRef.current = {
+      seq,
+      serverTimeMs,
+    };
+  }, [onReconcile, seq, serverTimeMs]);
 
   useEffect(() => {
     const baseSnapshot = snapshotRef.current;
@@ -84,6 +111,7 @@ export function useClientProjectionClock<TSnapshot, TValue, TStatus>({
           status,
           value: project(baseSnapshot, elapsedMs),
         });
+        projectedSinceAuthoritativeSnapshotRef.current = true;
         hasProjectedFrame = true;
         lastProjectionFrameKey = projectionFrameKey;
       }

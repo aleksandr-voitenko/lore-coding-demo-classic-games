@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { MultiplayerRealtimeServerMessage } from "@/lib/multiplayer/protocol";
 import type { PrivateRoom } from "@/lib/multiplayer/room";
@@ -10,6 +10,7 @@ import {
   type MultiplayerRoomWebSocketLike,
   createMultiplayerRoomCommandMessage,
   createMultiplayerRoomConnectionMessage,
+  createMultiplayerRoomDiagnosticsPingMessage,
   createMultiplayerRoomGameInputMessage,
   createMultiplayerRoomWebSocketTransport,
   resolveMultiplayerRoomWebSocketUrl,
@@ -235,6 +236,18 @@ describe("multiplayer room WebSocket message shapes", () => {
       roomCode: "ROOM1",
       type: "game.input",
     });
+    expect(
+      createMultiplayerRoomDiagnosticsPingMessage(
+        "ROOM1",
+        "diagnostics-1",
+        1_000,
+      ),
+    ).toEqual({
+      clientTimeMs: 1_000,
+      requestId: "diagnostics-1",
+      roomCode: "ROOM1",
+      type: "connection.ping",
+    });
   });
 
   it("sends room commands and Pong input through the generic WebSocket envelopes", async () => {
@@ -451,5 +464,58 @@ describe("multiplayer room WebSocket message shapes", () => {
     expect(socket.readyState).toBe(3);
 
     transport.close();
+  });
+
+  it("sends diagnostics pings and records echoed pong samples", () => {
+    const samples: Array<{
+      roundTripMs: number;
+      serverTimeMs: number;
+    }> = [];
+    const dateNowSpy = vi.spyOn(Date, "now");
+    const transport = createMultiplayerRoomWebSocketTransport({
+      onBootstrap: () => {},
+      onDiagnosticsPingSample: (sample) => {
+        samples.push({
+          roundTripMs: sample.roundTripMs,
+          serverTimeMs: sample.serverTimeMs,
+        });
+      },
+      onSnapshot: () => {},
+      roomCode: "ROOM1",
+      url: "ws://127.0.0.1:3001/multiplayer/rooms",
+      webSocketConstructor: FakeWebSocket,
+    });
+    const socket = FakeWebSocket.instances[0]!;
+
+    socket.emitOpen();
+    dateNowSpy.mockReturnValueOnce(1_000);
+    transport.sendDiagnosticsPing();
+
+    const pingMessage = JSON.parse(socket.sentMessages[1]!);
+
+    expect(pingMessage).toMatchObject({
+      clientTimeMs: 1_000,
+      roomCode: "ROOM1",
+      type: "connection.ping",
+    });
+
+    dateNowSpy.mockReturnValueOnce(1_037);
+    socket.emitMessage({
+      clientTimeMs: pingMessage.clientTimeMs,
+      requestId: pingMessage.requestId,
+      roomCode: "ROOM1",
+      serverTimeMs: 1_018,
+      type: "connection.pong",
+    });
+
+    expect(samples).toEqual([
+      {
+        roundTripMs: 37,
+        serverTimeMs: 1_018,
+      },
+    ]);
+
+    transport.close();
+    dateNowSpy.mockRestore();
   });
 });

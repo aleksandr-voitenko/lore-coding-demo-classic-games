@@ -58,7 +58,7 @@ function createProtocolRoom(settings: PrivateRoomSettings): PrivateRoom {
 }
 
 describe("multiplayer realtime protocol", () => {
-  it("carries connection hello, resume, and bootstrap messages for a room", () => {
+  it("carries connection hello, resume, diagnostics ping, and bootstrap messages for a room", () => {
     const hello = {
       displayName: "Guest Hero",
       roomCode: ROOM_CODE,
@@ -72,6 +72,12 @@ describe("multiplayer realtime protocol", () => {
       participantId: "guest-1",
       roomCode: ROOM_CODE,
       type: "connection.resume",
+    } satisfies MultiplayerRealtimeClientMessage;
+    const ping = {
+      clientTimeMs: 1_000,
+      requestId: "diagnostics-1",
+      roomCode: ROOM_CODE,
+      type: "connection.ping",
     } satisfies MultiplayerRealtimeClientMessage;
     const bootstrap = {
       displayName: "Guest Hero",
@@ -92,6 +98,7 @@ describe("multiplayer realtime protocol", () => {
       game: 12,
       room: 7,
     });
+    expect(ping.clientTimeMs).toBe(1_000);
     expect(bootstrap.snapshot.room.settings.gameId).toBe("space-invaders");
   });
 
@@ -171,7 +178,7 @@ describe("multiplayer realtime protocol", () => {
     });
   });
 
-  it("keeps server room snapshots, game snapshots, events, acks, rejections, and pings generic", () => {
+  it("keeps server room snapshots, game snapshots, events, acks, rejections, pings, and pongs generic", () => {
     const terminalSummary = {
       key: "space-invaders|mode=private-room|board=420x560|aliens=24",
       mode: "private-room",
@@ -257,6 +264,13 @@ describe("multiplayer realtime protocol", () => {
       serverTimeMs: 1_250,
       type: "connection.ping",
     } satisfies MultiplayerRealtimeServerMessage<typeof gameSnapshot>;
+    const pongMessage = {
+      clientTimeMs: 1_200,
+      requestId: "diagnostics-1",
+      roomCode: ROOM_CODE,
+      serverTimeMs: 1_225,
+      type: "connection.pong",
+    } satisfies MultiplayerRealtimeServerMessage<typeof gameSnapshot>;
 
     expect(snapshotMessage.snapshot.seq).toBe(8);
     expect(snapshotMessage.snapshot.game.seq).toBe(3);
@@ -267,6 +281,7 @@ describe("multiplayer realtime protocol", () => {
     expect(ackMessage.seq).toBe(9);
     expect(rejectionMessage.code).toBe("invalid-command");
     expect(pingMessage.serverTimeMs).toBe(1_250);
+    expect(pongMessage.clientTimeMs).toBe(1_200);
   });
 
   it("keeps room snapshot aliases compatible with nested game-specific payloads", () => {

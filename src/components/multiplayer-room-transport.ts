@@ -22,6 +22,7 @@ import type { PrivateRoom } from "@/lib/multiplayer/room";
 
 const OPEN_WEBSOCKET_READY_STATE = 1;
 const DEFAULT_RECONNECT_DELAY_MS = 500;
+const DEFAULT_DIAGNOSTICS_PING_INTERVAL_MS = 1_000;
 
 export type MultiplayerRoomWebSocketEventMap = {
   close: CloseEvent;
@@ -48,6 +49,15 @@ export type MultiplayerRoomTransportAck = {
   gameSeq?: number;
   participantId?: string;
   seq: number;
+};
+
+export type MultiplayerRoomTransportPingSample = {
+  clientTimeMs: number;
+  receivedAtMs: number;
+  requestId?: string;
+  roomCode?: string;
+  roundTripMs: number;
+  serverTimeMs: number;
 };
 
 export type MultiplayerRoomWebSocketLike = {
@@ -87,6 +97,7 @@ type CreateWebSocketTransportOptions = {
   onBootstrap: (snapshot: MultiplayerRoomTransportSnapshot) => void;
   onBootstrapRejected?: (error: MultiplayerRoomTransportError) => void;
   onClose?: () => void;
+  onDiagnosticsPingSample?: (sample: MultiplayerRoomTransportPingSample) => void;
   onError?: (error: MultiplayerRoomTransportError) => void;
   onParticipantId?: (participantId: string) => void;
   onSnapshot: (snapshot: MultiplayerRoomTransportSnapshot) => void;
@@ -97,10 +108,13 @@ type CreateWebSocketTransportOptions = {
 };
 
 type UseMultiplayerRoomWebSocketTransportOptions = {
+  diagnosticsEnabled?: boolean;
+  diagnosticsPingIntervalMs?: number;
   displayName?: string | null;
   enabled: boolean;
   lastSeq?: MultiplayerRealtimeConnectionCursor | null;
   onConnectionError?: (error: MultiplayerRoomTransportError) => void;
+  onDiagnosticsPingSample?: (sample: MultiplayerRoomTransportPingSample) => void;
   onParticipantId?: (participantId: string) => void;
   onSnapshot: (snapshot: MultiplayerRoomTransportSnapshot) => void;
   participantId?: string | null;
@@ -258,12 +272,26 @@ export function createMultiplayerRoomGameInputMessage<
   };
 }
 
+export function createMultiplayerRoomDiagnosticsPingMessage(
+  roomCode: string,
+  requestId: string,
+  clientTimeMs: number,
+): MultiplayerRealtimeConnectionMessage {
+  return {
+    clientTimeMs,
+    requestId,
+    roomCode,
+    type: "connection.ping",
+  };
+}
+
 export function createMultiplayerRoomWebSocketTransport({
   displayName,
   lastSeq,
   onBootstrap,
   onBootstrapRejected,
   onClose,
+  onDiagnosticsPingSample,
   onError,
   onParticipantId,
   onSnapshot,
@@ -377,6 +405,20 @@ export function createMultiplayerRoomWebSocketTransport({
       return;
     }
 
+    if (message.type === "connection.pong") {
+      const receivedAtMs = getTransportNowMs();
+
+      onDiagnosticsPingSample?.({
+        clientTimeMs: message.clientTimeMs,
+        receivedAtMs,
+        ...(message.requestId === undefined ? {} : { requestId: message.requestId }),
+        ...(message.roomCode === undefined ? {} : { roomCode: message.roomCode }),
+        roundTripMs: Math.max(0, receivedAtMs - message.clientTimeMs),
+        serverTimeMs: message.serverTimeMs,
+      });
+      return;
+    }
+
     if (message.type === "connection.ping") {
       try {
         sendMessage({
@@ -482,6 +524,18 @@ export function createMultiplayerRoomWebSocketTransport({
     });
   }
 
+  function sendDiagnosticsPing() {
+    const requestId = createMultiplayerRoomRequestId("diagnostics");
+
+    sendMessage(
+      createMultiplayerRoomDiagnosticsPingMessage(
+        roomCode,
+        requestId,
+        getTransportNowMs(),
+      ),
+    );
+  }
+
   function sendPendingRequest(
     requestId: string,
     sendRequest: () => void,
@@ -515,6 +569,7 @@ export function createMultiplayerRoomWebSocketTransport({
 
   return {
     close,
+    sendDiagnosticsPing,
     sendGameInput,
     sendRoomCommand,
     socket,
@@ -522,10 +577,13 @@ export function createMultiplayerRoomWebSocketTransport({
 }
 
 export function useMultiplayerRoomWebSocketTransport({
+  diagnosticsEnabled = false,
+  diagnosticsPingIntervalMs = DEFAULT_DIAGNOSTICS_PING_INTERVAL_MS,
   displayName,
   enabled,
   lastSeq,
   onConnectionError,
+  onDiagnosticsPingSample,
   onParticipantId,
   onSnapshot,
   participantId,
@@ -541,6 +599,7 @@ export function useMultiplayerRoomWebSocketTransport({
     displayName,
     lastSeq,
     onConnectionError,
+    onDiagnosticsPingSample,
     onParticipantId,
     onSnapshot,
     participantId,
@@ -555,6 +614,7 @@ export function useMultiplayerRoomWebSocketTransport({
       displayName,
       lastSeq,
       onConnectionError,
+      onDiagnosticsPingSample,
       onParticipantId,
       onSnapshot,
       participantId,
@@ -563,6 +623,7 @@ export function useMultiplayerRoomWebSocketTransport({
     displayName,
     lastSeq,
     onConnectionError,
+    onDiagnosticsPingSample,
     onParticipantId,
     onSnapshot,
     participantId,
@@ -688,6 +749,11 @@ export function useMultiplayerRoomWebSocketTransport({
               latestOptionsRef.current.onConnectionError?.(error);
             }
           },
+          onDiagnosticsPingSample: (sample) => {
+            if (isCurrent) {
+              latestOptionsRef.current.onDiagnosticsPingSample?.(sample);
+            }
+          },
           onParticipantId: (nextParticipantId) => {
             if (isCurrent) {
               latestOptionsRef.current.onParticipantId?.(nextParticipantId);
@@ -749,6 +815,42 @@ export function useMultiplayerRoomWebSocketTransport({
     webSocketUrl,
   ]);
 
+  useEffect(() => {
+    if (
+      !enabled ||
+      !diagnosticsEnabled ||
+      roomCode === null ||
+      status !== "active" ||
+      typeof window === "undefined"
+    ) {
+      return;
+    }
+
+    function sendDiagnosticsPing() {
+      try {
+        transportRef.current?.sendDiagnosticsPing();
+      } catch (error) {
+        latestOptionsRef.current.onConnectionError?.(toTransportError(error));
+      }
+    }
+
+    sendDiagnosticsPing();
+    const pingIntervalId = window.setInterval(
+      sendDiagnosticsPing,
+      diagnosticsPingIntervalMs,
+    );
+
+    return () => {
+      window.clearInterval(pingIntervalId);
+    };
+  }, [
+    diagnosticsEnabled,
+    diagnosticsPingIntervalMs,
+    enabled,
+    roomCode,
+    status,
+  ]);
+
   const sendRoomCommand = useCallback(
     (command: PrivateRoomCommandMessage) => {
       const transport = transportRef.current;
@@ -800,6 +902,10 @@ function getBrowserOrigin() {
 
 function getBrowserWebSocketConstructor() {
   return typeof WebSocket === "undefined" ? null : WebSocket;
+}
+
+function getTransportNowMs() {
+  return Date.now();
 }
 
 function createMultiplayerRoomRequestId(prefix: string) {

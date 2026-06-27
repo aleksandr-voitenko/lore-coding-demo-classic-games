@@ -542,6 +542,39 @@ describe("multiplayer room WebSocket gateway", () => {
     expect(bootstrap.snapshot).not.toHaveProperty("participant");
   });
 
+  it("echoes diagnostics pings with server timing data", async () => {
+    const store = createTestRoomStore();
+    createLobbyRoom(store);
+    const { url } = await createGatewayFixture(store);
+    const client = await connectClient(url);
+
+    await bootstrapClient(client);
+
+    const pongPromise = waitForServerMessage(
+      client,
+      (message) => message.type === "connection.pong",
+    );
+
+    sendClientMessage(client, {
+      clientTimeMs: 1_000,
+      requestId: "diagnostics-1",
+      roomCode: "ROOM1",
+      type: "connection.ping",
+    });
+
+    const pong = await pongPromise;
+
+    expect(pong).toMatchObject({
+      clientTimeMs: 1_000,
+      requestId: "diagnostics-1",
+      roomCode: "ROOM1",
+      type: "connection.pong",
+    });
+    expect(pong.type === "connection.pong" ? pong.serverTimeMs : null).toEqual(
+      expect.any(Number),
+    );
+  });
+
   it("rejects bootstrap when the volatile room is no longer in memory", async () => {
     const { url } = await createGatewayFixture();
     const client = await connectClient(url);

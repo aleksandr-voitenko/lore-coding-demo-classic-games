@@ -48,6 +48,7 @@ type PongMultiplayerRoomProps = {
   game: PongMultiplayerGameSnapshot;
   lifecycleControls?: ReactNode;
   onGameInput: (input: PongMultiplayerClientInput) => void | Promise<void>;
+  onProjectionReconcile?: () => void;
   room: PrivateRoom;
 };
 
@@ -88,11 +89,15 @@ function projectPongMultiplayerSnapshot(
   return projectPongMultiplayerGame(game.snapshot, game.heldInputs, elapsedMs);
 }
 
-function useProjectedPongMultiplayerGame(game: PongMultiplayerGameSnapshot) {
+function useProjectedPongMultiplayerGame(
+  game: PongMultiplayerGameSnapshot,
+  onProjectionReconcile: (() => void) | undefined,
+) {
   return useClientProjectionClock({
     baseValue: game.snapshot,
     getProjectionFrameKey: getPongMultiplayerProjectionFrameKey,
     isProjectionEnabled: isPongMultiplayerProjectionEnabled,
+    onReconcile: onProjectionReconcile,
     project: projectPongMultiplayerSnapshot,
     seq: game.seq,
     serverTimeMs: game.serverTimeMs,
@@ -104,13 +109,18 @@ function useProjectedPongMultiplayerGame(game: PongMultiplayerGameSnapshot) {
 function PongMultiplayerProjectedBoard({
   children,
   game,
+  onProjectionReconcile,
   statusLabel,
 }: {
   children?: ReactNode;
   game: PongMultiplayerGameSnapshot;
+  onProjectionReconcile?: () => void;
   statusLabel: string;
 }) {
-  const projectedGame = useProjectedPongMultiplayerGame(game);
+  const projectedGame = useProjectedPongMultiplayerGame(
+    game,
+    onProjectionReconcile,
+  );
 
   return (
     <PongBoard game={projectedGame} statusLabel={statusLabel}>
@@ -205,6 +215,7 @@ export function PongMultiplayerRoom({
   game,
   lifecycleControls = null,
   onGameInput,
+  onProjectionReconcile,
   room,
 }: PongMultiplayerRoomProps) {
   const onGameInputRef = useRef(onGameInput);
@@ -346,7 +357,11 @@ export function PongMultiplayerRoom({
       activeParticipant={activeParticipant}
       activeSeat={activeSeat}
       board={
-        <PongMultiplayerProjectedBoard game={game} statusLabel={statusLabel}>
+        <PongMultiplayerProjectedBoard
+          game={game}
+          onProjectionReconcile={onProjectionReconcile}
+          statusLabel={statusLabel}
+        >
           {gameState.status === "ready" ? (
             <div
               className="absolute inset-2 flex items-center justify-center rounded-[0.375rem] bg-[color-mix(in_oklch,var(--pong-board)_62%,transparent)] px-4 py-5 text-center text-[var(--pong-ball)] backdrop-blur-[1px]"

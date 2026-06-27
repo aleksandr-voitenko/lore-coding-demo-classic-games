@@ -12,6 +12,7 @@ import {
 import {
   type FormEvent,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -22,6 +23,11 @@ import {
   MultiplayerRoomGameRendererView,
   getMultiplayerRoomGameRenderer,
 } from "@/components/multiplayer-room-game-registry";
+import {
+  MultiplayerRoomDiagnosticsOverlay,
+  useMultiplayerRoomDiagnostics,
+  useMultiplayerRoomDiagnosticsMode,
+} from "@/components/multiplayer-room-diagnostics";
 import {
   MultiplayerRoomTransportError,
   type MultiplayerRoomTransportStatus,
@@ -440,6 +446,18 @@ export function MultiplayerRoomLobby({
     () => null,
   );
   const userId = user?.id ?? null;
+  const diagnosticsMode = useMultiplayerRoomDiagnosticsMode();
+  const diagnostics = useMultiplayerRoomDiagnostics({
+    enabled: diagnosticsMode.enabled,
+    log: diagnosticsMode.log,
+  });
+  const {
+    metrics: diagnosticsMetrics,
+    recordPingSample: recordDiagnosticsPingSample,
+    recordProjectionReconciliation,
+    recordSnapshot: recordDiagnosticsSnapshot,
+    recordTransportStatus: recordDiagnosticsTransportStatus,
+  } = diagnostics;
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [displayNameInput, setDisplayNameInput] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -492,10 +510,11 @@ export function MultiplayerRoomLobby({
   }, [setRoomSnapshot]);
   const handleRoomTransportSnapshot = useCallback(
     (nextSnapshot: RoomApiPayload) => {
+      recordDiagnosticsSnapshot(nextSnapshot);
       setLoadError(null);
       return applyRoomSnapshot(nextSnapshot);
     },
-    [applyRoomSnapshot, setLoadError],
+    [applyRoomSnapshot, recordDiagnosticsSnapshot, setLoadError],
   );
   const handleRoomTransportConnectionError = useCallback(
     (error: Error) => {
@@ -522,10 +541,12 @@ export function MultiplayerRoomLobby({
     [roomSnapshot],
   );
   const roomTransport = useMultiplayerRoomWebSocketTransport({
+    diagnosticsEnabled: diagnosticsMode.enabled,
     displayName,
     enabled: normalizedRoomCode !== null,
     lastSeq: transportLastSeq,
     onConnectionError: handleRoomTransportConnectionError,
+    onDiagnosticsPingSample: recordDiagnosticsPingSample,
     onParticipantId: setParticipantId,
     onSnapshot: handleRoomTransportSnapshot,
     participantId: activeParticipantId ?? participantId,
@@ -536,6 +557,10 @@ export function MultiplayerRoomLobby({
     sendRoomCommand: sendRoomTransportCommand,
     status: roomTransportStatus,
   } = roomTransport;
+
+  useEffect(() => {
+    recordDiagnosticsTransportStatus(roomTransportStatus);
+  }, [recordDiagnosticsTransportStatus, roomTransportStatus]);
 
   const handleCopyInviteLink = useCallback(() => {
     const currentInviteLink = getPrivateRoomShareLink(
@@ -761,6 +786,7 @@ export function MultiplayerRoomLobby({
         }
         renderer={activeRoomGameRenderer}
         room={room}
+        onProjectionReconcile={recordProjectionReconciliation}
         sendGameInput={handleGameInput}
       />
     ) : null;
@@ -896,6 +922,9 @@ export function MultiplayerRoomLobby({
           </div>
         ) : null}
       </section>
+      {diagnosticsMode.overlay ? (
+        <MultiplayerRoomDiagnosticsOverlay metrics={diagnosticsMetrics} />
+      ) : null}
     </main>
   );
 }
