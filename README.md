@@ -58,9 +58,11 @@ menu.
 Build and run the experimental multiplayer room sidecar in a separate terminal:
 
 ```bash
-npm run build:sidecar
 npm run start:sidecar
 ```
+
+The start script rebuilds the sidecar before launching it so local runtime code
+matches the current TypeScript source.
 
 The sidecar defaults to `127.0.0.1:3001`, exposes `GET /healthz`, accepts public
 room WebSocket upgrades on `/multiplayer/rooms`, and serves the internal JSON

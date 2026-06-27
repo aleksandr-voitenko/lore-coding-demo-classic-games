@@ -518,4 +518,36 @@ describe("multiplayer room WebSocket message shapes", () => {
     transport.close();
     dateNowSpy.mockRestore();
   });
+
+  it("ignores unsupported diagnostics ping rejections from older sidecars", () => {
+    const errors: MultiplayerRoomTransportError[] = [];
+    const transport = createMultiplayerRoomWebSocketTransport({
+      onBootstrap: () => {},
+      onError: (error) => errors.push(error),
+      onSnapshot: () => {},
+      roomCode: "ROOM1",
+      url: "ws://127.0.0.1:3001/multiplayer/rooms",
+      webSocketConstructor: FakeWebSocket,
+    });
+    const socket = FakeWebSocket.instances[0]!;
+
+    socket.emitOpen();
+    transport.sendDiagnosticsPing();
+
+    const pingMessage = JSON.parse(socket.sentMessages[1]!);
+
+    socket.emitMessage({
+      code: "invalid-message",
+      error: "Client message type is not supported.",
+      requestId: pingMessage.requestId,
+      roomCode: "ROOM1",
+      type: "room.commandRejected",
+    });
+    transport.sendDiagnosticsPing();
+
+    expect(errors).toEqual([]);
+    expect(socket.sentMessages).toHaveLength(2);
+
+    transport.close();
+  });
 });

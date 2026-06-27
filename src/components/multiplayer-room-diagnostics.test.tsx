@@ -68,6 +68,14 @@ describe("multiplayer room diagnostics", () => {
     });
   });
 
+  it("returns a stable diagnostics mode snapshot for the same URL search", () => {
+    const search = "?room=ROOM1&multiplayerDiagnostics=1";
+
+    expect(getMultiplayerRoomDiagnosticsMode(search)).toBe(
+      getMultiplayerRoomDiagnosticsMode(search),
+    );
+  });
+
   it("tracks snapshot rate, jitter, and authoritative sequence gaps", () => {
     const first = recordMultiplayerRoomDiagnosticsSnapshot(
       createInitialMultiplayerRoomDiagnosticsState("active"),
@@ -164,7 +172,10 @@ describe("multiplayer room diagnostics", () => {
     expect(markup).toContain("29.7/s");
     expect(markup).toContain("4ms");
     expect(markup).toContain("37ms");
-    expect(markup).toContain(">3</dd>");
+    expect(markup).toContain("Stream gaps");
+    expect(markup).toContain(">2</dd>");
+    expect(markup).toContain("Tick catch-up");
+    expect(markup).toContain(">1</dd>");
     expect(markup).toContain(">5</dd>");
   });
 });

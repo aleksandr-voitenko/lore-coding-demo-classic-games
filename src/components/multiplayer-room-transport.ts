@@ -23,6 +23,7 @@ import type { PrivateRoom } from "@/lib/multiplayer/room";
 const OPEN_WEBSOCKET_READY_STATE = 1;
 const DEFAULT_RECONNECT_DELAY_MS = 500;
 const DEFAULT_DIAGNOSTICS_PING_INTERVAL_MS = 1_000;
+const DIAGNOSTICS_REQUEST_ID_PREFIX = "diagnostics";
 
 export type MultiplayerRoomWebSocketEventMap = {
   close: CloseEvent;
@@ -308,6 +309,7 @@ export function createMultiplayerRoomWebSocketTransport({
   const pendingRequests = new Map<string, PendingTransportRequest>();
   const connectionRequestId = createMultiplayerRoomRequestId("connection");
   let hasBootstrapped = false;
+  let isDiagnosticsPingUnsupported = false;
   let isClosedByClient = false;
 
   function rejectPendingRequests(message: string) {
@@ -398,6 +400,11 @@ export function createMultiplayerRoomWebSocketTransport({
       if (!hasBootstrapped && message.requestId === connectionRequestId) {
         onBootstrapRejected?.(error);
         close();
+        return;
+      }
+
+      if (isDiagnosticsRequestId(message.requestId)) {
+        isDiagnosticsPingUnsupported = true;
         return;
       }
 
@@ -525,6 +532,10 @@ export function createMultiplayerRoomWebSocketTransport({
   }
 
   function sendDiagnosticsPing() {
+    if (isDiagnosticsPingUnsupported) {
+      return;
+    }
+
     const requestId = createMultiplayerRoomRequestId("diagnostics");
 
     sendMessage(
@@ -911,6 +922,10 @@ function getTransportNowMs() {
 function createMultiplayerRoomRequestId(prefix: string) {
   nextRequestId += 1;
   return `${prefix}-${nextRequestId}`;
+}
+
+function isDiagnosticsRequestId(requestId: string | undefined) {
+  return requestId?.startsWith(`${DIAGNOSTICS_REQUEST_ID_PREFIX}-`) === true;
 }
 
 function getOptionalNonEmptyString(value: string | null | undefined) {

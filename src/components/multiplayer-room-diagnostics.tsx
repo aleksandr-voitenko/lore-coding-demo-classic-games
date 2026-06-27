@@ -56,19 +56,30 @@ const DISABLED_DIAGNOSTICS_MODE = {
   log: false,
   overlay: false,
 } satisfies MultiplayerRoomDiagnosticsMode;
+let cachedDiagnosticsModeSearch: string | null = null;
+let cachedDiagnosticsMode: MultiplayerRoomDiagnosticsMode =
+  DISABLED_DIAGNOSTICS_MODE;
 
 export function getMultiplayerRoomDiagnosticsMode(search: string | null | undefined) {
   if (search === null || search === undefined || search.trim().length === 0) {
     return DISABLED_DIAGNOSTICS_MODE;
   }
 
-  const params = new URLSearchParams(stripSearchPrefix(search));
+  const normalizedSearch = stripSearchPrefix(search.trim());
+
+  if (cachedDiagnosticsModeSearch === normalizedSearch) {
+    return cachedDiagnosticsMode;
+  }
+
+  const params = new URLSearchParams(normalizedSearch);
   const values = [
     ...params.getAll(MULTIPLAYER_DIAGNOSTICS_QUERY_PARAM),
     ...params.getAll(MULTIPLAYER_DIAGNOSTICS_LOG_QUERY_PARAM),
   ];
 
   if (values.length === 0) {
+    cachedDiagnosticsModeSearch = normalizedSearch;
+    cachedDiagnosticsMode = DISABLED_DIAGNOSTICS_MODE;
     return DISABLED_DIAGNOSTICS_MODE;
   }
 
@@ -81,6 +92,8 @@ export function getMultiplayerRoomDiagnosticsMode(search: string | null | undefi
   const enabled = tokens.length === 0 || tokens.some(isDiagnosticsEnabledToken);
 
   if (!enabled) {
+    cachedDiagnosticsModeSearch = normalizedSearch;
+    cachedDiagnosticsMode = DISABLED_DIAGNOSTICS_MODE;
     return DISABLED_DIAGNOSTICS_MODE;
   }
 
@@ -94,11 +107,14 @@ export function getMultiplayerRoomDiagnosticsMode(search: string | null | undefi
         token === "log-only",
     );
 
-  return {
+  cachedDiagnosticsModeSearch = normalizedSearch;
+  cachedDiagnosticsMode = {
     enabled: true,
     log,
     overlay: !tokens.includes("log-only"),
   } satisfies MultiplayerRoomDiagnosticsMode;
+
+  return cachedDiagnosticsMode;
 }
 
 export function useMultiplayerRoomDiagnosticsMode() {
@@ -334,8 +350,11 @@ export function MultiplayerRoomDiagnosticsOverlay({
             ? "waiting"
             : `${formatDiagnosticsNumber(metrics.lastPingMs, 0)}ms`}
         </DiagnosticsMetric>
-        <DiagnosticsMetric label="Dropped seq">
-          {metrics.roomSeqGaps + metrics.gameSeqGaps}
+        <DiagnosticsMetric label="Stream gaps">
+          {metrics.roomSeqGaps}
+        </DiagnosticsMetric>
+        <DiagnosticsMetric label="Tick catch-up">
+          {metrics.gameSeqGaps}
         </DiagnosticsMetric>
         <DiagnosticsMetric label="Reconciled">
           {metrics.projectedReconciliations}
@@ -404,13 +423,14 @@ function serializeMultiplayerRoomDiagnosticsMetrics(
   metrics: MultiplayerRoomDiagnosticsMetrics,
 ) {
   return {
-    droppedSeq: metrics.roomSeqGaps + metrics.gameSeqGaps,
+    gameTickCatchUp: metrics.gameSeqGaps,
     jitterMs: Number(metrics.snapshotJitterMs.toFixed(1)),
     pingMs:
       metrics.lastPingMs === null ? null : Number(metrics.lastPingMs.toFixed(1)),
     reconciledFrames: metrics.projectedReconciliations,
     snapshotRatePerSecond: Number(metrics.snapshotRatePerSecond.toFixed(1)),
     snapshots: metrics.snapshots,
+    streamGaps: metrics.roomSeqGaps,
     transportStatus: metrics.transportStatus,
   };
 }
