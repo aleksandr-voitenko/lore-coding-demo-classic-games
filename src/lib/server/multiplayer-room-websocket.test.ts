@@ -413,6 +413,61 @@ async function bootstrapClient(client: WebSocket, roomCode = "ROOM1") {
 }
 
 describe("multiplayer room WebSocket gateway", () => {
+  it("normalizes snapshot pump intervals at gateway setup", async () => {
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+    const gateways: Array<
+      ReturnType<typeof createMultiplayerRoomWebSocketGateway>
+    > = [];
+
+    try {
+      for (const snapshotIntervalMs of [1, 16, 33.4]) {
+        gateways.push(
+          createMultiplayerRoomWebSocketGateway({
+            noServer: true,
+            snapshotIntervalMs,
+            store: createTestRoomStore(),
+          }),
+        );
+      }
+
+      gateways.push(
+        createMultiplayerRoomWebSocketGateway({
+          noServer: true,
+          store: createTestRoomStore(),
+        }),
+      );
+
+      expect(setIntervalSpy.mock.calls.map((call) => call[1])).toEqual([
+        16,
+        16,
+        33,
+        50,
+      ]);
+
+      setIntervalSpy.mockClear();
+
+      for (const snapshotIntervalMs of [
+        0,
+        -10,
+        Number.POSITIVE_INFINITY,
+        Number.NaN,
+      ]) {
+        gateways.push(
+          createMultiplayerRoomWebSocketGateway({
+            noServer: true,
+            snapshotIntervalMs,
+            store: createTestRoomStore(),
+          }),
+        );
+      }
+
+      expect(setIntervalSpy).not.toHaveBeenCalled();
+    } finally {
+      setIntervalSpy.mockRestore();
+      await Promise.all(gateways.map((gateway) => gateway.close()));
+    }
+  });
+
   it("uses the server game adapter to decide which room snapshots keep pumping", () => {
     const store = createTestRoomStore();
     const readySnapshot = createStartedPongRoom(store);
@@ -981,10 +1036,11 @@ describe("multiplayer room WebSocket gateway", () => {
       throw new Error("Expected a room snapshot message.");
     }
 
-    const startedPongGame = expectPongGame(started).snapshot;
     const gameSnapshot = runningSnapshot.snapshot.game?.snapshot as
       | PongGameState
       | undefined;
+
+    const startedPongGame = expectPongGame(started).snapshot;
 
     expect(gameSnapshot?.ball.position.x).not.toBe(startedPongGame.ball.position.x);
   });

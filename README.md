@@ -75,7 +75,13 @@ Override the bind address and path with `MULTIPLAYER_SIDECAR_HOST`,
 `MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH` when wiring it behind a local proxy. The
 sidecar pushes fresh snapshots for subscribed running rooms every 50ms by
 default; tune that with `MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS` during
-latency testing. Next API routes continue using their local in-process room store unless
+latency testing. Use `16` for local full-snapshot experiments, `33` for
+production-like smoothing work, and `50` for the lower-bandwidth fallback that
+matches the default. Full 16ms snapshots are useful for local comparison against
+the fastest game ticks, but production multiplayer should rely on client visual
+interpolation, projection, local input prediction, and reconciliation over
+authoritative sidecar snapshots instead of broadcasting every render frame. Next
+API routes continue using their local in-process room store unless
 `MULTIPLAYER_ROOM_SERVICE_URL` points at the sidecar room service base URL, for
 example `http://127.0.0.1:3001/_internal/multiplayer/rooms`.
 
