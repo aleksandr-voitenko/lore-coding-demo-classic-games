@@ -441,7 +441,7 @@ describe("multiplayer room WebSocket gateway", () => {
         16,
         16,
         33,
-        50,
+        33,
       ]);
 
       setIntervalSpy.mockClear();

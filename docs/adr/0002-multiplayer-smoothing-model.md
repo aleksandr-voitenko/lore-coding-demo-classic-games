@@ -6,10 +6,12 @@ Date: 2026-06-27
 ## Context
 
 Private-room multiplayer now uses a reusable WebSocket sidecar that publishes
-authoritative room snapshots. The current default sidecar cadence is 50ms, while
-solo Pong and Asteroids advance at 16ms and Space Invaders advances at 34ms. If
-the browser renders only each received authoritative snapshot, server-owned
-motion can look stepped even though the server simulation is correct.
+authoritative room snapshots. The default sidecar cadence is 33ms after LAN
+testing showed that 50ms felt acceptable for Pong but less smooth for Space
+Invaders. Solo Pong and Asteroids advance at 16ms, and Space Invaders advances
+at 34ms. If the browser renders only each received authoritative snapshot,
+server-owned motion can look stepped even though the server simulation is
+correct.
 
 Lowering the sidecar to full 16ms snapshots is useful during local timing
 experiments because it makes stepping easy to compare against the fastest local
@@ -66,12 +68,13 @@ Use these sidecar snapshot intervals while building and testing smoothing:
 - `16ms`: local experiment mode. This approximates the fastest Pong and
   Asteroids tick cadence and is useful for comparing full-snapshot rendering
   against projected rendering. Do not treat it as the production answer.
-- `33ms`: production-like smoothing mode. This approximates 30Hz authoritative
-  snapshots while leaving the browser responsible for 60Hz visual rendering,
-  interpolation, local prediction, and reconciliation.
-- `50ms`: lower-bandwidth fallback. This is the current sidecar default and
-  should remain usable with smoothing, but it needs the projection window above
-  so visual state does not drift across longer gaps.
+- `33ms`: production-like smoothing mode and current sidecar default. This
+  approximates 30Hz authoritative snapshots while leaving the browser
+  responsible for 60Hz visual rendering, interpolation, local prediction, and
+  reconciliation.
+- `50ms`: lower-bandwidth fallback. This should remain usable with smoothing,
+  but it needs the projection window above so visual state does not drift across
+  longer gaps.
 
 Server game adapters may continue to tick at game-specific rates. The sidecar
 snapshot interval controls how often subscribed rooms are sampled and broadcast,

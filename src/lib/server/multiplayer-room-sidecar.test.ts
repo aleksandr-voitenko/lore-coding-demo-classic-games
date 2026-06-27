@@ -199,9 +199,11 @@ describe("multiplayer room sidecar", () => {
       port: DEFAULT_MULTIPLAYER_SIDECAR_PORT,
       readinessPath: DEFAULT_MULTIPLAYER_SIDECAR_READINESS_PATH,
       roomServicePath: DEFAULT_MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH,
-      snapshotIntervalMs: DEFAULT_MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS,
+      snapshotIntervalMs: 33,
       websocketPath: DEFAULT_MULTIPLAYER_SIDECAR_WEBSOCKET_PATH,
     });
+
+    expect(DEFAULT_MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS).toBe(33);
 
     expect(
       parseMultiplayerRoomSidecarConfig({

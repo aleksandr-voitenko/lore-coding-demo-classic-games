@@ -68,7 +68,7 @@ type GameInputStoreCommand = Extract<
 
 const HOST_ONLY_WEBSOCKET_COMMAND_ERROR =
   "Host-only room commands require the authenticated HTTP room route.";
-export const DEFAULT_MULTIPLAYER_ROOM_SNAPSHOT_INTERVAL_MS = 50;
+export const DEFAULT_MULTIPLAYER_ROOM_SNAPSHOT_INTERVAL_MS = 33;
 
 export function createMultiplayerRoomWebSocketGateway({
   snapshotIntervalMs = DEFAULT_MULTIPLAYER_ROOM_SNAPSHOT_INTERVAL_MS,
