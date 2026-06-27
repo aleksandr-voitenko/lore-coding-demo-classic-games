@@ -6,9 +6,9 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
 } from "react";
 
+import { useClientProjectionClock } from "@/components/client-projection-clock";
 import {
   registerGameKeyDown,
   registerGameKeyUp,
@@ -70,80 +70,35 @@ const terminalSummaries = {
   won: "Left paddle wins the match",
 } satisfies Partial<Record<PongStatus, string>>;
 
-type PongMultiplayerProjection = {
-  game: PongGameState;
-  seq: number;
-  serverTimeMs: number;
-};
+function isPongMultiplayerProjectionEnabled(game: PongMultiplayerGameSnapshot) {
+  return game.snapshot.status === "running";
+}
 
-function getPongMultiplayerProjectionNowMs() {
-  return typeof performance === "undefined" ? Date.now() : performance.now();
+function getPongMultiplayerProjectionFrameKey(
+  _game: PongMultiplayerGameSnapshot,
+  elapsedMs: number,
+) {
+  return getPongMultiplayerProjectionTicks(elapsedMs);
+}
+
+function projectPongMultiplayerSnapshot(
+  game: PongMultiplayerGameSnapshot,
+  elapsedMs: number,
+) {
+  return projectPongMultiplayerGame(game.snapshot, game.heldInputs, elapsedMs);
 }
 
 function useProjectedPongMultiplayerGame(game: PongMultiplayerGameSnapshot) {
-  const gameRef = useRef(game);
-  const gameSeq = game.seq;
-  const gameServerTimeMs = game.serverTimeMs;
-  const gameStatus = game.snapshot.status;
-  const [projection, setProjection] = useState<PongMultiplayerProjection>(() => ({
-    game: game.snapshot,
+  return useClientProjectionClock({
+    baseValue: game.snapshot,
+    getProjectionFrameKey: getPongMultiplayerProjectionFrameKey,
+    isProjectionEnabled: isPongMultiplayerProjectionEnabled,
+    project: projectPongMultiplayerSnapshot,
     seq: game.seq,
     serverTimeMs: game.serverTimeMs,
-  }));
-
-  useEffect(() => {
-    gameRef.current = game;
-  }, [game]);
-
-  useEffect(() => {
-    const baseGame = gameRef.current;
-
-    if (baseGame.snapshot.status !== "running" || typeof window === "undefined") {
-      return;
-    }
-
-    const receivedAtMs = getPongMultiplayerProjectionNowMs();
-    let frameId: number | null = null;
-    let lastProjectedTicks = -1;
-
-    function updateProjection(nowMs: number) {
-      const elapsedMs = nowMs - receivedAtMs;
-      const ticks = getPongMultiplayerProjectionTicks(elapsedMs);
-
-      if (ticks !== lastProjectedTicks) {
-        setProjection({
-          game: projectPongMultiplayerGame(
-            baseGame.snapshot,
-            baseGame.heldInputs,
-            elapsedMs,
-          ),
-          seq: baseGame.seq,
-          serverTimeMs: baseGame.serverTimeMs,
-        });
-        lastProjectedTicks = ticks;
-      }
-
-      frameId = window.requestAnimationFrame(updateProjection);
-    }
-
-    frameId = window.requestAnimationFrame(updateProjection);
-
-    return () => {
-      if (frameId !== null) {
-        window.cancelAnimationFrame(frameId);
-      }
-    };
-  }, [gameSeq, gameServerTimeMs, gameStatus]);
-
-  if (
-    game.snapshot.status === "running" &&
-    projection.seq === game.seq &&
-    projection.serverTimeMs === game.serverTimeMs
-  ) {
-    return projection.game;
-  }
-
-  return game.snapshot;
+    snapshot: game,
+    status: game.snapshot.status,
+  });
 }
 
 function PongMultiplayerProjectedBoard({

@@ -20,9 +20,11 @@ import {
   advancePongMultiplayerTick,
   applyPongMultiplayerHeldInputs,
   createInitialPongMultiplayerGame,
+  getPongMultiplayerProjectionTicks,
   getPongMultiplayerParticipantSide,
   parsePongMultiplayerRoomSettings,
   pausePongMultiplayerGame,
+  PONG_MULTIPLAYER_PROJECTION_MAX_MS,
   projectPongMultiplayerGame,
   restartPongMultiplayerGame,
   resumePongMultiplayerGame,
@@ -323,6 +325,34 @@ describe("pong multiplayer adapter", () => {
     );
 
     expect(projectedGame).toBe(nearlyScoredGame);
+  });
+
+  it("caps projection ticks at the render projection window", () => {
+    const cappedTicks = getPongMultiplayerProjectionTicks(
+      PONG_MULTIPLAYER_PROJECTION_MAX_MS,
+    );
+
+    expect(
+      getPongMultiplayerProjectionTicks(
+        PONG_MULTIPLAYER_PROJECTION_MAX_MS + getPongTickDelay() * 10,
+      ),
+    ).toBe(cappedTicks);
+  });
+
+  it("leaves non-running snapshots unprojected", () => {
+    const readyGame = createInitialPongGame();
+
+    expect(
+      projectPongMultiplayerGame(
+        readyGame,
+        {
+          left: {
+            up: true,
+          },
+        },
+        getPongTickDelay(),
+      ),
+    ).toBe(readyGame);
   });
 
   it("starts, pauses, resumes, and restarts multiplayer game state", () => {
