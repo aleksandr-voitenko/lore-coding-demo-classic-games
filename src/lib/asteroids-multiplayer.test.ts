@@ -10,6 +10,7 @@ import {
   ASTEROIDS_STARTING_ASTEROID_COUNT,
   ASTEROIDS_STARTING_LIVES,
   createInitialAsteroidsGame,
+  getAsteroidsTickDelay,
   type Asteroid,
   type AsteroidsBullet,
   type AsteroidsPowerUp,
@@ -18,13 +19,16 @@ import {
 } from "./asteroids-game-engine";
 import {
   advanceAsteroidsMultiplayerGameTick,
+  ASTEROIDS_MULTIPLAYER_PROJECTION_MAX_MS,
   ASTEROIDS_MULTIPLAYER_ROOM_SEATS,
   ASTEROIDS_MULTIPLAYER_SHIP_SEATS,
   cloneAsteroidsMultiplayerGame,
   createInitialAsteroidsMultiplayerGame,
   fireAsteroidsMultiplayerShipBullet,
+  getAsteroidsMultiplayerProjectionTicks,
   isAsteroidsShipSeat,
   pauseAsteroidsMultiplayerGame,
+  projectAsteroidsMultiplayerGame,
   restartAsteroidsMultiplayerGame,
   startAsteroidsMultiplayerGame,
   type AsteroidsMultiplayerClientInput,
@@ -984,5 +988,337 @@ describe("asteroids multiplayer state model", () => {
     expect(lost.ships["ship-a"].shipExplosion).toBeNull();
     expect(lost.ships["ship-a"].bullets).toEqual([]);
     expect(lost.ships["ship-b"].bullets).toEqual([]);
+  });
+
+  it("projects held thrust and rotation through elapsed render time", () => {
+    const game = createRunningMultiplayerGame({
+      asteroids: [createSafeAsteroid()],
+    });
+    const inputs = {
+      "ship-a": { fire: true, rotateRight: true, thrust: true },
+    };
+    const projected = projectAsteroidsMultiplayerGame(
+      game,
+      inputs,
+      getAsteroidsTickDelay() * 2,
+    );
+
+    expect(projected).not.toBe(game);
+    expect(projected.ships["ship-a"].ship.isThrusting).toBe(true);
+    expect(projected.ships["ship-a"].ship.angle).toBe(284);
+    expect(projected.ships["ship-a"].ship.x).toBeGreaterThan(
+      game.ships["ship-a"].ship.x,
+    );
+    expect(projected.ships["ship-a"].ship.velocity.x).toBeGreaterThan(0);
+    expect(projected.ships["ship-a"].bullets).toEqual([]);
+    expect(projected.nextBulletId).toBe(game.nextBulletId);
+    expect(game.ships["ship-a"].ship).toMatchObject({
+      angle: -90,
+      isThrusting: false,
+      velocity: { x: 0, y: 0 },
+    });
+  });
+
+  it("projects existing bullets, asteroids, saucers, and saucer shots", () => {
+    const game = withShip(
+      createRunningMultiplayerGame({
+        asteroids: [
+          createSafeAsteroid({
+            id: "moving-asteroid",
+            velocity: { x: 2, y: 3 },
+            x: 100,
+            y: 100,
+          }),
+        ],
+        saucer: createSaucer({
+          shotCooldownTicks: 3,
+          velocity: { x: 1.5, y: -0.5 },
+          x: 180,
+          y: 160,
+        }),
+        saucerBullets: [
+          createSaucerShot({
+            id: "moving-saucer-shot",
+            ttl: 40,
+            velocity: { x: -3, y: 4 },
+            x: 260,
+            y: 270,
+          }),
+        ],
+      }),
+      "ship-a",
+      {
+        bullets: [
+          createBullet({
+            id: "moving-shot",
+            ttl: 10,
+            velocity: { x: 5, y: -2 },
+            x: 200,
+            y: 210,
+          }),
+        ],
+      },
+    );
+    const projected = projectAsteroidsMultiplayerGame(
+      game,
+      {},
+      getAsteroidsTickDelay(),
+    );
+
+    expect(projected.asteroids).toMatchObject([
+      {
+        id: "moving-asteroid",
+        x: 102,
+        y: 103,
+      },
+    ]);
+    expect(projected.saucer).toMatchObject({
+      id: "saucer-test",
+      shotCooldownTicks: 2,
+      x: 181.5,
+      y: 159.5,
+    });
+    expect(projected.saucerBullets).toMatchObject([
+      {
+        id: "moving-saucer-shot",
+        ttl: 39,
+        x: 257,
+        y: 274,
+      },
+    ]);
+    expect(projected.ships["ship-a"].bullets).toMatchObject([
+      {
+        id: "moving-shot",
+        ttl: 9,
+        x: 205,
+        y: 208,
+      },
+    ]);
+    expect(game.asteroids).toMatchObject([
+      {
+        id: "moving-asteroid",
+        x: 100,
+        y: 100,
+      },
+    ]);
+    expect(game.saucer).toMatchObject({
+      id: "saucer-test",
+      shotCooldownTicks: 3,
+      x: 180,
+      y: 160,
+    });
+    expect(game.saucerBullets).toMatchObject([
+      {
+        id: "moving-saucer-shot",
+        ttl: 40,
+        x: 260,
+        y: 270,
+      },
+    ]);
+    expect(game.ships["ship-a"].bullets).toMatchObject([
+      {
+        id: "moving-shot",
+        ttl: 10,
+        x: 200,
+        y: 210,
+      },
+    ]);
+  });
+
+  it("does not resolve projected collisions, fire, pickups, or spawns", () => {
+    const baseGame = createRunningMultiplayerGame({
+      asteroids: [createSafeAsteroid()],
+    });
+    const shipA = baseGame.ships["ship-a"].ship;
+    const game = withShip(
+      {
+        ...baseGame,
+        asteroids: [
+          createSafeAsteroid({
+            id: "target-asteroid",
+            velocity: { x: 0, y: 0 },
+            x: shipA.x,
+            y: shipA.y,
+          }),
+          createSafeAsteroid({
+            id: "remaining-asteroid",
+            x: 40,
+            y: 40,
+          }),
+        ],
+        nextAsteroidId: 20,
+        nextBulletId: 6,
+        nextPowerUpId: 4,
+        nextSaucerId: 8,
+        powerUp: createPowerUp({
+          kind: "shield",
+          x: shipA.x,
+          y: shipA.y,
+        }),
+        powerUpSpawnCooldownTicks: 0,
+        saucer: null,
+        saucerBullets: [
+          createSaucerShot({
+            id: "ship-hit-shot",
+            ttl: 40,
+            velocity: { x: 0, y: 0 },
+            x: shipA.x,
+            y: shipA.y,
+          }),
+        ],
+        saucerSpawnCooldownTicks: 0,
+        score: 40,
+        wave: 2,
+      },
+      "ship-a",
+      {
+        bullets: [
+          createBullet({
+            id: "hit-shot",
+            ttl: 10,
+            velocity: { x: 0, y: 0 },
+            x: shipA.x,
+            y: shipA.y,
+          }),
+        ],
+        respawnInvulnerabilityTicks: 0,
+        shotCooldownTicks: 0,
+      },
+    );
+    const projected = projectAsteroidsMultiplayerGame(
+      game,
+      { "ship-a": { fire: true } },
+      getAsteroidsTickDelay(),
+    );
+
+    expect(projected).toMatchObject({
+      lives: game.lives,
+      nextAsteroidId: game.nextAsteroidId,
+      nextBulletId: game.nextBulletId,
+      nextPowerUpId: game.nextPowerUpId,
+      nextSaucerId: game.nextSaucerId,
+      powerUpSpawnCooldownTicks: game.powerUpSpawnCooldownTicks,
+      saucer: null,
+      saucerSpawnCooldownTicks: game.saucerSpawnCooldownTicks,
+      score: game.score,
+      status: "running",
+      wave: game.wave,
+    });
+    expect(projected.powerUp).toEqual(game.powerUp);
+    expect(projected.asteroids.map((asteroid) => asteroid.id)).toEqual([
+      "target-asteroid",
+      "remaining-asteroid",
+    ]);
+    expect(projected.saucerBullets.map((bullet) => bullet.id)).toEqual([
+      "ship-hit-shot",
+    ]);
+    expect(projected.ships["ship-a"].shipExplosion).toBeNull();
+    expect(projected.ships["ship-a"].respawnInvulnerabilityTicks).toBe(0);
+    expect(game.ships["ship-a"].bullets.map((bullet) => bullet.id)).toEqual([
+      "hit-shot",
+    ]);
+    expect(projected.ships["ship-a"].bullets.map((bullet) => bullet.id)).toEqual([
+      "hit-shot",
+    ]);
+  });
+
+  it("leaves non-running snapshots authoritative and avoids projected terminal state", () => {
+    const pausedGame = pauseAsteroidsMultiplayerGame(
+      createRunningMultiplayerGame({
+        asteroids: [createSafeAsteroid()],
+      }),
+    );
+    const terminalGame = createRunningMultiplayerGame({
+      status: "lost",
+    });
+    const runningGame = createRunningMultiplayerGame({
+      asteroids: [],
+      lives: 0,
+    });
+    const shipA = runningGame.ships["ship-a"].ship;
+    const almostLost = withShip(
+      withShip(runningGame, "ship-a", {
+        isActive: false,
+        respawnOnExplosionEnd: false,
+        shipExplosion: {
+          durationTicks: ASTEROIDS_SHIP_EXPLOSION_TICKS,
+          radius: shipA.radius,
+          ticksRemaining: 1,
+          x: shipA.x,
+          y: shipA.y,
+        },
+      }),
+      "ship-b",
+      {
+        isActive: false,
+        respawnOnExplosionEnd: false,
+        shipExplosion: null,
+      },
+    );
+
+    expect(
+      projectAsteroidsMultiplayerGame(
+        pausedGame,
+        { "ship-a": { thrust: true } },
+        getAsteroidsTickDelay(),
+      ),
+    ).toBe(pausedGame);
+    expect(
+      projectAsteroidsMultiplayerGame(
+        terminalGame,
+        { "ship-a": { thrust: true } },
+        getAsteroidsTickDelay(),
+      ),
+    ).toBe(terminalGame);
+    expect(advanceAsteroidsMultiplayerGameTick(almostLost).status).toBe("lost");
+    expect(
+      projectAsteroidsMultiplayerGame(almostLost, {}, getAsteroidsTickDelay()),
+    ).toMatchObject({
+      lives: 0,
+      status: "running",
+    });
+    expect(
+      projectAsteroidsMultiplayerGame(almostLost, {}, getAsteroidsTickDelay())
+        .ships["ship-a"].shipExplosion,
+    ).toMatchObject({
+      ticksRemaining: 1,
+    });
+  });
+
+  it("caps projection ticks to the exported multiplayer window", () => {
+    const tickDelayMs = getAsteroidsTickDelay();
+    const maxTicks = Math.floor(
+      ASTEROIDS_MULTIPLAYER_PROJECTION_MAX_MS / tickDelayMs,
+    );
+    const game = createRunningMultiplayerGame({
+      asteroids: [
+        createSafeAsteroid({
+          id: "capped-asteroid",
+          velocity: { x: 1, y: 0 },
+          x: 100,
+          y: 100,
+        }),
+      ],
+    });
+    const projected = projectAsteroidsMultiplayerGame(
+      game,
+      {},
+      ASTEROIDS_MULTIPLAYER_PROJECTION_MAX_MS + tickDelayMs * 30,
+    );
+
+    expect(getAsteroidsMultiplayerProjectionTicks(-1)).toBe(0);
+    expect(getAsteroidsMultiplayerProjectionTicks(tickDelayMs - 1)).toBe(0);
+    expect(
+      getAsteroidsMultiplayerProjectionTicks(
+        ASTEROIDS_MULTIPLAYER_PROJECTION_MAX_MS + tickDelayMs * 30,
+      ),
+    ).toBe(maxTicks);
+    expect(projected.asteroids).toMatchObject([
+      {
+        id: "capped-asteroid",
+        x: 100 + maxTicks,
+        y: 100,
+      },
+    ]);
   });
 });

@@ -59,7 +59,10 @@ import type {
   AsteroidsShipOwnedState,
   CreateAsteroidsGameOptions,
 } from "./asteroids/types";
-import { createInitialAsteroidsGame } from "./asteroids-game-engine";
+import {
+  createInitialAsteroidsGame,
+  getAsteroidsTickDelay,
+} from "./asteroids-game-engine";
 
 type AsteroidsMultiplayerRespawnRatio = {
   x: number;
@@ -105,6 +108,11 @@ export const ASTEROIDS_MULTIPLAYER_ROOM_SEATS = [
     required: true,
   },
 ] as const satisfies readonly AsteroidsMultiplayerRoomSeat[];
+
+const ASTEROIDS_MULTIPLAYER_PROJECTION_MAX_TICKS = 3;
+
+export const ASTEROIDS_MULTIPLAYER_PROJECTION_MAX_MS =
+  getAsteroidsTickDelay() * ASTEROIDS_MULTIPLAYER_PROJECTION_MAX_TICKS;
 
 export type AsteroidsMultiplayerShipState = AsteroidsShipOwnedState & {
   isActive: boolean;
@@ -343,6 +351,129 @@ export function advanceAsteroidsMultiplayerGameTick(
     gameAfterHazards,
     explodingSeatsAtTickStart,
   );
+}
+
+export function getAsteroidsMultiplayerProjectionTicks(elapsedMs: number) {
+  if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) {
+    return 0;
+  }
+
+  const tickDelayMs = getAsteroidsTickDelay();
+
+  if (tickDelayMs <= 0) {
+    return 0;
+  }
+
+  return Math.floor(
+    Math.min(elapsedMs, ASTEROIDS_MULTIPLAYER_PROJECTION_MAX_MS) / tickDelayMs,
+  );
+}
+
+export function projectAsteroidsMultiplayerGame(
+  game: AsteroidsMultiplayerGameState,
+  inputs: AsteroidsMultiplayerHeldInputs,
+  elapsedMs: number,
+): AsteroidsMultiplayerGameState {
+  if (game.status !== "running") {
+    return game;
+  }
+
+  const projectionTicks = getAsteroidsMultiplayerProjectionTicks(elapsedMs);
+  let projectedGame = game;
+
+  for (let tickIndex = 0; tickIndex < projectionTicks; tickIndex += 1) {
+    projectedGame = advanceAsteroidsMultiplayerVisualProjectionTick(
+      projectedGame,
+      inputs,
+    );
+  }
+
+  return projectedGame;
+}
+
+function advanceAsteroidsMultiplayerVisualProjectionTick(
+  game: AsteroidsMultiplayerGameState,
+  inputs: AsteroidsMultiplayerHeldInputs,
+): AsteroidsMultiplayerGameState {
+  const gameAfterShipMotion = advanceAsteroidsMultiplayerShips(game, inputs);
+
+  return {
+    ...gameAfterShipMotion,
+    asteroids: gameAfterShipMotion.asteroids.map((asteroid) =>
+      moveWrappedEntity(
+        asteroid,
+        gameAfterShipMotion.boardWidth,
+        gameAfterShipMotion.boardHeight,
+      ),
+    ),
+    saucer: advanceAsteroidsMultiplayerProjectedSaucer(gameAfterShipMotion.saucer),
+    saucerBullets: advanceSaucerBullets(gameAfterShipMotion),
+    ships: advanceAsteroidsMultiplayerProjectedShips(gameAfterShipMotion),
+  };
+}
+
+function advanceAsteroidsMultiplayerProjectedShips(
+  game: AsteroidsMultiplayerGameState,
+): AsteroidsMultiplayerShips {
+  return {
+    "ship-a": advanceAsteroidsMultiplayerProjectedShip(
+      game,
+      game.ships["ship-a"],
+    ),
+    "ship-b": advanceAsteroidsMultiplayerProjectedShip(
+      game,
+      game.ships["ship-b"],
+    ),
+  };
+}
+
+function advanceAsteroidsMultiplayerProjectedShip(
+  game: AsteroidsMultiplayerGameState,
+  ship: AsteroidsMultiplayerShipState,
+): AsteroidsMultiplayerShipState {
+  return {
+    ...ship,
+    bullets: advanceBullets({
+      ...game,
+      bullets: ship.bullets,
+    }),
+    respawnInvulnerabilityTicks:
+      ship.shipExplosion === null
+        ? Math.max(0, ship.respawnInvulnerabilityTicks - 1)
+        : 0,
+    shipExplosion: advanceAsteroidsMultiplayerProjectedExplosion(
+      ship.shipExplosion,
+    ),
+    shotCooldownTicks: Math.max(0, ship.shotCooldownTicks - 1),
+  };
+}
+
+function advanceAsteroidsMultiplayerProjectedExplosion(
+  explosion: AsteroidsShipExplosion | null,
+) {
+  if (explosion === null) {
+    return null;
+  }
+
+  return {
+    ...explosion,
+    ticksRemaining: Math.max(1, explosion.ticksRemaining - 1),
+  };
+}
+
+function advanceAsteroidsMultiplayerProjectedSaucer(
+  saucer: AsteroidsSaucer | null,
+) {
+  if (saucer === null) {
+    return null;
+  }
+
+  return {
+    ...saucer,
+    shotCooldownTicks: Math.max(0, saucer.shotCooldownTicks - 1),
+    x: saucer.x + saucer.velocity.x,
+    y: saucer.y + saucer.velocity.y,
+  };
 }
 
 function advanceAsteroidsMultiplayerShips(
