@@ -2,9 +2,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PrivateRoom } from "@/lib/multiplayer/room";
+import { getSpaceInvadersTickDelay } from "@/lib/space-invaders-game-engine";
 import {
   createInitialSpaceInvadersMultiplayerGame,
   type SpaceInvadersMultiplayerGameSnapshot,
+  type SpaceInvadersMultiplayerHeldInputs,
 } from "@/lib/space-invaders-multiplayer";
 
 import { expectMarkup } from "./game-board-test-utils";
@@ -15,8 +17,10 @@ import {
 import {
   SpaceInvadersMultiplayerRoom,
   createSpaceInvadersMultiplayerInputState,
+  getSpaceInvadersMultiplayerProjectionHeldInputs,
   handleSpaceInvadersMultiplayerKeyDown,
   handleSpaceInvadersMultiplayerKeyUp,
+  projectSpaceInvadersMultiplayerBoardGame,
 } from "./space-invaders-multiplayer-room";
 
 const ACTIVE_SPACE_INVADERS_ROOM: PrivateRoom = {
@@ -73,6 +77,11 @@ const RUNNING_SPACE_INVADERS_GAME = {
     status: "running" as const,
   },
 } satisfies SpaceInvadersMultiplayerGameSnapshot;
+
+type SpaceInvadersMultiplayerSnapshotWithHeldInputs =
+  SpaceInvadersMultiplayerGameSnapshot & {
+    heldInputs: SpaceInvadersMultiplayerHeldInputs;
+  };
 
 type TestKeyboardEvent = Pick<
   KeyboardEvent,
@@ -168,6 +177,93 @@ describe("SpaceInvadersMultiplayerRoom", () => {
     );
 
     expect(markup).toContain('data-testid="multiplayer-room-host-controls"');
+  });
+
+  it("projects sparse board snapshots with local active-seat movement", () => {
+    const projected = projectSpaceInvadersMultiplayerBoardGame(
+      RUNNING_SPACE_INVADERS_GAME,
+      "ship-a",
+      "right",
+      getSpaceInvadersTickDelay(),
+    );
+
+    expect(projected.ships["ship-a"].player.x).toBeGreaterThan(
+      RUNNING_SPACE_INVADERS_GAME.snapshot.ships["ship-a"].player.x,
+    );
+    expect(projected.ships["ship-b"].player.x).toBe(
+      RUNNING_SPACE_INVADERS_GAME.snapshot.ships["ship-b"].player.x,
+    );
+    expect(projected.score).toBe(RUNNING_SPACE_INVADERS_GAME.snapshot.score);
+    expect(projected.lives).toBe(RUNNING_SPACE_INVADERS_GAME.snapshot.lives);
+  });
+
+  it("overrides active-seat server movement with local held direction", () => {
+    const game = {
+      ...RUNNING_SPACE_INVADERS_GAME,
+      heldInputs: {
+        "ship-a": {
+          fire: true,
+          left: true,
+        },
+        "ship-b": {
+          left: true,
+        },
+      },
+    } satisfies SpaceInvadersMultiplayerSnapshotWithHeldInputs;
+    const heldInputs = getSpaceInvadersMultiplayerProjectionHeldInputs(
+      game,
+      "ship-a",
+      "right",
+    );
+    const projected = projectSpaceInvadersMultiplayerBoardGame(
+      game,
+      "ship-a",
+      "right",
+      getSpaceInvadersTickDelay(),
+    );
+
+    expect(heldInputs).toEqual({
+      "ship-a": {
+        right: true,
+      },
+      "ship-b": {
+        left: true,
+      },
+    });
+    expect(projected.ships["ship-a"].player.x).toBeGreaterThan(
+      RUNNING_SPACE_INVADERS_GAME.snapshot.ships["ship-a"].player.x,
+    );
+    expect(projected.ships["ship-b"].player.x).toBeLessThan(
+      RUNNING_SPACE_INVADERS_GAME.snapshot.ships["ship-b"].player.x,
+    );
+    expect(projected.ships["ship-a"].playerShots).toEqual([]);
+  });
+
+  it("uses server held inputs for observers and unseated players", () => {
+    const game = {
+      ...RUNNING_SPACE_INVADERS_GAME,
+      heldInputs: {
+        "ship-a": {
+          left: true,
+        },
+        "ship-b": {
+          right: true,
+        },
+      },
+    } satisfies SpaceInvadersMultiplayerSnapshotWithHeldInputs;
+    const projected = projectSpaceInvadersMultiplayerBoardGame(
+      game,
+      null,
+      "right",
+      getSpaceInvadersTickDelay(),
+    );
+
+    expect(projected.ships["ship-a"].player.x).toBeLessThan(
+      RUNNING_SPACE_INVADERS_GAME.snapshot.ships["ship-a"].player.x,
+    );
+    expect(projected.ships["ship-b"].player.x).toBeGreaterThan(
+      RUNNING_SPACE_INVADERS_GAME.snapshot.ships["ship-b"].player.x,
+    );
   });
 
   it("renders authoritative terminal summary details", () => {

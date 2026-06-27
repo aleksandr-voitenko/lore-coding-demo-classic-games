@@ -6,8 +6,10 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
 } from "react";
 
+import { useClientProjectionClock } from "@/components/client-projection-clock";
 import {
   registerGameKeyDown,
   registerGameKeyUp,
@@ -40,11 +42,15 @@ import type {
 import type { SpaceInvadersStatus } from "@/lib/space-invaders-game-engine";
 import {
   SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS,
+  getSpaceInvadersMultiplayerProjectionTicks,
   isSpaceInvadersShipSeat,
+  projectSpaceInvadersMultiplayerGame,
   type SpaceInvadersMultiplayerClientInput,
   type SpaceInvadersMultiplayerGameSnapshot,
   type SpaceInvadersMultiplayerGameState,
+  type SpaceInvadersMultiplayerHeldInputs,
   type SpaceInvadersMultiplayerTerminalSummary,
+  type SpaceInvadersShipSeat,
 } from "@/lib/space-invaders-multiplayer";
 
 type SpaceInvadersMultiplayerRoomProps = {
@@ -83,6 +89,17 @@ type SpaceInvadersMultiplayerKeyUpOptions = {
   submitGameInput: (input: SpaceInvadersMultiplayerClientInput) => void;
 };
 
+type SpaceInvadersMultiplayerSnapshotWithHeldInputs =
+  SpaceInvadersMultiplayerGameSnapshot & {
+    heldInputs?: SpaceInvadersMultiplayerHeldInputs;
+  };
+
+type SpaceInvadersMultiplayerProjectionSnapshot = {
+  activeShipSeat: SpaceInvadersShipSeat | null;
+  game: SpaceInvadersMultiplayerGameSnapshot;
+  localMovementDirection: SpaceInvadersPlayerMovementDirection | null;
+};
+
 const statusLabels = {
   lost: "Lost",
   paused: "Paused",
@@ -93,6 +110,162 @@ const statusLabels = {
 
 function isSpaceInvadersMultiplayerFireKey(key: string) {
   return key === " " || key === "Enter";
+}
+
+function isSpaceInvadersMultiplayerProjectionEnabled({
+  game,
+}: SpaceInvadersMultiplayerProjectionSnapshot) {
+  return game.snapshot.status === "running";
+}
+
+function getSpaceInvadersMultiplayerProjectionFrameKey(
+  _snapshot: SpaceInvadersMultiplayerProjectionSnapshot,
+  elapsedMs: number,
+) {
+  return getSpaceInvadersMultiplayerProjectionTicks(elapsedMs);
+}
+
+function getSpaceInvadersMultiplayerSnapshotHeldInputs(
+  game: SpaceInvadersMultiplayerGameSnapshot,
+): SpaceInvadersMultiplayerHeldInputs {
+  // Space Invaders server snapshots include heldInputs before the exported
+  // client snapshot type requires them, so the room keeps sparse snapshots valid.
+  return (game as SpaceInvadersMultiplayerSnapshotWithHeldInputs).heldInputs ?? {};
+}
+
+function getSpaceInvadersMultiplayerLocalHeldInput(
+  direction: SpaceInvadersPlayerMovementDirection | null,
+) {
+  if (direction === "left") {
+    return { left: true };
+  }
+
+  if (direction === "right") {
+    return { right: true };
+  }
+
+  return {};
+}
+
+export function getSpaceInvadersMultiplayerProjectionHeldInputs(
+  game: SpaceInvadersMultiplayerGameSnapshot,
+  activeShipSeat: SpaceInvadersShipSeat | null,
+  localMovementDirection: SpaceInvadersPlayerMovementDirection | null,
+): SpaceInvadersMultiplayerHeldInputs {
+  const serverHeldInputs = getSpaceInvadersMultiplayerSnapshotHeldInputs(game);
+
+  if (activeShipSeat === null) {
+    return serverHeldInputs;
+  }
+
+  return {
+    ...serverHeldInputs,
+    [activeShipSeat]: getSpaceInvadersMultiplayerLocalHeldInput(
+      localMovementDirection,
+    ),
+  };
+}
+
+export function projectSpaceInvadersMultiplayerBoardGame(
+  game: SpaceInvadersMultiplayerGameSnapshot,
+  activeShipSeat: SpaceInvadersShipSeat | null,
+  localMovementDirection: SpaceInvadersPlayerMovementDirection | null,
+  elapsedMs: number,
+) {
+  return projectSpaceInvadersMultiplayerGame(
+    game.snapshot,
+    getSpaceInvadersMultiplayerProjectionHeldInputs(
+      game,
+      activeShipSeat,
+      localMovementDirection,
+    ),
+    elapsedMs,
+  );
+}
+
+function projectSpaceInvadersMultiplayerProjectionSnapshot(
+  snapshot: SpaceInvadersMultiplayerProjectionSnapshot,
+  elapsedMs: number,
+) {
+  return projectSpaceInvadersMultiplayerBoardGame(
+    snapshot.game,
+    snapshot.activeShipSeat,
+    snapshot.localMovementDirection,
+    elapsedMs,
+  );
+}
+
+function getSpaceInvadersMultiplayerProjectionIdentity(
+  game: SpaceInvadersMultiplayerGameSnapshot,
+  activeShipSeat: SpaceInvadersShipSeat | null,
+  localMovementDirection: SpaceInvadersPlayerMovementDirection | null,
+) {
+  return [
+    game.snapshot.status,
+    activeShipSeat ?? "observer",
+    localMovementDirection ?? "stationary",
+  ].join(":");
+}
+
+function useProjectedSpaceInvadersMultiplayerGame(
+  game: SpaceInvadersMultiplayerGameSnapshot,
+  activeShipSeat: SpaceInvadersShipSeat | null,
+  localMovementDirection: SpaceInvadersPlayerMovementDirection | null,
+) {
+  const projectionSnapshot = useMemo(
+    () => ({
+      activeShipSeat,
+      game,
+      localMovementDirection,
+    }),
+    [activeShipSeat, game, localMovementDirection],
+  );
+
+  return useClientProjectionClock({
+    baseValue: game.snapshot,
+    getProjectionFrameKey: getSpaceInvadersMultiplayerProjectionFrameKey,
+    isProjectionEnabled: isSpaceInvadersMultiplayerProjectionEnabled,
+    project: projectSpaceInvadersMultiplayerProjectionSnapshot,
+    seq: game.seq,
+    serverTimeMs: game.serverTimeMs,
+    snapshot: projectionSnapshot,
+    status: getSpaceInvadersMultiplayerProjectionIdentity(
+      game,
+      activeShipSeat,
+      localMovementDirection,
+    ),
+  });
+}
+
+function SpaceInvadersMultiplayerProjectedBoard({
+  activeShipSeat,
+  children,
+  game,
+  localMovementDirection,
+  statusLabel,
+}: {
+  activeShipSeat: SpaceInvadersShipSeat | null;
+  children?: ReactNode;
+  game: SpaceInvadersMultiplayerGameSnapshot;
+  localMovementDirection: SpaceInvadersPlayerMovementDirection | null;
+  statusLabel: string;
+}) {
+  const projectedGame = useProjectedSpaceInvadersMultiplayerGame(
+    game,
+    activeShipSeat,
+    localMovementDirection,
+  );
+
+  return (
+    <SpaceInvadersBoard
+      fillViewport={false}
+      game={projectedGame}
+      ships={getSpaceInvadersMultiplayerBoardShips(projectedGame)}
+      statusLabel={statusLabel}
+    >
+      {children}
+    </SpaceInvadersBoard>
+  );
 }
 
 export function createSpaceInvadersMultiplayerInputState() {
@@ -258,6 +431,8 @@ export function SpaceInvadersMultiplayerRoom({
 }: SpaceInvadersMultiplayerRoomProps) {
   const onGameInputRef = useRef(onGameInput);
   const inputStateRef = useRef(createSpaceInvadersMultiplayerInputState());
+  const [localMovementDirection, setLocalMovementDirection] =
+    useState<SpaceInvadersPlayerMovementDirection | null>(null);
   const gameState = game.snapshot;
   const activeSeat = useMemo(
     () =>
@@ -273,6 +448,9 @@ export function SpaceInvadersMultiplayerRoom({
       : null;
   const activeRoomSeat = activeShipSeat === null ? null : activeSeat;
   const canSendGameInput = activeShipSeat !== null && gameState.status === "running";
+  const projectedLocalMovementDirection = canSendGameInput
+    ? localMovementDirection
+    : null;
   const statusLabel = getSpaceInvadersMultiplayerStatusLabel(gameState.status);
   const boardFrameMaxWidth = getSpaceInvadersMultiplayerBoardFrameMaxWidth(game);
   const sidePanels = [
@@ -300,7 +478,7 @@ export function SpaceInvadersMultiplayerRoom({
     [],
   );
 
-  const clearShipDirection = useCallback(() => {
+  const resetShipDirectionInput = useCallback(() => {
     const transition = resetSpaceInvadersMultiplayerInputState(
       inputStateRef.current,
     );
@@ -313,11 +491,26 @@ export function SpaceInvadersMultiplayerRoom({
     }
   }, [submitGameInput]);
 
+  const clearShipDirection = useCallback(() => {
+    resetShipDirectionInput();
+
+    setLocalMovementDirection(null);
+  }, [resetShipDirectionInput]);
+
   useEffect(() => {
-    if (!canSendGameInput) {
-      clearShipDirection();
+    if (canSendGameInput) {
+      return undefined;
     }
-  }, [canSendGameInput, clearShipDirection]);
+
+    resetShipDirectionInput();
+    const timeoutId = window.setTimeout(() => {
+      setLocalMovementDirection(null);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [canSendGameInput, resetShipDirectionInput]);
 
   useEffect(() => {
     function handleWindowBlur() {
@@ -328,28 +521,36 @@ export function SpaceInvadersMultiplayerRoom({
 
     return () => {
       window.removeEventListener("blur", handleWindowBlur);
-      clearShipDirection();
+      resetShipDirectionInput();
     };
-  }, [clearShipDirection]);
+  }, [clearShipDirection, resetShipDirectionInput]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      handleSpaceInvadersMultiplayerKeyDown({
+      const handled = handleSpaceInvadersMultiplayerKeyDown({
         canSendGameInput,
         event,
         gameStatus: gameState.status,
         inputState: inputStateRef.current,
         submitGameInput,
       });
+
+      if (handled) {
+        setLocalMovementDirection(inputStateRef.current.direction);
+      }
     }
 
     function handleKeyUp(event: KeyboardEvent) {
-      handleSpaceInvadersMultiplayerKeyUp({
+      const handled = handleSpaceInvadersMultiplayerKeyUp({
         canSendGameInput,
         event,
         inputState: inputStateRef.current,
         submitGameInput,
       });
+
+      if (handled) {
+        setLocalMovementDirection(inputStateRef.current.direction);
+      }
     }
 
     const unregisterKeyDown = registerGameKeyDown(handleKeyDown);
@@ -366,10 +567,10 @@ export function SpaceInvadersMultiplayerRoom({
       activeParticipant={activeParticipant}
       activeSeat={activeRoomSeat}
       board={
-        <SpaceInvadersBoard
-          fillViewport={false}
-          game={gameState}
-          ships={getSpaceInvadersMultiplayerBoardShips(gameState)}
+        <SpaceInvadersMultiplayerProjectedBoard
+          activeShipSeat={activeShipSeat}
+          game={game}
+          localMovementDirection={projectedLocalMovementDirection}
           statusLabel={statusLabel}
         >
           {gameState.status === "paused" ? (
@@ -394,7 +595,7 @@ export function SpaceInvadersMultiplayerRoom({
               </p>
             </div>
           ) : null}
-        </SpaceInvadersBoard>
+        </SpaceInvadersMultiplayerProjectedBoard>
       }
       boardFrameMaxWidth={boardFrameMaxWidth}
       boardFrameTestId="space-invaders-multiplayer-board-frame"
