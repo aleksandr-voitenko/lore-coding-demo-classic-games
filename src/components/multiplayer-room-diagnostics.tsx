@@ -19,6 +19,13 @@ const MULTIPLAYER_DIAGNOSTICS_QUERY_PARAM = "multiplayerDiagnostics";
 const MULTIPLAYER_DIAGNOSTICS_LOG_QUERY_PARAM = "multiplayerDiagnosticsLog";
 const DIAGNOSTICS_SAMPLE_WINDOW_MS = 5_000;
 const DIAGNOSTICS_LOG_INTERVAL_MS = 2_000;
+const DIAGNOSTICS_PING_WARNING_MS = 80;
+const DIAGNOSTICS_PING_BAD_MS = 150;
+const DIAGNOSTICS_JITTER_WARNING_MS = 15;
+const DIAGNOSTICS_JITTER_BAD_MS = 35;
+const DIAGNOSTICS_STREAM_GAPS_BAD = 3;
+const DIAGNOSTICS_RECONCILIATION_WARNING_RATIO = 0.75;
+const DIAGNOSTICS_RECONCILIATION_BAD_RATIO = 1.25;
 
 export type MultiplayerRoomDiagnosticsMode = {
   enabled: boolean;
@@ -43,6 +50,19 @@ export type MultiplayerRoomDiagnosticsMetrics = {
 export type MultiplayerRoomDiagnosticsState = {
   metrics: MultiplayerRoomDiagnosticsMetrics;
   snapshotReceivedAtMs: readonly number[];
+};
+
+export type MultiplayerRoomDiagnosticsHealth =
+  | "bad"
+  | "healthy"
+  | "neutral"
+  | "warning";
+
+export type MultiplayerRoomDiagnosticsHealthSummary = {
+  jitter: MultiplayerRoomDiagnosticsHealth;
+  ping: MultiplayerRoomDiagnosticsHealth;
+  reconciliation: MultiplayerRoomDiagnosticsHealth;
+  stream: MultiplayerRoomDiagnosticsHealth;
 };
 
 type UseMultiplayerRoomDiagnosticsOptions = {
@@ -323,6 +343,8 @@ export function MultiplayerRoomDiagnosticsOverlay({
 }: {
   metrics: MultiplayerRoomDiagnosticsMetrics;
 }) {
+  const health = getMultiplayerRoomDiagnosticsHealth(metrics);
+
   return (
     <aside
       aria-label="Multiplayer diagnostics"
@@ -342,21 +364,21 @@ export function MultiplayerRoomDiagnosticsOverlay({
         <DiagnosticsMetric label="Snapshots">
           {formatDiagnosticsNumber(metrics.snapshotRatePerSecond, 1)}/s
         </DiagnosticsMetric>
-        <DiagnosticsMetric label="Jitter">
+        <DiagnosticsMetric health={health.jitter} label="Jitter">
           {formatDiagnosticsNumber(metrics.snapshotJitterMs, 0)}ms
         </DiagnosticsMetric>
-        <DiagnosticsMetric label="Ping">
+        <DiagnosticsMetric health={health.ping} label="Ping">
           {metrics.lastPingMs === null
             ? "waiting"
             : `${formatDiagnosticsNumber(metrics.lastPingMs, 0)}ms`}
         </DiagnosticsMetric>
-        <DiagnosticsMetric label="Stream gaps">
+        <DiagnosticsMetric health={health.stream} label="Stream gaps">
           {metrics.roomSeqGaps}
         </DiagnosticsMetric>
         <DiagnosticsMetric label="Tick catch-up">
           {metrics.gameSeqGaps}
         </DiagnosticsMetric>
-        <DiagnosticsMetric label="Reconciled">
+        <DiagnosticsMetric health={health.reconciliation} label="Reconciled">
           {metrics.projectedReconciliations}
         </DiagnosticsMetric>
       </dl>
@@ -366,19 +388,108 @@ export function MultiplayerRoomDiagnosticsOverlay({
 
 function DiagnosticsMetric({
   children,
+  health = "neutral",
   label,
 }: {
   children: ReactNode;
+  health?: MultiplayerRoomDiagnosticsHealth;
   label: string;
 }) {
   return (
     <>
       <dt className="text-[var(--chrome-muted)]">{label}</dt>
-      <dd className="text-right tabular-nums" data-testid={`multiplayer-room-diagnostics-${label.toLowerCase().replaceAll(" ", "-")}`}>
+      <dd
+        className={`text-right tabular-nums ${getDiagnosticsHealthClassName(
+          health,
+        )}`}
+        data-health={health}
+        data-testid={`multiplayer-room-diagnostics-${label.toLowerCase().replaceAll(" ", "-")}`}
+      >
         {children}
       </dd>
     </>
   );
+}
+
+export function getMultiplayerRoomDiagnosticsHealth(
+  metrics: MultiplayerRoomDiagnosticsMetrics,
+): MultiplayerRoomDiagnosticsHealthSummary {
+  return {
+    jitter: getLatencyHealth(
+      metrics.snapshotJitterMs,
+      DIAGNOSTICS_JITTER_WARNING_MS,
+      DIAGNOSTICS_JITTER_BAD_MS,
+    ),
+    ping:
+      metrics.lastPingMs === null
+        ? "neutral"
+        : getLatencyHealth(
+            metrics.lastPingMs,
+            DIAGNOSTICS_PING_WARNING_MS,
+            DIAGNOSTICS_PING_BAD_MS,
+          ),
+    reconciliation: getReconciliationHealth(metrics),
+    stream:
+      metrics.roomSeqGaps === 0
+        ? "healthy"
+        : metrics.roomSeqGaps >= DIAGNOSTICS_STREAM_GAPS_BAD
+          ? "bad"
+          : "warning",
+  };
+}
+
+function getLatencyHealth(
+  valueMs: number,
+  warningThresholdMs: number,
+  badThresholdMs: number,
+): MultiplayerRoomDiagnosticsHealth {
+  if (valueMs >= badThresholdMs) {
+    return "bad";
+  }
+
+  if (valueMs >= warningThresholdMs) {
+    return "warning";
+  }
+
+  return "healthy";
+}
+
+function getReconciliationHealth(
+  metrics: MultiplayerRoomDiagnosticsMetrics,
+): MultiplayerRoomDiagnosticsHealth {
+  if (metrics.snapshots === 0 || metrics.projectedReconciliations === 0) {
+    return "neutral";
+  }
+
+  const reconciliationRatio = metrics.projectedReconciliations / metrics.snapshots;
+
+  if (reconciliationRatio >= DIAGNOSTICS_RECONCILIATION_BAD_RATIO) {
+    return "bad";
+  }
+
+  if (reconciliationRatio >= DIAGNOSTICS_RECONCILIATION_WARNING_RATIO) {
+    return "warning";
+  }
+
+  return "healthy";
+}
+
+function getDiagnosticsHealthClassName(
+  health: MultiplayerRoomDiagnosticsHealth,
+) {
+  if (health === "healthy") {
+    return "text-[oklch(0.48_0.15_145)]";
+  }
+
+  if (health === "warning") {
+    return "text-[oklch(0.62_0.14_75)]";
+  }
+
+  if (health === "bad") {
+    return "text-[oklch(0.58_0.2_28)]";
+  }
+
+  return "text-[var(--chrome-ink)]";
 }
 
 function getSnapshotRatePerSecond(snapshotReceivedAtMs: readonly number[]) {

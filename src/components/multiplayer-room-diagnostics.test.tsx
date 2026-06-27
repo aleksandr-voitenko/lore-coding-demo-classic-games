@@ -7,6 +7,7 @@ import {
   MultiplayerRoomDiagnosticsOverlay,
   createInitialMultiplayerRoomDiagnosticsState,
   getMultiplayerRoomDiagnosticsMode,
+  getMultiplayerRoomDiagnosticsHealth,
   recordMultiplayerRoomDiagnosticsPingSample,
   recordMultiplayerRoomDiagnosticsProjectionReconciliation,
   recordMultiplayerRoomDiagnosticsSnapshot,
@@ -149,6 +150,67 @@ describe("multiplayer room diagnostics", () => {
     });
   });
 
+  it("classifies diagnostics health bands for live room tuning", () => {
+    const healthy = getMultiplayerRoomDiagnosticsHealth({
+      gameSeqGaps: 10,
+      lastGameSeq: 10,
+      lastPingMs: 42,
+      lastRoomSeq: 20,
+      pingSamples: 3,
+      projectedReconciliations: 10,
+      roomSeqGaps: 0,
+      snapshotJitterMs: 8,
+      snapshotRatePerSecond: 30,
+      snapshots: 40,
+      transportStatus: "active",
+    });
+    const warning = getMultiplayerRoomDiagnosticsHealth({
+      gameSeqGaps: 10,
+      lastGameSeq: 10,
+      lastPingMs: 83,
+      lastRoomSeq: 20,
+      pingSamples: 3,
+      projectedReconciliations: 35,
+      roomSeqGaps: 1,
+      snapshotJitterMs: 22,
+      snapshotRatePerSecond: 30,
+      snapshots: 40,
+      transportStatus: "active",
+    });
+    const bad = getMultiplayerRoomDiagnosticsHealth({
+      gameSeqGaps: 10,
+      lastGameSeq: 10,
+      lastPingMs: 170,
+      lastRoomSeq: 20,
+      pingSamples: 3,
+      projectedReconciliations: 60,
+      roomSeqGaps: 3,
+      snapshotJitterMs: 42,
+      snapshotRatePerSecond: 30,
+      snapshots: 40,
+      transportStatus: "active",
+    });
+
+    expect(healthy).toEqual({
+      jitter: "healthy",
+      ping: "healthy",
+      reconciliation: "healthy",
+      stream: "healthy",
+    });
+    expect(warning).toEqual({
+      jitter: "warning",
+      ping: "warning",
+      reconciliation: "warning",
+      stream: "warning",
+    });
+    expect(bad).toEqual({
+      jitter: "bad",
+      ping: "bad",
+      reconciliation: "bad",
+      stream: "bad",
+    });
+  });
+
   it("renders compact overlay metrics", () => {
     const markup = renderToStaticMarkup(
       <MultiplayerRoomDiagnosticsOverlay
@@ -173,6 +235,7 @@ describe("multiplayer room diagnostics", () => {
     expect(markup).toContain("4ms");
     expect(markup).toContain("37ms");
     expect(markup).toContain("Stream gaps");
+    expect(markup).toContain('data-health="warning"');
     expect(markup).toContain(">2</dd>");
     expect(markup).toContain("Tick catch-up");
     expect(markup).toContain(">1</dd>");
