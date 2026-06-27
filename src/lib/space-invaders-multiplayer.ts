@@ -5,6 +5,7 @@ import type {
 } from "./multiplayer/protocol";
 import {
   createInitialSpaceInvadersGame,
+  getSpaceInvadersTickDelay,
   type CreateSpaceInvadersGameOptions,
   type SpaceInvader,
   type SpaceInvadersDirection,
@@ -63,12 +64,16 @@ import {
   type SpaceInvadersPlayerOwnedState,
 } from "./space-invaders/player-state";
 import {
+  advanceInvaderShot,
   advanceInvaderShotPositions,
+  advancePlayerShotPosition,
   advanceSpaceInvadersRevengeVolleys,
   createCommanderShardShots,
   createInitialPlayerBurstState,
   createPlayerShots,
+  isInvaderShotActive,
   isInvaderShotDangerous,
+  isPlayerShotActive,
   maybePrimeSpaceInvadersRevengeVolley,
   maybeFireInvaderShot,
 } from "./space-invaders/projectiles";
@@ -129,6 +134,11 @@ export const SPACE_INVADERS_MULTIPLAYER_ROOM_SEATS = [
     required: true,
   },
 ] as const satisfies readonly SpaceInvadersMultiplayerRoomSeat[];
+
+const SPACE_INVADERS_MULTIPLAYER_PROJECTION_MAX_TICKS = 3;
+
+export const SPACE_INVADERS_MULTIPLAYER_PROJECTION_MAX_MS =
+  getSpaceInvadersTickDelay() * SPACE_INVADERS_MULTIPLAYER_PROJECTION_MAX_TICKS;
 
 export type SpaceInvadersMultiplayerSharedState = Pick<
   SpaceInvadersGameState,
@@ -440,6 +450,45 @@ export function advanceSpaceInvadersMultiplayerGameTick(
   return advanceSpaceInvadersMultiplayerShipRecovery(marchedGame);
 }
 
+export function getSpaceInvadersMultiplayerProjectionTicks(elapsedMs: number) {
+  if (elapsedMs <= 0) {
+    return 0;
+  }
+
+  const tickDelayMs = getSpaceInvadersTickDelay();
+
+  if (tickDelayMs <= 0) {
+    return 0;
+  }
+
+  return Math.floor(
+    Math.min(elapsedMs, SPACE_INVADERS_MULTIPLAYER_PROJECTION_MAX_MS) /
+      tickDelayMs,
+  );
+}
+
+export function projectSpaceInvadersMultiplayerGame(
+  game: SpaceInvadersMultiplayerGameState,
+  inputs: SpaceInvadersMultiplayerHeldInputs,
+  elapsedMs: number,
+): SpaceInvadersMultiplayerGameState {
+  if (game.status !== "running") {
+    return game;
+  }
+
+  const projectionTicks = getSpaceInvadersMultiplayerProjectionTicks(elapsedMs);
+  let projectedGame = game;
+
+  for (let tickIndex = 0; tickIndex < projectionTicks; tickIndex += 1) {
+    projectedGame = advanceSpaceInvadersMultiplayerVisualProjectionTick(
+      projectedGame,
+      inputs,
+    );
+  }
+
+  return projectedGame;
+}
+
 export function resolveSpaceInvadersMultiplayerInvaderShotHits(
   game: SpaceInvadersMultiplayerGameState,
   random: SpaceInvadersRandomSource = Math.random,
@@ -599,6 +648,132 @@ function advanceSpaceInvadersMultiplayerPowerUps(
   return {
     ...nextGame,
     powerUps: activePowerUps,
+  };
+}
+
+function advanceSpaceInvadersMultiplayerVisualProjectionTick(
+  game: SpaceInvadersMultiplayerGameState,
+  inputs: SpaceInvadersMultiplayerHeldInputs,
+): SpaceInvadersMultiplayerGameState {
+  // Keep projection to already-rendered movement and effects; the server tick
+  // remains authoritative for scoring, lives, pickups, spawns, and terminal state.
+  let nextGame = applySpaceInvadersMultiplayerProjectionHeldInputs(game, inputs);
+
+  nextGame = advanceSpaceInvadersMultiplayerExplosions(nextGame);
+  nextGame = advanceSpaceInvadersMultiplayerScorePopups(nextGame);
+  nextGame = advanceSpaceInvadersMultiplayerProjectedPowerUps(nextGame);
+  nextGame = advanceSpaceInvadersMultiplayerProjectedPlayerShots(nextGame);
+  nextGame = advanceSpaceInvadersMultiplayerProjectedInvaderShots(nextGame);
+
+  if (nextGame.alienFreezeTicks > 0) {
+    return nextGame;
+  }
+
+  nextGame = advanceSpaceInvadersMultiplayerProjectedUfo(nextGame);
+
+  return marchSpaceInvadersMultiplayerInvaders(nextGame);
+}
+
+function applySpaceInvadersMultiplayerProjectionHeldInputs(
+  game: SpaceInvadersMultiplayerGameState,
+  inputs: SpaceInvadersMultiplayerHeldInputs = {},
+): SpaceInvadersMultiplayerGameState {
+  let nextGame = game;
+
+  for (const seat of SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS) {
+    const input = inputs[seat];
+
+    if (input?.left === true && input.right !== true) {
+      nextGame = moveSpaceInvadersMultiplayerShipLeft(nextGame, seat);
+    } else if (input?.right === true && input.left !== true) {
+      nextGame = moveSpaceInvadersMultiplayerShipRight(nextGame, seat);
+    }
+  }
+
+  return nextGame;
+}
+
+function advanceSpaceInvadersMultiplayerProjectedPowerUps(
+  game: SpaceInvadersMultiplayerGameState,
+): SpaceInvadersMultiplayerGameState {
+  if (game.powerUps.length === 0) {
+    return game;
+  }
+
+  return {
+    ...game,
+    powerUps: game.powerUps
+      .map((powerUp) => ({
+        ...powerUp,
+        y: powerUp.y + powerUp.velocityY,
+      }))
+      .filter((powerUp) => powerUp.y <= game.boardHeight),
+  };
+}
+
+function advanceSpaceInvadersMultiplayerProjectedPlayerShots(
+  game: SpaceInvadersMultiplayerGameState,
+): SpaceInvadersMultiplayerGameState {
+  let nextShips = game.ships;
+
+  for (const seat of SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS) {
+    const ship = game.ships[seat];
+
+    if (ship.playerShots.length === 0) {
+      continue;
+    }
+
+    nextShips = {
+      ...nextShips,
+      [seat]: {
+        ...ship,
+        playerShots: ship.playerShots
+          .map(advancePlayerShotPosition)
+          .filter((shot) => isPlayerShotActive(shot, game)),
+      },
+    };
+  }
+
+  return nextShips === game.ships
+    ? game
+    : {
+        ...game,
+        ships: nextShips,
+      };
+}
+
+function advanceSpaceInvadersMultiplayerProjectedInvaderShots(
+  game: SpaceInvadersMultiplayerGameState,
+): SpaceInvadersMultiplayerGameState {
+  if (game.invaderShots.length === 0) {
+    return game;
+  }
+
+  return {
+    ...game,
+    invaderShots: game.invaderShots
+      .map((shot) =>
+        advanceInvaderShot(shot, {
+          player: getSpaceInvadersMultiplayerShotTargetPlayer(game, shot),
+        }),
+      )
+      .filter((shot) => isInvaderShotActive(shot, game)),
+  };
+}
+
+function advanceSpaceInvadersMultiplayerProjectedUfo(
+  game: SpaceInvadersMultiplayerGameState,
+): SpaceInvadersMultiplayerGameState {
+  if (!game.ufo.isActive) {
+    return game;
+  }
+
+  return {
+    ...game,
+    ufo: {
+      ...game.ufo,
+      x: game.ufo.x + game.ufo.direction * UFO_SPEED,
+    },
   };
 }
 

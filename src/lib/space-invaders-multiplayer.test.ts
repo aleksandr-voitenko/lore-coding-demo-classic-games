@@ -7,6 +7,7 @@ import {
   createPowerUpFixture,
   createRandomSequence,
   createPlayerShotAlignedWith,
+  getSpaceInvadersTickDelay,
   SPACE_INVADERS_ALIEN_FREEZE_TICKS,
   SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS,
   SPACE_INVADERS_BASE_Y,
@@ -33,10 +34,13 @@ import {
   cloneSpaceInvadersMultiplayerGame,
   createInitialSpaceInvadersMultiplayerGame,
   fireSpaceInvadersMultiplayerShipShot,
+  getSpaceInvadersMultiplayerProjectionTicks,
   isSpaceInvadersShipSeat,
   moveSpaceInvadersMultiplayerShip,
+  projectSpaceInvadersMultiplayerGame,
   resolveSpaceInvadersMultiplayerInvaderShotHits,
   resolveSpaceInvadersMultiplayerPowerUpPickup,
+  SPACE_INVADERS_MULTIPLAYER_PROJECTION_MAX_MS,
   SPACE_INVADERS_MULTIPLAYER_ROOM_SEATS,
   SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS,
   type SpaceInvadersMultiplayerGameSnapshot,
@@ -482,6 +486,137 @@ describe("space invaders multiplayer state model", () => {
     expect(ticked.ships["ship-b"].player.x).toBe(game.ships["ship-b"].player.x);
     expect(ticked.ships["ship-b"].playerShots).toHaveLength(1);
     expect(ticked.ships["ship-a"].playerShots).toEqual([]);
+  });
+
+  it("projects held movement without creating local fire outcomes", () => {
+    const game = createRunningSpaceInvadersMultiplayerGame();
+    const projected = projectSpaceInvadersMultiplayerGame(
+      game,
+      {
+        "ship-a": {
+          fire: true,
+          right: true,
+        },
+      },
+      getSpaceInvadersTickDelay(),
+    );
+
+    expect(projected.ships["ship-a"].player.x).toBeGreaterThan(
+      game.ships["ship-a"].player.x,
+    );
+    expect(projected.ships["ship-b"].player.x).toBe(game.ships["ship-b"].player.x);
+    expect(projected.ships["ship-a"].playerShots).toEqual([]);
+    expect(projected.nextPlayerShotId).toBe(game.nextPlayerShotId);
+  });
+
+  it("projects shots and aliens without local scoring resolution", () => {
+    const initialGame = createRunningSpaceInvadersMultiplayerGame({
+      nextInvaderShotId: 8,
+      nextPlayerShotId: 5,
+      score: 120,
+    });
+    const target = initialGame.invaders[0]!;
+    const playerShot = createPlayerShotMovingIntoTarget(target, {
+      id: "projected-player-shot",
+      velocityX: 1,
+    });
+    const invaderShot = createInvaderShotFixture({
+      id: "projected-invader-shot",
+      velocityY: 3.2,
+      x: 180,
+      y: 120,
+    });
+    const game = withOnlyActiveMultiplayerInvader(
+      {
+        ...initialGame,
+        invaderShots: [invaderShot],
+        ships: {
+          ...initialGame.ships,
+          "ship-a": {
+            ...initialGame.ships["ship-a"],
+            playerShots: [playerShot],
+          },
+        },
+      },
+      target,
+    );
+    const projected = projectSpaceInvadersMultiplayerGame(
+      game,
+      {},
+      getSpaceInvadersTickDelay(),
+    );
+    const projectedPlayerShot = projected.ships["ship-a"].playerShots[0]!;
+    const projectedInvaderShot = projected.invaderShots[0]!;
+    const projectedTarget = projected.invaders.find(
+      (invader) => invader.id === target.id,
+    )!;
+
+    expect(projectedPlayerShot).toMatchObject({
+      x: playerShot.x + playerShot.velocityX,
+      y: playerShot.y + playerShot.velocityY,
+    });
+    expect(projectedInvaderShot).toMatchObject({
+      ageTicks: invaderShot.ageTicks + 1,
+      y: invaderShot.y + invaderShot.velocityY,
+    });
+    expect(projectedTarget.isActive).toBe(true);
+    expect(projectedTarget.x).toBeGreaterThan(target.x);
+    expect(projected.score).toBe(game.score);
+    expect(projected.lives).toBe(game.lives);
+    expect(projected.status).toBe("running");
+    expect(projected.nextInvaderShotId).toBe(game.nextInvaderShotId);
+    expect(projected.nextPlayerShotId).toBe(game.nextPlayerShotId);
+  });
+
+  it("does not project terminal snapshots", () => {
+    const game = createRunningSpaceInvadersMultiplayerGame({
+      status: "lost",
+    });
+    const projected = projectSpaceInvadersMultiplayerGame(
+      game,
+      {
+        "ship-a": {
+          right: true,
+        },
+      },
+      getSpaceInvadersTickDelay(),
+    );
+
+    expect(projected).toBe(game);
+  });
+
+  it("caps multiplayer projection ticks", () => {
+    const game = createRunningSpaceInvadersMultiplayerGame();
+    const tickDelayMs = getSpaceInvadersTickDelay();
+    const cappedTicks = Math.floor(
+      SPACE_INVADERS_MULTIPLAYER_PROJECTION_MAX_MS / tickDelayMs,
+    );
+    const cappedProjection = projectSpaceInvadersMultiplayerGame(
+      game,
+      {
+        "ship-a": {
+          right: true,
+        },
+      },
+      SPACE_INVADERS_MULTIPLAYER_PROJECTION_MAX_MS,
+    );
+    const overCapProjection = projectSpaceInvadersMultiplayerGame(
+      game,
+      {
+        "ship-a": {
+          right: true,
+        },
+      },
+      SPACE_INVADERS_MULTIPLAYER_PROJECTION_MAX_MS + tickDelayMs * 20,
+    );
+
+    expect(getSpaceInvadersMultiplayerProjectionTicks(0)).toBe(0);
+    expect(
+      getSpaceInvadersMultiplayerProjectionTicks(
+        SPACE_INVADERS_MULTIPLAYER_PROJECTION_MAX_MS + tickDelayMs * 20,
+      ),
+    ).toBe(cappedTicks);
+    expect(overCapProjection).toEqual(cappedProjection);
   });
 
   it("advances both ships' player shots against the shared invader wave", () => {
