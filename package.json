@@ -16,6 +16,7 @@
     "build:sidecar": "tsc -p tsconfig.sidecar.json",
     "lint": "eslint",
     "lore-coding": "node .githooks/lore-coding.mjs",
+    "start:latency-proxy": "node scripts/multiplayer-latency-proxy.mjs",
     "start:sidecar": "npm run build:sidecar && node dist/sidecar/lib/server/multiplayer-room-sidecar.js",
     "test": "vitest run",
     "test:agent": "vitest run --coverage --reporter=default --reporter=json --reporter=junit --outputFile.json=reports/vitest/results.json --outputFile.junit=reports/vitest/junit.xml",
@@ -25,6 +26,7 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:install": "playwright install chromium",
     "test:e2e:sidecar": "playwright test --config e2e/playwright.sidecar.config.ts",
+    "test:e2e:sidecar:latency": "playwright test --config e2e/playwright.sidecar-latency.config.ts",
     "test:e2e:ui": "playwright test --ui",
     "typecheck": "tsc --noEmit"
   },

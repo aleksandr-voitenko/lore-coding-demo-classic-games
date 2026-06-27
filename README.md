@@ -99,6 +99,61 @@ diagnostics overlay with snapshot rate, jitter, ping, sequence gaps, and
 projection reconciliations. Use `multiplayerDiagnostics=log` to also emit the
 same summary to the browser console while testing real network conditions.
 
+### Multiplayer latency lab
+
+Use the latency proxy to put repeatable internet-like conditions between browser
+clients and the sidecar WebSocket stream. The proxy models target round-trip
+time by delaying each WebSocket direction by roughly half of the configured RTT,
+with optional jitter and message loss.
+
+Run the sidecar, proxy, and Next dev server in separate terminals:
+
+```bash
+npm run start:sidecar
+MULTIPLAYER_LATENCY_PROXY_PROFILE=normal npm run start:latency-proxy
+MULTIPLAYER_ROOM_SERVICE_URL=http://127.0.0.1:3001/_internal/multiplayer/rooms \
+NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL=ws://127.0.0.1:3002/multiplayer/rooms \
+npm run dev -- --hostname 0.0.0.0 --port 3000
+```
+
+Open a private room with `multiplayerDiagnostics=1`, for example
+`http://127.0.0.1:3000/?room=<code>&multiplayerDiagnostics=1`.
+
+Latency proxy profiles:
+
+| Profile | Target ping | Jitter | Drop rate | Use |
+| --- | ---: | ---: | ---: | --- |
+| `lan` | 0ms | 0ms | 0% | Baseline comparison |
+| `good` | 40ms | 5ms | 0% | Good nearby internet |
+| `normal` | 80ms | 15ms | 0% | Typical friend play |
+| `rough` | 120ms | 30ms | 0% | Noticeably delayed play |
+| `bad` | 180ms | 50ms | 2% | Stress testing only |
+
+Override any profile with:
+
+- `MULTIPLAYER_LATENCY_PROXY_RTT_MS`
+- `MULTIPLAYER_LATENCY_PROXY_JITTER_MS`
+- `MULTIPLAYER_LATENCY_PROXY_DROP_RATE`
+- `MULTIPLAYER_LATENCY_PROXY_SEED`
+
+Healthy manual test signals:
+
+- `Snapshots` stays close to the configured sidecar rate, about `30/s` at the
+  33ms default.
+- `Ping` roughly matches the selected profile.
+- `Stream gaps` stays at `0`; any growth means the live room stream is missing
+  authoritative room sequence numbers.
+- `Jitter` should stay in the healthy or warning band for playable sessions.
+- `Reconciled` should not produce visible snapping. Asteroids is the most
+  sensitive game because thrust, rotation, saucers, shots, and rocks are all
+  continuous motion.
+
+The sidecar latency smoke can be run through the proxy with:
+
+```bash
+npm run test:e2e:sidecar:latency -- --grep "Multiplayer diagnostics"
+```
+
 Browser room streams are enabled with
 `NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL`. Use an absolute endpoint such as
 `ws://127.0.0.1:3001/multiplayer/rooms` for local sidecar testing, or a
