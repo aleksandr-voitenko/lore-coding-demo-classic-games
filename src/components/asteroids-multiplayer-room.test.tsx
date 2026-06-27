@@ -2,7 +2,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  getAsteroidsTickDelay,
+  type AsteroidsControlInput,
+} from "@/lib/asteroids-game-engine";
+import {
   createInitialAsteroidsMultiplayerGame,
+  projectAsteroidsMultiplayerGame,
   startAsteroidsMultiplayerGame,
   type AsteroidsMultiplayerGameSnapshot,
 } from "@/lib/asteroids-multiplayer";
@@ -12,9 +17,12 @@ import { expectMarkup } from "./game-board-test-utils";
 import {
   AsteroidsMultiplayerRoom,
   createAsteroidsMultiplayerInputState,
+  getAsteroidsMultiplayerProjectionFrameKey,
+  getAsteroidsMultiplayerProjectionHeldInputs,
   handleAsteroidsMultiplayerKeyDown,
   handleAsteroidsMultiplayerKeyUp,
   pressAsteroidsMultiplayerInputKey,
+  projectAsteroidsMultiplayerSnapshot,
   releaseAsteroidsMultiplayerInputKey,
   resetAsteroidsMultiplayerInputState,
 } from "./asteroids-multiplayer-room";
@@ -84,6 +92,18 @@ const RUNNING_ASTEROIDS_GAME = {
     wave: 3,
   },
 } satisfies AsteroidsMultiplayerGameSnapshot;
+
+const RELEASED_ASTEROIDS_CONTROLS = {
+  rotateLeft: false,
+  rotateRight: false,
+  thrust: false,
+} satisfies AsteroidsControlInput;
+
+const THRUSTING_ASTEROIDS_CONTROLS = {
+  rotateLeft: false,
+  rotateRight: true,
+  thrust: true,
+} satisfies AsteroidsControlInput;
 
 type TestKeyboardEvent = Pick<
   KeyboardEvent,
@@ -274,6 +294,173 @@ describe("AsteroidsMultiplayerRoom", () => {
 
     expect(markup).toContain('data-testid="asteroids-multiplayer-room"');
     expect(markup).toContain('data-testid="asteroids-board"');
+  });
+
+  it("projects running board state from server held inputs", () => {
+    const game = {
+      ...RUNNING_ASTEROIDS_GAME,
+      heldInputs: {
+        "ship-b": {
+          rotateRight: true,
+          thrust: true,
+        },
+      },
+    } satisfies AsteroidsMultiplayerGameSnapshot;
+    const elapsedMs = getAsteroidsTickDelay();
+    const projected = projectAsteroidsMultiplayerSnapshot(
+      {
+        activeShipSeat: null,
+        game,
+        getLocalControls: () => THRUSTING_ASTEROIDS_CONTROLS,
+      },
+      elapsedMs,
+    );
+
+    expect(projected).toEqual(
+      projectAsteroidsMultiplayerGame(
+        game.snapshot,
+        game.heldInputs,
+        elapsedMs,
+      ),
+    );
+    expect(projected.ships["ship-a"].ship.isThrusting).toBe(false);
+    expect(projected.ships["ship-b"].ship.isThrusting).toBe(true);
+    expect(projected.ships["ship-b"].ship.angle).not.toBe(
+      RUNNING_ASTEROIDS_GAME.snapshot.ships["ship-b"].ship.angle,
+    );
+  });
+
+  it("predicts active-seat controls while preserving sparse server inputs", () => {
+    const game = {
+      ...RUNNING_ASTEROIDS_GAME,
+      heldInputs: {
+        "ship-b": {
+          rotateLeft: true,
+          thrust: true,
+        },
+      },
+    } satisfies AsteroidsMultiplayerGameSnapshot;
+    const elapsedMs = getAsteroidsTickDelay();
+    const heldInputs = getAsteroidsMultiplayerProjectionHeldInputs(
+      game.heldInputs,
+      "ship-a",
+      THRUSTING_ASTEROIDS_CONTROLS,
+    );
+    const projected = projectAsteroidsMultiplayerSnapshot(
+      {
+        activeShipSeat: "ship-a",
+        game,
+        getLocalControls: () => THRUSTING_ASTEROIDS_CONTROLS,
+      },
+      elapsedMs,
+    );
+
+    expect(heldInputs).toEqual({
+      "ship-a": {
+        rotateRight: true,
+        thrust: true,
+      },
+      "ship-b": {
+        rotateLeft: true,
+        thrust: true,
+      },
+    });
+    expect(projected.ships["ship-a"].ship.isThrusting).toBe(true);
+    expect(projected.ships["ship-a"].ship.angle).not.toBe(
+      RUNNING_ASTEROIDS_GAME.snapshot.ships["ship-a"].ship.angle,
+    );
+    expect(projected.ships["ship-b"].ship.isThrusting).toBe(true);
+    expect(projected.ships["ship-b"].ship.angle).not.toBe(
+      RUNNING_ASTEROIDS_GAME.snapshot.ships["ship-b"].ship.angle,
+    );
+    expect(projected.ships["ship-a"].bullets).toEqual(
+      RUNNING_ASTEROIDS_GAME.snapshot.ships["ship-a"].bullets,
+    );
+    expect(projected.nextBulletId).toBe(
+      RUNNING_ASTEROIDS_GAME.snapshot.nextBulletId,
+    );
+  });
+
+  it("uses server held inputs for observers and clears active local prediction", () => {
+    const heldInputs = {
+      "ship-a": {
+        thrust: true,
+      },
+      "ship-b": {
+        rotateLeft: true,
+      },
+    };
+    const observerHeldInputs = getAsteroidsMultiplayerProjectionHeldInputs(
+      heldInputs,
+      null,
+      THRUSTING_ASTEROIDS_CONTROLS,
+    );
+    const clearedActiveHeldInputs = getAsteroidsMultiplayerProjectionHeldInputs(
+      heldInputs,
+      "ship-a",
+      RELEASED_ASTEROIDS_CONTROLS,
+    );
+    const observerProjected = projectAsteroidsMultiplayerSnapshot(
+      {
+        activeShipSeat: null,
+        game: {
+          ...RUNNING_ASTEROIDS_GAME,
+          heldInputs,
+        },
+        getLocalControls: () => THRUSTING_ASTEROIDS_CONTROLS,
+      },
+      getAsteroidsTickDelay(),
+    );
+    const serverProjected = projectAsteroidsMultiplayerGame(
+      RUNNING_ASTEROIDS_GAME.snapshot,
+      heldInputs,
+      getAsteroidsTickDelay(),
+    );
+
+    expect(observerHeldInputs).toBe(heldInputs);
+    expect(clearedActiveHeldInputs).toEqual({
+      "ship-b": {
+        rotateLeft: true,
+      },
+    });
+    expect(observerProjected.ships["ship-a"].ship).toEqual(
+      serverProjected.ships["ship-a"].ship,
+    );
+    expect(observerProjected.ships["ship-a"].ship.isThrusting).toBe(true);
+  });
+
+  it("keys active-seat projection frames by local controls", () => {
+    let localControls: AsteroidsControlInput = THRUSTING_ASTEROIDS_CONTROLS;
+    const activeSnapshot = {
+      activeShipSeat: "ship-a" as const,
+      game: RUNNING_ASTEROIDS_GAME,
+      getLocalControls: () => localControls,
+    };
+    const thrustingKey = getAsteroidsMultiplayerProjectionFrameKey(
+      activeSnapshot,
+      0,
+    );
+
+    localControls = RELEASED_ASTEROIDS_CONTROLS;
+
+    expect(
+      getAsteroidsMultiplayerProjectionFrameKey(activeSnapshot, 0),
+    ).not.toBe(thrustingKey);
+
+    const observerSnapshot = {
+      ...activeSnapshot,
+      activeShipSeat: null,
+    };
+    const observerKey = getAsteroidsMultiplayerProjectionFrameKey(
+      observerSnapshot,
+      0,
+    );
+
+    localControls = THRUSTING_ASTEROIDS_CONTROLS;
+
+    expect(
+      getAsteroidsMultiplayerProjectionFrameKey(observerSnapshot, 0),
+    ).toBe(observerKey);
   });
 
   it("sends seated controls and fire payloads from keyboard input", () => {

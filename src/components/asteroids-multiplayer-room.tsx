@@ -12,6 +12,7 @@ import {
   AsteroidsBoard,
   type AsteroidsBoardShipRenderState,
 } from "@/components/asteroids-board";
+import { useClientProjectionClock } from "@/components/client-projection-clock";
 import {
   createAsteroidsControlState,
   getAsteroidsControlInput,
@@ -39,10 +40,14 @@ import type {
 } from "@/lib/asteroids-game-engine";
 import {
   ASTEROIDS_MULTIPLAYER_SHIP_SEATS,
+  getAsteroidsMultiplayerProjectionTicks,
   isAsteroidsShipSeat,
+  projectAsteroidsMultiplayerGame,
   type AsteroidsMultiplayerClientInput,
   type AsteroidsMultiplayerGameSnapshot,
   type AsteroidsMultiplayerGameState,
+  type AsteroidsMultiplayerHeldInput,
+  type AsteroidsMultiplayerHeldInputs,
   type AsteroidsMultiplayerTerminalSummary,
   type AsteroidsShipSeat,
 } from "@/lib/asteroids-multiplayer";
@@ -94,8 +99,143 @@ const statusLabels = {
   running: "Running",
 } satisfies Record<AsteroidsStatus, string>;
 
+export type AsteroidsMultiplayerProjectionSnapshot = {
+  activeShipSeat: AsteroidsShipSeat | null;
+  game: AsteroidsMultiplayerGameSnapshot;
+  getLocalControls: () => AsteroidsControlInput;
+};
+
 function isAsteroidsMultiplayerFireKey(key: string) {
   return key === " ";
+}
+
+function isAsteroidsMultiplayerProjectionEnabled({
+  game,
+}: AsteroidsMultiplayerProjectionSnapshot) {
+  return game.snapshot.status === "running";
+}
+
+export function getAsteroidsMultiplayerProjectionFrameKey(
+  snapshot: AsteroidsMultiplayerProjectionSnapshot,
+  elapsedMs: number,
+) {
+  const projectionTicks = getAsteroidsMultiplayerProjectionTicks(elapsedMs);
+
+  if (snapshot.activeShipSeat === null) {
+    return `server:${projectionTicks}`;
+  }
+
+  return [
+    snapshot.activeShipSeat,
+    projectionTicks,
+    getAsteroidsMultiplayerControlsKey(snapshot.getLocalControls()),
+  ].join(":");
+}
+
+function getAsteroidsMultiplayerProjectionStatusKey(
+  game: AsteroidsMultiplayerGameSnapshot,
+  activeShipSeat: AsteroidsShipSeat | null,
+) {
+  return `${game.snapshot.status}:${activeShipSeat ?? "server"}`;
+}
+
+export function projectAsteroidsMultiplayerSnapshot(
+  snapshot: AsteroidsMultiplayerProjectionSnapshot,
+  elapsedMs: number,
+) {
+  return projectAsteroidsMultiplayerGame(
+    snapshot.game.snapshot,
+    getAsteroidsMultiplayerProjectionHeldInputs(
+      snapshot.game.heldInputs,
+      snapshot.activeShipSeat,
+      snapshot.getLocalControls(),
+    ),
+    elapsedMs,
+  );
+}
+
+function useProjectedAsteroidsMultiplayerGame(
+  projectionSnapshot: AsteroidsMultiplayerProjectionSnapshot,
+) {
+  return useClientProjectionClock({
+    baseValue: projectionSnapshot.game.snapshot,
+    getProjectionFrameKey: getAsteroidsMultiplayerProjectionFrameKey,
+    isProjectionEnabled: isAsteroidsMultiplayerProjectionEnabled,
+    project: projectAsteroidsMultiplayerSnapshot,
+    seq: projectionSnapshot.game.seq,
+    serverTimeMs: projectionSnapshot.game.serverTimeMs,
+    snapshot: projectionSnapshot,
+    status: getAsteroidsMultiplayerProjectionStatusKey(
+      projectionSnapshot.game,
+      projectionSnapshot.activeShipSeat,
+    ),
+  });
+}
+
+export function getAsteroidsMultiplayerProjectionHeldInputs(
+  heldInputs: AsteroidsMultiplayerHeldInputs,
+  activeShipSeat: AsteroidsShipSeat | null,
+  localControls: AsteroidsControlInput,
+): AsteroidsMultiplayerHeldInputs {
+  if (activeShipSeat === null) {
+    return heldInputs;
+  }
+
+  const localHeldInput =
+    getAsteroidsMultiplayerHeldInputForControls(localControls);
+
+  if (
+    areAsteroidsMultiplayerHeldInputsEqual(
+      heldInputs[activeShipSeat],
+      localHeldInput,
+    )
+  ) {
+    return heldInputs;
+  }
+
+  const projectedHeldInputs: Partial<
+    Record<AsteroidsShipSeat, AsteroidsMultiplayerHeldInput>
+  > = { ...heldInputs };
+
+  if (localHeldInput === undefined) {
+    delete projectedHeldInputs[activeShipSeat];
+  } else {
+    projectedHeldInputs[activeShipSeat] = localHeldInput;
+  }
+
+  return projectedHeldInputs;
+}
+
+function getAsteroidsMultiplayerHeldInputForControls(
+  controls: AsteroidsControlInput,
+): AsteroidsMultiplayerHeldInput | undefined {
+  const heldInput = {
+    ...(controls.rotateLeft === true ? { rotateLeft: true } : {}),
+    ...(controls.rotateRight === true ? { rotateRight: true } : {}),
+    ...(controls.thrust === true ? { thrust: true } : {}),
+  } satisfies AsteroidsMultiplayerHeldInput;
+
+  return Object.keys(heldInput).length === 0 ? undefined : heldInput;
+}
+
+function getAsteroidsMultiplayerControlsKey(controls: AsteroidsControlInput) {
+  return [
+    controls.rotateLeft === true ? "L" : "-",
+    controls.rotateRight === true ? "R" : "-",
+    controls.thrust === true ? "T" : "-",
+  ].join("");
+}
+
+function areAsteroidsMultiplayerHeldInputsEqual(
+  left: AsteroidsMultiplayerHeldInput | undefined,
+  right: AsteroidsMultiplayerHeldInput | undefined,
+) {
+  return (
+    left?.fire === right?.fire &&
+    left?.rotateLeft === right?.rotateLeft &&
+    left?.rotateRight === right?.rotateRight &&
+    left?.thrust === right?.thrust
+  );
 }
 
 export function createAsteroidsMultiplayerInputState() {
@@ -282,9 +422,10 @@ export function AsteroidsMultiplayerRoom({
   const canSendGameInput = activeShipSeat !== null && gameState.status === "running";
   const statusLabel = getAsteroidsMultiplayerStatusLabel(gameState.status);
   const boardFrameMaxWidth = getAsteroidsMultiplayerBoardFrameMaxWidth(game);
-  const boardGame = getAsteroidsMultiplayerBoardGame(gameState, primaryBoardSeat);
-  const shipRenderStates =
-    getAsteroidsMultiplayerBoardShipRenderStates(gameState);
+  const getLocalControls = useCallback(
+    () => getAsteroidsControlInput(inputStateRef.current),
+    [],
+  );
   const sidePanels = [
     {
       content: (
@@ -373,9 +514,11 @@ export function AsteroidsMultiplayerRoom({
       activeParticipant={activeParticipant}
       activeSeat={activeRoomSeat}
       board={
-        <AsteroidsBoard
-          game={boardGame}
-          shipRenderStates={shipRenderStates}
+        <AsteroidsMultiplayerProjectedBoard
+          activeShipSeat={activeShipSeat}
+          game={game}
+          getLocalControls={getLocalControls}
+          primaryBoardSeat={primaryBoardSeat}
           statusLabel={statusLabel}
         >
           {gameState.status === "paused" ? (
@@ -400,7 +543,7 @@ export function AsteroidsMultiplayerRoom({
               </p>
             </div>
           ) : null}
-        </AsteroidsBoard>
+        </AsteroidsMultiplayerProjectedBoard>
       }
       boardFrameMaxWidth={boardFrameMaxWidth}
       boardFrameTestId="asteroids-multiplayer-board-frame"
@@ -410,6 +553,48 @@ export function AsteroidsMultiplayerRoom({
       rootTestId="asteroids-multiplayer-room"
       sidePanels={sidePanels}
     />
+  );
+}
+
+function AsteroidsMultiplayerProjectedBoard({
+  activeShipSeat,
+  children,
+  game,
+  getLocalControls,
+  primaryBoardSeat,
+  statusLabel,
+}: {
+  activeShipSeat: AsteroidsShipSeat | null;
+  children?: ReactNode;
+  game: AsteroidsMultiplayerGameSnapshot;
+  getLocalControls: () => AsteroidsControlInput;
+  primaryBoardSeat: AsteroidsShipSeat;
+  statusLabel: string;
+}) {
+  const projectionSnapshot = useMemo(
+    () => ({
+      activeShipSeat,
+      game,
+      getLocalControls,
+    }),
+    [activeShipSeat, game, getLocalControls],
+  );
+  const projectedGame = useProjectedAsteroidsMultiplayerGame(projectionSnapshot);
+  const boardGame = getAsteroidsMultiplayerBoardGame(
+    projectedGame,
+    primaryBoardSeat,
+  );
+  const shipRenderStates =
+    getAsteroidsMultiplayerBoardShipRenderStates(projectedGame);
+
+  return (
+    <AsteroidsBoard
+      game={boardGame}
+      shipRenderStates={shipRenderStates}
+      statusLabel={statusLabel}
+    >
+      {children}
+    </AsteroidsBoard>
   );
 }
 
