@@ -230,6 +230,46 @@ async function expectNoRepeatedRoomGetPolling({
   expect(guestHttpGets.countRoomGets(roomCode)).toBe(guestRoomGetsAfterBootstrap);
 }
 
+test("Multiplayer diagnostics reports sidecar WebSocket ping", async ({
+  baseURL,
+  page,
+}, testInfo) => {
+  const appBaseURL = baseURL ?? "http://127.0.0.1:3110";
+  const roomWebSocketUrl =
+    process.env.NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL ??
+    "ws://127.0.0.1:3111/multiplayer/rooms";
+  const hostName = createPlayerName(
+    "Diag Host",
+    testInfo.workerIndex,
+    testInfo.retry,
+  );
+  const hostWebSockets = trackRoomWebSockets(page, roomWebSocketUrl);
+
+  await openLauncher(page);
+  await signUpFromLauncher(page, hostName);
+
+  await page.getByTestId("private-room-host-pong-button").click();
+  await expect(page.getByTestId("multiplayer-room-lobby")).toBeVisible();
+  await expect(page.getByTestId("multiplayer-room-game")).toHaveText("Pong");
+
+  const roomCode = (await page.getByTestId("multiplayer-room-code").innerText()).trim();
+
+  await expectRoomWebSocketBootstrapped(hostWebSockets, "host");
+
+  await page.goto(
+    new URL(
+      `/?room=${roomCode}&multiplayerDiagnostics=1`,
+      appBaseURL,
+    ).toString(),
+  );
+  await expect(page.getByTestId("multiplayer-room-lobby")).toBeVisible();
+  await expect(page.getByTestId("multiplayer-room-diagnostics")).toBeVisible();
+  await expect(page.getByTestId("multiplayer-room-diagnostics-ping")).toHaveText(
+    /\d+ms/,
+    { timeout: 5_000 },
+  );
+});
+
 test("Pong private room reaches guest over the sidecar WebSocket path", async ({
   baseURL,
   browser,
