@@ -16,6 +16,11 @@ export type ClientProjectionClockOptions<TSnapshot, TValue, TStatus> = {
     elapsedMs: number,
   ) => ClientProjectionFrameKey;
   isProjectionEnabled: (snapshot: TSnapshot) => boolean;
+  isProjectionFrameAdvanced?: (
+    snapshot: TSnapshot,
+    elapsedMs: number,
+    frameKey: ClientProjectionFrameKey,
+  ) => boolean;
   onReconcile?: () => void;
   project: (snapshot: TSnapshot, elapsedMs: number) => TValue;
   seq: number;
@@ -38,6 +43,7 @@ function getClientProjectionNowMs() {
 export function useClientProjectionClock<TSnapshot, TValue, TStatus>({
   baseValue,
   getProjectionFrameKey,
+  isProjectionFrameAdvanced = defaultIsProjectionFrameAdvanced,
   isProjectionEnabled,
   onReconcile,
   project,
@@ -100,6 +106,11 @@ export function useClientProjectionClock<TSnapshot, TValue, TStatus>({
     function updateProjection(nowMs: number) {
       const elapsedMs = nowMs - receivedAtMs;
       const projectionFrameKey = getProjectionFrameKey(baseSnapshot, elapsedMs);
+      const projectionFrameAdvanced = isProjectionFrameAdvanced(
+        baseSnapshot,
+        elapsedMs,
+        projectionFrameKey,
+      );
 
       if (
         !hasProjectedFrame ||
@@ -111,7 +122,9 @@ export function useClientProjectionClock<TSnapshot, TValue, TStatus>({
           status,
           value: project(baseSnapshot, elapsedMs),
         });
-        projectedSinceAuthoritativeSnapshotRef.current = true;
+        if (projectionFrameAdvanced) {
+          projectedSinceAuthoritativeSnapshotRef.current = true;
+        }
         hasProjectedFrame = true;
         lastProjectionFrameKey = projectionFrameKey;
       }
@@ -128,6 +141,7 @@ export function useClientProjectionClock<TSnapshot, TValue, TStatus>({
     };
   }, [
     getProjectionFrameKey,
+    isProjectionFrameAdvanced,
     isProjectionEnabled,
     project,
     seq,
@@ -145,4 +159,8 @@ export function useClientProjectionClock<TSnapshot, TValue, TStatus>({
   }
 
   return baseValue;
+}
+
+function defaultIsProjectionFrameAdvanced() {
+  return true;
 }

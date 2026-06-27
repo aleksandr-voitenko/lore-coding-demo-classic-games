@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { PrivateRoom } from "@/lib/multiplayer/room";
 import {
   createInitialPongGame,
+  getPongTickDelay,
   pausePongGame,
   startPongGame,
 } from "@/lib/pong-game-engine";
@@ -14,6 +15,7 @@ import {
   PongMultiplayerRoom,
   createPongMultiplayerInputState,
   getPongMultiplayerBoardFrameMaxWidth,
+  isPongMultiplayerProjectionFrameAdvanced,
   pressPongMultiplayerInputKey,
   releasePongMultiplayerInputKey,
   resetPongMultiplayerInputState,
@@ -132,6 +134,18 @@ describe("PongMultiplayerRoom", () => {
     );
 
     expect(markup).toContain('data-testid="multiplayer-room-host-controls"');
+  });
+
+  it("treats only advanced projection ticks as reconciliation-worthy", () => {
+    expect(isPongMultiplayerProjectionFrameAdvanced(RUNNING_PONG_GAME, 0)).toBe(
+      false,
+    );
+    expect(
+      isPongMultiplayerProjectionFrameAdvanced(
+        RUNNING_PONG_GAME,
+        getPongTickDelay(),
+      ),
+    ).toBe(true);
   });
 
   it("renders ready, paused, and terminal state copy", () => {

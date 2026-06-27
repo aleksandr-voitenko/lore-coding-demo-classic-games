@@ -21,6 +21,7 @@ import {
   getAsteroidsMultiplayerProjectionHeldInputs,
   handleAsteroidsMultiplayerKeyDown,
   handleAsteroidsMultiplayerKeyUp,
+  isAsteroidsMultiplayerProjectionFrameAdvanced,
   pressAsteroidsMultiplayerInputKey,
   projectAsteroidsMultiplayerSnapshot,
   releaseAsteroidsMultiplayerInputKey,
@@ -201,6 +202,24 @@ describe("AsteroidsMultiplayerRoom", () => {
     );
 
     expect(markup).toContain('data-testid="multiplayer-room-host-controls"');
+  });
+
+  it("treats only advanced projection ticks as reconciliation-worthy", () => {
+    const projectionSnapshot = {
+      activeShipSeat: "ship-a",
+      game: RUNNING_ASTEROIDS_GAME,
+      getLocalControls: () => RELEASED_ASTEROIDS_CONTROLS,
+    } as const;
+
+    expect(
+      isAsteroidsMultiplayerProjectionFrameAdvanced(projectionSnapshot, 0),
+    ).toBe(false);
+    expect(
+      isAsteroidsMultiplayerProjectionFrameAdvanced(
+        projectionSnapshot,
+        getAsteroidsTickDelay(),
+      ),
+    ).toBe(true);
   });
 
   it("renders authoritative terminal summary details", () => {

@@ -126,6 +126,13 @@ function getSpaceInvadersMultiplayerProjectionFrameKey(
   return getSpaceInvadersMultiplayerProjectionTicks(elapsedMs);
 }
 
+export function isSpaceInvadersMultiplayerProjectionFrameAdvanced(
+  _snapshot: SpaceInvadersMultiplayerProjectionSnapshot,
+  elapsedMs: number,
+) {
+  return getSpaceInvadersMultiplayerProjectionTicks(elapsedMs) > 0;
+}
+
 function getSpaceInvadersMultiplayerSnapshotHeldInputs(
   game: SpaceInvadersMultiplayerGameSnapshot,
 ): SpaceInvadersMultiplayerHeldInputs {
@@ -226,6 +233,7 @@ function useProjectedSpaceInvadersMultiplayerGame(
   return useClientProjectionClock({
     baseValue: game.snapshot,
     getProjectionFrameKey: getSpaceInvadersMultiplayerProjectionFrameKey,
+    isProjectionFrameAdvanced: isSpaceInvadersMultiplayerProjectionFrameAdvanced,
     isProjectionEnabled: isSpaceInvadersMultiplayerProjectionEnabled,
     onReconcile: onProjectionReconcile,
     project: projectSpaceInvadersMultiplayerProjectionSnapshot,

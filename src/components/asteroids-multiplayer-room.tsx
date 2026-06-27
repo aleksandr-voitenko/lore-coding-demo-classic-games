@@ -133,6 +133,13 @@ export function getAsteroidsMultiplayerProjectionFrameKey(
   ].join(":");
 }
 
+export function isAsteroidsMultiplayerProjectionFrameAdvanced(
+  _snapshot: AsteroidsMultiplayerProjectionSnapshot,
+  elapsedMs: number,
+) {
+  return getAsteroidsMultiplayerProjectionTicks(elapsedMs) > 0;
+}
+
 function getAsteroidsMultiplayerProjectionStatusKey(
   game: AsteroidsMultiplayerGameSnapshot,
   activeShipSeat: AsteroidsShipSeat | null,
@@ -162,6 +169,7 @@ function useProjectedAsteroidsMultiplayerGame(
   return useClientProjectionClock({
     baseValue: projectionSnapshot.game.snapshot,
     getProjectionFrameKey: getAsteroidsMultiplayerProjectionFrameKey,
+    isProjectionFrameAdvanced: isAsteroidsMultiplayerProjectionFrameAdvanced,
     isProjectionEnabled: isAsteroidsMultiplayerProjectionEnabled,
     onReconcile: onProjectionReconcile,
     project: projectAsteroidsMultiplayerSnapshot,

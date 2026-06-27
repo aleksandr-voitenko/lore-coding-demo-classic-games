@@ -82,6 +82,13 @@ function getPongMultiplayerProjectionFrameKey(
   return getPongMultiplayerProjectionTicks(elapsedMs);
 }
 
+export function isPongMultiplayerProjectionFrameAdvanced(
+  _game: PongMultiplayerGameSnapshot,
+  elapsedMs: number,
+) {
+  return getPongMultiplayerProjectionTicks(elapsedMs) > 0;
+}
+
 function projectPongMultiplayerSnapshot(
   game: PongMultiplayerGameSnapshot,
   elapsedMs: number,
@@ -96,6 +103,7 @@ function useProjectedPongMultiplayerGame(
   return useClientProjectionClock({
     baseValue: game.snapshot,
     getProjectionFrameKey: getPongMultiplayerProjectionFrameKey,
+    isProjectionFrameAdvanced: isPongMultiplayerProjectionFrameAdvanced,
     isProjectionEnabled: isPongMultiplayerProjectionEnabled,
     onReconcile: onProjectionReconcile,
     project: projectPongMultiplayerSnapshot,

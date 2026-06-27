@@ -20,6 +20,7 @@ import {
   getSpaceInvadersMultiplayerProjectionHeldInputs,
   handleSpaceInvadersMultiplayerKeyDown,
   handleSpaceInvadersMultiplayerKeyUp,
+  isSpaceInvadersMultiplayerProjectionFrameAdvanced,
   projectSpaceInvadersMultiplayerBoardGame,
 } from "./space-invaders-multiplayer-room";
 
@@ -177,6 +178,24 @@ describe("SpaceInvadersMultiplayerRoom", () => {
     );
 
     expect(markup).toContain('data-testid="multiplayer-room-host-controls"');
+  });
+
+  it("treats only advanced projection ticks as reconciliation-worthy", () => {
+    const projectionSnapshot = {
+      activeShipSeat: "ship-a",
+      game: RUNNING_SPACE_INVADERS_GAME,
+      localMovementDirection: null,
+    } as const;
+
+    expect(
+      isSpaceInvadersMultiplayerProjectionFrameAdvanced(projectionSnapshot, 0),
+    ).toBe(false);
+    expect(
+      isSpaceInvadersMultiplayerProjectionFrameAdvanced(
+        projectionSnapshot,
+        getSpaceInvadersTickDelay(),
+      ),
+    ).toBe(true);
   });
 
   it("projects sparse board snapshots with local active-seat movement", () => {
