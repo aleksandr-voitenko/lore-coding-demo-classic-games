@@ -716,11 +716,19 @@ describe("SpaceInvadersBoard", () => {
             playerShots: ship.playerShots,
           };
         })}
+        smoothShipIds={["ship-a"]}
         statusLabel="Running"
       />,
     );
 
     expect(markup.match(/data-testid="space-invaders-player"/g)).toHaveLength(2);
+    expect(markup.match(/data-motion-smoothed="true"/g)).toHaveLength(2);
+    expect(markup).toMatch(
+      /data-motion-smoothed="true"[^>]*data-ship-id="ship-a"/,
+    );
+    expect(markup).not.toMatch(
+      /data-motion-smoothed="true"[^>]*data-ship-id="ship-b"/,
+    );
     expect(markup).toContain('data-ship-id="ship-a"');
     expect(markup).toContain('data-ship-id="ship-b"');
     expect(markup).toContain('data-testid="space-invaders-player-shield"');

@@ -141,6 +141,13 @@ describe("SpaceInvadersMultiplayerRoom", () => {
       "/images/space-invaders/player-b-ship.png?v=sprite-art-v2",
     ]);
     expect(markup.match(/data-testid="space-invaders-player"/g)).toHaveLength(2);
+    expect(markup.match(/data-motion-smoothed="true"/g)).toHaveLength(1);
+    expect(markup).toMatch(
+      /data-motion-smoothed="true"[^>]*data-ship-id="ship-a"/,
+    );
+    expect(markup).not.toMatch(
+      /data-motion-smoothed="true"[^>]*data-ship-id="ship-b"/,
+    );
     expect(markup).not.toContain('data-testid="space-invaders-multiplayer-readonly"');
     expect(markup).toContain("max-width:min(100%, calc((100svh - 8rem) * 0.75))");
     expect(markup).not.toContain("h-svh");
@@ -162,6 +169,7 @@ describe("SpaceInvadersMultiplayerRoom", () => {
     expect(markup).toContain('data-testid="space-invaders-multiplayer-score"');
     expect(markup).toContain('data-testid="space-invaders-multiplayer-active-seat"');
     expect(markup).toContain("Observer");
+    expect(markup).not.toContain('data-motion-smoothed="true"');
   });
 
   it("renders supplied host lifecycle controls", () => {

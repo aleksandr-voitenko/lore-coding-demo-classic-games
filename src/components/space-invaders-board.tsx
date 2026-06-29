@@ -79,6 +79,7 @@ type SpaceInvadersBoardProps = {
   fillViewport?: boolean;
   game: SpaceInvadersBoardGame;
   ships?: readonly SpaceInvadersBoardShip[];
+  smoothShipIds?: readonly string[];
   statusLabel: string;
 };
 
@@ -154,6 +155,7 @@ export function SpaceInvadersBoard({
   fillViewport = true,
   game,
   ships,
+  smoothShipIds = [],
   statusLabel,
 }: SpaceInvadersBoardProps) {
   const activeInvaderCount = game.invaders.filter((invader) => invader.isActive).length;
@@ -163,6 +165,7 @@ export function SpaceInvadersBoard({
       ? "1 power up falling"
       : `${activePowerUpCount} power ups falling`;
   const boardShips = ships ?? getSoloSpaceInvadersBoardShips(game);
+  const smoothShipIdSet = new Set(smoothShipIds);
   const boardPlayerShots = boardShips.flatMap((ship) =>
     ship.playerShots.map((shot) => ({
       ship,
@@ -395,11 +398,17 @@ export function SpaceInvadersBoard({
           const isPlayerShieldFlashing =
             isPlayerShieldVisible &&
             ship.playerShieldTicks <= SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS;
+          const shouldSmoothShipMotion = smoothShipIdSet.has(ship.id);
 
           return isPlayerShieldVisible ? (
             <span
               aria-hidden="true"
-              className="space-invaders-player-shield absolute left-0 top-0 will-change-transform"
+              className={cn(
+                "space-invaders-player-shield absolute left-0 top-0 will-change-transform",
+                shouldSmoothShipMotion &&
+                  "transition-transform duration-75 ease-linear",
+              )}
+              data-motion-smoothed={shouldSmoothShipMotion ? "true" : undefined}
               data-shield-flashing={isPlayerShieldFlashing ? "true" : "false"}
               data-ship-id={ship.id}
               data-testid="space-invaders-player-shield"
@@ -422,10 +431,17 @@ export function SpaceInvadersBoard({
             return null;
           }
 
+          const shouldSmoothShipMotion = smoothShipIdSet.has(ship.id);
+
           return (
             <span
               aria-hidden="true"
-              className="absolute left-0 top-0 bg-contain bg-center bg-no-repeat drop-shadow-[0_0_18px_color-mix(in_oklch,var(--invaders-player)_56%,transparent)] will-change-transform [image-rendering:pixelated]"
+              className={cn(
+                "absolute left-0 top-0 bg-contain bg-center bg-no-repeat drop-shadow-[0_0_18px_color-mix(in_oklch,var(--invaders-player)_56%,transparent)] will-change-transform [image-rendering:pixelated]",
+                shouldSmoothShipMotion &&
+                  "transition-transform duration-75 ease-linear",
+              )}
+              data-motion-smoothed={shouldSmoothShipMotion ? "true" : undefined}
               data-ship-id={ship.id}
               data-testid="space-invaders-player"
               key={ship.id}

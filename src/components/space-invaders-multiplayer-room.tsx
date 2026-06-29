@@ -269,12 +269,17 @@ function SpaceInvadersMultiplayerProjectedBoard({
     localMovementDirection,
     onProjectionReconcile,
   );
+  const smoothShipIds =
+    activeShipSeat === null || projectedGame.status !== "running"
+      ? []
+      : [activeShipSeat];
 
   return (
     <SpaceInvadersBoard
       fillViewport={false}
       game={projectedGame}
       ships={getSpaceInvadersMultiplayerBoardShips(projectedGame)}
+      smoothShipIds={smoothShipIds}
       statusLabel={statusLabel}
     >
       {children}
