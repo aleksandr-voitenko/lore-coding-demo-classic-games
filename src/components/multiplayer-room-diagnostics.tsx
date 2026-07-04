@@ -18,6 +18,7 @@ import type {
 const MULTIPLAYER_DIAGNOSTICS_QUERY_PARAM = "multiplayerDiagnostics";
 const MULTIPLAYER_DIAGNOSTICS_LOG_QUERY_PARAM = "multiplayerDiagnosticsLog";
 const DIAGNOSTICS_SAMPLE_WINDOW_MS = 5_000;
+const DIAGNOSTICS_SAMPLE_WINDOW_SECONDS = DIAGNOSTICS_SAMPLE_WINDOW_MS / 1_000;
 const DIAGNOSTICS_LOG_INTERVAL_MS = 2_000;
 const DIAGNOSTICS_PING_WARNING_MS = 80;
 const DIAGNOSTICS_PING_BAD_MS = 150;
@@ -35,11 +36,15 @@ export type MultiplayerRoomDiagnosticsMode = {
 
 export type MultiplayerRoomDiagnosticsMetrics = {
   gameSeqGaps: number;
+  gameSeqGapRatePerSecond: number;
+  gameSeqGapsInWindow: number;
   lastGameSeq: number | null;
   lastPingMs: number | null;
   lastRoomSeq: number | null;
   pingSamples: number;
   projectedReconciliations: number;
+  projectedReconciliationRatePerSecond: number;
+  projectedReconciliationsInWindow: number;
   roomSeqGaps: number;
   snapshotJitterMs: number;
   snapshotRatePerSecond: number;
@@ -48,7 +53,9 @@ export type MultiplayerRoomDiagnosticsMetrics = {
 };
 
 export type MultiplayerRoomDiagnosticsState = {
+  gameSeqGapEvents: readonly MultiplayerRoomDiagnosticsTimedValue[];
   metrics: MultiplayerRoomDiagnosticsMetrics;
+  projectionReconciliationReceivedAtMs: readonly number[];
   snapshotReceivedAtMs: readonly number[];
 };
 
@@ -69,6 +76,11 @@ type UseMultiplayerRoomDiagnosticsOptions = {
   enabled: boolean;
   log: boolean;
   transportStatus?: MultiplayerRoomTransportStatus;
+};
+
+type MultiplayerRoomDiagnosticsTimedValue = {
+  receivedAtMs: number;
+  value: number;
 };
 
 const DISABLED_DIAGNOSTICS_MODE = {
@@ -149,19 +161,25 @@ export function createInitialMultiplayerRoomDiagnosticsState(
   transportStatus: MultiplayerRoomTransportStatus,
 ): MultiplayerRoomDiagnosticsState {
   return {
+    gameSeqGapEvents: [],
     metrics: {
       gameSeqGaps: 0,
+      gameSeqGapRatePerSecond: 0,
+      gameSeqGapsInWindow: 0,
       lastGameSeq: null,
       lastPingMs: null,
       lastRoomSeq: null,
       pingSamples: 0,
       projectedReconciliations: 0,
+      projectedReconciliationRatePerSecond: 0,
+      projectedReconciliationsInWindow: 0,
       roomSeqGaps: 0,
       snapshotJitterMs: 0,
       snapshotRatePerSecond: 0,
       snapshots: 0,
       transportStatus,
     },
+    projectionReconciliationReceivedAtMs: [],
     snapshotReceivedAtMs: [],
   };
 }
@@ -177,30 +195,60 @@ export function recordMultiplayerRoomDiagnosticsSnapshot(
     ),
     receivedAtMs,
   ];
+  const projectionReconciliationReceivedAtMs = getDiagnosticsWindowSamples(
+    state.projectionReconciliationReceivedAtMs,
+    receivedAtMs,
+  );
   const lastRoomSeq = snapshot.seq;
   const nextGameSeq = snapshot.game?.seq ?? null;
+  const gameSeqGapCount =
+    state.metrics.lastGameSeq === null ||
+    nextGameSeq === null ||
+    nextGameSeq <= state.metrics.lastGameSeq + 1
+      ? 0
+      : nextGameSeq - state.metrics.lastGameSeq - 1;
+  const gameSeqGapEvents = getDiagnosticsWindowTimedValues(
+    gameSeqGapCount === 0
+      ? state.gameSeqGapEvents
+      : [
+          ...state.gameSeqGapEvents,
+          {
+            receivedAtMs,
+            value: gameSeqGapCount,
+          },
+        ],
+    receivedAtMs,
+  );
   const roomSeqGaps =
     state.metrics.lastRoomSeq === null || lastRoomSeq <= state.metrics.lastRoomSeq + 1
       ? state.metrics.roomSeqGaps
       : state.metrics.roomSeqGaps + (lastRoomSeq - state.metrics.lastRoomSeq - 1);
-  const gameSeqGaps =
-    state.metrics.lastGameSeq === null ||
-    nextGameSeq === null ||
-    nextGameSeq <= state.metrics.lastGameSeq + 1
-      ? state.metrics.gameSeqGaps
-      : state.metrics.gameSeqGaps + (nextGameSeq - state.metrics.lastGameSeq - 1);
+  const gameSeqGaps = state.metrics.gameSeqGaps + gameSeqGapCount;
+  const gameSeqGapsInWindow =
+    getDiagnosticsTimedValueTotal(gameSeqGapEvents);
 
   return {
+    gameSeqGapEvents,
     metrics: {
       ...state.metrics,
       gameSeqGaps,
+      gameSeqGapRatePerSecond:
+        getDiagnosticsWindowRatePerSecond(gameSeqGapsInWindow),
+      gameSeqGapsInWindow,
       lastGameSeq: nextGameSeq ?? state.metrics.lastGameSeq,
       lastRoomSeq,
+      projectedReconciliationRatePerSecond:
+        getDiagnosticsWindowRatePerSecond(
+          projectionReconciliationReceivedAtMs.length,
+        ),
+      projectedReconciliationsInWindow:
+        projectionReconciliationReceivedAtMs.length,
       roomSeqGaps,
       snapshotJitterMs: getSnapshotJitterMs(snapshotReceivedAtMs),
       snapshotRatePerSecond: getSnapshotRatePerSecond(snapshotReceivedAtMs),
       snapshots: state.metrics.snapshots + 1,
     },
+    projectionReconciliationReceivedAtMs,
     snapshotReceivedAtMs,
   };
 }
@@ -221,13 +269,39 @@ export function recordMultiplayerRoomDiagnosticsPingSample(
 
 export function recordMultiplayerRoomDiagnosticsProjectionReconciliation(
   state: MultiplayerRoomDiagnosticsState,
+  recordedAtMs = Date.now(),
 ): MultiplayerRoomDiagnosticsState {
+  const projectionReconciliationReceivedAtMs = [
+    ...getDiagnosticsWindowSamples(
+      state.projectionReconciliationReceivedAtMs,
+      recordedAtMs,
+    ),
+    recordedAtMs,
+  ];
+  const gameSeqGapEvents = getDiagnosticsWindowTimedValues(
+    state.gameSeqGapEvents,
+    recordedAtMs,
+  );
+  const gameSeqGapsInWindow =
+    getDiagnosticsTimedValueTotal(gameSeqGapEvents);
+
   return {
     ...state,
+    gameSeqGapEvents,
     metrics: {
       ...state.metrics,
+      gameSeqGapRatePerSecond:
+        getDiagnosticsWindowRatePerSecond(gameSeqGapsInWindow),
+      gameSeqGapsInWindow,
       projectedReconciliations: state.metrics.projectedReconciliations + 1,
+      projectedReconciliationRatePerSecond:
+        getDiagnosticsWindowRatePerSecond(
+          projectionReconciliationReceivedAtMs.length,
+        ),
+      projectedReconciliationsInWindow:
+        projectionReconciliationReceivedAtMs.length,
     },
+    projectionReconciliationReceivedAtMs,
   };
 }
 
@@ -376,10 +450,14 @@ export function MultiplayerRoomDiagnosticsOverlay({
           {metrics.roomSeqGaps}
         </DiagnosticsMetric>
         <DiagnosticsMetric label="Tick catch-up">
-          {metrics.gameSeqGaps}
+          {formatDiagnosticsNumber(metrics.gameSeqGapRatePerSecond, 1)}/s
         </DiagnosticsMetric>
         <DiagnosticsMetric health={health.reconciliation} label="Reconciled">
-          {metrics.projectedReconciliations}
+          {formatDiagnosticsNumber(
+            metrics.projectedReconciliationRatePerSecond,
+            1,
+          )}
+          /s
         </DiagnosticsMetric>
       </dl>
     </aside>
@@ -457,11 +535,16 @@ function getLatencyHealth(
 function getReconciliationHealth(
   metrics: MultiplayerRoomDiagnosticsMetrics,
 ): MultiplayerRoomDiagnosticsHealth {
-  if (metrics.snapshots === 0 || metrics.projectedReconciliations === 0) {
+  if (
+    metrics.snapshotRatePerSecond === 0 ||
+    metrics.projectedReconciliationRatePerSecond === 0
+  ) {
     return "neutral";
   }
 
-  const reconciliationRatio = metrics.projectedReconciliations / metrics.snapshots;
+  const reconciliationRatio =
+    metrics.projectedReconciliationRatePerSecond /
+    metrics.snapshotRatePerSecond;
 
   if (reconciliationRatio >= DIAGNOSTICS_RECONCILIATION_BAD_RATIO) {
     return "bad";
@@ -472,6 +555,34 @@ function getReconciliationHealth(
   }
 
   return "healthy";
+}
+
+function getDiagnosticsWindowSamples(
+  samples: readonly number[],
+  receivedAtMs: number,
+) {
+  return samples.filter(
+    (sampleMs) => receivedAtMs - sampleMs <= DIAGNOSTICS_SAMPLE_WINDOW_MS,
+  );
+}
+
+function getDiagnosticsWindowTimedValues(
+  samples: readonly MultiplayerRoomDiagnosticsTimedValue[],
+  receivedAtMs: number,
+) {
+  return samples.filter(
+    (sample) => receivedAtMs - sample.receivedAtMs <= DIAGNOSTICS_SAMPLE_WINDOW_MS,
+  );
+}
+
+function getDiagnosticsTimedValueTotal(
+  samples: readonly MultiplayerRoomDiagnosticsTimedValue[],
+) {
+  return samples.reduce((total, sample) => total + sample.value, 0);
+}
+
+function getDiagnosticsWindowRatePerSecond(count: number) {
+  return count / DIAGNOSTICS_SAMPLE_WINDOW_SECONDS;
 }
 
 function getDiagnosticsHealthClassName(
@@ -534,11 +645,17 @@ function serializeMultiplayerRoomDiagnosticsMetrics(
   metrics: MultiplayerRoomDiagnosticsMetrics,
 ) {
   return {
-    gameTickCatchUp: metrics.gameSeqGaps,
+    gameTickCatchUpPerSecond: Number(
+      metrics.gameSeqGapRatePerSecond.toFixed(1),
+    ),
+    gameTickCatchUpTotal: metrics.gameSeqGaps,
     jitterMs: Number(metrics.snapshotJitterMs.toFixed(1)),
     pingMs:
       metrics.lastPingMs === null ? null : Number(metrics.lastPingMs.toFixed(1)),
-    reconciledFrames: metrics.projectedReconciliations,
+    reconciledFramesPerSecond: Number(
+      metrics.projectedReconciliationRatePerSecond.toFixed(1),
+    ),
+    reconciledFramesTotal: metrics.projectedReconciliations,
     snapshotRatePerSecond: Number(metrics.snapshotRatePerSecond.toFixed(1)),
     snapshots: metrics.snapshots,
     streamGaps: metrics.roomSeqGaps,

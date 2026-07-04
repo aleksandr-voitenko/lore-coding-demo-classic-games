@@ -95,9 +95,10 @@ process, so players should create a new room after a restart instead of
 expecting replay-log recovery.
 
 Append `multiplayerDiagnostics=1` to a room URL to show a small client-side
-diagnostics overlay with snapshot rate, jitter, ping, sequence gaps, and
-projection reconciliations. Use `multiplayerDiagnostics=log` to also emit the
-same summary to the browser console while testing real network conditions.
+diagnostics overlay with snapshot rate, jitter, ping, stream sequence gaps, and
+recent tick catch-up and projection-reconciliation rates. Use
+`multiplayerDiagnostics=log` to also emit the same summary to the browser
+console while testing real network conditions.
 
 ### Multiplayer latency lab
 
@@ -144,9 +145,10 @@ Healthy manual test signals:
 - `Stream gaps` stays at `0`; any growth means the live room stream is missing
   authoritative room sequence numbers.
 - `Jitter` should stay in the healthy or warning band for playable sessions.
-- `Reconciled` should not produce visible snapping. Asteroids is the most
-  sensitive game because thrust, rotation, saucers, shots, and rocks are all
-  continuous motion.
+- `Tick catch-up` and `Reconciled` are recent per-second rates, not lifetime
+  totals. They can be non-zero in healthy games, but high rates should not
+  produce visible snapping. Asteroids is the most sensitive game because thrust,
+  rotation, saucers, shots, and rocks are all continuous motion.
 
 The sidecar latency smoke can be run through the proxy with:
 

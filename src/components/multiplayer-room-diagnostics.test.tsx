@@ -123,6 +123,8 @@ describe("multiplayer room diagnostics", () => {
 
     expect(third.metrics).toMatchObject({
       gameSeqGaps: 2,
+      gameSeqGapRatePerSecond: 0.4,
+      gameSeqGapsInWindow: 2,
       lastGameSeq: 5,
       lastRoomSeq: 6,
       roomSeqGaps: 3,
@@ -130,6 +132,25 @@ describe("multiplayer room diagnostics", () => {
     });
     expect(third.metrics.snapshotRatePerSecond).toBeCloseTo(0.83, 2);
     expect(third.metrics.snapshotJitterMs).toBeCloseTo(200, 0);
+
+    const aged = recordMultiplayerRoomDiagnosticsSnapshot(
+      third,
+      {
+        game: {
+          gameId: "pong",
+          seq: 6,
+          serverTimeMs: 4_000,
+          snapshot: {},
+        },
+        room: ROOM,
+        seq: 7,
+      },
+      8_000,
+    );
+
+    expect(aged.metrics.gameSeqGaps).toBe(2);
+    expect(aged.metrics.gameSeqGapsInWindow).toBe(0);
+    expect(aged.metrics.gameSeqGapRatePerSecond).toBe(0);
   });
 
   it("tracks ping samples and projection reconciliations", () => {
@@ -140,24 +161,47 @@ describe("multiplayer room diagnostics", () => {
       roundTripMs: 42,
       serverTimeMs: 1_025,
     });
-    const reconciled =
-      recordMultiplayerRoomDiagnosticsProjectionReconciliation(pinged);
+    const firstReconciled =
+      recordMultiplayerRoomDiagnosticsProjectionReconciliation(pinged, 1_000);
+    const secondReconciled =
+      recordMultiplayerRoomDiagnosticsProjectionReconciliation(
+        firstReconciled,
+        2_000,
+      );
+    const agedReconciled =
+      recordMultiplayerRoomDiagnosticsProjectionReconciliation(
+        secondReconciled,
+        7_100,
+      );
 
-    expect(reconciled.metrics).toMatchObject({
+    expect(secondReconciled.metrics).toMatchObject({
       lastPingMs: 42,
       pingSamples: 1,
-      projectedReconciliations: 1,
+      projectedReconciliationRatePerSecond: 0.4,
+      projectedReconciliations: 2,
+      projectedReconciliationsInWindow: 2,
+    });
+    expect(agedReconciled.metrics).toMatchObject({
+      lastPingMs: 42,
+      pingSamples: 1,
+      projectedReconciliationRatePerSecond: 0.2,
+      projectedReconciliations: 3,
+      projectedReconciliationsInWindow: 1,
     });
   });
 
   it("classifies diagnostics health bands for live room tuning", () => {
     const healthy = getMultiplayerRoomDiagnosticsHealth({
       gameSeqGaps: 10,
+      gameSeqGapRatePerSecond: 2,
+      gameSeqGapsInWindow: 10,
       lastGameSeq: 10,
       lastPingMs: 42,
       lastRoomSeq: 20,
       pingSamples: 3,
       projectedReconciliations: 10,
+      projectedReconciliationRatePerSecond: 10,
+      projectedReconciliationsInWindow: 50,
       roomSeqGaps: 0,
       snapshotJitterMs: 8,
       snapshotRatePerSecond: 30,
@@ -166,11 +210,15 @@ describe("multiplayer room diagnostics", () => {
     });
     const warning = getMultiplayerRoomDiagnosticsHealth({
       gameSeqGaps: 10,
+      gameSeqGapRatePerSecond: 2,
+      gameSeqGapsInWindow: 10,
       lastGameSeq: 10,
       lastPingMs: 83,
       lastRoomSeq: 20,
       pingSamples: 3,
       projectedReconciliations: 35,
+      projectedReconciliationRatePerSecond: 25,
+      projectedReconciliationsInWindow: 125,
       roomSeqGaps: 1,
       snapshotJitterMs: 22,
       snapshotRatePerSecond: 30,
@@ -179,11 +227,15 @@ describe("multiplayer room diagnostics", () => {
     });
     const bad = getMultiplayerRoomDiagnosticsHealth({
       gameSeqGaps: 10,
+      gameSeqGapRatePerSecond: 2,
+      gameSeqGapsInWindow: 10,
       lastGameSeq: 10,
       lastPingMs: 170,
       lastRoomSeq: 20,
       pingSamples: 3,
       projectedReconciliations: 60,
+      projectedReconciliationRatePerSecond: 40,
+      projectedReconciliationsInWindow: 200,
       roomSeqGaps: 3,
       snapshotJitterMs: 42,
       snapshotRatePerSecond: 30,
@@ -216,11 +268,15 @@ describe("multiplayer room diagnostics", () => {
       <MultiplayerRoomDiagnosticsOverlay
         metrics={{
           gameSeqGaps: 1,
+          gameSeqGapRatePerSecond: 0.2,
+          gameSeqGapsInWindow: 1,
           lastGameSeq: 8,
           lastPingMs: 37,
           lastRoomSeq: 12,
           pingSamples: 3,
           projectedReconciliations: 5,
+          projectedReconciliationRatePerSecond: 1,
+          projectedReconciliationsInWindow: 5,
           roomSeqGaps: 2,
           snapshotJitterMs: 4.2,
           snapshotRatePerSecond: 29.7,
@@ -238,7 +294,7 @@ describe("multiplayer room diagnostics", () => {
     expect(markup).toContain('data-health="warning"');
     expect(markup).toContain(">2</dd>");
     expect(markup).toContain("Tick catch-up");
-    expect(markup).toContain(">1</dd>");
-    expect(markup).toContain(">5</dd>");
+    expect(markup).toContain("0.2/s");
+    expect(markup).toContain("1.0/s");
   });
 });
