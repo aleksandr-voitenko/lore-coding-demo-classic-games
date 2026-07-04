@@ -55,6 +55,26 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000) to choose a game from the
 menu.
 
+For local multiplayer testing on another device in the same network, run both
+the sidecar and Next dev server through the wrapper:
+
+```bash
+npm run dev:multiplayer
+```
+
+The wrapper binds Next and the sidecar to `0.0.0.0`, discovers a private LAN IPv4
+address for browser WebSocket URLs, and prints the shareable app URL. Override
+the detected address when the machine has multiple network interfaces:
+
+```bash
+MULTIPLAYER_DEV_PUBLIC_HOST=10.125.3.39 npm run dev:multiplayer
+```
+
+Optional wrapper overrides include `MULTIPLAYER_DEV_NEXT_PORT`,
+`MULTIPLAYER_DEV_SIDECAR_PORT`, and
+`MULTIPLAYER_DEV_SNAPSHOT_INTERVAL_MS`. Next still talks to the sidecar through
+`127.0.0.1`; only browser-facing URLs use the detected LAN address.
+
 Build and run the experimental multiplayer room sidecar in a separate terminal:
 
 ```bash
