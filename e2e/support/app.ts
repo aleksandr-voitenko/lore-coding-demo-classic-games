@@ -12,6 +12,15 @@ export async function openGame(page: Page, gameId: string) {
   await page.getByTestId(`game-card-${gameId}`).click();
 }
 
+export async function hostMultiplayerRoomFromLauncher(page: Page, gameId: string) {
+  await page.getByTestId("game-library-multiplayer-tab").click();
+  await expect(page.getByTestId("game-library-multiplayer-tab")).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.getByTestId(`game-card-${gameId}`).click();
+}
+
 export async function expectSignedInProfileMenu(page: Page, displayName: string) {
   const profileMenuTrigger = page.getByTestId("profile-menu-trigger");
 

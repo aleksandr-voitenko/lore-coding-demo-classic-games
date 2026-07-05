@@ -106,6 +106,26 @@ describe("game launcher", () => {
     );
   });
 
+  it("splits the launcher into single-player and multiplayer tabs", () => {
+    const markup = renderToStaticMarkup(<GameLauncher />);
+    const singlePlayerTabMarkup = getButtonMarkup(
+      markup,
+      "game-library-single-player-tab",
+    );
+    const multiplayerTabMarkup = getButtonMarkup(markup, "game-library-multiplayer-tab");
+
+    expect(singlePlayerTabMarkup).toContain('aria-selected="true"');
+    expect(singlePlayerTabMarkup).toContain(">Single player<");
+    expect(singlePlayerTabMarkup).toContain(">9<");
+    expect(multiplayerTabMarkup).toContain('aria-selected="false"');
+    expect(multiplayerTabMarkup).toContain(">Multiplayer<");
+    expect(multiplayerTabMarkup).toContain(">3<");
+    expect(markup).toContain('data-testid="game-library-single-player-panel"');
+    expect(markup).not.toContain('data-testid="game-library-multiplayer-panel"');
+    expect(markup).not.toContain("single player games available");
+    expect(markup).not.toContain("multiplayer games available");
+  });
+
   it("renders only configurable card parameters on the launch screen", () => {
     const markup = renderToStaticMarkup(<GameLauncher />);
 
@@ -143,29 +163,18 @@ describe("game launcher", () => {
     expect(getSelectMarkup(markup, "minesweeper-difficulty").match(/<option/g)).toHaveLength(3);
   });
 
-  it("shows signed-out prompts for hostable private-room games", () => {
+  it("keeps private-room host controls out of launcher cards", () => {
     const markup = renderToStaticMarkup(<GameLauncher />);
 
     for (const gameId of PRIVATE_ROOM_HOSTABLE_GAME_IDS) {
-      const hostButtonMarkup = getButtonMarkup(markup, `private-room-host-${gameId}-button`);
-      const statusMarkup = getParagraphMarkup(markup, `private-room-host-${gameId}-status`);
-
-      expect(hostButtonMarkup).toContain('disabled=""');
-      expect(hostButtonMarkup).toContain("Sign in to host");
-      expect(statusMarkup).toContain("Account required");
+      expect(markup).not.toContain(`data-testid="private-room-host-${gameId}-button"`);
+      expect(markup).not.toContain(`data-testid="private-room-host-${gameId}-status"`);
     }
 
-    for (const game of GAME_CARDS) {
-      if (PRIVATE_ROOM_HOSTABLE_GAME_IDS.some((gameId) => gameId === game.id)) {
-        continue;
-      }
-
-      expect(markup).not.toContain(`data-testid="private-room-host-${game.id}-button"`);
-      expect(markup).not.toContain(`data-testid="private-room-host-${game.id}-status"`);
-    }
+    expect(markup).not.toContain("Host room");
   });
 
-  it("enables hostable private-room games for signed-in users", () => {
+  it("does not reintroduce host controls for signed-in users", () => {
     const markup = renderToStaticMarkup(
       <CurrentUserProvider initialUser={{ displayName: "Ada", id: "user-1" }}>
         <GameLauncher />
@@ -173,12 +182,8 @@ describe("game launcher", () => {
     );
 
     for (const gameId of PRIVATE_ROOM_HOSTABLE_GAME_IDS) {
-      const hostButtonMarkup = getButtonMarkup(markup, `private-room-host-${gameId}-button`);
-      const statusMarkup = getParagraphMarkup(markup, `private-room-host-${gameId}-status`);
-
-      expect(hostButtonMarkup).not.toContain('disabled=""');
-      expect(hostButtonMarkup).toContain("Host room");
-      expect(statusMarkup).toContain("Private room");
+      expect(markup).not.toContain(`data-testid="private-room-host-${gameId}-button"`);
+      expect(markup).not.toContain(`data-testid="private-room-host-${gameId}-status"`);
     }
   });
 
@@ -256,16 +261,6 @@ function getSelectMarkup(markup: string, testId: string) {
 function getButtonMarkup(markup: string, testId: string) {
   const elementMatch = markup.match(
     new RegExp('<button(?=[^>]*data-testid="' + testId + '")[\\s\\S]*?</button>'),
-  );
-
-  expect(elementMatch).not.toBeNull();
-
-  return elementMatch?.[0] ?? "";
-}
-
-function getParagraphMarkup(markup: string, testId: string) {
-  const elementMatch = markup.match(
-    new RegExp('<p(?=[^>]*data-testid="' + testId + '")[\\s\\S]*?</p>'),
   );
 
   expect(elementMatch).not.toBeNull();

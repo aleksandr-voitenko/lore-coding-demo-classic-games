@@ -2,13 +2,13 @@
 
 import { Gamepad2Icon, PlayIcon, TrophyIcon, UsersIcon } from "lucide-react";
 import {
+  type KeyboardEvent,
   type ReactNode,
   useCallback,
   useRef,
   useState,
 } from "react";
 
-import { Button } from "@/components/ui/button";
 import {
   GAME_CARDS,
   GAME_PARAMETER_CONFIG,
@@ -36,6 +36,7 @@ import {
   type PrivateRoomSettings,
 } from "@/lib/multiplayer/room";
 import type { UserAuthMode } from "@/lib/user-profile";
+import { cn } from "@/lib/utils";
 
 type MenuViewport = {
   scrollX: number;
@@ -54,19 +55,40 @@ type ActiveRoomSession = {
   roomCode: string;
 };
 
-type PrivateRoomHostActionProps = {
-  error: string | null;
-  gameId: GameId;
-  isCreating: boolean;
-  isSignedIn: boolean;
-  onCreatePrivateRoom: () => void;
-};
+type GameCardAction = "host-room" | "play";
+
+type GameLibraryTab = "single-player" | "multiplayer";
 
 const PRIVATE_ROOM_HOSTABLE_GAME_IDS = new Set<GameId>([
   "asteroids",
   "pong",
   "space-invaders",
 ]);
+
+const GAME_LIBRARY_TAB_CONFIGS = [
+  {
+    count: GAME_CARDS.length,
+    id: "single-player",
+    label: "Single player",
+  },
+  {
+    count: PRIVATE_ROOM_HOSTABLE_GAME_IDS.size,
+    id: "multiplayer",
+    label: "Multiplayer",
+  },
+] as const satisfies readonly {
+  count: number;
+  id: GameLibraryTab;
+  label: string;
+}[];
+
+const MULTIPLAYER_GAME_CARDS = GAME_CARDS.filter((game) =>
+  isPrivateRoomHostableGame(game.id),
+);
+
+const MULTIPLAYER_STATUS_ID = "multiplayer-room-host-status";
+const MULTIPLAYER_SIGN_IN_REQUIRED_MESSAGE =
+  "Sign in before creating multiplayer rooms.";
 
 export function GameLauncher({
   initialAuthMode = null,
@@ -87,6 +109,8 @@ export function GameLauncher({
   const [selectedReplayMode, setSelectedReplayMode] = useState<"latest" | null>(
     initialReplayGameId === null ? null : "latest",
   );
+  const [activeGameLibraryTab, setActiveGameLibraryTab] =
+    useState<GameLibraryTab>("single-player");
   const [isGlobalLeaderboardVisible, setIsGlobalLeaderboardVisible] = useState(false);
   const [parameterValues, setParameterValues] = useState<GameParameterValues>(() =>
     createDefaultParameterValues(),
@@ -98,6 +122,25 @@ export function GameLauncher({
   const shouldRestoreMenuViewportRef = useRef(false);
 
   const selectedGame = GAME_CARDS.find((game) => game.id === selectedGameId) ?? null;
+  const activeGameCards =
+    activeGameLibraryTab === "multiplayer" ? MULTIPLAYER_GAME_CARDS : GAME_CARDS;
+  const privateRoomCreatingGame =
+    privateRoomCreatingGameId === null
+      ? null
+      : GAME_CARDS.find((game) => game.id === privateRoomCreatingGameId) ?? null;
+  const displayedPrivateRoomCreateError =
+    user !== null && privateRoomCreateError === MULTIPLAYER_SIGN_IN_REQUIRED_MESSAGE
+      ? null
+      : privateRoomCreateError;
+  const multiplayerStatusMessage =
+    activeGameLibraryTab !== "multiplayer"
+      ? null
+      : displayedPrivateRoomCreateError ??
+        (privateRoomCreatingGame === null
+          ? user === null
+            ? MULTIPLAYER_SIGN_IN_REQUIRED_MESSAGE
+            : null
+          : `Creating ${privateRoomCreatingGame.label} room`);
 
   const selectGame = useCallback((gameId: GameId) => {
     menuViewportRef.current = {
@@ -109,6 +152,42 @@ export function GameLauncher({
     setSelectedGameId(gameId);
     setSelectedReplayMode(null);
   }, []);
+
+  const switchGameLibraryTab = useCallback((tab: GameLibraryTab) => {
+    setActiveGameLibraryTab(tab);
+    setPrivateRoomCreateError(null);
+  }, []);
+
+  const handleGameLibraryTabKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>) => {
+      const currentIndex = GAME_LIBRARY_TAB_CONFIGS.findIndex(
+        (tab) => tab.id === activeGameLibraryTab,
+      );
+      const lastIndex = GAME_LIBRARY_TAB_CONFIGS.length - 1;
+      let nextIndex: number | null = null;
+
+      if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+        nextIndex = currentIndex <= 0 ? lastIndex : currentIndex - 1;
+      } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+        nextIndex = currentIndex >= lastIndex ? 0 : currentIndex + 1;
+      } else if (event.key === "Home") {
+        nextIndex = 0;
+      } else if (event.key === "End") {
+        nextIndex = lastIndex;
+      }
+
+      if (nextIndex === null) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const nextTab = GAME_LIBRARY_TAB_CONFIGS[nextIndex];
+      switchGameLibraryTab(nextTab.id);
+      document.getElementById(getGameLibraryTabId(nextTab.id))?.focus();
+    },
+    [activeGameLibraryTab, switchGameLibraryTab],
+  );
 
   const returnToMenu = useCallback(() => {
     shouldRestoreMenuViewportRef.current = true;
@@ -160,7 +239,12 @@ export function GameLauncher({
 
   const createPrivateRoomForGame = useCallback(
     async (game: GameCard) => {
-      if (user === null || privateRoomCreatingGameId !== null) {
+      if (user === null) {
+        setPrivateRoomCreateError(MULTIPLAYER_SIGN_IN_REQUIRED_MESSAGE);
+        return;
+      }
+
+      if (privateRoomCreatingGameId !== null) {
         return;
       }
 
@@ -249,7 +333,7 @@ export function GameLauncher({
       data-testid="game-menu"
       ref={restoreMenuViewport}
     >
-      <section className="mx-auto flex min-h-[calc(100svh-3rem)] w-full max-w-6xl flex-col justify-center gap-6">
+      <section className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <header className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center lg:grid-cols-[repeat(3,minmax(0,1fr))]">
           <div className="flex max-w-2xl items-center gap-4 lg:col-start-1">
             <div
@@ -279,38 +363,89 @@ export function GameLauncher({
           </div>
         </header>
 
-        <div className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))]">
-          {GAME_CARDS.map((game) => (
-            <GameCardArticle
-              game={game}
-              key={game.id}
-              onSelectGame={() => selectGame(game.id)}
-              privateRoomHostAction={
-                isPrivateRoomHostableGame(game.id) ? (
-                  <PrivateRoomHostAction
-                    error={privateRoomCreateError}
-                    gameId={game.id}
-                    isCreating={privateRoomCreatingGameId === game.id}
-                    isSignedIn={user !== null}
-                    onCreatePrivateRoom={() => {
-                      void createPrivateRoomForGame(game);
-                    }}
-                  />
-                ) : null
+        <div className="flex flex-col gap-3">
+          <div
+            aria-label="Game library mode"
+            className="grid w-full grid-cols-2 gap-1 rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] p-1 shadow-sm sm:inline-grid sm:w-auto"
+            data-testid="game-library-tabs"
+            role="tablist"
+          >
+            {GAME_LIBRARY_TAB_CONFIGS.map((tab) => {
+              const isSelected = tab.id === activeGameLibraryTab;
+              const TabIcon = tab.id === "multiplayer" ? UsersIcon : Gamepad2Icon;
+
+              return (
+                <button
+                  aria-controls={getGameLibraryTabPanelId(tab.id)}
+                  aria-selected={isSelected}
+                  className={getGameLibraryTabButtonClassName(isSelected)}
+                  data-testid={`game-library-${tab.id}-tab`}
+                  id={getGameLibraryTabId(tab.id)}
+                  key={tab.id}
+                  onClick={() => switchGameLibraryTab(tab.id)}
+                  onKeyDown={handleGameLibraryTabKeyDown}
+                  role="tab"
+                  type="button"
+                >
+                  <TabIcon className="size-4" aria-hidden="true" />
+                  <span>{tab.label}</span>
+                  <span
+                    className={getGameLibraryTabCountClassName(isSelected)}
+                    data-testid={`game-library-${tab.id}-count`}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {multiplayerStatusMessage !== null && (
+            <p
+              className={
+                displayedPrivateRoomCreateError === null
+                  ? "text-sm font-semibold text-[var(--chrome-muted)]"
+                  : "text-sm font-semibold text-destructive"
               }
+              data-testid={MULTIPLAYER_STATUS_ID}
+              id={MULTIPLAYER_STATUS_ID}
+              role={displayedPrivateRoomCreateError === null ? "status" : "alert"}
+            >
+              {multiplayerStatusMessage}
+            </p>
+          )}
+        </div>
+
+        <div
+          aria-labelledby={getGameLibraryTabId(activeGameLibraryTab)}
+          className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))]"
+          data-testid={`game-library-${activeGameLibraryTab}-panel`}
+          id={getGameLibraryTabPanelId(activeGameLibraryTab)}
+          role="tabpanel"
+        >
+          {activeGameCards.map((game) => (
+            <GameCardArticle
+              action={activeGameLibraryTab === "multiplayer" ? "host-room" : "play"}
+              descriptionId={
+                activeGameLibraryTab === "multiplayer" && multiplayerStatusMessage !== null
+                  ? MULTIPLAYER_STATUS_ID
+                  : undefined
+              }
+              game={game}
+              isPending={privateRoomCreatingGameId === game.id}
+              key={game.id}
+              onSelectGame={() => {
+                if (activeGameLibraryTab === "multiplayer") {
+                  void createPrivateRoomForGame(game);
+                  return;
+                }
+
+                selectGame(game.id);
+              }}
               renderGameParameter={renderGameParameter}
               versionedArtworkSrc={getVersionedGameArtworkSrc(game)}
             />
           ))}
-        </div>
-
-        <div className="flex items-center gap-2 text-sm font-medium text-[var(--chrome-muted)]">
-          <TrophyIcon className="size-4" aria-hidden="true" />
-          <span>
-            {GAME_CARDS.length === 1
-              ? "1 game available"
-              : `${GAME_CARDS.length} games available`}
-          </span>
         </div>
       </section>
     </main>
@@ -322,26 +457,41 @@ function isPrivateRoomHostableGame(gameId: GameId) {
 }
 
 type GameCardArticleProps = {
+  action: GameCardAction;
+  descriptionId?: string;
   game: GameCard;
+  isPending?: boolean;
   onSelectGame: () => void;
-  privateRoomHostAction?: ReactNode;
   renderGameParameter: (game: GameCard, parameterKind: GameParameterKind) => ReactNode;
   versionedArtworkSrc: string;
 };
 
 function GameCardArticle({
+  action,
+  descriptionId,
   game,
+  isPending = false,
   onSelectGame,
-  privateRoomHostAction = null,
   renderGameParameter,
   versionedArtworkSrc,
 }: GameCardArticleProps) {
+  const ActionIcon = action === "host-room" ? UsersIcon : PlayIcon;
+  const actionLabel =
+    action === "host-room"
+      ? isPending
+        ? `Creating ${game.label} room`
+        : `Host ${game.label} room`
+      : `Play ${game.label}`;
+
   return (
     <article className="group flex min-h-72 w-full flex-col overflow-hidden rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[color-mix(in_oklch,var(--chrome-accent)_45%,var(--chrome-border))] hover:shadow-[0_22px_70px_var(--chrome-shadow-soft)] focus-within:border-[var(--chrome-accent)] focus-within:ring-3 focus-within:ring-[var(--chrome-focus-ring)]">
       <button
-        aria-label={`Play ${game.label}`}
+        aria-busy={isPending}
+        aria-describedby={descriptionId}
+        aria-label={actionLabel}
         className="flex flex-1 flex-col text-left focus-visible:outline-none"
         data-testid={`game-card-${game.id}`}
+        disabled={isPending}
         onClick={onSelectGame}
         type="button"
       >
@@ -366,7 +516,7 @@ function GameCardArticle({
               className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[var(--chrome-accent-soft)] text-[var(--chrome-ink)] transition group-hover:bg-[var(--chrome-accent)] group-hover:text-[var(--chrome-accent-ink)]"
               aria-hidden="true"
             >
-              <PlayIcon className="size-4" />
+              <ActionIcon className={cn("size-4", isPending && "animate-pulse")} />
             </span>
           </span>
         </span>
@@ -374,53 +524,8 @@ function GameCardArticle({
 
       <div className="mt-auto grid grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-2 p-4">
         {game.parameters.map((parameter) => renderGameParameter(game, parameter))}
-        {privateRoomHostAction}
       </div>
     </article>
-  );
-}
-
-function PrivateRoomHostAction({
-  error,
-  gameId,
-  isCreating,
-  isSignedIn,
-  onCreatePrivateRoom,
-}: PrivateRoomHostActionProps) {
-  const statusId = `${gameId}-private-room-host-status`;
-  const buttonLabel = isSignedIn
-    ? isCreating
-      ? "Creating room"
-      : "Host room"
-    : "Sign in to host";
-
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5 rounded-md border border-[var(--chrome-border)] p-2">
-      <Button
-        aria-describedby={statusId}
-        className="w-full"
-        data-testid={`private-room-host-${gameId}-button`}
-        disabled={!isSignedIn || isCreating}
-        onClick={onCreatePrivateRoom}
-        type="button"
-        variant={isSignedIn ? "default" : "outline"}
-      >
-        <UsersIcon data-icon="inline-start" />
-        {buttonLabel}
-      </Button>
-      <p
-        className={
-          error === null
-            ? "text-xs font-semibold text-[var(--chrome-muted)]"
-            : "text-xs font-semibold text-destructive"
-        }
-        data-testid={`private-room-host-${gameId}-status`}
-        id={statusId}
-        role={error === null ? "status" : "alert"}
-      >
-        {error ?? (isSignedIn ? "Private room" : "Account required")}
-      </p>
-    </div>
   );
 }
 
@@ -486,4 +591,30 @@ export function createLauncherPrivateRoomSettings(
         gameId: game.id,
         parameters,
       };
+}
+
+function getGameLibraryTabId(tab: GameLibraryTab) {
+  return `game-library-${tab}-tab`;
+}
+
+function getGameLibraryTabPanelId(tab: GameLibraryTab) {
+  return `game-library-${tab}-panel`;
+}
+
+function getGameLibraryTabButtonClassName(isSelected: boolean) {
+  return cn(
+    "inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--chrome-focus-ring)]",
+    isSelected
+      ? "bg-[oklch(0.84_0.115_132)] text-[var(--chrome-ink)] shadow-sm"
+      : "text-[var(--chrome-muted)] hover:bg-[var(--chrome-accent-faint)] hover:text-[var(--chrome-ink)]",
+  );
+}
+
+function getGameLibraryTabCountClassName(isSelected: boolean) {
+  return cn(
+    "inline-flex min-w-6 items-center justify-center rounded-md px-1.5 py-0.5 text-xs",
+    isSelected
+      ? "bg-[oklch(0.72_0.13_132_/_28%)] text-[var(--chrome-ink)]"
+      : "bg-[var(--chrome-accent-faint)] text-[var(--chrome-muted)]",
+  );
 }

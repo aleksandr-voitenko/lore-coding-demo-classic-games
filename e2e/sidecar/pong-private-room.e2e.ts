@@ -1,7 +1,11 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "../support/fixtures";
-import { openLauncher, signUpFromLauncher } from "../support/app";
+import {
+  hostMultiplayerRoomFromLauncher,
+  openLauncher,
+  signUpFromLauncher,
+} from "../support/app";
 
 type BrowserIssue = {
   source: "console" | "pageerror";
@@ -248,7 +252,7 @@ test("Multiplayer diagnostics reports sidecar WebSocket ping", async ({
   await openLauncher(page);
   await signUpFromLauncher(page, hostName);
 
-  await page.getByTestId("private-room-host-pong-button").click();
+  await hostMultiplayerRoomFromLauncher(page, "pong");
   await expect(page.getByTestId("multiplayer-room-lobby")).toBeVisible();
   await expect(page.getByTestId("multiplayer-room-game")).toHaveText("Pong");
 
@@ -287,7 +291,7 @@ test("Pong private room reaches guest over the sidecar WebSocket path", async ({
   await openLauncher(page);
   await signUpFromLauncher(page, hostName);
 
-  await page.getByTestId("private-room-host-pong-button").click();
+  await hostMultiplayerRoomFromLauncher(page, "pong");
   await expect(page.getByTestId("multiplayer-room-lobby")).toBeVisible();
   await expect(page.getByTestId("multiplayer-room-game")).toHaveText("Pong");
   await expect(page.getByTestId("multiplayer-room-status")).toHaveText("Lobby");
@@ -374,7 +378,7 @@ test("Space Invaders private room reaches guest over the sidecar WebSocket path"
   await openLauncher(page);
   await signUpFromLauncher(page, hostName);
 
-  await page.getByTestId("private-room-host-space-invaders-button").click();
+  await hostMultiplayerRoomFromLauncher(page, "space-invaders");
   await expect(page.getByTestId("multiplayer-room-lobby")).toBeVisible();
   await expect(page.getByTestId("multiplayer-room-game")).toHaveText(
     "Space Invaders",

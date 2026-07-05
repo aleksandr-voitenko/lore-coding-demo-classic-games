@@ -262,13 +262,21 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("launcher renders game cards and configurable parameters", async ({ page }) => {
+  await page.setViewportSize({ width: 1932, height: 1280 });
   await openLauncher(page);
+
+  await expect(page.getByTestId("game-library-single-player-tab")).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByTestId("game-library-single-player-count")).toHaveText("9");
+  await expect(page.getByTestId("game-library-multiplayer-count")).toHaveText("3");
 
   for (const gameId of gameCardIds) {
     await expect(page.getByTestId(`game-card-${gameId}`)).toBeVisible();
   }
 
-  await expect(page.getByText("9 games available")).toBeVisible();
+  await expect(page.getByText("9 single player games available")).toHaveCount(0);
   await expect(page.getByTestId("snake-board-size")).toHaveCount(0);
   await expect(page.getByTestId("tetris-board-size")).toHaveValue("10x20");
   await expect(page.getByTestId("tetris-start-level")).toHaveValue("1");
@@ -280,6 +288,33 @@ test("launcher renders game cards and configurable parameters", async ({ page })
   await expect(page.getByTestId("asteroids-board-size")).toHaveCount(0);
   await expect(page.getByTestId("asteroids-rocks")).toHaveCount(0);
   await expect(page.getByTestId("asteroids-difficulty")).toHaveValue("medium");
+
+  const tabTopBeforeSwitch = await page
+    .getByTestId("game-library-tabs")
+    .evaluate((element) => element.getBoundingClientRect().top);
+
+  await page.getByTestId("game-library-multiplayer-tab").click();
+  await expect(page.getByTestId("game-library-multiplayer-tab")).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  const tabTopAfterSwitch = await page
+    .getByTestId("game-library-tabs")
+    .evaluate((element) => element.getBoundingClientRect().top);
+
+  expect(Math.abs(tabTopAfterSwitch - tabTopBeforeSwitch)).toBeLessThanOrEqual(1);
+  await expect(page.getByTestId("multiplayer-room-host-status")).toHaveText(
+    "Sign in before creating multiplayer rooms.",
+  );
+  await expect(page.getByText("3 multiplayer games available")).toHaveCount(0);
+  await expect(page.getByTestId("game-card-asteroids")).toBeVisible();
+  await expect(page.getByTestId("game-card-pong")).toBeVisible();
+  await expect(page.getByTestId("game-card-space-invaders")).toBeVisible();
+  await expect(page.getByTestId("game-card-snake")).toHaveCount(0);
+  await expect(page.getByTestId("game-card-tetris")).toHaveCount(0);
+  await expect(page.getByTestId("private-room-host-pong-button")).toHaveCount(0);
+  await expect(page.getByTestId("private-room-host-space-invaders-button")).toHaveCount(0);
+  await expect(page.getByTestId("private-room-host-asteroids-button")).toHaveCount(0);
 });
 
 test("cookie notice explains essential storage and stays dismissed", async ({

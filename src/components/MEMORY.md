@@ -17,11 +17,12 @@ This file covers React component ownership and shared game UI conventions under
   and versioned card-art metadata from the server-safe catalog in
   `src/lib/game-catalog.ts` so server routes and pages can share profile-safe
   game metadata without importing playable components.
-- `game-launcher.tsx` owns selected game state, launcher card parameter state,
-  menu rendering, menu viewport preservation, and placement of the shared
-  `UserAccountControls`. Keep browser-only `window` access in this client
-  component; it snapshots `window.scrollX` and `window.scrollY` before opening a
-  game and restores the viewport when returning to the launcher.
+- `game-launcher.tsx` owns selected game state, single-player/multiplayer
+  launcher tab state, launcher card parameter state, menu rendering, menu
+  viewport preservation, and placement of the shared `UserAccountControls`.
+  Keep browser-only `window` access in this client component; it snapshots
+  `window.scrollX` and `window.scrollY` before opening a game and restores the
+  viewport when returning to the launcher.
 - `multiplayer-room-lobby.tsx` owns the generic private-room lobby/shell UI plus
   HTTP helpers for room creation and authenticated host-only commands.
   `multiplayer-room-transport.ts` owns the browser WebSocket room transport,
