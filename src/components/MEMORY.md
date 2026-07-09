@@ -32,9 +32,13 @@ This file covers React component ownership and shared game UI conventions under
   the Next HTTP route until the WebSocket sidecar has an authenticated host
   session model. Live room snapshots, guest-capable room commands, and game input
   require the WebSocket stream; do not reintroduce browser HTTP polling or POST
-  fallback for those paths. Keep both surfaces game-agnostic; actual game play,
-  score submission, replay derivation, and server transport authority belong
-  outside the shell.
+  fallback for those paths. Bootstrap and command-ack deadlines default to five
+  seconds and remain configurable at the transport boundary. Bootstrap timeouts
+  reconnect, while command timeouts reject without automatic retry because the
+  server may have applied a command before its ack was lost and request ids are
+  not idempotency keys. Keep both surfaces game-agnostic; actual game play, score
+  submission, replay derivation, and server transport authority belong outside
+  the shell.
 - Active multiplayer game UI should be selected through a client
   renderer/input registry keyed by `gameId`. A renderer consumes authoritative
   server snapshots/events and emits adapter-owned intents through the generic

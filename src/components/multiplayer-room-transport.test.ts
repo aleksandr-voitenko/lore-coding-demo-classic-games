@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { MultiplayerRealtimeServerMessage } from "@/lib/multiplayer/protocol";
 import type { PrivateRoom } from "@/lib/multiplayer/room";
@@ -410,6 +410,8 @@ describe("multiplayer room WebSocket message shapes", () => {
         seq: 1,
       },
     ]);
+
+    transport.close();
   });
 
   it("preserves unrecoverable bootstrap rejection codes for room-gone UX", () => {
@@ -464,6 +466,174 @@ describe("multiplayer room WebSocket message shapes", () => {
     expect(socket.readyState).toBe(3);
 
     transport.close();
+  });
+
+  describe("timeout recovery", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("closes and requests reconnect when bootstrap is lost on an open socket", () => {
+      const connectionErrors: MultiplayerRoomTransportError[] = [];
+      const onClose = vi.fn();
+      const transport = createMultiplayerRoomWebSocketTransport({
+        bootstrapTimeoutMs: 5_000,
+        onBootstrap: () => {
+          throw new Error("Bootstrap should not succeed.");
+        },
+        onClose,
+        onError: (error) => connectionErrors.push(error),
+        onSnapshot: () => {},
+        roomCode: "ROOM1",
+        url: "ws://127.0.0.1:3001/multiplayer/rooms",
+        webSocketConstructor: FakeWebSocket,
+      });
+      const socket = FakeWebSocket.instances[0]!;
+
+      socket.emitOpen();
+      vi.advanceTimersByTime(4_999);
+
+      expect(socket.readyState).toBe(1);
+      expect(connectionErrors).toEqual([]);
+      expect(onClose).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(1);
+
+      expect(connectionErrors).toEqual([
+        expect.objectContaining({
+          message: "Room stream connection timed out.",
+        }),
+      ]);
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(socket.readyState).toBe(3);
+      expect(vi.getTimerCount()).toBe(0);
+
+      transport.close();
+    });
+
+    it("rejects an unacknowledged command without retrying or closing the socket", async () => {
+      const transport = createMultiplayerRoomWebSocketTransport({
+        commandAckTimeoutMs: 5_000,
+        onBootstrap: () => {},
+        onSnapshot: () => {},
+        roomCode: "ROOM1",
+        url: "ws://127.0.0.1:3001/multiplayer/rooms",
+        webSocketConstructor: FakeWebSocket,
+      });
+      const socket = FakeWebSocket.instances[0]!;
+
+      socket.emitOpen();
+      socket.emitMessage({
+        requestId: JSON.parse(socket.sentMessages[0]!).requestId,
+        roomCode: "ROOM1",
+        snapshot: {
+          room: ROOM,
+          seq: 1,
+        },
+        type: "connection.bootstrap",
+      });
+
+      const commandAck = transport.sendRoomCommand({
+        participantId: "guest-1",
+        seatId: "right",
+        type: "room.claimSeat",
+      });
+
+      expect(socket.sentMessages).toHaveLength(2);
+
+      vi.advanceTimersByTime(5_000);
+
+      await expect(commandAck).rejects.toMatchObject({
+        message: "Room command response timed out.",
+      });
+      expect(socket.sentMessages).toHaveLength(2);
+      expect(socket.readyState).toBe(1);
+      expect(vi.getTimerCount()).toBe(0);
+
+      const nextCommandAck = transport.sendRoomCommand({
+        participantId: "guest-1",
+        seatId: "right",
+        type: "room.releaseSeat",
+      });
+      const nextCommandMessage = JSON.parse(socket.sentMessages[2]!);
+
+      socket.emitMessage({
+        requestId: nextCommandMessage.requestId,
+        roomCode: "ROOM1",
+        seq: 2,
+        type: "room.commandAck",
+      });
+
+      await expect(nextCommandAck).resolves.toEqual({ seq: 2 });
+      expect(vi.getTimerCount()).toBe(0);
+
+      transport.close();
+    });
+
+    it("clears command deadlines when the server rejects or the transport closes", async () => {
+      const transport = createMultiplayerRoomWebSocketTransport({
+        commandAckTimeoutMs: 5_000,
+        onBootstrap: () => {},
+        onSnapshot: () => {},
+        roomCode: "ROOM1",
+        url: "ws://127.0.0.1:3001/multiplayer/rooms",
+        webSocketConstructor: FakeWebSocket,
+      });
+      const socket = FakeWebSocket.instances[0]!;
+
+      socket.emitOpen();
+      socket.emitMessage({
+        requestId: JSON.parse(socket.sentMessages[0]!).requestId,
+        roomCode: "ROOM1",
+        snapshot: {
+          room: ROOM,
+          seq: 1,
+        },
+        type: "connection.bootstrap",
+      });
+
+      const rejectedCommand = transport.sendRoomCommand({
+        participantId: "guest-1",
+        seatId: "left",
+        type: "room.claimSeat",
+      });
+      const rejectedCommandMessage = JSON.parse(socket.sentMessages[1]!);
+
+      expect(vi.getTimerCount()).toBe(1);
+
+      socket.emitMessage({
+        code: "seat-occupied",
+        error: "Seat is unavailable.",
+        requestId: rejectedCommandMessage.requestId,
+        roomCode: "ROOM1",
+        type: "room.commandRejected",
+      });
+
+      await expect(rejectedCommand).rejects.toMatchObject({
+        code: "seat-occupied",
+        message: "Seat is unavailable.",
+      });
+      expect(vi.getTimerCount()).toBe(0);
+
+      const interruptedCommand = transport.sendRoomCommand({
+        participantId: "guest-1",
+        seatId: "right",
+        type: "room.claimSeat",
+      });
+
+      expect(vi.getTimerCount()).toBe(1);
+
+      transport.close();
+
+      await expect(interruptedCommand).rejects.toMatchObject({
+        message: "Room stream closed.",
+      });
+      expect(vi.getTimerCount()).toBe(0);
+    });
   });
 
   it("sends diagnostics pings and records echoed pong samples", () => {
