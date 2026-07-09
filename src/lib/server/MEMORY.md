@@ -45,10 +45,13 @@ This file covers Node-only server helpers and storage adapters under
   sidecar or upstream failures back into store-style results for route handlers.
 - `multiplayer-room-runtime.ts` wraps the pure room model with process-local room
   state, deterministic id/code/time factories for tests, snapshot sequence
-  numbers for API routes, and a process-local Pong runtime that exposes optional
-  server-owned game snapshots. Room state is intentionally volatile: the
-  in-process store or sidecar owns server authority while the room exists, and
-  in-progress games may be abandoned if that process restarts.
+  numbers for API routes, and adapter-owned runtimes that expose optional
+  server-owned game snapshots. It retains the current canonical room/game state,
+  not an internal history of accepted inputs or snapshot advances; current
+  WebSocket reconnects recover from a fresh authoritative snapshot. Room state
+  is intentionally volatile: the in-process store or sidecar owns server
+  authority while the room exists, and in-progress games may be abandoned if
+  that process restarts.
 - `multiplayer-room-websocket.ts` owns the reusable Node WebSocket gateway for
   the realtime sidecar. It adapts the generic protocol envelopes to the room
   runtime, accepts an injectable `MultiplayerRoomStore`, rejects public
@@ -100,13 +103,13 @@ This file covers Node-only server helpers and storage adapters under
   pickup. The adapter should project compact terminal summaries with shared
   score, wave, lives, and occupied seats; per-ship contribution stats are out of
   scope for the first Asteroids co-op slice.
-- The server-ordered room event path is the live source of truth only while the
-  room exists. Keep lifecycle, membership, settings versions, accepted gameplay
-  intents, ticks, snapshots, power-up awards, and cursor catch-up windows
-  in-process; do not add SQLite tables or another durable per-event log for that
-  high-frequency traffic. If multiplayer persistence is needed later, persist
-  compact terminal summaries or mode-scoped results derived from server-owned
-  final state.
+- The current authoritative source is the room's canonical state plus room/game
+  sequence counters while the room exists. Do not retain an unbounded internal
+  history of high-frequency inputs, ticks, snapshots, or power-up awards. A
+  bounded reconnect window may be added when its cursor and retention policy are
+  defined; until then reconnect uses a fresh snapshot. If multiplayer
+  persistence is needed later, persist compact terminal summaries or mode-scoped
+  results derived from server-owned final state, not a durable per-event log.
 - Multiplayer results and scores stay mode-scoped, for example private-room
   Pong keys must remain separate from solo Pong keys. Do not write multiplayer
   outcomes through solo replay uploads or unscoped solo leaderboard keys.
