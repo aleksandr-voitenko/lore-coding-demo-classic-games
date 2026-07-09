@@ -38,7 +38,10 @@ This file covers React component ownership and shared game UI conventions under
   server may have applied a command before its ack was lost and request ids are
   not idempotency keys. Keep both surfaces game-agnostic; actual game play, score
   submission, replay derivation, and server transport authority belong outside
-  the shell.
+  the shell. Validate inbound WebSocket and successful room HTTP snapshots with
+  the shared transport-neutral protocol guards before updating React state. The
+  low-level WebSocket transport normalizes its requested room code once before
+  sending messages or scoping inbound validation.
 - Active multiplayer game UI should be selected through a client
   renderer/input registry keyed by `gameId`. A renderer consumes authoritative
   server snapshots/events and emits adapter-owned intents through the generic

@@ -83,6 +83,10 @@ class FakeWebSocket implements MultiplayerRoomWebSocketLike {
   }
 
   emitMessage(message: MultiplayerRealtimeServerMessage) {
+    this.emitRawMessage(message);
+  }
+
+  emitRawMessage(message: unknown) {
     const event = {
       data: JSON.stringify(message),
     } as MessageEvent<unknown>;
@@ -466,6 +470,181 @@ describe("multiplayer room WebSocket message shapes", () => {
     expect(socket.readyState).toBe(3);
 
     transport.close();
+  });
+
+  it("normalizes a lowercase requested room code before bootstrap validation", () => {
+    const onBootstrap = vi.fn();
+    const transport = createMultiplayerRoomWebSocketTransport({
+      onBootstrap,
+      onSnapshot: () => {},
+      roomCode: "room1",
+      url: "ws://127.0.0.1:3001/multiplayer/rooms",
+      webSocketConstructor: FakeWebSocket,
+    });
+    const socket = FakeWebSocket.instances[0]!;
+
+    socket.emitOpen();
+
+    const connectionMessage = JSON.parse(socket.sentMessages[0]!);
+
+    expect(connectionMessage.roomCode).toBe("ROOM1");
+
+    socket.emitMessage({
+      requestId: connectionMessage.requestId,
+      roomCode: "ROOM1",
+      snapshot: {
+        room: ROOM,
+        seq: 1,
+      },
+      type: "connection.bootstrap",
+    });
+
+    expect(onBootstrap).toHaveBeenCalledWith({
+      room: ROOM,
+      seq: 1,
+    });
+
+    transport.close();
+  });
+
+  it.each([
+    {
+      message: {
+        roomCode: "ROOM1",
+        type: "connection.bootstrap",
+      },
+      name: "bootstrap without a snapshot",
+    },
+    {
+      message: {
+        roomCode: "ROOM1",
+        type: "room.snapshot",
+      },
+      name: "room snapshot without a snapshot",
+    },
+    {
+      message: {
+        roomCode: "ROOM1",
+        snapshot: {
+          room: ROOM,
+          seq: -1,
+        },
+        type: "room.snapshot",
+      },
+      name: "negative room sequence",
+    },
+    {
+      message: {
+        roomCode: "ROOM1",
+        snapshot: {
+          room: {
+            ...ROOM,
+            participants: [{ ...ROOM.participants[0], id: 12 }],
+          },
+          seq: 1,
+        },
+        type: "room.snapshot",
+      },
+      name: "malformed participant nesting",
+    },
+    {
+      message: {
+        roomCode: "ROOM1",
+        snapshot: {
+          game: {
+            gameId: "asteroids",
+            seq: 1,
+            serverTimeMs: 1_000,
+            snapshot: {},
+          },
+          room: ROOM,
+          seq: 1,
+        },
+        type: "room.snapshot",
+      },
+      name: "game snapshot that does not match the room game",
+    },
+    {
+      message: {
+        roomCode: "ROOM1",
+        seq: -1,
+        type: "room.commandAck",
+      },
+      name: "acknowledgement with an invalid sequence",
+    },
+    {
+      message: {
+        event: {
+          payload: {},
+          seq: 1,
+        },
+        roomCode: "ROOM1",
+        type: "room.event",
+      },
+      name: "room event without an event type",
+    },
+    {
+      message: {
+        code: "made-up-error",
+        error: "Rejected.",
+        type: "room.commandRejected",
+      },
+      name: "rejection with an unknown code",
+    },
+    {
+      message: {
+        serverTimeMs: "soon",
+        type: "connection.ping",
+      },
+      name: "ping with an invalid timestamp",
+    },
+    {
+      message: {
+        clientTimeMs: 1_000,
+        serverTimeMs: Number.NaN,
+        type: "connection.pong",
+      },
+      name: "pong with an invalid timestamp",
+    },
+    {
+      message: {
+        type: "room.unknown",
+      },
+      name: "unknown top-level message type",
+    },
+  ])("reports a controlled transport error for $name", ({ message }) => {
+    const errors: MultiplayerRoomTransportError[] = [];
+    const onBootstrap = vi.fn();
+    const onSnapshot = vi.fn();
+    const transport = createMultiplayerRoomWebSocketTransport({
+      onBootstrap,
+      onError: (error) => errors.push(error),
+      onSnapshot,
+      roomCode: "ROOM1",
+      url: "ws://127.0.0.1:3001/multiplayer/rooms",
+      webSocketConstructor: FakeWebSocket,
+    });
+    const socket = FakeWebSocket.instances[0]!;
+    let thrownError: unknown;
+
+    socket.emitOpen();
+
+    try {
+      socket.emitRawMessage(message);
+    } catch (error) {
+      thrownError = error;
+    } finally {
+      transport.close();
+    }
+
+    expect(thrownError).toBeUndefined();
+    expect(errors).toEqual([
+      expect.objectContaining({
+        message: "Room stream sent an unsupported message.",
+      }),
+    ]);
+    expect(onBootstrap).not.toHaveBeenCalled();
+    expect(onSnapshot).not.toHaveBeenCalled();
   });
 
   describe("timeout recovery", () => {

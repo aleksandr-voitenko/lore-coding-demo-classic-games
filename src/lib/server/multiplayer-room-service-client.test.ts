@@ -227,4 +227,109 @@ describe("multiplayer room service client", () => {
       success: false,
     });
   });
+
+  it.each([
+    {
+      name: "invalid room sequence",
+      snapshot: {
+        ...ROOM_SNAPSHOT,
+        seq: -1,
+      },
+    },
+    {
+      name: "malformed room participants",
+      snapshot: {
+        ...ROOM_SNAPSHOT,
+        room: {
+          ...ROOM_SNAPSHOT.room,
+          participants: "not-a-participant-list",
+        },
+      },
+    },
+    {
+      name: "game snapshot for a different room game",
+      snapshot: {
+        ...ROOM_SNAPSHOT,
+        game: {
+          gameId: "asteroids",
+          seq: 1,
+          serverTimeMs: 1_000,
+          snapshot: {},
+        },
+      },
+    },
+  ])("maps a successful service response with $name to an invalid response", async ({ snapshot }) => {
+    const client = new MultiplayerRoomServiceClient({
+      baseUrl: "http://service.local/_internal/multiplayer/rooms",
+      fetcher: vi.fn<typeof fetch>(async () =>
+        Response.json({
+          snapshot,
+          success: true,
+        }),
+      ),
+    });
+
+    await expect(client.getRoom("ROOM1")).resolves.toEqual({
+      code: "room-service-invalid-response",
+      error: "Room service returned 200 with an invalid room result.",
+      success: false,
+    });
+  });
+
+  it.each([
+    {
+      name: "a deeply nested invalid setting",
+      value: createDeepSettingValue(undefined, 20_000),
+    },
+    {
+      name: "a cyclic setting",
+      value: createCyclicSettingValue(),
+    },
+  ])("maps a successful service response with $name to an invalid response", async ({ value }) => {
+    const snapshot = {
+      ...ROOM_SNAPSHOT,
+      room: {
+        ...ROOM_SNAPSHOT.room,
+        settings: {
+          gameId: "pong",
+          parameters: {
+            value,
+          },
+        },
+      },
+    };
+    const client = new MultiplayerRoomServiceClient({
+      baseUrl: "http://service.local/_internal/multiplayer/rooms",
+      fetcher: vi.fn<typeof fetch>(async () =>
+        ({
+          json: async () => ({ snapshot, success: true }),
+          status: 200,
+        }) as Response,
+      ),
+    });
+
+    await expect(client.getRoom("ROOM1")).resolves.toEqual({
+      code: "room-service-invalid-response",
+      error: "Room service returned 200 with an invalid room result.",
+      success: false,
+    });
+  });
 });
+
+function createDeepSettingValue(leaf: unknown, depth: number) {
+  let value = leaf;
+
+  for (let index = 0; index < depth; index += 1) {
+    value = { nested: value };
+  }
+
+  return value;
+}
+
+function createCyclicSettingValue() {
+  const value: Record<string, unknown> = {};
+
+  value.self = value;
+
+  return value;
+}

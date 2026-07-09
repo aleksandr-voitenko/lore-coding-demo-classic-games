@@ -15,6 +15,9 @@ folder.
   wrap the private-room command model, game input carries `gameId` plus a nested
   game payload, and server messages carry room snapshots, events, acks,
   rejections, and ping-style timing messages.
+- `protocol-validation.ts` owns dependency-free runtime guards for untrusted
+  server messages and room snapshots shared by browser WebSocket, browser HTTP,
+  and internal room-service HTTP boundaries.
 
 ## Protocol Boundaries
 
@@ -42,5 +45,14 @@ folder.
   create rooms and carry authenticated host-only commands, but new protocol work
   should not depend on polling-only message shapes.
 - Protocol tests should remain deterministic data-shape checks using TypeScript
-  `satisfies` objects and small runtime assertions unless a real parser or
-  validator is added for the protocol boundary.
+  `satisfies` objects and small runtime assertions. Runtime guard tests should
+  cover every known top-level discriminant, malformed nested room state, and
+  forward-compatible extra fields.
+- Runtime validation owns the complete generic room structure and invariants,
+  server envelope fields, room/game sequence and timestamp fields, and the
+  generic game snapshot envelope. Game state remains an opaque object here;
+  game-specific state and snapshot extras belong to the adapter or renderer
+  that understands that game instead of being duplicated in the shared codec.
+  Keep settings traversal iterative so deeply nested JSON remains valid without
+  a recursion limit; reject cyclic/shared-reference graphs, and keep public
+  guards total by returning `false` when reflective access fails.

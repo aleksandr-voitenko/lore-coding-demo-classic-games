@@ -18,7 +18,11 @@ import type {
   MultiplayerRoomGameSnapshot,
   PrivateRoomCommandMessage,
 } from "@/lib/multiplayer/protocol";
-import type { PrivateRoom } from "@/lib/multiplayer/room";
+import { isMultiplayerRealtimeServerMessage } from "@/lib/multiplayer/protocol-validation";
+import {
+  normalizePrivateRoomCode,
+  type PrivateRoom,
+} from "@/lib/multiplayer/room";
 
 const OPEN_WEBSOCKET_READY_STATE = 1;
 const DEFAULT_RECONNECT_DELAY_MS = 500;
@@ -306,7 +310,7 @@ export function createMultiplayerRoomWebSocketTransport({
   onParticipantId,
   onSnapshot,
   participantId,
-  roomCode,
+  roomCode: requestedRoomCode,
   url,
   webSocketConstructor = getBrowserWebSocketConstructor(),
 }: CreateWebSocketTransportOptions) {
@@ -314,6 +318,13 @@ export function createMultiplayerRoomWebSocketTransport({
     throw new MultiplayerRoomTransportError("WebSocket is not available.");
   }
 
+  const normalizedRoomCode = normalizePrivateRoomCode(requestedRoomCode);
+
+  if (normalizedRoomCode === null) {
+    throw new MultiplayerRoomTransportError("Room code is not supported.");
+  }
+
+  const roomCode = normalizedRoomCode;
   const socket = new webSocketConstructor(url);
   const pendingRequests = new Map<string, PendingTransportRequest>();
   const connectionRequestId = createMultiplayerRoomRequestId("connection");
@@ -437,7 +448,7 @@ export function createMultiplayerRoomWebSocketTransport({
   }
 
   function handleMessage(event: MessageEvent<unknown>) {
-    const message = parseServerMessage(event.data);
+    const message = parseServerMessage(event.data, roomCode);
 
     if (message === null) {
       onError?.(
@@ -1066,6 +1077,7 @@ function normalizeConnectionCursor(
 
 function parseServerMessage(
   data: unknown,
+  expectedRoomCode: string,
 ): MultiplayerRealtimeServerMessage<MultiplayerRoomGameSnapshot> | null {
   if (typeof data !== "string") {
     return null;
@@ -1074,16 +1086,15 @@ function parseServerMessage(
   try {
     const parsedMessage = JSON.parse(data) as unknown;
 
-    return isServerMessage(parsedMessage) ? parsedMessage : null;
+    return isMultiplayerRealtimeServerMessage(
+      parsedMessage,
+      expectedRoomCode,
+    )
+      ? parsedMessage
+      : null;
   } catch {
     return null;
   }
-}
-
-function isServerMessage(
-  value: unknown,
-): value is MultiplayerRealtimeServerMessage<MultiplayerRoomGameSnapshot> {
-  return typeof value === "object" && value !== null && "type" in value;
 }
 
 function createTransportSnapshot(

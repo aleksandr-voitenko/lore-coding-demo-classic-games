@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isMultiplayerRoomSnapshot } from "../multiplayer/protocol-validation";
 import { normalizePrivateRoomCode } from "../multiplayer/room";
 
 import type {
@@ -196,7 +197,7 @@ function parseMultiplayerRoomServiceResult(
   }
 
   if (value.success) {
-    if (!isRecord(value.snapshot)) {
+    if (!isMultiplayerRoomSnapshot(value.snapshot)) {
       return null;
     }
 

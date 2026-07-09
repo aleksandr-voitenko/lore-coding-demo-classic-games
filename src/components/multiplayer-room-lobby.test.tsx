@@ -392,6 +392,45 @@ describe("multiplayer room lobby", () => {
     });
   });
 
+  it.each([
+    {
+      name: "malformed participants",
+      room: {
+        ...PONG_ROOM,
+        participants: "not-a-participant-list",
+      },
+    },
+    {
+      name: "a deeply nested invalid setting",
+      room: createRoomWithSettingValue(
+        createDeepSettingValue(undefined, 20_000),
+      ),
+    },
+    {
+      name: "a cyclic setting",
+      room: createRoomWithSettingValue(createCyclicSettingValue()),
+    },
+  ])("rejects a successful room API snapshot with $name", async ({ room }) => {
+    const fetcher = vi.fn<RoomFetch>(async () =>
+      objectResponse({
+        participant: PONG_ROOM.participants[0],
+        room,
+        seq: 1,
+      }),
+    );
+
+    await expect(
+      createMultiplayerRoom({
+        fetcher,
+        gameId: "pong",
+        settings: PONG_ROOM.settings,
+      }),
+    ).rejects.toMatchObject({
+      message: "Create room response included an invalid room snapshot.",
+      status: 200,
+    });
+  });
+
   it("posts host-only lifecycle and settings commands to the room endpoint", async () => {
     const fetcher = vi.fn<RoomFetch>(async () =>
       jsonResponse({ room: PONG_ROOM, seq: 3 }),
@@ -464,4 +503,42 @@ function jsonResponse(payload: unknown, init?: ResponseInit) {
     status: 200,
     ...init,
   });
+}
+
+function objectResponse(payload: unknown) {
+  return {
+    json: async () => payload,
+    ok: true,
+    status: 200,
+  } as Response;
+}
+
+function createRoomWithSettingValue(value: unknown) {
+  return {
+    ...PONG_ROOM,
+    settings: {
+      gameId: "pong",
+      parameters: {
+        value,
+      },
+    },
+  };
+}
+
+function createDeepSettingValue(leaf: unknown, depth: number) {
+  let value = leaf;
+
+  for (let index = 0; index < depth; index += 1) {
+    value = { nested: value };
+  }
+
+  return value;
+}
+
+function createCyclicSettingValue() {
+  const value: Record<string, unknown> = {};
+
+  value.self = value;
+
+  return value;
 }

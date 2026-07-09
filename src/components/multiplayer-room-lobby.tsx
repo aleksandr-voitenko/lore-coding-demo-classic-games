@@ -56,6 +56,7 @@ import type {
   PrivateRoomCommandMessage,
   PrivateRoomLifecycleCommand,
 } from "@/lib/multiplayer/protocol";
+import { isMultiplayerRoomSnapshot } from "@/lib/multiplayer/protocol-validation";
 import {
   MAX_USER_DISPLAY_NAME_LENGTH,
   type UserAuthMode,
@@ -191,24 +192,26 @@ async function readRoomApiPayload(
     );
   }
 
-  const participantId =
-    isRecord(payload.participant) && typeof payload.participant.id === "string"
-      ? payload.participant.id
-      : undefined;
-  const game = isRecord(payload.game)
-    ? (payload.game as MultiplayerRoomGameSnapshot)
-    : undefined;
+  if (!isMultiplayerRoomSnapshot(payload)) {
+    throw new MultiplayerRoomRequestError(
+      `${context} response included an invalid room snapshot.`,
+      response.status,
+    );
+  }
+
+  const participantId = payload.participant?.id;
+  const game = payload.game;
 
   return participantId === undefined
     ? ({
         ...(game === undefined ? {} : { game }),
-        room: payload.room as PrivateRoom,
+        room: payload.room,
         seq: payload.seq,
       } satisfies RoomApiPayload)
     : ({
         ...(game === undefined ? {} : { game }),
         participantId,
-        room: payload.room as PrivateRoom,
+        room: payload.room,
         seq: payload.seq,
       } satisfies RoomApiPayload);
 }
