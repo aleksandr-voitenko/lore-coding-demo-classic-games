@@ -47,8 +47,11 @@ rules live in child memory files for `src/app`, `src/components`, `src/lib`, and
 - Profile stats must be recorded through the shared game-session hook and server
   store. Keep guest play as a no-op for profile stats, and do not trust client
   submissions for user identity; server routes derive the user from the session
-  cookie. Name/password auth still uses normalized display-name keys, so
-  duplicate account checks and profile ownership must remain server-enforced.
+  cookie. A terminal-to-nonterminal transition starts a new hook run; late
+  terminal request settlements from the previous run must not replace the new
+  run's completed session id or submission guard. Name/password auth still uses
+  normalized display-name keys, so duplicate account checks and profile
+  ownership must remain server-enforced.
 - Snake, Tetris, Breakout, Minesweeper, Space Invaders, Pong, Simon, 2048, and
   Asteroids replay saves are profile-scoped. The live game components record
   replay events unconditionally after a server-issued run, but
