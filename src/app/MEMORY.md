@@ -58,9 +58,10 @@ This file covers routes and App Router conventions under `src/app/`.
   cookies, such as `api/auth/session-response.ts` and
   `api/replays/route-handlers.ts`, import `server-only`; route entry files stay
   under App Router's server boundary and compose those guarded helpers.
-- `api/auth/login/route.ts` verifies a display name and password and sets the
-  same session cookie. Invalid credentials return `401` with a generic password
-  field error.
+- `api/auth/login/route-handlers.ts` owns the testable display-name/password
+  login handler, including session-cookie responses and generic invalid-credential
+  errors. `api/auth/login/route.ts` stays a thin App Router entry that exports
+  only Next-supported route configuration and the production `POST` handler.
 - `api/me/route.ts` only returns the current session user on GET and clears the
   current session on DELETE.
 - `api/game-sessions/route.ts` records completed or abandoned signed-in play

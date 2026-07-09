@@ -2,11 +2,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { SqliteUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
 
-import { createLoginRouteHandlers } from "./route";
+import * as loginRoute from "./route";
+import { createLoginRouteHandlers } from "./route-handlers";
 
 describe("login route", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
+  });
+
+  it("exports only the supported Next.js route fields", () => {
+    expect(Object.keys(loginRoute).sort()).toEqual(["POST", "dynamic", "runtime"]);
   });
 
   it("creates a session cookie for valid credentials", async () => {
