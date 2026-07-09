@@ -28,6 +28,7 @@ const HOST_USER = {
 
 const HOST_ONLY_WEBSOCKET_COMMAND_ERROR =
   "Host-only room commands require the authenticated HTTP room route.";
+const EXPECTED_DEFAULT_MAX_PAYLOAD_BYTES = 64 * 1024;
 
 const cleanupCallbacks: Array<() => Promise<void> | void> = [];
 
@@ -234,6 +235,7 @@ function serveStartedPongRoom(store: InProcessMultiplayerRoomStore) {
 async function createGatewayFixture(
   store = createTestRoomStore(),
   gatewayOptions: {
+    maxPayload?: number;
     snapshotIntervalMs?: number;
   } = {},
 ) {
@@ -365,6 +367,31 @@ function waitForServerMessage(
     };
 
     client.on("message", handleMessage);
+    client.once("error", handleError);
+  });
+}
+
+function waitForClientClose(client: WebSocket) {
+  return new Promise<{ code: number; reason: string }>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error("Timed out waiting for the WebSocket client to close."));
+    }, 1_000);
+    const handleClose = (code: number, reason: Buffer) => {
+      cleanup();
+      resolve({ code, reason: reason.toString("utf8") });
+    };
+    const handleError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const cleanup = () => {
+      clearTimeout(timeout);
+      client.off("close", handleClose);
+      client.off("error", handleError);
+    };
+
+    client.once("close", handleClose);
     client.once("error", handleError);
   });
 }
@@ -1221,6 +1248,60 @@ describe("multiplayer room WebSocket gateway", () => {
       error: "Client message must be valid JSON.",
       type: "room.commandRejected",
     });
+  });
+
+  it("closes client messages above the default payload limit", async () => {
+    const { url } = await createGatewayFixture();
+    const client = await connectClient(url);
+    const closePromise = waitForClientClose(client);
+    const oversizedMessage = JSON.stringify({
+      clientTimeMs: 123,
+      padding: "x".repeat(EXPECTED_DEFAULT_MAX_PAYLOAD_BYTES),
+      type: "connection.ping",
+    });
+
+    expect(Buffer.byteLength(oversizedMessage)).toBeGreaterThan(
+      EXPECTED_DEFAULT_MAX_PAYLOAD_BYTES,
+    );
+
+    client.send(oversizedMessage);
+
+    await expect(closePromise).resolves.toEqual({ code: 1009, reason: "" });
+  });
+
+  it.each([
+    {
+      label: "a larger byte limit",
+      maxPayload: EXPECTED_DEFAULT_MAX_PAYLOAD_BYTES + 1024,
+    },
+    { label: "zero to disable the limit", maxPayload: 0 },
+  ])("honors explicit maxPayload overrides: $label", async ({ maxPayload }) => {
+    const { url } = await createGatewayFixture(undefined, { maxPayload });
+    const client = await connectClient(url);
+    const pongPromise = waitForServerMessage(
+      client,
+      (message) => message.type === "connection.pong",
+    );
+    const messageAboveDefault = JSON.stringify({
+      clientTimeMs: 456,
+      padding: "x".repeat(EXPECTED_DEFAULT_MAX_PAYLOAD_BYTES),
+      type: "connection.ping",
+    });
+
+    expect(Buffer.byteLength(messageAboveDefault)).toBeGreaterThan(
+      EXPECTED_DEFAULT_MAX_PAYLOAD_BYTES,
+    );
+    if (maxPayload > 0) {
+      expect(Buffer.byteLength(messageAboveDefault)).toBeLessThan(maxPayload);
+    }
+
+    client.send(messageAboveDefault);
+
+    await expect(pongPromise).resolves.toMatchObject({
+      clientTimeMs: 456,
+      type: "connection.pong",
+    });
+    expect(client.readyState).toBe(WebSocket.OPEN);
   });
 
   it("lets the room store reject registered game ids without adapters", async () => {

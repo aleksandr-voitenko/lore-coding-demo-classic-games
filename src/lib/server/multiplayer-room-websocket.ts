@@ -69,20 +69,26 @@ type GameInputStoreCommand = Extract<
 
 const HOST_ONLY_WEBSOCKET_COMMAND_ERROR =
   "Host-only room commands require the authenticated HTTP room route.";
+const DEFAULT_MULTIPLAYER_ROOM_MAX_PAYLOAD_BYTES = 64 * 1024;
 export const DEFAULT_MULTIPLAYER_ROOM_SNAPSHOT_INTERVAL_MS = 33;
 
 export function createMultiplayerRoomWebSocketGateway({
+  maxPayload = DEFAULT_MULTIPLAYER_ROOM_MAX_PAYLOAD_BYTES,
   snapshotIntervalMs = DEFAULT_MULTIPLAYER_ROOM_SNAPSHOT_INTERVAL_MS,
   store = new InProcessMultiplayerRoomStore(),
   ...webSocketOptions
 }: CreateMultiplayerRoomWebSocketGatewayOptions = {}): MultiplayerRoomWebSocketGateway {
+  const webSocketServerOptions = {
+    ...webSocketOptions,
+    maxPayload,
+  };
   const webSocketServer = new WebSocketServer(
-    needsNoServerDefault(webSocketOptions)
+    needsNoServerDefault(webSocketServerOptions)
       ? {
-          ...webSocketOptions,
+          ...webSocketServerOptions,
           noServer: true,
         }
-      : webSocketOptions,
+      : webSocketServerOptions,
   );
   const roomCodeBySocket = new Map<WebSocket, string>();
   const socketsByRoomCode = new Map<string, Set<WebSocket>>();
@@ -395,6 +401,11 @@ export function createMultiplayerRoomWebSocketGateway({
   }
 
   webSocketServer.on("connection", (socket) => {
+    socket.on("error", () => {
+      // ws reports receiver protocol errors, including oversized payloads,
+      // before it completes the close handshake with the client.
+      removeSocketFromRoom(socket);
+    });
     socket.on("message", (data, isBinary) => {
       void handleClientMessage(socket, data, isBinary).catch((error: unknown) => {
         sendRejection(socket, {

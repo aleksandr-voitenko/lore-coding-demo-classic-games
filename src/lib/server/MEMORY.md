@@ -60,7 +60,9 @@ This file covers Node-only server helpers and storage adapters under
   snapshots after accepted WebSocket commands, runs a subscribed-room snapshot
   pump so server-owned games keep advancing when HTTP polling is disabled,
   exposes a narrow snapshot fanout method for sidecar-owned mutations, and keeps
-  game-specific payloads nested behind `game.input` dispatch.
+  game-specific payloads nested behind `game.input` dispatch. Its public factory
+  defaults inbound client messages to 64 KiB through `ws` `maxPayload` while
+  preserving explicit caller overrides.
 - `multiplayer-room-sidecar.ts` owns the standalone Node HTTP/WebSocket process
   wrapper around the gateway. It parses `MULTIPLAYER_SIDECAR_HOST`,
   `MULTIPLAYER_SIDECAR_PORT`, `MULTIPLAYER_SIDECAR_WEBSOCKET_PATH`,
