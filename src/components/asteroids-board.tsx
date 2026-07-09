@@ -55,6 +55,7 @@ const SHIP_SHIELD_BLINK_BRIGHT_OPACITY = 0.82;
 const asteroidsBoardBackgroundStyle: CSSProperties = {
   background:
     "radial-gradient(circle at 18% 22%, color-mix(in_oklch,var(--asteroids-star)_82%,transparent) 0 1px, transparent 1.5px), radial-gradient(circle at 78% 18%, color-mix(in_oklch,var(--asteroids-star)_68%,transparent) 0 1px, transparent 1.5px), radial-gradient(circle at 64% 72%, color-mix(in_oklch,var(--asteroids-star)_72%,transparent) 0 1px, transparent 1.5px), linear-gradient(180deg, color-mix(in_oklch,var(--asteroids-board)_92%,black), var(--asteroids-board))",
+  backgroundColor: "var(--asteroids-board)",
   backgroundSize: "140px 140px, 190px 190px, 170px 170px, auto",
   containerType: "size",
 };
@@ -83,16 +84,15 @@ export function AsteroidsBoard({
       style={{ aspectRatio: `${game.boardWidth} / ${game.boardHeight}` }}
     >
       <div
-        aria-label={`Asteroids board. Field ${game.boardWidth} by ${game.boardHeight}. Score ${game.score}. Lives ${game.lives}. Wave ${game.wave}. ${game.asteroids.length} asteroids remaining. ${statusLabel}.${getShipStateLabel(game, boardShipRenderStates, hasCustomShipRenderStates)}${getSaucerStateLabel(game)}${getPowerUpStateLabel(game)}`}
         className="relative size-full overflow-hidden rounded-[0.375rem] bg-[var(--asteroids-board)] text-[var(--asteroids-board-text)]"
-        data-testid="asteroids-board"
-        role="img"
         style={asteroidsBoardBackgroundStyle}
       >
         <svg
-          aria-hidden="true"
+          aria-label={`Asteroids board. Field ${game.boardWidth} by ${game.boardHeight}. Score ${game.score}. Lives ${game.lives}. Wave ${game.wave}. ${game.asteroids.length} asteroids remaining. ${statusLabel}.${getShipStateLabel(game, boardShipRenderStates, hasCustomShipRenderStates)}${getSaucerStateLabel(game)}${getPowerUpStateLabel(game)}`}
           className="absolute inset-0 size-full"
+          data-testid="asteroids-board"
           preserveAspectRatio="none"
+          role="img"
           viewBox={`0 0 ${game.boardWidth} ${game.boardHeight}`}
         >
           <defs>

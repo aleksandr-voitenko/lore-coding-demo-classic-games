@@ -27,7 +27,61 @@ function getExpectedAsteroidsPowerUpLabel(kind: AsteroidsPowerUpKind) {
   }
 }
 
+function getRoleImageMarkup(markup: string) {
+  const openingTag = /<([a-z][\w:-]*)\b[^>]*\brole="img"[^>]*>/i.exec(markup);
+
+  if (openingTag === null) {
+    throw new Error("Expected rendered markup to contain an element with role=img.");
+  }
+
+  const tagName = openingTag[1]!;
+  const sameTagPattern = new RegExp(`<\\/?${tagName}\\b[^>]*>`, "gi");
+  let depth = 0;
+
+  sameTagPattern.lastIndex = openingTag.index;
+
+  for (
+    let tag = sameTagPattern.exec(markup);
+    tag !== null;
+    tag = sameTagPattern.exec(markup)
+  ) {
+    if (tag[0].startsWith("</")) {
+      depth -= 1;
+    } else if (!tag[0].endsWith("/>")) {
+      depth += 1;
+    }
+
+    if (depth === 0) {
+      return markup.slice(openingTag.index, sameTagPattern.lastIndex);
+    }
+  }
+
+  throw new Error(`Expected rendered role=img <${tagName}> element to close.`);
+}
+
 describe("AsteroidsBoard", () => {
+  it("keeps overlay actions outside the board image semantics", () => {
+    const game = createInitialAsteroidsGame();
+    const actionLabels = ["Start", "Resume", "New game", "Back"];
+    const markup = renderToStaticMarkup(
+      <AsteroidsBoard game={game} statusLabel="Ready">
+        {actionLabels.map((label) => (
+          <button key={label} type="button">
+            {label}
+          </button>
+        ))}
+      </AsteroidsBoard>,
+    );
+    const boardImageMarkup = getRoleImageMarkup(markup);
+
+    expect(boardImageMarkup).toContain('data-testid="asteroids-board"');
+
+    for (const label of actionLabels) {
+      expect(markup).toContain(`<button type="button">${label}</button>`);
+      expect(boardImageMarkup).not.toContain(`>${label}</button>`);
+    }
+  });
+
   it("renders Asteroids vector entities and score summary", () => {
     const game = createInitialAsteroidsGame();
     const markup = renderToStaticMarkup(
