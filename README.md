@@ -280,8 +280,11 @@ GitHub Actions runs these checks on pushes to `main` and pull requests that
 change code or build-affecting files: `npm ci`, `npm run build`,
 `npm run lint`, `npm run typecheck`, `npm run check:deps`,
 `npm run check:unused`,
-`npm run test:coverage:core`, and `npm run test:e2e`. Documentation-only
-changes such as Markdown, `docs/**`, and `LICENSE` are ignored by CI.
+`npm run test:coverage:core`, `npm run test:e2e`, and
+`npm run test:e2e:sidecar`. The sidecar suite rebuilds and starts the emitted
+multiplayer sidecar before exercising its isolated browser flows.
+Documentation-only changes such as Markdown, `docs/**`, and `LICENSE` are
+ignored by CI.
 
 After those checks pass on a push to `main`, GitHub Actions builds the
 `linux/amd64` and `linux/arm64` Docker images and pushes a multi-platform

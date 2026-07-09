@@ -103,6 +103,9 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   final reporting so global core coverage regressions are caught locally.
 - `npm run test:e2e` runs the focused Chromium Playwright smoke suite. Browser
   flow details live in `e2e/MEMORY.md`.
+- `npm run test:e2e:sidecar` builds the emitted multiplayer sidecar and runs its
+  isolated Chromium acceptance suite with Next wired to the sidecar room
+  service and WebSocket endpoint.
 - `npm run typecheck`, `npm run lint`, `npm run check:deps`,
   `npm run check:unused`, and `npm run build` are the standard TypeScript,
   ESLint, dependency-boundary, unused-code, and Next build checks.
@@ -111,6 +114,6 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   `prepare` script to configure `core.hooksPath .githooks` for local clones;
   CI does not run Lore Coding validation yet.
 - CI repeats the build, static checks, dependency-boundary gate, Knip
-  unused-code gate, core coverage gate, and Playwright suite for code-affecting
-  changes, then publishes the Docker image to Docker Hub after successful `main`
-  pushes. See `.github/MEMORY.md`.
+  unused-code gate, core coverage gate, and both default and sidecar Playwright
+  suites for code-affecting changes, then publishes the Docker image to Docker
+  Hub after successful `main` pushes. See `.github/MEMORY.md`.
