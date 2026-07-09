@@ -308,6 +308,132 @@ test("Tetris supports ready Escape, Help pause/resume, and abandon confirmation"
   await expect(page.getByTestId("game-menu")).toBeVisible();
 });
 
+test("shared game dialogs trap focus and restore it to their action buttons", async ({
+  page,
+}) => {
+  await openLauncher(page);
+  await openGame(page, "tetris");
+
+  const helpButton = page.getByTestId("tetris-board-help");
+  const helpCloseButton = page.getByTestId("tetris-help-screen-close");
+
+  await helpButton.click();
+  await expect(helpCloseButton).toBeFocused();
+
+  for (const key of ["Tab", "Shift+Tab"]) {
+    let returnedToCloseButton = false;
+
+    for (let index = 0; index < 10; index += 1) {
+      await page.keyboard.press(key);
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const dialog = document.querySelector(
+              '[data-testid="tetris-help-screen"]',
+            );
+
+            return dialog?.contains(document.activeElement) ?? false;
+          }),
+        )
+        .toBe(true);
+
+      if (await helpCloseButton.evaluate((element) => element === document.activeElement)) {
+        returnedToCloseButton = true;
+        break;
+      }
+    }
+
+    expect(returnedToCloseButton).toBe(true);
+  }
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("tetris-help-screen")).toBeHidden();
+  await expect(helpButton).toBeFocused();
+
+  await page.getByTestId("tetris-start-button").click();
+  await expect(page.getByTestId("tetris-status")).toHaveText("Running");
+
+  const backButton = page.getByTestId("tetris-back-to-menu");
+  const cancelButton = page.getByTestId("game-abandon-cancel");
+  const confirmButton = page.getByTestId("game-abandon-confirm");
+
+  await backButton.click();
+  await expect(cancelButton).toBeFocused();
+
+  await page.keyboard.press("Tab");
+  await expect(confirmButton).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(cancelButton).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(confirmButton).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expectAbandonDialogHidden(page);
+  await expect(backButton).toBeFocused();
+});
+
+test("2048 ignores movement shortcuts while abandon confirmation is open", async ({
+  page,
+}) => {
+  await openLauncher(page);
+  await openGame(page, "twenty-forty-eight");
+  await page.getByTestId("twenty-forty-eight-overlay-start-button").click();
+  await expect(page.getByTestId("twenty-forty-eight-status")).toHaveText("Running");
+
+  await page.getByTestId("twenty-forty-eight-back-to-menu").click();
+  await expect(page.getByTestId("game-abandon-dialog")).toBeVisible();
+  await expect(page.getByTestId("twenty-forty-eight-moves")).toHaveText("0");
+
+  for (const key of ["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"]) {
+    await page.keyboard.press(key);
+  }
+
+  await expect(page.getByTestId("twenty-forty-eight-moves")).toHaveText("0");
+});
+
+test("Minesweeper ignores mode shortcuts while abandon confirmation is open", async ({
+  page,
+}) => {
+  await page.route("**/api/replays/minesweeper/run", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({ id: "run-minesweeper-modal-e2e", seed: 1 }),
+      contentType: "application/json",
+      status: 201,
+    });
+  });
+
+  await openLauncher(page);
+  await openGame(page, "minesweeper");
+  await page.getByTestId("minesweeper-start-button").click();
+  await page.getByTestId("minesweeper-cell-0:0").click();
+  await expect(page.getByTestId("minesweeper-status")).toHaveText("Running");
+
+  await page.getByTestId("minesweeper-back-to-menu").click();
+  await expect(page.getByTestId("game-abandon-dialog")).toBeVisible();
+  await expect(page.getByTestId("minesweeper-active-mode")).toHaveText("Reveal");
+
+  await page.keyboard.press("m");
+
+  await expect(page.getByTestId("minesweeper-active-mode")).toHaveText("Reveal");
+});
+
+test("Tetris ignores pause shortcuts while abandon confirmation is open", async ({
+  page,
+}) => {
+  await openLauncher(page);
+  await openGame(page, "tetris");
+  await page.getByTestId("tetris-start-button").click();
+  await expect(page.getByTestId("tetris-status")).toHaveText("Running");
+
+  await page.getByTestId("tetris-back-to-menu").click();
+  await expect(page.getByTestId("game-abandon-dialog")).toBeVisible();
+  await expect(page.getByTestId("tetris-status")).toHaveText("Paused");
+
+  await page.keyboard.press("p");
+
+  await expect(page.getByTestId("tetris-status")).toHaveText("Paused");
+});
+
 test("Minesweeper supports flagging and blocks keyboard mode changes while Help is open", async ({
   page,
 }) => {

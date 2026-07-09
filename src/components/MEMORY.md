@@ -197,6 +197,11 @@ This file covers React component ownership and shared game UI conventions under
   confirmation owns a theme-aware modal palette through `--game-abandon-*`
   tokens, so game components should pass behavior only rather than
   board-specific dialog colors.
+- Shared Help and abandon surfaces use Base UI modal dialogs for focus trapping
+  and background isolation. Keep their `data-game-modal` marker so shared game
+  input ignores every mounted modal. Their shared return-focus helper defers
+  restoration until the parent flow re-enables the action opener after close
+  and must not override focus intentionally taken by another surface.
 - Completed UI surfaces that show a Back, Close, Done, or equivalent return
   action should let Escape trigger that same action. Keep this behavior
   consistent across game overlays, replay screens, and modal-like UI unless a
@@ -210,7 +215,8 @@ This file covers React component ownership and shared game UI conventions under
 
 - Use `shouldIgnoreGameKeyDown`, `registerGameKeyDown`, and `registerGameKeyUp`
   from `game-input.ts` for game-level global keyboard handlers that should ignore
-  Help overlays, pending leaderboard entry, and typing targets.
+  Help overlays, mounted shared game modals, pending leaderboard entry, and
+  typing targets.
 - Direct game-level keyboard pause/resume shortcuts should use `isGamePauseKey`;
   `P` is the only direct pause key, while Space remains available for
   game-specific actions such as start, hard drop, or fire.
