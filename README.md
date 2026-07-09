@@ -63,12 +63,17 @@ npm run dev:multiplayer
 ```
 
 The wrapper binds Next and the sidecar to `0.0.0.0`, discovers a private LAN IPv4
-address for browser WebSocket URLs, and prints the shareable app URL. Override
-the detected address when the machine has multiple network interfaces:
+address for browser WebSocket URLs, prints the shareable app URL, and adds that
+exact host to Next's development-origin allowlist. Override the detected address
+when the machine has multiple network interfaces:
 
 ```bash
 MULTIPLAYER_DEV_PUBLIC_HOST=10.125.3.39 npm run dev:multiplayer
 ```
+
+The detected or overridden public host must be a bare dotted-decimal IPv4
+address. The wrapper rejects protocols, ports, paths, hostnames, IPv6 literals,
+and wildcards instead of forwarding them to Next's development-origin matcher.
 
 Optional wrapper overrides include `MULTIPLAYER_DEV_NEXT_PORT`,
 `MULTIPLAYER_DEV_SIDECAR_PORT`, and

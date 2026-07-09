@@ -87,6 +87,12 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
 - Replay recording may run during guest play for supported replay games, but
   persisted profile replays are signed-in and scoped by user and game. The MVP
   keeps one latest replay per user/game in SQLite.
+- `npm run dev:multiplayer` owns LAN host discovery for local room testing. It
+  forwards the resolved exact IPv4 host to Next's development-origin allowlist
+  so the printed app URL, browser WebSocket URL, and allowed host stay aligned.
+  The shared host parser rejects protocols, ports, paths, hostnames, IPv6, and
+  wildcards; ordinary `npm run dev` leaves custom LAN origins unset unless the
+  variable is supplied.
 - shadcn/ui is initialized with Tailwind CSS v4, the `base-nova` preset, and the
   `@/*` import alias. The shared button is `src/components/ui/button.tsx`.
 
