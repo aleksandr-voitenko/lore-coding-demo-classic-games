@@ -4,7 +4,11 @@ import { describe, expect, it } from "vitest";
 import { CurrentUserProvider } from "@/hooks/use-current-user";
 import { GAME_CATALOG } from "@/lib/game-catalog";
 
-import { GameLauncher, createLauncherPrivateRoomSettings } from "./game-launcher";
+import {
+  GameLauncher,
+  createLauncherPrivateRoomSettings,
+  getLauncherPrivateRoomCodeFromSearch,
+} from "./game-launcher";
 import { GAME_CARDS, createDefaultParameterValues } from "./game-launcher-config";
 import { PLAYABLE_GAME_COMPONENTS } from "./game-launcher-playables";
 
@@ -227,6 +231,12 @@ describe("game launcher", () => {
         "asteroids-difficulty": "hard",
       },
     });
+  });
+
+  it("reads normalized and unsupported room codes from browser search params", () => {
+    expect(getLauncherPrivateRoomCodeFromSearch("")).toBeNull();
+    expect(getLauncherPrivateRoomCodeFromSearch("?room=pong-1")).toBe("PONG-1");
+    expect(getLauncherPrivateRoomCodeFromSearch("?room=bad%20code")).toBe("bad code");
   });
 
   it("renders the room lobby instead of the launcher grid when a room code is present", () => {

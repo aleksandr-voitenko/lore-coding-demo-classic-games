@@ -22,7 +22,12 @@ This file covers React component ownership and shared game UI conventions under
   viewport preservation, and placement of the shared `UserAccountControls`.
   Keep browser-only `window` access in this client component; it snapshots
   `window.scrollX` and `window.scrollY` before opening a game and restores the
-  viewport when returning to the launcher.
+  viewport when returning to the launcher. It also reconciles private-room URL
+  entries on `popstate` while retaining launcher-owned tab, parameter, selection,
+  and viewport state. Forward always bootstraps authoritative room state; it may
+  reuse only a launcher-created participant id scoped to the same signed-in user.
+  Popstate, account changes, and unmount invalidate in-flight room creation so a
+  stale response cannot navigate or replace a newer creation status.
 - `multiplayer-room-lobby.tsx` owns the generic private-room lobby/shell UI plus
   HTTP helpers for room creation and authenticated host-only commands.
   `multiplayer-room-transport.ts` owns the browser WebSocket room transport,

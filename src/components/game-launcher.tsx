@@ -5,6 +5,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
   useCallback,
+  useEffect,
   useRef,
   useState,
 } from "react";
@@ -32,6 +33,7 @@ import { UserAccountControls } from "@/components/user-account-controls";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import {
   getPrivateRoomInvitePath,
+  normalizePrivateRoomCode,
   type PrivateRoom,
   type PrivateRoomSettings,
 } from "@/lib/multiplayer/room";
@@ -53,6 +55,17 @@ type ActiveRoomSession = {
   participantId: string | null;
   room: PrivateRoom | null;
   roomCode: string;
+};
+
+type PrivateRoomCreateRequest = {
+  gameId: GameId;
+  generation: number;
+  userId: string;
+};
+
+type RoomParticipantCapability = {
+  participantId: string;
+  userId: string;
 };
 
 type GameCardAction = "host-room" | "play";
@@ -96,15 +109,15 @@ export function GameLauncher({
   initialRoomCode = null,
 }: GameLauncherProps) {
   const { user } = useCurrentUser();
+  const currentUserId = user?.id ?? null;
   const [activeRoomSession, setActiveRoomSession] = useState<ActiveRoomSession | null>(() =>
-    initialRoomCode === null
-      ? null
-      : {
-          participantId: null,
-          room: null,
-          roomCode: initialRoomCode,
-        },
+    initialRoomCode === null ? null : createUnloadedActiveRoomSession(initialRoomCode),
   );
+  // Participant ids are capabilities, so only retain their creating account alongside them.
+  const roomParticipantCapabilityHistoryRef = useRef<
+    Map<string, RoomParticipantCapability>
+  >(new Map());
+  const roomCreateRequestGenerationRef = useRef(0);
   const [selectedGameId, setSelectedGameId] = useState<GameId | null>(initialReplayGameId);
   const [selectedReplayMode, setSelectedReplayMode] = useState<"latest" | null>(
     initialReplayGameId === null ? null : "latest",
@@ -116,7 +129,8 @@ export function GameLauncher({
     createDefaultParameterValues(),
   );
   const [privateRoomCreateError, setPrivateRoomCreateError] = useState<string | null>(null);
-  const [privateRoomCreatingGameId, setPrivateRoomCreatingGameId] = useState<GameId | null>(null);
+  const [privateRoomCreateRequest, setPrivateRoomCreateRequest] =
+    useState<PrivateRoomCreateRequest | null>(null);
   // Return-to-menu paths opt into restoring this viewport after a full-screen game view exits.
   const menuViewportRef = useRef<MenuViewport>({ scrollX: 0, scrollY: 0 });
   const shouldRestoreMenuViewportRef = useRef(false);
@@ -124,6 +138,10 @@ export function GameLauncher({
   const selectedGame = GAME_CARDS.find((game) => game.id === selectedGameId) ?? null;
   const activeGameCards =
     activeGameLibraryTab === "multiplayer" ? MULTIPLAYER_GAME_CARDS : GAME_CARDS;
+  const privateRoomCreatingGameId =
+    privateRoomCreateRequest?.userId === currentUserId
+      ? privateRoomCreateRequest.gameId
+      : null;
   const privateRoomCreatingGame =
     privateRoomCreatingGameId === null
       ? null
@@ -141,6 +159,45 @@ export function GameLauncher({
             ? MULTIPLAYER_SIGN_IN_REQUIRED_MESSAGE
             : null
           : `Creating ${privateRoomCreatingGame.label} room`);
+
+  useEffect(() => {
+    for (const [roomCode, capability] of roomParticipantCapabilityHistoryRef.current) {
+      if (capability.userId !== currentUserId) {
+        roomParticipantCapabilityHistoryRef.current.delete(roomCode);
+      }
+    }
+
+    function handlePopState() {
+      roomCreateRequestGenerationRef.current += 1;
+      const roomCode = getLauncherPrivateRoomCodeFromSearch(window.location.search);
+
+      setActiveRoomSession(() => {
+        if (roomCode === null) {
+          return null;
+        }
+
+        const capability = roomParticipantCapabilityHistoryRef.current.get(roomCode);
+
+        if (capability !== undefined && capability.userId !== currentUserId) {
+          roomParticipantCapabilityHistoryRef.current.delete(roomCode);
+        }
+
+        return createUnloadedActiveRoomSession(
+          roomCode,
+          capability?.userId === currentUserId ? capability.participantId : null,
+        );
+      });
+      setPrivateRoomCreateError(null);
+      setPrivateRoomCreateRequest(null);
+    }
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      roomCreateRequestGenerationRef.current += 1;
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [currentUserId]);
 
   const selectGame = useCallback((gameId: GameId) => {
     menuViewportRef.current = {
@@ -204,7 +261,7 @@ export function GameLauncher({
     window.history.pushState(null, "", "/");
     setActiveRoomSession(null);
     setPrivateRoomCreateError(null);
-    setPrivateRoomCreatingGameId(null);
+    setPrivateRoomCreateRequest(null);
   }, []);
 
   const openGlobalLeaderboard = useCallback(() => {
@@ -239,7 +296,7 @@ export function GameLauncher({
 
   const createPrivateRoomForGame = useCallback(
     async (game: GameCard) => {
-      if (user === null) {
+      if (currentUserId === null) {
         setPrivateRoomCreateError(MULTIPLAYER_SIGN_IN_REQUIRED_MESSAGE);
         return;
       }
@@ -248,7 +305,13 @@ export function GameLauncher({
         return;
       }
 
-      setPrivateRoomCreatingGameId(game.id);
+      const requestGeneration = roomCreateRequestGenerationRef.current + 1;
+      roomCreateRequestGenerationRef.current = requestGeneration;
+      setPrivateRoomCreateRequest({
+        gameId: game.id,
+        generation: requestGeneration,
+        userId: currentUserId,
+      });
       setPrivateRoomCreateError(null);
 
       try {
@@ -256,26 +319,45 @@ export function GameLauncher({
           gameId: game.id,
           settings: createLauncherPrivateRoomSettings(game, parameterValues),
         });
+
+        if (roomCreateRequestGenerationRef.current !== requestGeneration) {
+          return;
+        }
+
         const invitePath = getPrivateRoomInvitePath(result.room.code);
 
         if (invitePath !== null) {
           window.history.pushState(null, "", invitePath);
         }
 
-        setActiveRoomSession({
+        const activeRoom = {
           participantId: result.participantId,
           room: result.room,
           roomCode: result.room.code,
+        } satisfies ActiveRoomSession;
+
+        roomParticipantCapabilityHistoryRef.current.set(activeRoom.roomCode, {
+          participantId: result.participantId,
+          userId: currentUserId,
         });
+        setActiveRoomSession(activeRoom);
       } catch (error) {
+        if (roomCreateRequestGenerationRef.current !== requestGeneration) {
+          return;
+        }
+
         setPrivateRoomCreateError(
           error instanceof Error ? error.message : "Could not create room.",
         );
       } finally {
-        setPrivateRoomCreatingGameId(null);
+        if (roomCreateRequestGenerationRef.current === requestGeneration) {
+          setPrivateRoomCreateRequest((currentRequest) =>
+            currentRequest?.generation === requestGeneration ? null : currentRequest,
+          );
+        }
       }
     },
-    [parameterValues, privateRoomCreatingGameId, user],
+    [currentUserId, parameterValues, privateRoomCreatingGameId],
   );
 
   if (activeRoomSession !== null) {
@@ -591,6 +673,27 @@ export function createLauncherPrivateRoomSettings(
         gameId: game.id,
         parameters,
       };
+}
+
+export function getLauncherPrivateRoomCodeFromSearch(search: string) {
+  const roomCode = new URLSearchParams(search).get("room");
+
+  if (roomCode === null) {
+    return null;
+  }
+
+  return normalizePrivateRoomCode(roomCode) ?? roomCode.trim();
+}
+
+function createUnloadedActiveRoomSession(
+  roomCode: string,
+  participantId: string | null = null,
+): ActiveRoomSession {
+  return {
+    participantId,
+    room: null,
+    roomCode,
+  };
 }
 
 function getGameLibraryTabId(tab: GameLibraryTab) {
