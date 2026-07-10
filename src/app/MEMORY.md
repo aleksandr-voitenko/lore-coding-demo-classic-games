@@ -41,8 +41,10 @@ This file covers routes and App Router conventions under `src/app/`.
 - The route is dynamic and Node-only (`dynamic = "force-dynamic"`,
   `runtime = "nodejs"`) because it uses the server leaderboard store.
 - Keep request parsing and store-independent behavior testable through
-  `createLeaderboardRouteHandlers(store)`. The exported GET/POST handlers should
-  stay thin and use `getLeaderboardStore()`.
+  `api/leaderboard/route-handlers.ts` and its
+  `createLeaderboardRouteHandlers(store)` factory. The `route.ts` entry should
+  export only Next-supported route fields and keep GET/POST thin around the
+  production leaderboard and user-profile stores.
 - GET reads `key` and optional `sort` search params. POST expects JSON with a
   leaderboard key, score, player name, and optional sort direction.
 - Invalid keys, invalid JSON, or invalid scores return `400`; accepted
