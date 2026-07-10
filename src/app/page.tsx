@@ -1,10 +1,11 @@
 import { GameLauncher } from "@/components/game-launcher";
 import { CurrentUserProvider } from "@/hooks/use-current-user";
-import { normalizePrivateRoomCode } from "@/lib/multiplayer/room";
 import { getUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
 import { USER_SESSION_COOKIE_NAME } from "@/lib/server/user-session-cookie";
 import type { UserAuthMode } from "@/lib/user-profile";
 import { cookies } from "next/headers";
+
+import { getInitialReplayGameId, getInitialRoomCode } from "./home-search-params";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,32 +28,6 @@ function getInitialAuthMode(value: string | string[] | undefined): UserAuthMode 
   const authMode = Array.isArray(value) ? value[0] : value;
 
   return authMode === "login" || authMode === "signup" ? authMode : null;
-}
-
-export function getInitialReplayGameId(value: string | string[] | undefined) {
-  const replayGameId = Array.isArray(value) ? value[0] : value;
-
-  return replayGameId === "snake" ||
-    replayGameId === "tetris" ||
-    replayGameId === "breakout" ||
-    replayGameId === "minesweeper" ||
-    replayGameId === "pong" ||
-    replayGameId === "simon" ||
-    replayGameId === "space-invaders" ||
-    replayGameId === "asteroids" ||
-    replayGameId === "twenty-forty-eight"
-    ? replayGameId
-    : null;
-}
-
-export function getInitialRoomCode(value: string | string[] | undefined) {
-  const roomCode = Array.isArray(value) ? value[0] : value;
-
-  if (roomCode === undefined) {
-    return null;
-  }
-
-  return normalizePrivateRoomCode(roomCode) ?? roomCode.trim();
 }
 
 export default async function Home({ searchParams }: HomeProps) {

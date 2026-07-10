@@ -9,7 +9,9 @@ This file covers routes and App Router conventions under `src/app/`.
   leaderboard saves share the current signed-in display name. The route reads
   the HTTP-only session cookie on the server and passes `initialUser` into the
   provider to avoid a signed-out flash during client navigation from `/profile`.
-  It also maps `?auth=login|signup` to the launcher auth modal.
+  It also maps `?auth=login|signup` to the launcher auth modal. Keep testable
+  replay and room query parsing in `home-search-params.ts` so `page.tsx` exports
+  only fields supported by the Next.js page contract.
 - `profile/page.tsx` renders signed-in aggregate stats from the server-side
   profile store. It is dynamic and Node-only because it reads the session cookie
   and SQLite-backed session rows. Signed-out profile requests redirect to
