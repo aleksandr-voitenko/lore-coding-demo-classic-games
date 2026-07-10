@@ -24,10 +24,8 @@ import {
 import { GameCardArtworkFrame } from "@/components/game-card-artwork-frame";
 import { PLAYABLE_GAME_COMPONENTS } from "@/components/game-launcher-playables";
 import { GlobalLeaderboardScreen } from "@/components/global-leaderboard";
-import {
-  MultiplayerRoomLobby,
-  createMultiplayerRoom,
-} from "@/components/multiplayer-room-lobby";
+import { createMultiplayerRoom } from "@/components/multiplayer-room-client";
+import { MultiplayerRoomLobby } from "@/components/multiplayer-room-lobby";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserAccountControls } from "@/components/user-account-controls";
 import { useCurrentUser } from "@/hooks/use-current-user";

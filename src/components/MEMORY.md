@@ -30,25 +30,30 @@ This file covers React component ownership and shared game UI conventions under
   stale response cannot navigate or replace a newer creation status.
   Multiplayer card availability and count come from the pure registry in
   `src/lib/multiplayer/game-registry.ts`, not a launcher-local game-id list.
-- `multiplayer-room-lobby.tsx` owns the generic private-room lobby/shell UI plus
-  HTTP helpers for room creation and authenticated host-only commands.
-  `multiplayer-room-transport.ts` owns the browser WebSocket room transport,
-  URL derivation from `NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL`, generic
-  non-host `room.command` and `game.input` envelope sending, and
-  reconnect/bootstrap handling. Host-only lifecycle/settings commands stay on
-  the Next HTTP route until the WebSocket sidecar has an authenticated host
-  session model. Live room snapshots, guest-capable room commands, and game input
-  require the WebSocket stream; do not reintroduce browser HTTP polling or POST
-  fallback for those paths. Bootstrap and command-ack deadlines default to five
-  seconds and remain configurable at the transport boundary. Bootstrap timeouts
-  reconnect, while command timeouts reject without automatic retry because the
-  server may have applied a command before its ack was lost and request ids are
-  not idempotency keys. Keep both surfaces game-agnostic; actual game play, score
-  submission, replay derivation, and server transport authority belong outside
-  the shell. Validate inbound WebSocket and successful room HTTP snapshots with
-  the shared transport-neutral protocol guards before updating React state. The
-  low-level WebSocket transport normalizes its requested room code once before
-  sending messages or scoping inbound validation.
+- `multiplayer-room-lobby.tsx` owns the generic private-room lobby/shell UI and
+  browser session state: participant resolution, fresh snapshot selection,
+  host derivation, diagnostics presentation, and pending form/action state.
+  `multiplayer-room-client.ts` owns validated browser HTTP room creation and
+  authenticated host-command helpers plus the game-agnostic HTTP/WebSocket
+  dispatch boundary consumed by the shell. `multiplayer-room-transport.ts` owns
+  the low-level browser WebSocket lifecycle, URL derivation from
+  `NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL`, generic non-host `room.command` and
+  `game.input` envelopes, resume/hello bootstrap, reconnect, timeout,
+  cancellation, and inbound message validation. Host-only lifecycle/settings
+  commands stay on the Next HTTP route until the WebSocket sidecar has an
+  authenticated host session model. Live room snapshots, guest-capable room
+  commands, and game input require the WebSocket stream; do not reintroduce
+  browser HTTP polling or POST fallback for those paths. Bootstrap and
+  command-ack deadlines default to five seconds and remain configurable at the
+  transport boundary. Bootstrap timeouts reconnect, while command timeouts
+  reject without automatic retry because the server may have applied a command
+  before its ack was lost and request ids are not idempotency keys. Keep these
+  surfaces game-agnostic; actual game play, score submission, replay derivation,
+  and server transport authority belong outside the shell. Validate inbound
+  WebSocket and successful room HTTP snapshots with the shared
+  transport-neutral protocol guards before updating React state. The low-level
+  WebSocket transport normalizes its requested room code once before sending
+  messages or scoping inbound validation.
 - Active multiplayer game UI should be selected through a client
   renderer/input registry keyed by `gameId`. A renderer consumes authoritative
   server snapshots/events and emits adapter-owned intents through the generic
