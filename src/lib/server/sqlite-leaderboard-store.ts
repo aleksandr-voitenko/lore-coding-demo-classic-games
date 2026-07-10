@@ -95,7 +95,12 @@ export class SqliteLeaderboardStore implements LeaderboardStore {
         @score,
         @createdAt,
         @userId,
-        @gameSessionId
+        (
+          SELECT id
+          FROM game_sessions
+          WHERE id = @gameSessionId
+            AND user_id = @userId
+        )
       )
     `);
     this.#submitScoreTransaction = this.#database.transaction(

@@ -133,7 +133,9 @@ This file covers Node-only server helpers and storage adapters under
   for high-score and low-time rankings.
 - `leaderboard_scores` can optionally link to `users` and `game_sessions`, but
   profile stats are derived from `game_sessions`, not from top-three leaderboard
-  rows.
+  rows. The SQLite leaderboard insert resolves an optional game-session link in
+  the same transaction and stores it only when the session belongs to the
+  server-derived score user; guest, missing, and mismatched links remain null.
 - `users` are keyed by normalized display name and store nullable password
   hashes for backward-compatible migration. New signups must set a password hash;
   legacy passwordless users remain reserved names and cannot be claimed through

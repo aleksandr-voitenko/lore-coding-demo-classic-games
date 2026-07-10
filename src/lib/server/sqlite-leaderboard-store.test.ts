@@ -32,6 +32,99 @@ function createTempStore() {
   };
 }
 
+function createLegacyGenericTempStore() {
+  const tempDir = mkdtempSync(join(tmpdir(), "leaderboard-generic-migration-"));
+  const databasePath = join(tempDir, "scores.sqlite");
+  const legacyDatabase = new Database(databasePath);
+
+  legacyDatabase.exec(`
+    CREATE TABLE leaderboard_scores (
+      id TEXT PRIMARY KEY,
+      leaderboard_key TEXT NOT NULL,
+      player_name TEXT NOT NULL,
+      score INTEGER NOT NULL CHECK (score > 0),
+      created_at TEXT NOT NULL
+    );
+
+    INSERT INTO leaderboard_scores (
+      id,
+      leaderboard_key,
+      player_name,
+      score,
+      created_at
+    )
+    VALUES (
+      'legacy-score',
+      'snake|board=19',
+      'Legacy',
+      4,
+      '2026-05-07T23:59:59.000Z'
+    );
+  `);
+  legacyDatabase.close();
+
+  let nextId = 0;
+  let nextTime = 0;
+  const store = new SqliteLeaderboardStore({
+    createId: () => `score-${++nextId}`,
+    databasePath,
+    now: () => new Date(START_TIME + nextTime++),
+  });
+
+  return {
+    databasePath,
+    dispose() {
+      store.close();
+      rmSync(tempDir, { force: true, recursive: true });
+    },
+    store,
+  };
+}
+
+async function createProfileUsersAndSession(databasePath: string) {
+  const ids = ["user-ada", "session-ada", "user-grace"];
+  const userStore = new SqliteUserProfileStore({
+    createId: () => {
+      const id = ids.shift();
+
+      if (id === undefined) {
+        throw new Error("Profile fixture ran out of deterministic ids.");
+      }
+
+      return id;
+    },
+    createSessionToken: () => `token-${ids.length}`,
+    databasePath,
+    now: () => new Date(START_TIME),
+  });
+  const adaRegistration = await userStore.registerUser("Ada", "password123");
+
+  if (!adaRegistration.success) {
+    throw new Error(`Expected Ada registration to succeed, got ${adaRegistration.reason}.`);
+  }
+
+  const adaGameSession = await userStore.recordGameSession(adaRegistration.session.user, {
+    activeDurationMs: 1000,
+    finalScore: 9,
+    gameId: "snake",
+    leaderboardKey: "snake|board=19",
+    result: "won",
+    sortDirection: "desc",
+  });
+  const graceRegistration = await userStore.registerUser("Grace", "password123");
+
+  if (!graceRegistration.success) {
+    throw new Error(`Expected Grace registration to succeed, got ${graceRegistration.reason}.`);
+  }
+
+  return {
+    adaGameSessionId: adaGameSession.id,
+    adaUser: adaRegistration.session.user,
+    graceUser: graceRegistration.session.user,
+    userStore,
+  };
+}
+
 describe("sqlite leaderboard store", () => {
   const disposables: Array<() => void> = [];
 
@@ -179,56 +272,278 @@ describe("sqlite leaderboard store", () => {
     ]);
   });
 
-  it("stores optional user and game-session links with qualifying scores", async () => {
+  it("links qualifying scores only to game sessions owned by the signed-in user", async () => {
     const { databasePath, dispose, store } = createTempStore();
-    const userStore = new SqliteUserProfileStore({
-      createId: () => "user-1",
-      createSessionToken: () => "token-1",
-      databasePath,
-      now: () => new Date(START_TIME),
-    });
+    const { adaGameSessionId, adaUser, graceUser, userStore } =
+      await createProfileUsersAndSession(databasePath);
     disposables.push(() => {
       userStore.close();
       dispose();
     });
-    const userSession = await userStore.registerUser("Ada", "password123");
-
-    expect(userSession.success).toBe(true);
-
-    if (!userSession.success) {
-      throw new Error(`Expected user registration to succeed, got ${userSession.reason}.`);
-    }
-
-    await userStore.recordGameSession(userSession.session.user, {
-      activeDurationMs: 1000,
-      finalScore: 9,
-      gameId: "snake",
-      leaderboardKey: "snake|board=19",
-      result: "won",
-      sortDirection: "desc",
-    });
 
     await store.submitScore({
-      gameSessionId: "user-1",
+      gameSessionId: adaGameSessionId,
       leaderboardKey: "snake|board=19",
       name: "Ada",
       score: 9,
       sortDirection: "desc",
-      userId: "user-1",
+      userId: adaUser.id,
+    });
+    await store.submitScore({
+      gameSessionId: adaGameSessionId,
+      leaderboardKey: "tetris|board=10x20|level=1",
+      name: "Grace",
+      score: 8,
+      sortDirection: "desc",
+      userId: graceUser.id,
     });
 
     const database = new Database(databasePath);
-    const row = database
+    const rows = database
       .prepare(
-        "SELECT user_id AS userId, game_session_id AS gameSessionId FROM leaderboard_scores",
+        `SELECT
+          player_name AS name,
+          user_id AS userId,
+          game_session_id AS gameSessionId
+        FROM leaderboard_scores
+        ORDER BY created_at ASC, id ASC`,
       )
-      .get() as { gameSessionId: string; userId: string };
+      .all() as Array<{ gameSessionId: string | null; name: string; userId: string | null }>;
+    const foreignKeyViolations = database.pragma("foreign_key_check");
     database.close();
 
-    expect(row).toEqual({
-      gameSessionId: "user-1",
-      userId: "user-1",
+    expect(rows).toEqual([
+      {
+        gameSessionId: adaGameSessionId,
+        name: "Ada",
+        userId: adaUser.id,
+      },
+      {
+        gameSessionId: null,
+        name: "Grace",
+        userId: graceUser.id,
+      },
+    ]);
+    expect(foreignKeyViolations).toEqual([]);
+  });
+
+  it("omits invalid session links without rejecting compatible score submissions", async () => {
+    const { databasePath, dispose, store } = createTempStore();
+    const { adaGameSessionId, graceUser, userStore } =
+      await createProfileUsersAndSession(databasePath);
+    disposables.push(() => {
+      userStore.close();
+      dispose();
     });
+
+    await expect(
+      store.submitScore({
+        gameSessionId: "missing-session",
+        leaderboardKey: "breakout|board=420x560|lives=3",
+        name: "Grace missing",
+        score: 7,
+        sortDirection: "desc",
+        userId: graceUser.id,
+      }),
+    ).resolves.toMatchObject({ accepted: true, rank: 0 });
+    await expect(
+      store.submitScore({
+        gameSessionId: adaGameSessionId,
+        leaderboardKey: "pong|board=420x560|target=5",
+        name: "Guest",
+        score: 6,
+        sortDirection: "desc",
+      }),
+    ).resolves.toMatchObject({ accepted: true, rank: 0 });
+    await expect(
+      store.submitScore({
+        leaderboardKey: "simon|difficulty=easy",
+        name: "Grace no session",
+        score: 5,
+        sortDirection: "desc",
+        userId: graceUser.id,
+      }),
+    ).resolves.toMatchObject({ accepted: true, rank: 0 });
+
+    const database = new Database(databasePath);
+    const rows = database
+      .prepare(
+        `SELECT
+          player_name AS name,
+          user_id AS userId,
+          game_session_id AS gameSessionId
+        FROM leaderboard_scores
+        ORDER BY created_at ASC, id ASC`,
+      )
+      .all() as Array<{ gameSessionId: string | null; name: string; userId: string | null }>;
+    database.close();
+
+    expect(rows).toEqual([
+      {
+        gameSessionId: null,
+        name: "Grace missing",
+        userId: graceUser.id,
+      },
+      {
+        gameSessionId: null,
+        name: "Guest",
+        userId: null,
+      },
+      {
+        gameSessionId: null,
+        name: "Grace no session",
+        userId: graceUser.id,
+      },
+    ]);
+  });
+
+  it("keeps non-qualifying submissions independent of optional session links", async () => {
+    const { dispose, store } = createTempStore();
+    disposables.push(dispose);
+    const leaderboardKey = "snake|board=19";
+
+    for (const [name, score] of [
+      ["First", 9],
+      ["Second", 8],
+      ["Third", 7],
+    ] as const) {
+      await store.submitScore({
+        leaderboardKey,
+        name,
+        score,
+        sortDirection: "desc",
+      });
+    }
+
+    await expect(
+      store.submitScore({
+        gameSessionId: "missing-session",
+        leaderboardKey,
+        name: "Does not qualify",
+        score: 6,
+        sortDirection: "desc",
+        userId: "missing-user",
+      }),
+    ).resolves.toEqual({
+      accepted: false,
+      entries: [
+        { name: "First", score: 9 },
+        { name: "Second", score: 8 },
+        { name: "Third", score: 7 },
+      ],
+      rank: null,
+    });
+  });
+
+  it("enforces session ownership after upgrading a generic table without link foreign keys", async () => {
+    const { databasePath, dispose, store } = createLegacyGenericTempStore();
+    const { adaGameSessionId, adaUser, graceUser, userStore } =
+      await createProfileUsersAndSession(databasePath);
+    disposables.push(() => {
+      userStore.close();
+      dispose();
+    });
+
+    const migratedDatabase = new Database(databasePath);
+    const migratedLinkColumns = migratedDatabase
+      .prepare(
+        `SELECT name, type
+        FROM pragma_table_info('leaderboard_scores')
+        WHERE name IN ('user_id', 'game_session_id')
+        ORDER BY name ASC`,
+      )
+      .all();
+    const migratedForeignKeys = migratedDatabase.pragma(
+      "foreign_key_list(leaderboard_scores)",
+    );
+    migratedDatabase.close();
+
+    expect(migratedLinkColumns).toEqual([
+      { name: "game_session_id", type: "TEXT" },
+      { name: "user_id", type: "TEXT" },
+    ]);
+    expect(migratedForeignKeys).toEqual([]);
+
+    await expect(
+      store.submitScore({
+        gameSessionId: adaGameSessionId,
+        leaderboardKey: "snake|board=25",
+        name: "Ada",
+        score: 9,
+        sortDirection: "desc",
+        userId: adaUser.id,
+      }),
+    ).resolves.toMatchObject({ accepted: true, rank: 0 });
+    await expect(
+      store.submitScore({
+        gameSessionId: adaGameSessionId,
+        leaderboardKey: "tetris|board=10x20|level=1",
+        name: "Grace cross-user",
+        score: 8,
+        sortDirection: "desc",
+        userId: graceUser.id,
+      }),
+    ).resolves.toMatchObject({ accepted: true, rank: 0 });
+    await expect(
+      store.submitScore({
+        gameSessionId: "missing-session",
+        leaderboardKey: "breakout|board=420x560|lives=3",
+        name: "Grace missing",
+        score: 7,
+        sortDirection: "desc",
+        userId: graceUser.id,
+      }),
+    ).resolves.toMatchObject({ accepted: true, rank: 0 });
+    await expect(
+      store.submitScore({
+        gameSessionId: adaGameSessionId,
+        leaderboardKey: "pong|board=420x560|target=5",
+        name: "Guest",
+        score: 6,
+        sortDirection: "desc",
+      }),
+    ).resolves.toMatchObject({ accepted: true, rank: 0 });
+
+    const database = new Database(databasePath);
+    const rows = database
+      .prepare(
+        `SELECT
+          player_name AS name,
+          user_id AS userId,
+          game_session_id AS gameSessionId
+        FROM leaderboard_scores
+        ORDER BY created_at ASC, id ASC`,
+      )
+      .all() as Array<{ gameSessionId: string | null; name: string; userId: string | null }>;
+    database.close();
+
+    expect(rows).toEqual([
+      {
+        gameSessionId: null,
+        name: "Legacy",
+        userId: null,
+      },
+      {
+        gameSessionId: adaGameSessionId,
+        name: "Ada",
+        userId: adaUser.id,
+      },
+      {
+        gameSessionId: null,
+        name: "Grace cross-user",
+        userId: graceUser.id,
+      },
+      {
+        gameSessionId: null,
+        name: "Grace missing",
+        userId: graceUser.id,
+      },
+      {
+        gameSessionId: null,
+        name: "Guest",
+        userId: null,
+      },
+    ]);
   });
 
   it("migrates existing snake rows into board-scoped leaderboard keys", async () => {
