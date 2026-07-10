@@ -66,8 +66,10 @@ This file covers routes and App Router conventions under `src/app/`.
   login handler, including session-cookie responses and generic invalid-credential
   errors. `api/auth/login/route.ts` stays a thin App Router entry that exports
   only Next-supported route configuration and the production `POST` handler.
-- `api/me/route.ts` only returns the current session user on GET and clears the
-  current session on DELETE.
+- `api/me/route-handlers.ts` owns the testable current-session GET and logout
+  DELETE handlers, including session-cookie clearing. `api/me/route.ts` stays a
+  thin App Router entry that exports only Next-supported route configuration
+  and the production `GET` and `DELETE` handlers.
 - `api/game-sessions/route-handlers.ts` owns game-session payload parsing and
   the injectable signed-in session-recording handler. `api/game-sessions/route.ts`
   stays a thin App Router entry that exports only Next-supported route
