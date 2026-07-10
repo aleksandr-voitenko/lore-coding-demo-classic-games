@@ -80,7 +80,10 @@ This file covers routes and App Router conventions under `src/app/`.
   Minesweeper, Space Invaders, Pong, Simon, 2048, and Asteroids expose
   `api/replays/<game>/run/route.ts` to issue replay run ids and seeds for live
   recording and `api/replays/<game>/route.ts` to require a signed-in session
-  before saving or downloading the current user's latest replay.
+  before saving or downloading the current user's latest replay. Each game's
+  adjacent `route-handlers.ts` owns its testable game-id, payload-parser, and
+  replay-label adapters; both production route entries export only their
+  Next-supported HTTP and configuration fields.
 
 ## Multiplayer Room API
 

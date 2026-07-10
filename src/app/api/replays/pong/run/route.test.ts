@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SqliteReplayStore } from "@/lib/server/sqlite-replay-store";
 
-import { createPongReplayRunRouteHandlers } from "./route";
+import { createPongReplayRunRouteHandlers } from "../route-handlers";
 
 describe("pong replay run route", () => {
   it("issues Pong replay runs through the wrapper", async () => {

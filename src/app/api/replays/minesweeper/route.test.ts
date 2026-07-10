@@ -9,7 +9,7 @@ import { getMinesweeperDifficultySettings } from "@/lib/minesweeper-game-engine"
 import type { SqliteReplayStore } from "@/lib/server/sqlite-replay-store";
 import type { SqliteUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
 
-import { createMinesweeperReplayRouteHandlers } from "./route";
+import { createMinesweeperReplayRouteHandlers } from "./route-handlers";
 
 function createReplayPayload(
   overrides: Partial<MinesweeperReplayPayload> = {},

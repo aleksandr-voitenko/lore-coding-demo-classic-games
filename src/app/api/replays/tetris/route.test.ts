@@ -8,7 +8,7 @@ import {
   type TetrisReplayPayload,
 } from "@/lib/tetris-replay";
 
-import { createTetrisReplayRouteHandlers } from "./route";
+import { createTetrisReplayRouteHandlers } from "./route-handlers";
 
 function createReplayPayload(
   overrides: Partial<TetrisReplayPayload> = {},

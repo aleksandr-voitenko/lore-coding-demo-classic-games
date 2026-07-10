@@ -8,7 +8,7 @@ import {
 import type { SqliteReplayStore } from "@/lib/server/sqlite-replay-store";
 import type { SqliteUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
 
-import { createSpaceInvadersReplayRouteHandlers } from "./route";
+import { createSpaceInvadersReplayRouteHandlers } from "./route-handlers";
 
 function createReplayPayload(
   overrides: Partial<SpaceInvadersReplayPayload> = {},

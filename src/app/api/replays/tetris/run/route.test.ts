@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SqliteReplayStore } from "@/lib/server/sqlite-replay-store";
 
-import { createTetrisReplayRunRouteHandlers } from "./route";
+import { createTetrisReplayRunRouteHandlers } from "../route-handlers";
 
 describe("tetris replay run route", () => {
   it("issues Tetris replay runs through the wrapper", async () => {

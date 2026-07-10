@@ -7,7 +7,7 @@ import {
   type SnakeReplayPayload,
 } from "@/lib/snake-replay";
 
-import { createSnakeReplayRouteHandlers } from "./route";
+import { createSnakeReplayRouteHandlers } from "./route-handlers";
 
 function createReplayPayload(overrides: Partial<SnakeReplayPayload> = {}): SnakeReplayPayload {
   return {
