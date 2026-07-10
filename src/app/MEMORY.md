@@ -81,3 +81,10 @@ This file covers routes and App Router conventions under `src/app/`.
   `api/replays/<game>/run/route.ts` to issue replay run ids and seeds for live
   recording and `api/replays/<game>/route.ts` to require a signed-in session
   before saving or downloading the current user's latest replay.
+
+## Multiplayer Room API
+
+- `api/multiplayer/rooms/[code]/route-handlers.ts` owns testable room lookup,
+  command parsing, WebSocket-only command rejection, and signed-in host-command
+  authorization. Its `route.ts` entry stays thin and exports only Next-supported
+  route configuration plus the production `GET` and `POST` handlers.

@@ -4,7 +4,8 @@ import { InProcessMultiplayerRoomStore } from "@/lib/server/multiplayer-room-run
 import type { AuthenticatedUser } from "@/lib/user-profile";
 
 import type { MultiplayerRoomUserSessionLookup } from "../route";
-import { createMultiplayerRoomRouteHandlers } from "./route";
+import * as multiplayerRoomRoute from "./route";
+import { createMultiplayerRoomRouteHandlers } from "./route-handlers";
 
 const SIGNED_IN_USER = {
   displayName: "Ada Host",
@@ -84,6 +85,15 @@ function expectRoomStarted(store: InProcessMultiplayerRoomStore) {
 }
 
 describe("multiplayer room route", () => {
+  it("exports only the supported Next.js route fields", () => {
+    expect(Object.keys(multiplayerRoomRoute).sort()).toEqual([
+      "GET",
+      "POST",
+      "dynamic",
+      "runtime",
+    ]);
+  });
+
   it("returns room snapshots by normalized code", async () => {
     const roomStore = createRoomStore();
     const userStore = createUserStore(null);
