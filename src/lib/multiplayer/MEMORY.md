@@ -7,6 +7,12 @@ folder.
 
 ## Files
 
+- `game-registry.ts` owns pure multiplayer support membership and default game
+  selection. `game-catalog.ts` owns game labels, while the launcher `GAME_CARDS`
+  catalog owns rendered card order and filters that order through the registry.
+  Client renderer and server adapter maps must be exhaustive over
+  `MultiplayerGameId`; keep their actual imports local to their UI and server
+  layers.
 - `room.ts` owns the reusable private-room model: signed-in hosts, guest
   observers, player seats, generic game settings, invite paths, host-only
   lifecycle/settings commands, and immutable room transitions.
@@ -21,6 +27,10 @@ folder.
 
 ## Protocol Boundaries
 
+- Keep room settings and generic protocol envelopes catalog-generic through
+  `GameId`. A catalog game may have no active multiplayer adapter yet; the
+  shared registry identifies runtime support, while adapter dispatch returns
+  the existing unsupported-game behavior at the owning runtime boundary.
 - Do not add one top-level transport message per game. Add game-specific input
   or snapshot payloads behind the generic `game.input` and game-snapshot
   envelopes so Pong, Space Invaders, Asteroids, and later games can share the

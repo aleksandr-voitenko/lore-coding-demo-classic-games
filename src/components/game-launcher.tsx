@@ -32,6 +32,10 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { UserAccountControls } from "@/components/user-account-controls";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import {
+  MULTIPLAYER_GAME_IDS,
+  isMultiplayerGameId,
+} from "@/lib/multiplayer/game-registry";
+import {
   getPrivateRoomInvitePath,
   normalizePrivateRoomCode,
   type PrivateRoom,
@@ -72,12 +76,6 @@ type GameCardAction = "host-room" | "play";
 
 type GameLibraryTab = "single-player" | "multiplayer";
 
-const PRIVATE_ROOM_HOSTABLE_GAME_IDS = new Set<GameId>([
-  "asteroids",
-  "pong",
-  "space-invaders",
-]);
-
 const GAME_LIBRARY_TAB_CONFIGS = [
   {
     count: GAME_CARDS.length,
@@ -85,7 +83,7 @@ const GAME_LIBRARY_TAB_CONFIGS = [
     label: "Single player",
   },
   {
-    count: PRIVATE_ROOM_HOSTABLE_GAME_IDS.size,
+    count: MULTIPLAYER_GAME_IDS.length,
     id: "multiplayer",
     label: "Multiplayer",
   },
@@ -96,7 +94,7 @@ const GAME_LIBRARY_TAB_CONFIGS = [
 }[];
 
 const MULTIPLAYER_GAME_CARDS = GAME_CARDS.filter((game) =>
-  isPrivateRoomHostableGame(game.id),
+  isMultiplayerGameId(game.id),
 );
 
 const MULTIPLAYER_STATUS_ID = "multiplayer-room-host-status";
@@ -532,10 +530,6 @@ export function GameLauncher({
       </section>
     </main>
   );
-}
-
-function isPrivateRoomHostableGame(gameId: GameId) {
-  return PRIVATE_ROOM_HOSTABLE_GAME_IDS.has(gameId);
 }
 
 type GameCardArticleProps = {

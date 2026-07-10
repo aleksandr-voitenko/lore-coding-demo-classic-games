@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { CurrentUserProvider } from "@/hooks/use-current-user";
+import { MULTIPLAYER_GAME_IDS } from "@/lib/multiplayer/game-registry";
 import type { PrivateRoom } from "@/lib/multiplayer/room";
 import type { MultiplayerRoomGameSnapshot } from "@/lib/multiplayer/protocol";
 import {
@@ -211,9 +212,21 @@ describe("multiplayer room lobby", () => {
   });
 
   it("selects registered active game renderers only when room and snapshot game ids match", () => {
-    expect(
-      getMultiplayerRoomGameRenderer(ACTIVE_PONG_ROOM, RUNNING_PONG_GAME)?.gameId,
-    ).toBe("pong");
+    for (const gameId of MULTIPLAYER_GAME_IDS) {
+      const room = {
+        ...ACTIVE_PONG_ROOM,
+        settings: { gameId },
+      } satisfies PrivateRoom;
+      const game = {
+        gameId,
+        seq: 1,
+        serverTimeMs: 1_000,
+        snapshot: {},
+      } satisfies MultiplayerRoomGameSnapshot;
+
+      expect(getMultiplayerRoomGameRenderer(room, game)?.gameId).toBe(gameId);
+    }
+
     expect(getMultiplayerRoomGameRenderer(ACTIVE_PONG_ROOM, null)).toBeNull();
     expect(
       getMultiplayerRoomGameRenderer(ACTIVE_PONG_ROOM, RUNNING_SNAKE_GAME),

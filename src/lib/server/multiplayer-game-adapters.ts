@@ -1,4 +1,9 @@
 import type { GameId } from "../game-catalog";
+import {
+  DEFAULT_MULTIPLAYER_GAME_ID,
+  isMultiplayerGameId,
+  type MultiplayerGameId,
+} from "../multiplayer/game-registry";
 import type { MultiplayerServerGameRuntimeAdapter } from "./multiplayer-game-adapter-contract";
 import { asteroidsMultiplayerRuntimeAdapter } from "./asteroids-multiplayer-game-adapter";
 import { pongMultiplayerRuntimeAdapter } from "./pong-multiplayer-game-adapter";
@@ -25,9 +30,8 @@ export {
 } from "./pong-multiplayer-game-adapter";
 export { DEFAULT_SPACE_INVADERS_PRIVATE_ROOM_SEATS } from "./space-invaders-multiplayer-game-adapter";
 
-const defaultMultiplayerServerGameAdapter = pongMultiplayerRuntimeAdapter;
-const multiplayerServerGameAdapters: Partial<
-  Record<GameId, MultiplayerServerGameRuntimeAdapter>
+const multiplayerServerGameAdapters: Readonly<
+  Record<MultiplayerGameId, MultiplayerServerGameRuntimeAdapter>
 > = {
   asteroids: asteroidsMultiplayerRuntimeAdapter,
   pong: pongMultiplayerRuntimeAdapter,
@@ -35,9 +39,9 @@ const multiplayerServerGameAdapters: Partial<
 };
 
 export function getDefaultMultiplayerServerGameAdapter() {
-  return defaultMultiplayerServerGameAdapter;
+  return multiplayerServerGameAdapters[DEFAULT_MULTIPLAYER_GAME_ID];
 }
 
 export function getMultiplayerServerGameAdapter(gameId: GameId) {
-  return multiplayerServerGameAdapters[gameId] ?? null;
+  return isMultiplayerGameId(gameId) ? multiplayerServerGameAdapters[gameId] : null;
 }

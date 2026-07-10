@@ -87,6 +87,10 @@ This file covers Node-only server helpers and storage adapters under
   Pong-owned room architecture. Pong is the first adapter; later games should
   plug into the same room service, sidecar, protocol envelopes, and result
   pipeline.
+- The supported ids and default game live in
+  `src/lib/multiplayer/game-registry.ts`; keep the server adapter map exhaustive
+  over its `MultiplayerGameId` while leaving adapter implementations in this
+  server-only folder.
 - A server game adapter owns game settings defaults/validation, seat and role
   mapping, accepted input payloads, initial state, deterministic application of
   server-ordered intents and ticks, authoritative snapshot projection, terminal

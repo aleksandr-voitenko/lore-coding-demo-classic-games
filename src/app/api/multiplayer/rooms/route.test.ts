@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
+import {
+  DEFAULT_MULTIPLAYER_GAME_ID,
+  MULTIPLAYER_GAME_IDS,
+} from "@/lib/multiplayer/game-registry";
 import { InProcessMultiplayerRoomStore } from "@/lib/server/multiplayer-room-runtime";
 import type { AuthenticatedUser } from "@/lib/user-profile";
 
@@ -140,5 +144,58 @@ describe("multiplayer rooms route", () => {
       },
       seq: 1,
     });
+  });
+
+  it("uses the shared default when a signed-in room create omits the game id", async () => {
+    const alternateDefaultGameId = MULTIPLAYER_GAME_IDS.find(
+      (gameId) => gameId !== DEFAULT_MULTIPLAYER_GAME_ID,
+    );
+
+    if (alternateDefaultGameId === undefined) {
+      throw new Error("The default-game route test requires another multiplayer game.");
+    }
+
+    vi.resetModules();
+    vi.doMock("@/lib/multiplayer/game-registry", async (importOriginal) => ({
+      ...(await importOriginal<
+        typeof import("@/lib/multiplayer/game-registry")
+      >()),
+      DEFAULT_MULTIPLAYER_GAME_ID: alternateDefaultGameId,
+    }));
+
+    try {
+      const [routeModule, runtimeModule, adapterModule] = await Promise.all([
+        import("./route"),
+        import("@/lib/server/multiplayer-room-runtime"),
+        import("@/lib/server/multiplayer-game-adapters"),
+      ]);
+      const roomStore = new runtimeModule.InProcessMultiplayerRoomStore({
+        createParticipantId: () => "host-1",
+        createRoomCode: () => "ROOM1",
+      });
+      const handlers = routeModule.createMultiplayerRoomsRouteHandlers(
+        roomStore,
+        createUserStore(SIGNED_IN_USER),
+      );
+      const response = await handlers.POST(createCreateRoomRequest({}));
+      const defaultAdapter = adapterModule.getDefaultMultiplayerServerGameAdapter();
+
+      expect(response.status).toBe(201);
+      expect(defaultAdapter.gameId).toBe(alternateDefaultGameId);
+      await expect(response.json()).resolves.toMatchObject({
+        room: {
+          seats: defaultAdapter.defaultSeats.map((seat) => ({
+            id: seat.id,
+            label: seat.label,
+            occupiedByParticipantId: null,
+            required: seat.required === true,
+          })),
+          settings: defaultAdapter.defaultSettings,
+        },
+      });
+    } finally {
+      vi.doUnmock("@/lib/multiplayer/game-registry");
+      vi.resetModules();
+    }
   });
 });

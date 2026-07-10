@@ -28,6 +28,8 @@ This file covers React component ownership and shared game UI conventions under
   reuse only a launcher-created participant id scoped to the same signed-in user.
   Popstate, account changes, and unmount invalidate in-flight room creation so a
   stale response cannot navigate or replace a newer creation status.
+  Multiplayer card availability and count come from the pure registry in
+  `src/lib/multiplayer/game-registry.ts`, not a launcher-local game-id list.
 - `multiplayer-room-lobby.tsx` owns the generic private-room lobby/shell UI plus
   HTTP helpers for room creation and authenticated host-only commands.
   `multiplayer-room-transport.ts` owns the browser WebSocket room transport,
@@ -52,6 +54,8 @@ This file covers React component ownership and shared game UI conventions under
   server snapshots/events and emits adapter-owned intents through the generic
   transport envelope; it does not own canonical game state, result ordering,
   solo replay saving, or solo leaderboard submission.
+  Keep that renderer map exhaustive over the shared `MultiplayerGameId` so a
+  registry addition cannot omit its client implementation silently.
 - The future Space Invaders multiplayer renderer should present two independent
   ship seats, `ship-a` and `ship-b`, on one shared alien wave with shared score
   and lives. It should display server-owned outcomes for simultaneous hits and

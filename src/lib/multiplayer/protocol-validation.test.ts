@@ -402,6 +402,26 @@ describe("multiplayer protocol validation", () => {
   it("accepts an opaque object game state without duplicating game schemas", () => {
     expect(isMultiplayerRoomSnapshot(SNAPSHOT)).toBe(true);
   });
+
+  it("keeps generic room envelopes valid for catalog games without adapters", () => {
+    const snapshot = {
+      game: {
+        gameId: "snake",
+        seq: 1,
+        serverTimeMs: 1_000,
+        snapshot: {},
+      },
+      room: {
+        ...ROOM,
+        settings: {
+          gameId: "snake",
+        },
+      },
+      seq: 1,
+    } satisfies MultiplayerRoomSnapshot;
+
+    expect(isMultiplayerRoomSnapshot(snapshot)).toBe(true);
+  });
 });
 
 function createDeepSettingValue(leaf: unknown, depth: number) {

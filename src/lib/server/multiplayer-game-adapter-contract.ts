@@ -1,4 +1,4 @@
-import type { GameId } from "../game-catalog";
+import type { MultiplayerGameId } from "../multiplayer/game-registry";
 import type { PrivateRoomLifecycleCommand } from "../multiplayer/protocol";
 import type {
   PrivateRoom,
@@ -39,10 +39,21 @@ export type SpaceInvadersMultiplayerServerGameSnapshot =
     heldInputs: SpaceInvadersMultiplayerHeldInputs;
   };
 
+type DefineMultiplayerServerGameSnapshots<
+  Snapshots extends {
+    [Game in MultiplayerGameId]: { gameId: Game };
+  },
+> = Snapshots;
+
+type MultiplayerServerGameSnapshotsById =
+  DefineMultiplayerServerGameSnapshots<{
+    asteroids: AsteroidsMultiplayerGameSnapshot;
+    pong: PongMultiplayerGameSnapshot;
+    "space-invaders": SpaceInvadersMultiplayerServerGameSnapshot;
+  }>;
+
 export type MultiplayerServerGameSnapshot =
-  | AsteroidsMultiplayerGameSnapshot
-  | PongMultiplayerGameSnapshot
-  | SpaceInvadersMultiplayerServerGameSnapshot;
+  MultiplayerServerGameSnapshotsById[MultiplayerGameId];
 
 export type MultiplayerServerGameRuntimeErrorCode =
   | PrivateRoomErrorCode
@@ -108,7 +119,7 @@ export type MultiplayerServerGameRuntimeAdapter = {
   }) => MultiplayerServerGameSnapshot;
   defaultSeats: readonly PrivateRoomSeatInput[];
   defaultSettings: PrivateRoomSettings;
-  gameId: GameId;
+  gameId: MultiplayerGameId;
   isActive: (options: {
     room: PrivateRoom;
     runtime: unknown;

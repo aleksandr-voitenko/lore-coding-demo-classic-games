@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { CurrentUserProvider } from "@/hooks/use-current-user";
 import { GAME_CATALOG } from "@/lib/game-catalog";
+import { MULTIPLAYER_GAME_IDS } from "@/lib/multiplayer/game-registry";
 
 import {
   GameLauncher,
@@ -11,12 +12,6 @@ import {
 } from "./game-launcher";
 import { GAME_CARDS, createDefaultParameterValues } from "./game-launcher-config";
 import { PLAYABLE_GAME_COMPONENTS } from "./game-launcher-playables";
-
-const PRIVATE_ROOM_HOSTABLE_GAME_IDS = [
-  "asteroids",
-  "pong",
-  "space-invaders",
-] as const;
 
 const LAUNCHER_ARTWORK_SIZES =
   "(min-width: 1200px) 23.333rem, (min-width: 944px) calc(33.333vw - 1.667rem), (min-width: 640px) calc(50vw - 2rem), calc(100vw - 2rem)";
@@ -181,7 +176,7 @@ describe("game launcher", () => {
   it("keeps private-room host controls out of launcher cards", () => {
     const markup = renderToStaticMarkup(<GameLauncher />);
 
-    for (const gameId of PRIVATE_ROOM_HOSTABLE_GAME_IDS) {
+    for (const gameId of MULTIPLAYER_GAME_IDS) {
       expect(markup).not.toContain(`data-testid="private-room-host-${gameId}-button"`);
       expect(markup).not.toContain(`data-testid="private-room-host-${gameId}-status"`);
     }
@@ -196,7 +191,7 @@ describe("game launcher", () => {
       </CurrentUserProvider>,
     );
 
-    for (const gameId of PRIVATE_ROOM_HOSTABLE_GAME_IDS) {
+    for (const gameId of MULTIPLAYER_GAME_IDS) {
       expect(markup).not.toContain(`data-testid="private-room-host-${gameId}-button"`);
       expect(markup).not.toContain(`data-testid="private-room-host-${gameId}-status"`);
     }
