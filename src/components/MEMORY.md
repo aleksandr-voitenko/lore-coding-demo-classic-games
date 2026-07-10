@@ -22,24 +22,45 @@ This file covers React component ownership and shared game UI conventions under
   viewport preservation, and placement of the shared `UserAccountControls`.
   Keep browser-only `window` access in this client component; it snapshots
   `window.scrollX` and `window.scrollY` before opening a game and restores the
-  viewport when returning to the launcher.
-- `multiplayer-room-lobby.tsx` owns the generic private-room lobby/shell UI plus
-  HTTP helpers for room creation and authenticated host-only commands.
-  `multiplayer-room-transport.ts` owns the browser WebSocket room transport,
-  URL derivation from `NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL`, generic
-  non-host `room.command` and `game.input` envelope sending, and
-  reconnect/bootstrap handling. Host-only lifecycle/settings commands stay on
-  the Next HTTP route until the WebSocket sidecar has an authenticated host
-  session model. Live room snapshots, guest-capable room commands, and game input
-  require the WebSocket stream; do not reintroduce browser HTTP polling or POST
-  fallback for those paths. Keep both surfaces game-agnostic; actual game play,
-  score submission, replay derivation, and server transport authority belong
-  outside the shell.
+  viewport when returning to the launcher. It also reconciles private-room URL
+  entries on `popstate` while retaining launcher-owned tab, parameter, selection,
+  and viewport state. Forward always bootstraps authoritative room state; it may
+  reuse only a launcher-created participant id scoped to the same signed-in user.
+  Popstate, account changes, and unmount invalidate in-flight room creation so a
+  stale response cannot navigate or replace a newer creation status.
+  Multiplayer card availability and count come from the pure registry in
+  `src/lib/multiplayer/game-registry.ts`, not a launcher-local game-id list.
+- `multiplayer-room-lobby.tsx` owns the generic private-room lobby/shell UI and
+  browser session state: participant resolution, fresh snapshot selection,
+  host derivation, diagnostics presentation, and pending form/action state.
+  `multiplayer-room-client.ts` owns validated browser HTTP room creation and
+  authenticated host-command helpers plus the game-agnostic HTTP/WebSocket
+  dispatch boundary consumed by the shell. `multiplayer-room-transport.ts` owns
+  the low-level browser WebSocket lifecycle, URL derivation from
+  `NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL`, generic non-host `room.command` and
+  `game.input` envelopes, resume/hello bootstrap, reconnect, timeout,
+  cancellation, and inbound message validation. Host-only lifecycle/settings
+  commands stay on the Next HTTP route until the WebSocket sidecar has an
+  authenticated host session model. Live room snapshots, guest-capable room
+  commands, and game input require the WebSocket stream; do not reintroduce
+  browser HTTP polling or POST fallback for those paths. Bootstrap and
+  command-ack deadlines default to five seconds and remain configurable at the
+  transport boundary. Bootstrap timeouts reconnect, while command timeouts
+  reject without automatic retry because the server may have applied a command
+  before its ack was lost and request ids are not idempotency keys. Keep these
+  surfaces game-agnostic; actual game play, score submission, replay derivation,
+  and server transport authority belong outside the shell. Validate inbound
+  WebSocket and successful room HTTP snapshots with the shared
+  transport-neutral protocol guards before updating React state. The low-level
+  WebSocket transport normalizes its requested room code once before sending
+  messages or scoping inbound validation.
 - Active multiplayer game UI should be selected through a client
   renderer/input registry keyed by `gameId`. A renderer consumes authoritative
   server snapshots/events and emits adapter-owned intents through the generic
   transport envelope; it does not own canonical game state, result ordering,
   solo replay saving, or solo leaderboard submission.
+  Keep that renderer map exhaustive over the shared `MultiplayerGameId` so a
+  registry addition cannot omit its client implementation silently.
 - The future Space Invaders multiplayer renderer should present two independent
   ship seats, `ship-a` and `ship-b`, on one shared alien wave with shared score
   and lives. It should display server-owned outcomes for simultaneous hits and
@@ -58,8 +79,9 @@ This file covers React component ownership and shared game UI conventions under
   shell behavior.
 - `game-card-artwork-frame.tsx` owns the shared launcher-style key-art frame
   used by launcher cards and the global leaderboard cards. Keep the blurred
-  background, dark overlay, centered rounded foreground image, direct versioned
-  public URL behavior, and button-safe `<span>` structure together there.
+  background, dark overlay, centered rounded foreground image, responsive
+  optimizer sizing, versioned source URL, and button-safe `<span>` structure
+  together there.
 - `game-leaderboard.tsx` renders the shared top-three panel and save-score form.
   `use-game-leaderboard.ts` in `src/hooks/` owns the client state feeding those
   components and pre-fills the signed-in display name when available.
@@ -140,7 +162,16 @@ This file covers React component ownership and shared game UI conventions under
   stamp active elapsed milliseconds on each event and pause that replay clock
   while Pause, Help, or abandon-confirm overlays stop the player's active view;
   replay players schedule playback from those elapsed timestamps instead of
-  fixed per-turn delays.
+  fixed per-turn delays. `game-replay-playback.ts` ignores stale saved-replay
+  load settlements and owns the main elapsed-frame timeout, shared
+  ready/finished state, and ref cleanup on player unmount. Focused replay
+  players keep their game-specific frame reducers and visual side effects;
+  Minesweeper and Simon also keep their cursor timers local so
+  cursor-before-action ordering remains explicit. Replacing a loader or
+  initializer must synchronously cancel the current main-frame timeout before
+  replacement playback refs can be installed. Every accepted load increments an
+  internal scheduling generation so replacement playback starts even when its
+  initialized game keeps the same object identity.
   Minesweeper and Simon live recordings also sample mouse movement over the
   board into a separate cursor event stream every 50ms, and their replay
   playback draws that stream as a schematic board-local cursor without moving
@@ -185,6 +216,11 @@ This file covers React component ownership and shared game UI conventions under
   confirmation owns a theme-aware modal palette through `--game-abandon-*`
   tokens, so game components should pass behavior only rather than
   board-specific dialog colors.
+- Shared Help and abandon surfaces use Base UI modal dialogs for focus trapping
+  and background isolation. Keep their `data-game-modal` marker so shared game
+  input ignores every mounted modal. Their shared return-focus helper defers
+  restoration until the parent flow re-enables the action opener after close
+  and must not override focus intentionally taken by another surface.
 - Completed UI surfaces that show a Back, Close, Done, or equivalent return
   action should let Escape trigger that same action. Keep this behavior
   consistent across game overlays, replay screens, and modal-like UI unless a
@@ -198,7 +234,8 @@ This file covers React component ownership and shared game UI conventions under
 
 - Use `shouldIgnoreGameKeyDown`, `registerGameKeyDown`, and `registerGameKeyUp`
   from `game-input.ts` for game-level global keyboard handlers that should ignore
-  Help overlays, pending leaderboard entry, and typing targets.
+  Help overlays, mounted shared game modals, pending leaderboard entry, and
+  typing targets.
 - Direct game-level keyboard pause/resume shortcuts should use `isGamePauseKey`;
   `P` is the only direct pause key, while Space remains available for
   game-specific actions such as start, hard drop, or fire.

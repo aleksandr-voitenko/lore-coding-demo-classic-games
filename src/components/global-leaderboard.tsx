@@ -142,7 +142,7 @@ function GlobalLeaderboardCard({
       <GameCardArtworkFrame
         artwork={artwork}
         artworkSrc={artworkSrc}
-        backgroundSizes="(min-width: 1280px) 22rem, (min-width: 768px) 50vw, calc(100vw - 2rem)"
+        backgroundSizes="(min-width: 1280px) 23.333rem, (min-width: 1200px) 35.5rem, (min-width: 768px) calc(50vw - 2rem), (min-width: 640px) calc(100vw - 3rem), calc(100vw - 2rem)"
       />
 
       <header className="flex flex-col gap-1 px-4 pt-4">

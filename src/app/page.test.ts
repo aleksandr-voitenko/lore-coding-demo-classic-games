@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { getInitialReplayGameId, getInitialRoomCode } from "./page";
+import { getInitialReplayGameId, getInitialRoomCode } from "./home-search-params";
+import * as homePage from "./page";
+
+describe("home page entry exports", () => {
+  it("exposes only supported Next.js page fields", () => {
+    expect(Object.keys(homePage).sort()).toEqual(["default", "dynamic", "runtime"]);
+  });
+});
 
 describe("home replay query parsing", () => {
   it("allows only games with replay players to launch in latest replay mode", () => {

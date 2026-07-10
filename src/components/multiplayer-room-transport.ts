@@ -18,10 +18,16 @@ import type {
   MultiplayerRoomGameSnapshot,
   PrivateRoomCommandMessage,
 } from "@/lib/multiplayer/protocol";
-import type { PrivateRoom } from "@/lib/multiplayer/room";
+import { isMultiplayerRealtimeServerMessage } from "@/lib/multiplayer/protocol-validation";
+import {
+  normalizePrivateRoomCode,
+  type PrivateRoom,
+} from "@/lib/multiplayer/room";
 
 const OPEN_WEBSOCKET_READY_STATE = 1;
 const DEFAULT_RECONNECT_DELAY_MS = 500;
+const DEFAULT_BOOTSTRAP_TIMEOUT_MS = 5_000;
+const DEFAULT_COMMAND_ACK_TIMEOUT_MS = 5_000;
 const DEFAULT_DIAGNOSTICS_PING_INTERVAL_MS = 1_000;
 const DIAGNOSTICS_REQUEST_ID_PREFIX = "diagnostics";
 
@@ -82,6 +88,7 @@ export type MultiplayerRoomWebSocketConstructor = new (
 type PendingTransportRequest = {
   reject: (error: MultiplayerRoomTransportError) => void;
   resolve: (ack: MultiplayerRoomTransportAck) => void;
+  timeoutId: ReturnType<typeof setTimeout> | null;
 };
 
 type CreateConnectionMessageOptions = {
@@ -93,6 +100,8 @@ type CreateConnectionMessageOptions = {
 };
 
 type CreateWebSocketTransportOptions = {
+  bootstrapTimeoutMs?: number;
+  commandAckTimeoutMs?: number;
   displayName?: string | null;
   lastSeq?: MultiplayerRealtimeConnectionCursor | null;
   onBootstrap: (snapshot: MultiplayerRoomTransportSnapshot) => void;
@@ -109,6 +118,8 @@ type CreateWebSocketTransportOptions = {
 };
 
 type UseMultiplayerRoomWebSocketTransportOptions = {
+  bootstrapTimeoutMs?: number;
+  commandAckTimeoutMs?: number;
   diagnosticsEnabled?: boolean;
   diagnosticsPingIntervalMs?: number;
   displayName?: string | null;
@@ -287,6 +298,8 @@ export function createMultiplayerRoomDiagnosticsPingMessage(
 }
 
 export function createMultiplayerRoomWebSocketTransport({
+  bootstrapTimeoutMs = DEFAULT_BOOTSTRAP_TIMEOUT_MS,
+  commandAckTimeoutMs = DEFAULT_COMMAND_ACK_TIMEOUT_MS,
   displayName,
   lastSeq,
   onBootstrap,
@@ -297,7 +310,7 @@ export function createMultiplayerRoomWebSocketTransport({
   onParticipantId,
   onSnapshot,
   participantId,
-  roomCode,
+  roomCode: requestedRoomCode,
   url,
   webSocketConstructor = getBrowserWebSocketConstructor(),
 }: CreateWebSocketTransportOptions) {
@@ -305,21 +318,101 @@ export function createMultiplayerRoomWebSocketTransport({
     throw new MultiplayerRoomTransportError("WebSocket is not available.");
   }
 
+  const normalizedRoomCode = normalizePrivateRoomCode(requestedRoomCode);
+
+  if (normalizedRoomCode === null) {
+    throw new MultiplayerRoomTransportError("Room code is not supported.");
+  }
+
+  const roomCode = normalizedRoomCode;
   const socket = new webSocketConstructor(url);
   const pendingRequests = new Map<string, PendingTransportRequest>();
   const connectionRequestId = createMultiplayerRoomRequestId("connection");
+  let bootstrapTimeoutId: ReturnType<typeof setTimeout> | null = setTimeout(
+    handleBootstrapTimeout,
+    bootstrapTimeoutMs,
+  );
   let hasBootstrapped = false;
   let isDiagnosticsPingUnsupported = false;
   let isClosedByClient = false;
+  let isTerminated = false;
 
-  function rejectPendingRequests(message: string) {
-    const error = new MultiplayerRoomTransportError(message);
-
+  function rejectPendingRequests(error: MultiplayerRoomTransportError) {
     for (const pendingRequest of pendingRequests.values()) {
+      clearPendingRequestTimeout(pendingRequest);
       pendingRequest.reject(error);
     }
 
     pendingRequests.clear();
+  }
+
+  function clearBootstrapTimeout() {
+    if (bootstrapTimeoutId !== null) {
+      clearTimeout(bootstrapTimeoutId);
+      bootstrapTimeoutId = null;
+    }
+  }
+
+  function clearPendingRequestTimeout(
+    pendingRequest: PendingTransportRequest,
+  ) {
+    if (pendingRequest.timeoutId !== null) {
+      clearTimeout(pendingRequest.timeoutId);
+      pendingRequest.timeoutId = null;
+    }
+  }
+
+  function terminateTransport({
+    closeSocket,
+    error,
+    notifyClose,
+    reportError,
+  }: {
+    closeSocket: boolean;
+    error: MultiplayerRoomTransportError;
+    notifyClose: boolean;
+    reportError: boolean;
+  }) {
+    if (isTerminated) {
+      return;
+    }
+
+    isTerminated = true;
+    clearBootstrapTimeout();
+    cleanup();
+    rejectPendingRequests(error);
+
+    if (
+      closeSocket &&
+      (socket.readyState === 0 || socket.readyState === OPEN_WEBSOCKET_READY_STATE)
+    ) {
+      socket.close();
+    }
+
+    if (reportError) {
+      onError?.(error);
+    }
+
+    if (notifyClose) {
+      onClose?.();
+    }
+  }
+
+  function handleBootstrapTimeout() {
+    if (hasBootstrapped) {
+      return;
+    }
+
+    const error = new MultiplayerRoomTransportError(
+      "Room stream connection timed out.",
+    );
+
+    terminateTransport({
+      closeSocket: true,
+      error,
+      notifyClose: true,
+      reportError: true,
+    });
   }
 
   function sendMessage(message: MultiplayerRealtimeConnectionMessage): void;
@@ -355,7 +448,7 @@ export function createMultiplayerRoomWebSocketTransport({
   }
 
   function handleMessage(event: MessageEvent<unknown>) {
-    const message = parseServerMessage(event.data);
+    const message = parseServerMessage(event.data, roomCode);
 
     if (message === null) {
       onError?.(
@@ -370,6 +463,7 @@ export function createMultiplayerRoomWebSocketTransport({
       const snapshot = createTransportSnapshot(message.snapshot);
 
       hasBootstrapped = true;
+      clearBootstrapTimeout();
       notifyParticipantId(snapshot.participantId);
       onBootstrap(snapshot);
       return;
@@ -445,12 +539,12 @@ export function createMultiplayerRoomWebSocketTransport({
   }
 
   function handleClose() {
-    cleanup();
-    rejectPendingRequests("Room stream closed.");
-
-    if (!isClosedByClient) {
-      onClose?.();
-    }
+    terminateTransport({
+      closeSocket: false,
+      error: new MultiplayerRoomTransportError("Room stream closed."),
+      notifyClose: !isClosedByClient,
+      reportError: false,
+    });
   }
 
   function resolvePendingRequest(
@@ -468,6 +562,7 @@ export function createMultiplayerRoomWebSocketTransport({
     }
 
     pendingRequests.delete(requestId);
+    clearPendingRequestTimeout(pendingRequest);
     pendingRequest.resolve(ack);
   }
 
@@ -488,6 +583,7 @@ export function createMultiplayerRoomWebSocketTransport({
     }
 
     pendingRequests.delete(requestId);
+    clearPendingRequestTimeout(pendingRequest);
     pendingRequest.reject(error);
   }
 
@@ -552,12 +648,36 @@ export function createMultiplayerRoomWebSocketTransport({
     sendRequest: () => void,
   ): Promise<MultiplayerRoomTransportAck> {
     return new Promise((resolve, reject) => {
-      pendingRequests.set(requestId, { reject, resolve });
+      const pendingRequest: PendingTransportRequest = {
+        reject,
+        resolve,
+        timeoutId: null,
+      };
+
+      pendingRequests.set(requestId, pendingRequest);
+      pendingRequest.timeoutId = setTimeout(() => {
+        if (pendingRequests.get(requestId) !== pendingRequest) {
+          return;
+        }
+
+        // The server may have applied a command whose ack was lost. Request ids
+        // are not idempotency keys, so recovery must reject instead of retrying.
+        pendingRequests.delete(requestId);
+        pendingRequest.timeoutId = null;
+        pendingRequest.reject(
+          new MultiplayerRoomTransportError(
+            "Room command response timed out.",
+          ),
+        );
+      }, commandAckTimeoutMs);
 
       try {
         sendRequest();
       } catch (error) {
-        pendingRequests.delete(requestId);
+        if (pendingRequests.get(requestId) === pendingRequest) {
+          pendingRequests.delete(requestId);
+        }
+        clearPendingRequestTimeout(pendingRequest);
         reject(toTransportError(error));
       }
     });
@@ -565,12 +685,12 @@ export function createMultiplayerRoomWebSocketTransport({
 
   function close() {
     isClosedByClient = true;
-    cleanup();
-    rejectPendingRequests("Room stream closed.");
-
-    if (socket.readyState === 0 || socket.readyState === OPEN_WEBSOCKET_READY_STATE) {
-      socket.close();
-    }
+    terminateTransport({
+      closeSocket: true,
+      error: new MultiplayerRoomTransportError("Room stream closed."),
+      notifyClose: false,
+      reportError: false,
+    });
   }
 
   socket.addEventListener("open", handleOpen);
@@ -588,6 +708,8 @@ export function createMultiplayerRoomWebSocketTransport({
 }
 
 export function useMultiplayerRoomWebSocketTransport({
+  bootstrapTimeoutMs = DEFAULT_BOOTSTRAP_TIMEOUT_MS,
+  commandAckTimeoutMs = DEFAULT_COMMAND_ACK_TIMEOUT_MS,
   diagnosticsEnabled = false,
   diagnosticsPingIntervalMs = DEFAULT_DIAGNOSTICS_PING_INTERVAL_MS,
   displayName,
@@ -710,12 +832,13 @@ export function useMultiplayerRoomWebSocketTransport({
       transportRef.current?.close();
       setStatus(isReconnect ? "reconnecting" : "connecting");
 
-      let connectionBootstrapped = false;
       let selectedUnavailable = false;
       const latestOptions = latestOptionsRef.current;
 
       try {
         transportRef.current = createMultiplayerRoomWebSocketTransport({
+          bootstrapTimeoutMs,
+          commandAckTimeoutMs,
           displayName: latestOptions.displayName,
           lastSeq: latestOptions.lastSeq,
           onBootstrap: (snapshot) => {
@@ -723,7 +846,6 @@ export function useMultiplayerRoomWebSocketTransport({
               return;
             }
 
-            connectionBootstrapped = true;
             hasBootstrappedRef.current = true;
             setStatus("active");
             latestOptionsRef.current.onSnapshot(snapshot);
@@ -744,11 +866,6 @@ export function useMultiplayerRoomWebSocketTransport({
             }
 
             transportRef.current = null;
-
-            if (!connectionBootstrapped && !hasBootstrappedRef.current) {
-              setStatus("unavailable");
-              return;
-            }
 
             setStatus("reconnecting");
             reconnectTimeoutId = window.setTimeout(() => {
@@ -818,6 +935,8 @@ export function useMultiplayerRoomWebSocketTransport({
       transportRef.current = null;
     };
   }, [
+    bootstrapTimeoutMs,
+    commandAckTimeoutMs,
     enabled,
     reconnectDelayMs,
     roomCode,
@@ -958,6 +1077,7 @@ function normalizeConnectionCursor(
 
 function parseServerMessage(
   data: unknown,
+  expectedRoomCode: string,
 ): MultiplayerRealtimeServerMessage<MultiplayerRoomGameSnapshot> | null {
   if (typeof data !== "string") {
     return null;
@@ -966,16 +1086,15 @@ function parseServerMessage(
   try {
     const parsedMessage = JSON.parse(data) as unknown;
 
-    return isServerMessage(parsedMessage) ? parsedMessage : null;
+    return isMultiplayerRealtimeServerMessage(
+      parsedMessage,
+      expectedRoomCode,
+    )
+      ? parsedMessage
+      : null;
   } catch {
     return null;
   }
-}
-
-function isServerMessage(
-  value: unknown,
-): value is MultiplayerRealtimeServerMessage<MultiplayerRoomGameSnapshot> {
-  return typeof value === "object" && value !== null && "type" in value;
 }
 
 function createTransportSnapshot(

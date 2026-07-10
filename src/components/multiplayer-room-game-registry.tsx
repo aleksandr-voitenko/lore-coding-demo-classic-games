@@ -10,6 +10,10 @@ import type {
   AsteroidsMultiplayerClientInput,
   AsteroidsMultiplayerGameSnapshot,
 } from "@/lib/asteroids-multiplayer";
+import {
+  isMultiplayerGameId,
+  type MultiplayerGameId,
+} from "@/lib/multiplayer/game-registry";
 import type {
   PrivateRoom,
   PrivateRoomParticipant,
@@ -47,7 +51,7 @@ export type MultiplayerRoomGameRendererProps<
 };
 
 export type MultiplayerRoomGameRenderer = {
-  gameId: GameId;
+  gameId: MultiplayerGameId;
   View: ComponentType<MultiplayerRoomGameRendererProps>;
 };
 
@@ -157,8 +161,8 @@ function AsteroidsMultiplayerRoomRendererView({
   );
 }
 
-const MULTIPLAYER_ROOM_GAME_RENDERERS: Partial<
-  Record<GameId, MultiplayerRoomGameRenderer>
+const MULTIPLAYER_ROOM_GAME_RENDERERS: Readonly<
+  Record<MultiplayerGameId, MultiplayerRoomGameRenderer>
 > = {
   asteroids: {
     gameId: "asteroids",
@@ -179,6 +183,10 @@ export function getMultiplayerRoomGameRenderer(
   game: MultiplayerRoomGameSnapshot | null | undefined,
 ) {
   if (game === null || game === undefined || room.settings.gameId !== game.gameId) {
+    return null;
+  }
+
+  if (!isMultiplayerGameId(room.settings.gameId)) {
     return null;
   }
 

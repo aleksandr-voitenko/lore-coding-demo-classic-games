@@ -12,8 +12,6 @@ import {
   createGameReplayRandom,
   createGameReplayRun as createGenericGameReplayRun,
   fetchGameReplay,
-  getGameReplayApiPath,
-  getGameReplayRunApiPath,
   isNonNegativeInteger,
   isRecord,
   normalizeGameReplayRunId,
@@ -80,8 +78,6 @@ export type ParseTetrisReplayPayloadResult =
 
 export const TETRIS_REPLAY_SCHEMA_VERSION = 1;
 export const TETRIS_REPLAY_GAME_ID = "tetris";
-export const TETRIS_REPLAY_API_PATH = getGameReplayApiPath(TETRIS_REPLAY_GAME_ID);
-export const TETRIS_REPLAY_RUN_API_PATH = getGameReplayRunApiPath(TETRIS_REPLAY_GAME_ID);
 export const MAX_TETRIS_REPLAY_EVENTS = 80_000;
 
 const TETRIS_MIN_BOARD_WIDTH = 4;

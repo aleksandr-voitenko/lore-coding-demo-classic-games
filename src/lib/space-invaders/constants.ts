@@ -16,15 +16,6 @@ export const SPACE_INVADERS_STARTING_LIVES = 3;
 export const SPACE_INVADERS_BASE_Y = 492;
 export const SPACE_INVADERS_TICK_DELAY_MS = 34;
 export const SPACE_INVADERS_EXPLOSION_VARIANTS = [1, 2, 3, 4] as const;
-export const SPACE_INVADERS_POWER_UP_KINDS: SpaceInvadersPowerUpKind[] = [
-  "bonus-score",
-  "burst-shot",
-  "extra-life",
-  "freeze",
-  "piercing-laser",
-  "shield",
-  "shotgun-shot",
-];
 export const SPACE_INVADERS_COMMON_POWER_UP_KINDS: Exclude<
   SpaceInvadersPowerUpKind,
   "extra-life"

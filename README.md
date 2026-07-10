@@ -63,16 +63,23 @@ npm run dev:multiplayer
 ```
 
 The wrapper binds Next and the sidecar to `0.0.0.0`, discovers a private LAN IPv4
-address for browser WebSocket URLs, and prints the shareable app URL. Override
-the detected address when the machine has multiple network interfaces:
+address for browser WebSocket URLs, prints the shareable app URL, and adds that
+exact host to Next's development-origin allowlist. Override the detected address
+when the machine has multiple network interfaces:
 
 ```bash
 MULTIPLAYER_DEV_PUBLIC_HOST=10.125.3.39 npm run dev:multiplayer
 ```
 
+The detected or overridden public host must be a bare dotted-decimal IPv4
+address. The wrapper rejects protocols, ports, paths, hostnames, IPv6 literals,
+and wildcards instead of forwarding them to Next's development-origin matcher.
+
 Optional wrapper overrides include `MULTIPLAYER_DEV_NEXT_PORT`,
 `MULTIPLAYER_DEV_SIDECAR_PORT`, and
-`MULTIPLAYER_DEV_SNAPSHOT_INTERVAL_MS`. Next still talks to the sidecar through
+`MULTIPLAYER_DEV_SNAPSHOT_INTERVAL_MS`. Sidecar-specific settings such as
+`MULTIPLAYER_SIDECAR_MAX_ROOMS` are inherited by the child process. Next still
+talks to the sidecar through
 `127.0.0.1`; only browser-facing URLs use the detected LAN address.
 
 Build and run the experimental multiplayer room sidecar in a separate terminal:
@@ -95,7 +102,11 @@ room service on `/_internal/multiplayer/rooms`:
 Override the bind address and path with `MULTIPLAYER_SIDECAR_HOST`,
 `MULTIPLAYER_SIDECAR_PORT`, `MULTIPLAYER_SIDECAR_WEBSOCKET_PATH`, and
 `MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH` when wiring it behind a local proxy. The
-sidecar pushes fresh snapshots for subscribed running rooms every 33ms by
+sidecar retains at most 256 rooms by default; set
+`MULTIPLAYER_SIDECAR_MAX_ROOMS` to a positive integer when a deployment needs a
+different per-process capacity.
+
+The sidecar pushes fresh snapshots for subscribed running rooms every 33ms by
 default; tune that with `MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS` during
 latency testing. Use `16` for local full-snapshot experiments, keep `33` for
 production-like smoothing work, and use `50` as a lower-bandwidth fallback. Full
@@ -113,6 +124,26 @@ not write inputs, ticks, power-up awards, or other per-event room history into
 SQLite. Restarting the sidecar abandons waiting and active rooms owned by that
 process, so players should create a new room after a restart instead of
 expecting replay-log recovery.
+
+Volatile rooms also have bounded idle retention. An unconnected lobby expires
+after 60 minutes without a successful participant or host command; an
+unconnected running or paused room expires after two hours; and a completed
+game or explicitly finished room expires after 30 minutes. Passive invite
+reads, connection handshakes, diagnostics pings, snapshot delivery, and
+server-owned game ticks do not refresh those clocks. A WebSocket carrying a
+participant capability that still belongs to the room protects it from expiry,
+and the final recognized disconnect grants the room its full state-specific
+grace period again.
+
+The sidecar sweeps expired rooms about once a minute and also checks retention
+during room operations. At capacity it removes expired rooms first, then the
+oldest unconnected terminal room, then the oldest unconnected lobby. It never
+capacity-evicts nonterminal running or paused games or rooms with recognized
+participant connections; if no safe candidate exists, creation returns a
+retryable `503`. Expired room codes return `410 room-expired` for up to five
+minutes so clients can explain what happened, then fall back to the ordinary
+`404` response. Both retained expired-code markers and live rooms remain
+bounded by the configured capacity.
 
 Append `multiplayerDiagnostics=1` to a room URL to show a small client-side
 diagnostics overlay with snapshot rate, jitter, ping, stream sequence gaps, and
@@ -280,8 +311,11 @@ GitHub Actions runs these checks on pushes to `main` and pull requests that
 change code or build-affecting files: `npm ci`, `npm run build`,
 `npm run lint`, `npm run typecheck`, `npm run check:deps`,
 `npm run check:unused`,
-`npm run test:coverage:core`, and `npm run test:e2e`. Documentation-only
-changes such as Markdown, `docs/**`, and `LICENSE` are ignored by CI.
+`npm run test:coverage:core`, `npm run test:e2e`, and
+`npm run test:e2e:sidecar`. The sidecar suite rebuilds and starts the emitted
+multiplayer sidecar before exercising its isolated browser flows.
+Documentation-only changes such as Markdown, `docs/**`, and `LICENSE` are
+ignored by CI.
 
 After those checks pass on a push to `main`, GitHub Actions builds the
 `linux/amd64` and `linux/arm64` Docker images and pushes a multi-platform

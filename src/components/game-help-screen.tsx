@@ -1,9 +1,12 @@
 "use client";
 
+import { Dialog } from "@base-ui/react/dialog";
 import { XIcon, type LucideIcon } from "lucide-react";
-import { useEffect } from "react";
+import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { useGameDialogReturnFocus } from "@/components/game-dialog-focus";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export type GameHelpSection = {
   controls?: GameHelpControlRow[];
@@ -35,59 +38,74 @@ export function GameHelpScreen({
   testId,
   title,
 }: GameHelpScreenProps) {
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape") {
-        return;
-      }
-
-      event.preventDefault();
-      onClose();
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  const [isOpen, setIsOpen] = useState(true);
+  const { restoreReturnFocus, returnFocusRef } = useGameDialogReturnFocus();
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
-      data-testid={testId}
-      role="dialog"
-      aria-label={`${title} help`}
+    <Dialog.Root
+      disablePointerDismissal
+      onOpenChange={setIsOpen}
+      onOpenChangeComplete={(open) => {
+        if (!open) {
+          onClose();
+          restoreReturnFocus();
+        }
+      }}
+      open={isOpen}
     >
-      <div className="flex max-h-[min(36rem,calc(100svh-2rem))] w-full max-w-2xl flex-col gap-4 overflow-hidden rounded-md border border-[var(--game-help-border)] bg-[var(--game-help-panel)] p-4 text-left text-[var(--game-help-ink)] shadow-[0_24px_80px_var(--game-help-shadow)]">
-        <div className="flex shrink-0 items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-col gap-1">
-            <p className="text-xs font-semibold uppercase tracking-normal opacity-70">Help</p>
-            <h2 className="text-2xl font-semibold tracking-normal text-balance">{title}</h2>
-          </div>
-          <Button
-            aria-label="Close help"
-            autoFocus
-            className="!border-[var(--game-help-border)] !bg-[var(--game-help-close-bg)] !text-[var(--game-help-close-ink)] hover:!bg-[var(--game-help-close-hover-bg)] hover:!text-[var(--game-help-close-ink)] focus-visible:!border-[var(--game-help-focus-border)] focus-visible:!ring-[var(--game-help-focus-ring)]"
-            data-testid={`${testId}-close`}
-            onClick={onClose}
-            size="icon"
-            type="button"
-            variant="outline"
-          >
-            <XIcon />
-          </Button>
-        </div>
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm" />
+        <Dialog.Popup
+          aria-label={`${title} help`}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 outline-none"
+          data-game-modal
+          data-testid={testId}
+          initialFocus
+          finalFocus={returnFocusRef}
+        >
+          <div className="flex max-h-[min(36rem,calc(100svh-2rem))] w-full max-w-2xl flex-col gap-4 overflow-hidden rounded-md border border-[var(--game-help-border)] bg-[var(--game-help-panel)] p-4 text-left text-[var(--game-help-ink)] shadow-[0_24px_80px_var(--game-help-shadow)]">
+            <div className="flex shrink-0 items-start justify-between gap-3">
+              <div className="flex min-w-0 flex-col gap-1">
+                <p className="text-xs font-semibold uppercase tracking-normal opacity-70">
+                  Help
+                </p>
+                <Dialog.Title className="text-2xl font-semibold tracking-normal text-balance">
+                  {title}
+                  <span className="sr-only"> help</span>
+                </Dialog.Title>
+              </div>
+              <Dialog.Close
+                aria-label="Close help"
+                className={cn(
+                  buttonVariants({ size: "icon", variant: "outline" }),
+                  "!border-[var(--game-help-border)] !bg-[var(--game-help-close-bg)] !text-[var(--game-help-close-ink)] hover:!bg-[var(--game-help-close-hover-bg)] hover:!text-[var(--game-help-close-ink)] focus-visible:!border-[var(--game-help-focus-border)] focus-visible:!ring-[var(--game-help-focus-ring)]",
+                )}
+                data-slot="button"
+                data-testid={`${testId}-close`}
+                type="button"
+              >
+                <XIcon />
+              </Dialog.Close>
+            </div>
 
-        <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-4 overflow-hidden sm:grid-cols-[minmax(0,max-content)_minmax(0,1fr)] sm:grid-rows-[minmax(0,1fr)]">
-          {sections.map((section) => (
-            <section className="flex min-h-0 min-w-0 flex-col gap-2 overflow-hidden" key={section.title}>
-              <h3 className="text-sm font-semibold tracking-normal">{section.title}</h3>
-              {section.controls ? <GameHelpControls controls={section.controls} /> : null}
-              {section.items ? <GameHelpItems items={section.items} /> : null}
-            </section>
-          ))}
-        </div>
-      </div>
-    </div>
+            <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-4 overflow-hidden sm:grid-cols-[minmax(0,max-content)_minmax(0,1fr)] sm:grid-rows-[minmax(0,1fr)]">
+              {sections.map((section) => (
+                <section
+                  className="flex min-h-0 min-w-0 flex-col gap-2 overflow-hidden"
+                  key={section.title}
+                >
+                  <h3 className="text-sm font-semibold tracking-normal">{section.title}</h3>
+                  {section.controls ? (
+                    <GameHelpControls controls={section.controls} />
+                  ) : null}
+                  {section.items ? <GameHelpItems items={section.items} /> : null}
+                </section>
+              ))}
+            </div>
+          </div>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

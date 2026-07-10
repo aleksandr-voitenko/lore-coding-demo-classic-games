@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SqliteReplayStore } from "@/lib/server/sqlite-replay-store";
 
-import { createTwentyFortyEightReplayRunRouteHandlers } from "./route";
+import { createTwentyFortyEightReplayRunRouteHandlers } from "../route-handlers";
 
 describe("2048 replay run route", () => {
   it("issues 2048 replay runs through the wrapper", async () => {

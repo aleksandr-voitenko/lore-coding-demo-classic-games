@@ -4,6 +4,11 @@ import os from "node:os";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import {
+  isExactIPv4Host,
+  readOptionalExactIPv4Host,
+} from "./exact-ipv4-host.mjs";
+
 const DEFAULT_NEXT_HOST = "0.0.0.0";
 const DEFAULT_NEXT_PORT = 3000;
 const DEFAULT_PUBLIC_HOST = "127.0.0.1";
@@ -37,8 +42,14 @@ export function resolveMultiplayerDevConfig(
 ) {
   const lanCandidates = getLanIPv4Candidates(networkInterfaces);
   const publicHost =
-    getOptionalEnvString(env.MULTIPLAYER_DEV_PUBLIC_HOST) ??
-    getOptionalEnvString(env.NEXT_PUBLIC_MULTIPLAYER_HOST) ??
+    readOptionalExactIPv4Host(
+      env.MULTIPLAYER_DEV_PUBLIC_HOST,
+      "MULTIPLAYER_DEV_PUBLIC_HOST",
+    ) ??
+    readOptionalExactIPv4Host(
+      env.NEXT_PUBLIC_MULTIPLAYER_HOST,
+      "NEXT_PUBLIC_MULTIPLAYER_HOST",
+    ) ??
     lanCandidates[0]?.address ??
     DEFAULT_PUBLIC_HOST;
   const sidecarPort = readIntegerEnv(
@@ -111,6 +122,7 @@ export function createMultiplayerDevProcessSpecs(config, env = process.env) {
       ],
       env: {
         ...env,
+        MULTIPLAYER_DEV_PUBLIC_HOST: config.publicHost,
         MULTIPLAYER_ROOM_SERVICE_URL: config.roomServiceUrl,
         NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL: config.webSocketUrl,
       },
@@ -207,6 +219,7 @@ function isUsableIPv4Address(address) {
   return (
     !address.internal &&
     (address.family === "IPv4" || address.family === 4) &&
+    isExactIPv4Host(address.address) &&
     address.address !== "0.0.0.0"
   );
 }

@@ -39,6 +39,11 @@ import {
   type LiveGameReplayRecording,
 } from "@/components/game-replay-recording";
 import {
+  pauseGameReplayRecordingClock,
+  resumeGameReplayRecordingClock,
+  type GameReplayClockedRecording,
+} from "@/components/game-replay-timing";
+import {
   appendLiveGameReplayCursorEvent,
   createLiveGameReplayCursorRecordingFields,
   getGameReplayActionCursorPosition,
@@ -104,6 +109,11 @@ type MinesweeperReplayPendingAction =
       type: "toggleFlag";
     };
 
+type MinesweeperElapsedClock = {
+  activeElapsedMs: number;
+  activeStartedAtMs: number | null;
+};
+
 const statusLabels: Record<MinesweeperStatus, string> = {
   lost: "Game over",
   ready: "Ready",
@@ -142,6 +152,133 @@ const MINESWEEPER_HELP_SECTIONS: GameHelpSection[] = [
     ],
   },
 ];
+
+export function createMinesweeperElapsedClock(): MinesweeperElapsedClock {
+  return {
+    activeElapsedMs: 0,
+    activeStartedAtMs: null,
+  };
+}
+
+export function getMinesweeperElapsedSeconds(
+  clock: MinesweeperElapsedClock,
+  nowMs: number,
+) {
+  const runningElapsedMs =
+    clock.activeStartedAtMs === null
+      ? 0
+      : Math.max(0, nowMs - clock.activeStartedAtMs);
+
+  return Math.floor((clock.activeElapsedMs + runningElapsedMs) / 1_000);
+}
+
+export function pauseMinesweeperElapsedClock(
+  clock: MinesweeperElapsedClock,
+  nowMs: number,
+) {
+  if (clock.activeStartedAtMs !== null) {
+    clock.activeElapsedMs += Math.max(0, nowMs - clock.activeStartedAtMs);
+    clock.activeStartedAtMs = null;
+  }
+
+  return getMinesweeperElapsedSeconds(clock, nowMs);
+}
+
+export function resumeMinesweeperElapsedClock(
+  clock: MinesweeperElapsedClock,
+  nowMs: number,
+) {
+  if (clock.activeStartedAtMs === null) {
+    clock.activeStartedAtMs = Math.max(0, nowMs);
+  }
+}
+
+export function createMinesweeperTimingController() {
+  let elapsedClock = createMinesweeperElapsedClock();
+  let isHelpVisible = false;
+  let shouldResumeOnClose = false;
+
+  return {
+    closeHelp(
+      status: MinesweeperStatus,
+      nowMs: number,
+      resumeReplayClocks: () => void,
+    ) {
+      if (!isHelpVisible) {
+        return getMinesweeperElapsedSeconds(elapsedClock, nowMs);
+      }
+
+      const shouldResume = shouldResumeOnClose;
+
+      isHelpVisible = false;
+      shouldResumeOnClose = false;
+
+      if (shouldResume && (status === "ready" || status === "running")) {
+        if (status === "running") {
+          resumeMinesweeperElapsedClock(elapsedClock, nowMs);
+        }
+
+        resumeReplayClocks();
+      }
+
+      return getMinesweeperElapsedSeconds(elapsedClock, nowMs);
+    },
+    getElapsedSeconds(nowMs: number) {
+      return getMinesweeperElapsedSeconds(elapsedClock, nowMs);
+    },
+    keepReplayPaused(pauseReplayClock: () => void) {
+      if (isHelpVisible) {
+        shouldResumeOnClose = true;
+        pauseReplayClock();
+      }
+    },
+    openHelp(
+      nowMs: number,
+      pauseReplayClocks: () => void,
+      isTimingActive: boolean,
+    ) {
+      if (!isHelpVisible) {
+        isHelpVisible = true;
+        shouldResumeOnClose = isTimingActive;
+
+        if (isTimingActive) {
+          pauseReplayClocks();
+        }
+      }
+
+      return pauseMinesweeperElapsedClock(elapsedClock, nowMs);
+    },
+    reset(resetReplayClocks: () => void) {
+      elapsedClock = createMinesweeperElapsedClock();
+      isHelpVisible = false;
+      shouldResumeOnClose = false;
+      resetReplayClocks();
+
+      return 0;
+    },
+    transitionStatus(
+      currentStatus: MinesweeperStatus,
+      nextStatus: MinesweeperStatus,
+      nowMs: number,
+    ) {
+      if (currentStatus !== "running" && nextStatus === "running") {
+        if (isHelpVisible) {
+          shouldResumeOnClose = true;
+        } else {
+          resumeMinesweeperElapsedClock(elapsedClock, nowMs);
+        }
+      } else if (currentStatus === "running" && nextStatus !== "running") {
+        pauseMinesweeperElapsedClock(elapsedClock, nowMs);
+      }
+
+      return getMinesweeperElapsedSeconds(elapsedClock, nowMs);
+    },
+  };
+}
+
+function getMinesweeperNowMs() {
+  return globalThis.performance?.now() ?? Date.now();
+}
 
 function createNewMinesweeperGame({
   difficulty,
@@ -227,6 +364,8 @@ function MinesweeperLiveGame({
   const elapsedSecondsRef = useRef(0);
   const gameRef = useRef(game);
   const pendingInitialActionRef = useRef<MinesweeperReplayPendingAction | null>(null);
+  const pendingReplayClockRef = useRef<GameReplayClockedRecording | null>(null);
+  const timingControllerRef = useRef(createMinesweeperTimingController());
   const {
     captureFinishedReplay,
     finishedReplay,
@@ -251,7 +390,67 @@ function MinesweeperLiveGame({
   const leaderboardKey = createGameLeaderboardKey("minesweeper", [
     { name: "difficulty", value: game.difficulty },
   ]);
-  const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen();
+  const updateElapsedSeconds = useCallback((nextElapsedSeconds: number) => {
+    elapsedSecondsRef.current = nextElapsedSeconds;
+    setElapsedSeconds((current) =>
+      current === nextElapsedSeconds ? current : nextElapsedSeconds,
+    );
+
+    return nextElapsedSeconds;
+  }, []);
+  const refreshElapsedSeconds = useCallback(() => {
+    const nextElapsedSeconds = timingControllerRef.current.getElapsedSeconds(
+      getMinesweeperNowMs(),
+    );
+
+    return updateElapsedSeconds(nextElapsedSeconds);
+  }, [updateElapsedSeconds]);
+  const resetGameTiming = useCallback(() => {
+    const nextElapsedSeconds = timingControllerRef.current.reset(() => {
+      pendingReplayClockRef.current = null;
+      resetReplayRecording();
+    });
+
+    updateElapsedSeconds(nextElapsedSeconds);
+  }, [resetReplayRecording, updateElapsedSeconds]);
+  const pauseReplayClocks = useCallback(() => {
+    pauseGameReplayRecordingClock(pendingReplayClockRef.current);
+    pauseRecordingClock();
+  }, [pauseRecordingClock]);
+  const resumeReplayClocks = useCallback(() => {
+    resumeGameReplayRecordingClock(pendingReplayClockRef.current);
+    resumeRecordingClock();
+  }, [resumeRecordingClock]);
+  const {
+    closeHelp: closeHelpFlow,
+    isHelpVisible,
+    openHelp: openHelpFlow,
+  } = useGameHelpScreen();
+  const openHelp = useCallback(() => {
+    const currentStatus = gameRef.current.status;
+    const isTimingActive =
+      currentStatus === "running" ||
+      (currentStatus === "ready" &&
+        (pendingReplayClockRef.current !== null || replayRecordingRef.current !== null));
+    const nextElapsedSeconds = timingControllerRef.current.openHelp(
+      getMinesweeperNowMs(),
+      pauseReplayClocks,
+      isTimingActive,
+    );
+
+    updateElapsedSeconds(nextElapsedSeconds);
+    openHelpFlow();
+  }, [openHelpFlow, pauseReplayClocks, replayRecordingRef, updateElapsedSeconds]);
+  const closeHelp = useCallback(() => {
+    const nextElapsedSeconds = timingControllerRef.current.closeHelp(
+      gameRef.current.status,
+      getMinesweeperNowMs(),
+      resumeReplayClocks,
+    );
+
+    updateElapsedSeconds(nextElapsedSeconds);
+    closeHelpFlow();
+  }, [closeHelpFlow, resumeReplayClocks, updateElapsedSeconds]);
   const { completedSessionId } = useGameSession({
     active: game.status === "running" && !isHelpVisible,
     finalResult:
@@ -283,10 +482,21 @@ function MinesweeperLiveGame({
     onBackToMenu,
   });
 
-  const commitGame = useCallback((nextGame: MinesweeperGameState) => {
-    gameRef.current = nextGame;
-    setGame(nextGame);
-  }, []);
+  const commitGame = useCallback(
+    (nextGame: MinesweeperGameState) => {
+      const currentGame = gameRef.current;
+      const nextElapsedSeconds = timingControllerRef.current.transitionStatus(
+        currentGame.status,
+        nextGame.status,
+        getMinesweeperNowMs(),
+      );
+
+      updateElapsedSeconds(nextElapsedSeconds);
+      gameRef.current = nextGame;
+      setGame(nextGame);
+    },
+    [updateElapsedSeconds],
+  );
 
   const updateCommittedGame = useCallback(
     (updateGame: (current: MinesweeperGameState) => MinesweeperGameState) => {
@@ -313,7 +523,15 @@ function MinesweeperLiveGame({
 
     pendingInitialActionRef.current = initialAction ?? null;
     resetLeaderboardForm();
-    const clock = createGameReplayRecordingClock();
+    const pendingReplayClock = {
+      clock: createGameReplayRecordingClock(),
+    } satisfies GameReplayClockedRecording;
+
+    pendingReplayClockRef.current = pendingReplayClock;
+    timingControllerRef.current.keepReplayPaused(() => {
+      pauseGameReplayRecordingClock(pendingReplayClock);
+    });
+
     const recording = await startLiveReplayRecording(async () => {
       const run = await createMinesweeperReplayRun();
       const random = createMinesweeperReplayRandom(run.seed);
@@ -325,17 +543,23 @@ function MinesweeperLiveGame({
           random: () => number;
         }
       >({
-        clock,
+        clock: pendingReplayClock.clock,
         ...createLiveGameReplayCursorRecordingFields<MinesweeperReplayCursorEvent>(),
         random,
         run,
       });
     });
 
+    if (pendingReplayClockRef.current === pendingReplayClock) {
+      pendingReplayClockRef.current = null;
+    }
+
     if (recording === null) {
       pendingInitialActionRef.current = null;
       return;
     }
+
+    timingControllerRef.current.keepReplayPaused(pauseRecordingClock);
 
     let nextGame = gameRef.current;
 
@@ -372,7 +596,13 @@ function MinesweeperLiveGame({
 
     pendingInitialActionRef.current = null;
     commitGame(nextGame);
-  }, [commitGame, isReplayRunPendingRef, resetLeaderboardForm, startLiveReplayRecording]);
+  }, [
+    commitGame,
+    isReplayRunPendingRef,
+    pauseRecordingClock,
+    resetLeaderboardForm,
+    startLiveReplayRecording,
+  ]);
 
   const startGame = useCallback(() => {
     resetLeaderboardForm();
@@ -388,6 +618,7 @@ function MinesweeperLiveGame({
     const cursorPosition = getGameReplayActionCursorPosition(event, {
       boardTestId: "minesweeper-board",
     });
+    const actionElapsedSeconds = refreshElapsedSeconds();
 
     updateCommittedGame((current) => {
       if (current.status === "ready" && replayRecordingRef.current === null) {
@@ -410,7 +641,7 @@ function MinesweeperLiveGame({
               ...cursorPosition,
               type: "cursorMove",
             },
-            elapsedSecondsRef.current,
+            actionElapsedSeconds,
             { force: true },
           );
         }
@@ -421,7 +652,7 @@ function MinesweeperLiveGame({
             cellId,
             type: "reveal",
           },
-          elapsedSecondsRef.current,
+          actionElapsedSeconds,
         );
 
         return revealMinesweeperCell(current, cellId, { random: recording.random });
@@ -429,7 +660,7 @@ function MinesweeperLiveGame({
 
       return revealMinesweeperCell(current, cellId, { random: Math.random });
     });
-  }, [replayRecordingRef, startReplayRecording, updateCommittedGame]);
+  }, [refreshElapsedSeconds, replayRecordingRef, startReplayRecording, updateCommittedGame]);
 
   const toggleFlag = useCallback((
     cellId: string,
@@ -438,6 +669,7 @@ function MinesweeperLiveGame({
     const cursorPosition = getGameReplayActionCursorPosition(event, {
       boardTestId: "minesweeper-board",
     });
+    const actionElapsedSeconds = refreshElapsedSeconds();
 
     updateCommittedGame((current) => {
       if (current.status === "ready" && replayRecordingRef.current === null) {
@@ -460,7 +692,7 @@ function MinesweeperLiveGame({
               ...cursorPosition,
               type: "cursorMove",
             },
-            elapsedSecondsRef.current,
+            actionElapsedSeconds,
             { force: true },
           );
         }
@@ -471,13 +703,13 @@ function MinesweeperLiveGame({
             cellId,
             type: "toggleFlag",
           },
-          elapsedSecondsRef.current,
+          actionElapsedSeconds,
         );
       }
 
       return toggleMinesweeperFlag(current, cellId);
     });
-  }, [replayRecordingRef, startReplayRecording, updateCommittedGame]);
+  }, [refreshElapsedSeconds, replayRecordingRef, startReplayRecording, updateCommittedGame]);
 
   const trackReplayPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== "mouse" || isHelpVisible || showStartScreen) {
@@ -497,82 +729,68 @@ function MinesweeperLiveGame({
       return;
     }
 
+    const currentElapsedSeconds = refreshElapsedSeconds();
+
     appendMinesweeperReplayCursorEvent(
       recording,
       {
         ...cursorPosition,
         type: "cursorMove",
       },
-      elapsedSecondsRef.current,
+      currentElapsedSeconds,
     );
-  }, [isHelpVisible, replayRecordingRef, showStartScreen]);
+  }, [isHelpVisible, refreshElapsedSeconds, replayRecordingRef, showStartScreen]);
 
   const startNewGame = useCallback(() => {
     if (isReplayRunPendingRef.current) {
       return;
     }
 
-    resetReplayRecording();
     pendingInitialActionRef.current = null;
     resetLeaderboardForm();
-    setElapsedSeconds(0);
-    elapsedSecondsRef.current = 0;
+    resetGameTiming();
     setIsFlagMode(false);
     setIsStartScreenVisible(true);
     updateCommittedGame((current) => restartMinesweeperGame(current));
-  }, [isReplayRunPendingRef, resetLeaderboardForm, resetReplayRecording, updateCommittedGame]);
+  }, [
+    isReplayRunPendingRef,
+    resetGameTiming,
+    resetLeaderboardForm,
+    updateCommittedGame,
+  ]);
 
   const startNewPlayableGame = useCallback(() => {
     if (isReplayRunPendingRef.current) {
       return;
     }
 
-    resetReplayRecording();
     pendingInitialActionRef.current = null;
     resetLeaderboardForm();
-    setElapsedSeconds(0);
-    elapsedSecondsRef.current = 0;
+    resetGameTiming();
     setIsFlagMode(false);
     setIsStartScreenVisible(false);
     updateCommittedGame((current) => restartMinesweeperGame(current));
     void startReplayRecording();
   }, [
     isReplayRunPendingRef,
+    resetGameTiming,
     resetLeaderboardForm,
-    resetReplayRecording,
     startReplayRecording,
     updateCommittedGame,
   ]);
-
-  useEffect(() => {
-    if (game.status === "lost" || game.status === "won") {
-      return;
-    }
-
-    if (isHelpVisible) {
-      pauseRecordingClock();
-    } else {
-      resumeRecordingClock();
-    }
-  }, [game.status, isHelpVisible, pauseRecordingClock, resumeRecordingClock]);
 
   useEffect(() => {
     if (game.status !== "running" || isHelpVisible) {
       return;
     }
 
+    refreshElapsedSeconds();
     const timer = window.setInterval(() => {
-      setElapsedSeconds((current) => {
-        const nextElapsedSeconds = current + 1;
-
-        elapsedSecondsRef.current = nextElapsedSeconds;
-
-        return nextElapsedSeconds;
-      });
+      refreshElapsedSeconds();
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [game.status, isHelpVisible]);
+  }, [game.status, isHelpVisible, refreshElapsedSeconds]);
 
   useEffect(() => {
     if (game.status !== "lost" && game.status !== "won") {

@@ -33,6 +33,7 @@ export function useGameSession({
   const [completedSessionId, setCompletedSessionId] = useState<string | null>(null);
   const accumulatedMsRef = useRef(0);
   const activeStartedAtRef = useRef<number | null>(null);
+  const runGenerationRef = useRef(0);
   const latestSubmissionRef = useRef({
     finalResult,
     finalScore,
@@ -61,6 +62,7 @@ export function useGameSession({
     if (finalResult === null && wasTerminalRef.current) {
       accumulatedMsRef.current = 0;
       activeStartedAtRef.current = null;
+      runGenerationRef.current += 1;
       submittedRef.current = false;
       setCompletedSessionId(null);
       wasTerminalRef.current = false;
@@ -94,6 +96,7 @@ export function useGameSession({
     }
 
     submittedRef.current = true;
+    const submissionGeneration = runGenerationRef.current;
 
     const activeStartedAt = activeStartedAtRef.current;
     const activeDurationMs = Math.round(
@@ -108,9 +111,16 @@ export function useGameSession({
       result: finalResult,
       sortDirection,
     })
-      .then((session) => setCompletedSessionId(session.id))
+      .then((session) => {
+        if (runGenerationRef.current === submissionGeneration) {
+          setCompletedSessionId(session.id);
+        }
+      })
       .catch(() => {
-        submittedRef.current = false;
+        // A previous run can settle after restart, but it no longer owns this guard.
+        if (runGenerationRef.current === submissionGeneration) {
+          submittedRef.current = false;
+        }
       });
   }, [finalResult, finalScore, gameId, leaderboardKey, sortDirection, started, user]);
 

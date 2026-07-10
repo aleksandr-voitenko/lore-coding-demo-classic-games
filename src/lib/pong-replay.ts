@@ -12,8 +12,6 @@ import {
 import {
   createGameReplayRun as createGenericGameReplayRun,
   fetchGameReplay,
-  getGameReplayApiPath,
-  getGameReplayRunApiPath,
   isNonNegativeInteger,
   isRecord,
   normalizeGameReplayRunId,
@@ -84,8 +82,6 @@ export type ParsePongReplayPayloadResult = ParseGameReplayPayloadResult<PongRepl
 
 export const PONG_REPLAY_SCHEMA_VERSION = 1;
 export const PONG_REPLAY_GAME_ID = "pong";
-export const PONG_REPLAY_API_PATH = getGameReplayApiPath(PONG_REPLAY_GAME_ID);
-export const PONG_REPLAY_RUN_API_PATH = getGameReplayRunApiPath(PONG_REPLAY_GAME_ID);
 export const MAX_PONG_REPLAY_EVENTS = 180_000;
 
 const PONG_MIN_BOARD_WIDTH = 240;

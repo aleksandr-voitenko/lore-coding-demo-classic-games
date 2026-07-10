@@ -8,7 +8,7 @@ import {
   type TwentyFortyEightReplayPayload,
 } from "@/lib/twenty-forty-eight-replay";
 
-import { createTwentyFortyEightReplayRouteHandlers } from "./route";
+import { createTwentyFortyEightReplayRouteHandlers } from "./route-handlers";
 
 function createReplayPayload(
   overrides: Partial<TwentyFortyEightReplayPayload> = {},

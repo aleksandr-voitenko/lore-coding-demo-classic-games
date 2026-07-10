@@ -18,8 +18,6 @@ import {
   createGameReplayRandom,
   createGameReplayRun as createGenericGameReplayRun,
   fetchGameReplay,
-  getGameReplayApiPath,
-  getGameReplayRunApiPath,
   isNonNegativeInteger,
   isRecord,
   normalizeGameReplayRunId,
@@ -109,8 +107,6 @@ export type ParseSimonReplayPayloadResult =
 export const SIMON_REPLAY_LEGACY_SCHEMA_VERSION = 2;
 export const SIMON_REPLAY_SCHEMA_VERSION = 3;
 export const SIMON_REPLAY_GAME_ID = "simon";
-export const SIMON_REPLAY_API_PATH = getGameReplayApiPath(SIMON_REPLAY_GAME_ID);
-export const SIMON_REPLAY_RUN_API_PATH = getGameReplayRunApiPath(SIMON_REPLAY_GAME_ID);
 export const MAX_SIMON_REPLAY_EVENTS = 50_000;
 export const MAX_SIMON_REPLAY_CURSOR_EVENTS = 80_000;
 export const SIMON_REPLAY_CURSOR_SAMPLE_INTERVAL_MS = 50;

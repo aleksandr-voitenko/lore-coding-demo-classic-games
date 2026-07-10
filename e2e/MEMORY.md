@@ -40,3 +40,7 @@ This file covers Playwright browser-flow coverage under `e2e/`.
   delivery. The isolated sidecar suite should prove that WebSocket room events
   cover the host, guest, observer, lifecycle, and active-game delivery paths
   needed by the shared room shell and registered game adapters.
+- CI runs both the default `npm run test:e2e` smoke and the separate
+  `npm run test:e2e:sidecar` acceptance path. Sidecar artifacts remain isolated
+  under `reports/playwright-sidecar/` so failures from either suite can be
+  diagnosed without merging their discovery boundaries.

@@ -1,8 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createLeaderboardRouteHandlers } from "./route";
+import * as leaderboardRoute from "./route";
+import { createLeaderboardRouteHandlers } from "./route-handlers";
 
 describe("leaderboard route", () => {
+  it("exports only the supported Next.js route fields", () => {
+    expect(Object.keys(leaderboardRoute).sort()).toEqual([
+      "GET",
+      "POST",
+      "dynamic",
+      "runtime",
+    ]);
+  });
+
   it("returns leaderboard entries for the requested key", async () => {
     const store = {
       listTopScores: vi.fn(async () => [{ name: "Server", score: 8 }]),
@@ -51,6 +61,25 @@ describe("leaderboard route", () => {
     expect(store.submitScore).not.toHaveBeenCalled();
   });
 
+  it("rejects malformed JSON before calling the store", async () => {
+    const store = {
+      listTopScores: vi.fn(),
+      submitScore: vi.fn(),
+    };
+    const handlers = createLeaderboardRouteHandlers(store);
+    const request = new Request("http://localhost/api/leaderboard", {
+      body: "{",
+      method: "POST",
+    });
+    const response = await handlers.POST(request);
+
+    expect(response.status).toBe(400);
+    expect(store.submitScore).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toEqual({
+      error: "Request body must be valid JSON.",
+    });
+  });
+
   it("submits valid scores and returns the updated leaderboard", async () => {
     const store = {
       listTopScores: vi.fn(),
@@ -83,6 +112,40 @@ describe("leaderboard route", () => {
       accepted: true,
       entries: [{ name: "Ada", score: 9 }],
       rank: 0,
+      version: 1,
+    });
+  });
+
+  it("returns a successful non-qualifying result without creating a new entry", async () => {
+    const entries = [
+      { name: "Ada", score: 9 },
+      { name: "Grace", score: 8 },
+      { name: "Linus", score: 7 },
+    ];
+    const store = {
+      listTopScores: vi.fn(),
+      submitScore: vi.fn(async () => ({
+        accepted: false,
+        entries,
+        rank: null,
+      })),
+    };
+    const handlers = createLeaderboardRouteHandlers(store);
+    const request = new Request("http://localhost/api/leaderboard", {
+      body: JSON.stringify({
+        leaderboardKey: "snake|board=19",
+        name: "Player",
+        score: 6,
+      }),
+      method: "POST",
+    });
+    const response = await handlers.POST(request);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      accepted: false,
+      entries,
+      rank: null,
       version: 1,
     });
   });

@@ -14,7 +14,7 @@ import {
 import type { SqliteReplayStore } from "@/lib/server/sqlite-replay-store";
 import type { SqliteUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
 
-import { createAsteroidsReplayRouteHandlers } from "./route";
+import { createAsteroidsReplayRouteHandlers } from "./route-handlers";
 
 function createReplayPayload(
   overrides: Partial<AsteroidsReplayPayload> = {},

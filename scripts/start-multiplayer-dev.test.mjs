@@ -6,6 +6,19 @@ import {
   resolveMultiplayerDevConfig,
 } from "./start-multiplayer-dev.mjs";
 
+const invalidPublicHosts = [
+  ["bare wildcard", "*"],
+  ["wildcard IPv4 pattern", "10.*.*.*"],
+  ["protocol", "http://192.168.1.50"],
+  ["port", "192.168.1.50:3000"],
+  ["path", "192.168.1.50/app"],
+  ["hostname", "arcade.local"],
+  ["raw IPv6", "fe80::1"],
+  ["bracketed IPv6", "[fe80::1]"],
+  ["out-of-range octet", "192.168.1.999"],
+  ["noncanonical octet", "192.168.001.50"],
+];
+
 describe("start multiplayer dev wrapper", () => {
   it("prefers private LAN IPv4 addresses for browser-reachable URLs", () => {
     const config = resolveMultiplayerDevConfig(
@@ -64,6 +77,25 @@ describe("start multiplayer dev wrapper", () => {
     ]);
   });
 
+  it("ignores malformed or noncanonical IPv4 interface entries", () => {
+    expect(
+      getLanIPv4Candidates({
+        en0: [
+          {
+            address: "192.168.1.999",
+            family: "IPv4",
+            internal: false,
+          },
+          {
+            address: "192.168.001.50",
+            family: "IPv4",
+            internal: false,
+          },
+        ],
+      }),
+    ).toEqual([]);
+  });
+
   it("allows explicit public host, port, and snapshot overrides", () => {
     const config = resolveMultiplayerDevConfig(
       {
@@ -85,10 +117,54 @@ describe("start multiplayer dev wrapper", () => {
     });
   });
 
+  it("falls back to a discovered address for a whitespace-only public host", () => {
+    const config = resolveMultiplayerDevConfig(
+      {
+        MULTIPLAYER_DEV_PUBLIC_HOST: "   ",
+      },
+      {
+        en0: [
+          {
+            address: "192.168.1.50",
+            family: "IPv4",
+            internal: false,
+          },
+        ],
+      },
+    );
+
+    expect(config.publicHost).toBe("192.168.1.50");
+  });
+
+  it.each(invalidPublicHosts)(
+    "rejects an explicit public host containing a %s",
+    (_label, publicHost) => {
+      expect(() =>
+        resolveMultiplayerDevConfig(
+          {
+            MULTIPLAYER_DEV_PUBLIC_HOST: publicHost,
+          },
+          {},
+        ),
+      ).toThrow("MULTIPLAYER_DEV_PUBLIC_HOST must be an exact IPv4 address");
+    },
+  );
+
+  it("validates the legacy public-host fallback with the same IPv4 boundary", () => {
+    expect(() =>
+      resolveMultiplayerDevConfig(
+        {
+          NEXT_PUBLIC_MULTIPLAYER_HOST: "arcade.local",
+        },
+        {},
+      ),
+    ).toThrow("NEXT_PUBLIC_MULTIPLAYER_HOST must be an exact IPv4 address");
+  });
+
   it("passes resolved multiplayer env into sidecar and Next commands", () => {
     const config = resolveMultiplayerDevConfig(
       {
-        MULTIPLAYER_DEV_PUBLIC_HOST: "10.0.0.9",
+        MULTIPLAYER_DEV_PUBLIC_HOST: "192.168.50.9",
       },
       {},
     );
@@ -118,10 +194,11 @@ describe("start multiplayer dev wrapper", () => {
           "3000",
         ],
         env: {
+          MULTIPLAYER_DEV_PUBLIC_HOST: "192.168.50.9",
           MULTIPLAYER_ROOM_SERVICE_URL:
             "http://127.0.0.1:3001/_internal/multiplayer/rooms",
           NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL:
-            "ws://10.0.0.9:3001/multiplayer/rooms",
+            "ws://192.168.50.9:3001/multiplayer/rooms",
           PATH: "/usr/bin",
         },
         label: "next",

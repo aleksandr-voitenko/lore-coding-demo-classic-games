@@ -19,15 +19,29 @@ import {
 const originalHTMLElement = globalThis.HTMLElement;
 
 class TestHTMLElement {
+  isInsideGameModal = false;
   isContentEditable = false;
   tagName = "DIV";
+
+  closest(selector: string) {
+    if (selector === "[data-game-modal]" && this.isInsideGameModal) {
+      return this;
+    }
+
+    return null;
+  }
 }
 
-function createElement(tagName: string, isContentEditable = false) {
+function createElement(
+  tagName: string,
+  isContentEditable = false,
+  isInsideGameModal = false,
+) {
   const element = new TestHTMLElement();
 
   element.tagName = tagName;
   element.isContentEditable = isContentEditable;
+  element.isInsideGameModal = isInsideGameModal;
 
   return element as unknown as HTMLElement;
 }
@@ -216,7 +230,7 @@ describe("shouldIgnoreGameKeyDown", () => {
     ).toBe(false);
   });
 
-  it("ignores keyboard input during help, leaderboard entry, or typing targets", () => {
+  it("ignores keyboard input during help, game dialogs, leaderboard entry, or typing targets", () => {
     expect(
       shouldIgnoreGameKeyDown(
         {
@@ -236,6 +250,11 @@ describe("shouldIgnoreGameKeyDown", () => {
     expect(
       shouldIgnoreGameKeyDown({
         target: createElement("INPUT"),
+      }),
+    ).toBe(true);
+    expect(
+      shouldIgnoreGameKeyDown({
+        target: createElement("BUTTON", false, true),
       }),
     ).toBe(true);
   });

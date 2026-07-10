@@ -115,6 +115,11 @@ export const spaceInvadersMultiplayerRuntimeAdapter: MultiplayerServerGameRuntim
   isActive({ room, runtime }) {
     return isSpaceInvadersRuntimeActive(getSpaceInvadersRuntime(runtime), room);
   },
+  isTerminal({ runtime }) {
+    const status = getSpaceInvadersRuntime(runtime).game.status;
+
+    return status === "won" || status === "lost";
+  },
   shouldAdvanceSnapshot({ room, snapshot }) {
     return shouldAdvanceSpaceInvadersSnapshot(room, snapshot);
   },

@@ -42,6 +42,8 @@ type SnakeReplayTestEvent =
 const SNAKE_REPLAY_SCHEMA_VERSION = 1;
 const REPLAY_DIRECTIONS: Direction[] = ["up", "right", "down", "left"];
 const REPLAY_FIXTURE_TICK_MS = 1_000;
+const SNAKE_LEADERBOARD_KEY = "snake|mode=levels";
+const SNAKE_LEADERBOARD_SEED_SCORES = [100, 99, 98] as const;
 
 function createReplayRandom(seed: number) {
   let value = seed % 2_147_483_647;
@@ -214,19 +216,46 @@ function createReplayPayloadWithInitialPickup(
   };
 }
 
-async function seedSnakeLeaderboard(request: APIRequestContext, namePrefix: string) {
-  for (let index = 0; index < 3; index += 1) {
-    const response = await request.post("/api/leaderboard", {
-      data: {
-        leaderboardKey: "snake|mode=levels",
-        name: `${namePrefix} Seed ${index}`,
-        score: 100 - index,
-        sortDirection: "desc",
-      },
-    });
+async function getSnakeLeaderboardScores(request: APIRequestContext) {
+  const response = await request.get(
+    `/api/leaderboard?key=${encodeURIComponent(SNAKE_LEADERBOARD_KEY)}&sort=desc`,
+  );
 
-    expect(response.status()).toBe(201);
+  expect(response.status()).toBe(200);
+
+  const data = (await response.json()) as {
+    entries: Array<{ score: number }>;
+  };
+
+  return data.entries.map(({ score }) => score);
+}
+
+async function seedSnakeLeaderboard(request: APIRequestContext, namePrefix: string) {
+  const existingScores = await getSnakeLeaderboardScores(request);
+  const lowestSeedScore = Math.min(...SNAKE_LEADERBOARD_SEED_SCORES);
+  const isAlreadySeeded =
+    existingScores.length === SNAKE_LEADERBOARD_SEED_SCORES.length &&
+    Math.min(...existingScores) >= lowestSeedScore;
+
+  if (!isAlreadySeeded) {
+    for (const [index, score] of SNAKE_LEADERBOARD_SEED_SCORES.entries()) {
+      const response = await request.post("/api/leaderboard", {
+        data: {
+          leaderboardKey: SNAKE_LEADERBOARD_KEY,
+          name: `${namePrefix} Seed ${index}`,
+          score,
+          sortDirection: "desc",
+        },
+      });
+
+      expect(response.ok()).toBe(true);
+    }
   }
+
+  const seededScores = await getSnakeLeaderboardScores(request);
+
+  expect(seededScores).toHaveLength(SNAKE_LEADERBOARD_SEED_SCORES.length);
+  expect(Math.min(...seededScores)).toBeGreaterThanOrEqual(lowestSeedScore);
 }
 
 async function getSnakeHeadPosition(page: Page) {

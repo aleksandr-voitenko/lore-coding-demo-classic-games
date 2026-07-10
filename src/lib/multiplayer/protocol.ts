@@ -181,6 +181,7 @@ export type MultiplayerRealtimeRejectionCode =
   | "duplicate-room"
   | "invalid-command"
   | "invalid-message"
+  | "room-expired"
   | "room-not-found"
   | "unsupported-game";
 

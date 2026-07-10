@@ -9,7 +9,7 @@ import { getSimonDifficultySettings } from "@/lib/simon-game-engine";
 import type { SqliteReplayStore } from "@/lib/server/sqlite-replay-store";
 import type { SqliteUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
 
-import { createSimonReplayRouteHandlers } from "./route";
+import { createSimonReplayRouteHandlers } from "./route-handlers";
 
 function createReplayPayload(
   overrides: Partial<SimonReplayPayload> = {},

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SqliteReplayStore } from "@/lib/server/sqlite-replay-store";
 
-import { createBreakoutReplayRunRouteHandlers } from "./route";
+import { createBreakoutReplayRunRouteHandlers } from "../route-handlers";
 
 describe("breakout replay run route", () => {
   it("issues Breakout replay runs through the wrapper", async () => {

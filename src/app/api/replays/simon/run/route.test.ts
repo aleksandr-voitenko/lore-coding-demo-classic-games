@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SqliteReplayStore } from "@/lib/server/sqlite-replay-store";
 
-import { createSimonReplayRunRouteHandlers } from "./route";
+import { createSimonReplayRunRouteHandlers } from "../route-handlers";
 
 describe("simon replay run route", () => {
   it("issues Simon replay runs through the wrapper", async () => {

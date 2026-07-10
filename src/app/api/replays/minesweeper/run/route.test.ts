@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SqliteReplayStore } from "@/lib/server/sqlite-replay-store";
 
-import { createMinesweeperReplayRunRouteHandlers } from "./route";
+import { createMinesweeperReplayRunRouteHandlers } from "../route-handlers";
 
 describe("minesweeper replay run route", () => {
   it("issues Minesweeper replay runs through the wrapper", async () => {

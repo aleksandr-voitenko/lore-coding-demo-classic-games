@@ -45,10 +45,23 @@ This file covers Node-only server helpers and storage adapters under
   sidecar or upstream failures back into store-style results for route handlers.
 - `multiplayer-room-runtime.ts` wraps the pure room model with process-local room
   state, deterministic id/code/time factories for tests, snapshot sequence
-  numbers for API routes, and a process-local Pong runtime that exposes optional
-  server-owned game snapshots. Room state is intentionally volatile: the
-  in-process store or sidecar owns server authority while the room exists, and
-  in-progress games may be abandoned if that process restarts.
+  numbers for API routes, and adapter-owned runtimes that expose optional
+  server-owned game snapshots. It retains the current canonical room/game state,
+  not an internal history of accepted inputs or snapshot advances; current
+  WebSocket reconnects recover from a fresh authoritative snapshot. Room state
+  is intentionally volatile: the in-process store or sidecar owns server
+  authority while the room exists, and in-progress games may be abandoned if
+  that process restarts.
+  The store bounds that volatile authority to 256 rooms by default. Successful
+  room/game commands refresh meaningful activity; passive reads, snapshot
+  advancement, handshakes, and diagnostics do not. Unconnected lobbies expire
+  after 60 minutes, running/paused rooms after two hours, and explicit or
+  adapter-classified terminal rooms after 30 minutes. Recognized participant
+  WebSocket connections protect a room and the last disconnect starts a full
+  state-specific grace. Capacity eviction prefers expired rooms, then terminal
+  rooms, then lobbies, and never removes connected or nonterminal
+  running/paused rooms. Up-to-five-minute, capacity-bounded tombstones
+  distinguish recent expiry from an unknown room code.
 - `multiplayer-room-websocket.ts` owns the reusable Node WebSocket gateway for
   the realtime sidecar. It adapts the generic protocol envelopes to the room
   runtime, accepts an injectable `MultiplayerRoomStore`, rejects public
@@ -57,13 +70,22 @@ This file covers Node-only server helpers and storage adapters under
   snapshots after accepted WebSocket commands, runs a subscribed-room snapshot
   pump so server-owned games keep advancing when HTTP polling is disabled,
   exposes a narrow snapshot fanout method for sidecar-owned mutations, and keeps
-  game-specific payloads nested behind `game.input` dispatch.
+  game-specific payloads nested behind `game.input` dispatch. When the injected
+  store exposes the co-located participant-connection capability, the gateway
+  counts only sockets whose participant id matches room membership, promotes a
+  socket after a successful guest join, and releases presence on close, error,
+  or room change; anonymous invite viewers do not protect retention. Its public
+  factory defaults inbound client messages to 64 KiB through `ws` `maxPayload`
+  while preserving explicit caller overrides.
 - `multiplayer-room-sidecar.ts` owns the standalone Node HTTP/WebSocket process
   wrapper around the gateway. It parses `MULTIPLAYER_SIDECAR_HOST`,
   `MULTIPLAYER_SIDECAR_PORT`, `MULTIPLAYER_SIDECAR_WEBSOCKET_PATH`,
   `MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH`,
   `MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS`, and optional
-  `MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN`. It exposes `/healthz`, keeps
+  `MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN`. It also parses the strict
+  positive `MULTIPLAYER_SIDECAR_MAX_ROOMS` capacity override, owns the one-minute
+  room sweep timer, and clears that timer during idempotent shutdown. It exposes
+  `/healthz`, keeps
   public WebSocket upgrades on `/multiplayer/rooms` by default, serves internal
   JSON room create/get/command endpoints on `/_internal/multiplayer/rooms` by
   default, passes one in-process room store to both those HTTP endpoints and the
@@ -82,6 +104,10 @@ This file covers Node-only server helpers and storage adapters under
   Pong-owned room architecture. Pong is the first adapter; later games should
   plug into the same room service, sidecar, protocol envelopes, and result
   pipeline.
+- The supported ids and default game live in
+  `src/lib/multiplayer/game-registry.ts`; keep the server adapter map exhaustive
+  over its `MultiplayerGameId` while leaving adapter implementations in this
+  server-only folder.
 - A server game adapter owns game settings defaults/validation, seat and role
   mapping, accepted input payloads, initial state, deterministic application of
   server-ordered intents and ticks, authoritative snapshot projection, terminal
@@ -100,13 +126,13 @@ This file covers Node-only server helpers and storage adapters under
   pickup. The adapter should project compact terminal summaries with shared
   score, wave, lives, and occupied seats; per-ship contribution stats are out of
   scope for the first Asteroids co-op slice.
-- The server-ordered room event path is the live source of truth only while the
-  room exists. Keep lifecycle, membership, settings versions, accepted gameplay
-  intents, ticks, snapshots, power-up awards, and cursor catch-up windows
-  in-process; do not add SQLite tables or another durable per-event log for that
-  high-frequency traffic. If multiplayer persistence is needed later, persist
-  compact terminal summaries or mode-scoped results derived from server-owned
-  final state.
+- The current authoritative source is the room's canonical state plus room/game
+  sequence counters while the room exists. Do not retain an unbounded internal
+  history of high-frequency inputs, ticks, snapshots, or power-up awards. A
+  bounded reconnect window may be added when its cursor and retention policy are
+  defined; until then reconnect uses a fresh snapshot. If multiplayer
+  persistence is needed later, persist compact terminal summaries or mode-scoped
+  results derived from server-owned final state, not a durable per-event log.
 - Multiplayer results and scores stay mode-scoped, for example private-room
   Pong keys must remain separate from solo Pong keys. Do not write multiplayer
   outcomes through solo replay uploads or unscoped solo leaderboard keys.
@@ -128,7 +154,9 @@ This file covers Node-only server helpers and storage adapters under
   for high-score and low-time rankings.
 - `leaderboard_scores` can optionally link to `users` and `game_sessions`, but
   profile stats are derived from `game_sessions`, not from top-three leaderboard
-  rows.
+  rows. The SQLite leaderboard insert resolves an optional game-session link in
+  the same transaction and stores it only when the session belongs to the
+  server-derived score user; guest, missing, and mismatched links remain null.
 - `users` are keyed by normalized display name and store nullable password
   hashes for backward-compatible migration. New signups must set a password hash;
   legacy passwordless users remain reserved names and cannot be claimed through

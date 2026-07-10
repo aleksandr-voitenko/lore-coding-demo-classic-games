@@ -18,9 +18,9 @@ import {
 } from "@/components/game-layout";
 import {
   getReplayEventElapsedMs,
-  getReplayPlaybackDelayMs,
   isFutureReplayEventFrame,
   type GameReplayTimedPlayback,
+  useGameReplayPlayback,
 } from "@/components/game-replay-playback";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { SnakeBoard } from "@/components/snake-board";
@@ -34,6 +34,7 @@ import {
   createInitialSnakeReplayGame,
   fetchSnakeReplay,
   type SnakeReplayEvent,
+  type SnakeReplayPayload,
 } from "@/lib/snake-replay";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 
@@ -79,14 +80,8 @@ function SnakeReplayMessage({
 
 export function SnakeReplayPlayer({ onBackToProfile }: SnakeReplayPlayerProps) {
   const [foodFeedbacks, setFoodFeedbacks] = useState<FoodFeedback[]>([]);
-  const [game, setGame] = useState<GameState | null>(null);
-  const [isFinished, setIsFinished] = useState(false);
   const [levelIntermissionLevel, setLevelIntermissionLevel] = useState<number | null>(null);
-  const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">("loading");
-  const [playbackStep, setPlaybackStep] = useState(0);
   const foodFeedbackIdRef = useRef(0);
-  const gameRef = useRef<GameState | null>(null);
-  const playbackRef = useRef<PlaybackState | null>(null);
   const leaderboardKey = createGameLeaderboardKey("snake", [
     { name: "mode", value: "levels" },
   ]);
@@ -103,143 +98,113 @@ export function SnakeReplayPlayer({ onBackToProfile }: SnakeReplayPlayerProps) {
     setFoodFeedbacks((current) => current.filter((feedback) => feedback.id !== id));
   }, []);
 
-  useEffect(() => {
-    let isCurrent = true;
+  const initializeReplay = useCallback(
+    (replay: SnakeReplayPayload) => {
+      const initialReplay = createInitialSnakeReplayGame(replay);
 
-    fetchSnakeReplay()
-      .then((replay) => {
-        if (!isCurrent) {
-          return;
-        }
+      foodFeedbackIdRef.current = 0;
+      setFoodFeedbacks([]);
+      setLevelIntermissionLevel(null);
 
-        const initialReplay = createInitialSnakeReplayGame(replay);
-
-        gameRef.current = initialReplay.game;
-        foodFeedbackIdRef.current = 0;
-        playbackRef.current = {
+      return {
+        game: initialReplay.game,
+        playback: {
           eventIndex: 0,
           events: replay.events,
           lastElapsedMs: 0,
           random: initialReplay.random,
-        };
-        setFoodFeedbacks([]);
-        setGame(initialReplay.game);
-        setIsFinished(false);
-        setLevelIntermissionLevel(null);
-        setLoadStatus("ready");
-      })
-      .catch(() => {
-        if (isCurrent) {
-          setLoadStatus("failed");
+        } satisfies PlaybackState,
+      };
+    },
+    [],
+  );
+
+  const advanceReplayFrame = useCallback(
+    ({
+      game,
+      playback,
+    }: {
+      game: GameState;
+      playback: PlaybackState;
+    }) => {
+      let nextGame = game;
+      const nextFoodFeedbacks: FoodFeedback[] = [];
+      let didChangeLevel = false;
+      let lastElapsedMs: number | null = null;
+      let processedAdvance = false;
+      const frameElapsedMs = getReplayEventElapsedMs(
+        playback.events[playback.eventIndex],
+      );
+      const isTimedFrame = frameElapsedMs !== null;
+
+      while (
+        playback.eventIndex < playback.events.length &&
+        (isTimedFrame || !processedAdvance)
+      ) {
+        const event = playback.events[playback.eventIndex]!;
+        const previousEventGame = nextGame;
+
+        if (isFutureReplayEventFrame(frameElapsedMs, event)) {
+          break;
         }
-      });
 
-    return () => {
-      isCurrent = false;
-    };
-  }, []);
+        playback.eventIndex += 1;
+        nextGame = applySnakeReplayEvent(nextGame, event, playback.random);
+        lastElapsedMs = getReplayEventElapsedMs(event) ?? lastElapsedMs;
+        processedAdvance = isTimedFrame ? false : event.type === "advance";
 
-  const advanceReplayFrame = useCallback(() => {
-    const playback = playbackRef.current;
-    const currentGame = gameRef.current;
+        if (previousEventGame.level !== nextGame.level) {
+          didChangeLevel = true;
+          nextFoodFeedbacks.length = 0;
+          continue;
+        }
 
-    if (playback === null || currentGame === null || isFinished) {
-      return;
-    }
+        const feedback = createFoodFeedback(
+          previousEventGame,
+          nextGame,
+          foodFeedbackIdRef.current,
+        );
 
-    let nextGame = currentGame;
-    const nextFoodFeedbacks: FoodFeedback[] = [];
-    let didChangeLevel = false;
-    let lastElapsedMs: number | null = null;
-    let processedAdvance = false;
-    const frameElapsedMs = getReplayEventElapsedMs(
-      playback.events[playback.eventIndex],
-    );
-    const isTimedFrame = frameElapsedMs !== null;
-
-    while (playback.eventIndex < playback.events.length && (isTimedFrame || !processedAdvance)) {
-      const event = playback.events[playback.eventIndex]!;
-      const previousEventGame = nextGame;
-
-      if (isFutureReplayEventFrame(frameElapsedMs, event)) {
-        break;
+        if (feedback !== null) {
+          foodFeedbackIdRef.current += 1;
+          nextFoodFeedbacks.push(feedback);
+        }
       }
 
-      playback.eventIndex += 1;
-      nextGame = applySnakeReplayEvent(nextGame, event, playback.random);
-      lastElapsedMs = getReplayEventElapsedMs(event) ?? lastElapsedMs;
-      processedAdvance = isTimedFrame ? false : event.type === "advance";
+      playback.lastElapsedMs = lastElapsedMs ?? playback.lastElapsedMs;
 
-      if (previousEventGame.level !== nextGame.level) {
-        didChangeLevel = true;
-        nextFoodFeedbacks.length = 0;
-        continue;
+      if (didChangeLevel) {
+        setLevelIntermissionLevel(nextGame.level);
       }
 
-      const feedback = createFoodFeedback(
-        previousEventGame,
-        nextGame,
-        foodFeedbackIdRef.current,
-      );
-
-      if (feedback !== null) {
-        foodFeedbackIdRef.current += 1;
-        nextFoodFeedbacks.push(feedback);
+      if (didChangeLevel || nextFoodFeedbacks.length > 0) {
+        setFoodFeedbacks((current) =>
+          didChangeLevel ? nextFoodFeedbacks : [...current, ...nextFoodFeedbacks].slice(-6),
+        );
       }
-    }
 
-    playback.lastElapsedMs = lastElapsedMs ?? playback.lastElapsedMs;
-    gameRef.current = nextGame;
-    setGame(nextGame);
-    setPlaybackStep((current) => current + 1);
+      return {
+        game: nextGame,
+        isFinished:
+          playback.eventIndex >= playback.events.length ||
+          nextGame.status === "lost" ||
+          nextGame.status === "won",
+      };
+    },
+    [],
+  );
+  const canAdvanceReplay = useCallback(
+    ({ game }: { game: GameState; playback: PlaybackState }) =>
+      levelIntermissionLevel === null && game.status === "running",
+    [levelIntermissionLevel],
+  );
 
-    if (didChangeLevel) {
-      setLevelIntermissionLevel(nextGame.level);
-    }
-
-    if (didChangeLevel || nextFoodFeedbacks.length > 0) {
-      setFoodFeedbacks((current) =>
-        didChangeLevel ? nextFoodFeedbacks : [...current, ...nextFoodFeedbacks].slice(-6),
-      );
-    }
-
-    if (
-      playback.eventIndex >= playback.events.length ||
-      nextGame.status === "lost" ||
-      nextGame.status === "won"
-    ) {
-      setIsFinished(true);
-    }
-  }, [isFinished]);
-
-  useEffect(() => {
-    if (loadStatus !== "ready" || isFinished || levelIntermissionLevel !== null) {
-      return;
-    }
-
-    const currentGame = gameRef.current;
-
-    if (currentGame === null || currentGame.status !== "running") {
-      return;
-    }
-
-    const playback = playbackRef.current;
-    const nextEvent = playback?.events[playback.eventIndex];
-
-    if (playback === null || nextEvent === undefined) {
-      return;
-    }
-
-    const timeout = window.setTimeout(
-      advanceReplayFrame,
-      getReplayPlaybackDelayMs({
-        event: nextEvent,
-        playback,
-      }),
-    );
-
-    return () => window.clearTimeout(timeout);
-  }, [advanceReplayFrame, game, isFinished, levelIntermissionLevel, loadStatus, playbackStep]);
+  const { game, isFinished, loadStatus } = useGameReplayPlayback({
+    advanceFrame: advanceReplayFrame,
+    canAdvance: canAdvanceReplay,
+    initializeReplay,
+    loadReplay: fetchSnakeReplay,
+  });
 
   useEffect(() => {
     if (levelIntermissionLevel === null) {

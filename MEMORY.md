@@ -87,6 +87,12 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
 - Replay recording may run during guest play for supported replay games, but
   persisted profile replays are signed-in and scoped by user and game. The MVP
   keeps one latest replay per user/game in SQLite.
+- `npm run dev:multiplayer` owns LAN host discovery for local room testing. It
+  forwards the resolved exact IPv4 host to Next's development-origin allowlist
+  so the printed app URL, browser WebSocket URL, and allowed host stay aligned.
+  The shared host parser rejects protocols, ports, paths, hostnames, IPv6, and
+  wildcards; ordinary `npm run dev` leaves custom LAN origins unset unless the
+  variable is supplied.
 - shadcn/ui is initialized with Tailwind CSS v4, the `base-nova` preset, and the
   `@/*` import alias. The shared button is `src/components/ui/button.tsx`.
 
@@ -103,6 +109,9 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   final reporting so global core coverage regressions are caught locally.
 - `npm run test:e2e` runs the focused Chromium Playwright smoke suite. Browser
   flow details live in `e2e/MEMORY.md`.
+- `npm run test:e2e:sidecar` builds the emitted multiplayer sidecar and runs its
+  isolated Chromium acceptance suite with Next wired to the sidecar room
+  service and WebSocket endpoint.
 - `npm run typecheck`, `npm run lint`, `npm run check:deps`,
   `npm run check:unused`, and `npm run build` are the standard TypeScript,
   ESLint, dependency-boundary, unused-code, and Next build checks.
@@ -111,6 +120,6 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   `prepare` script to configure `core.hooksPath .githooks` for local clones;
   CI does not run Lore Coding validation yet.
 - CI repeats the build, static checks, dependency-boundary gate, Knip
-  unused-code gate, core coverage gate, and Playwright suite for code-affecting
-  changes, then publishes the Docker image to Docker Hub after successful `main`
-  pushes. See `.github/MEMORY.md`.
+  unused-code gate, core coverage gate, and both default and sidecar Playwright
+  suites for code-affecting changes, then publishes the Docker image to Docker
+  Hub after successful `main` pushes. See `.github/MEMORY.md`.

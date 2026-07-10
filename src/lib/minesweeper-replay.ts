@@ -2,8 +2,6 @@ import {
   createGameReplayRandom,
   createGameReplayRun as createGenericGameReplayRun,
   fetchGameReplay,
-  getGameReplayApiPath,
-  getGameReplayRunApiPath,
   isNonNegativeInteger,
   isRecord,
   normalizeGameReplayRunId,
@@ -93,12 +91,6 @@ export type ParseMinesweeperReplayPayloadResult =
 export const MINESWEEPER_REPLAY_LEGACY_SCHEMA_VERSION = 2;
 export const MINESWEEPER_REPLAY_SCHEMA_VERSION = 3;
 export const MINESWEEPER_REPLAY_GAME_ID = "minesweeper";
-export const MINESWEEPER_REPLAY_API_PATH = getGameReplayApiPath(
-  MINESWEEPER_REPLAY_GAME_ID,
-);
-export const MINESWEEPER_REPLAY_RUN_API_PATH = getGameReplayRunApiPath(
-  MINESWEEPER_REPLAY_GAME_ID,
-);
 export const MAX_MINESWEEPER_REPLAY_EVENTS = 80_000;
 export const MAX_MINESWEEPER_REPLAY_CURSOR_EVENTS = 80_000;
 export const MINESWEEPER_REPLAY_CURSOR_SAMPLE_INTERVAL_MS = 50;

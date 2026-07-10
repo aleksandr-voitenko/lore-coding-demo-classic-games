@@ -12,12 +12,18 @@ type GameCardArtworkFrameProps = {
   backgroundSizes: string;
 };
 
+const FOREGROUND_ARTWORK_HEIGHT_PX = 136;
+
 export function GameCardArtworkFrame({
   accentClassName,
   artwork,
   artworkSrc,
   backgroundSizes,
 }: GameCardArtworkFrameProps) {
+  const foregroundSizes = `${Math.ceil(
+    (FOREGROUND_ARTWORK_HEIGHT_PX * artwork.width) / artwork.height,
+  )}px`;
+
   return (
     <span className="relative block h-40 w-full overflow-hidden bg-[var(--snake-board)]">
       {accentClassName ? (
@@ -35,7 +41,6 @@ export function GameCardArtworkFrame({
         priority={artwork.priority}
         sizes={backgroundSizes}
         src={artworkSrc}
-        unoptimized
       />
       <span className="absolute inset-0 bg-[color-mix(in_oklch,var(--snake-board)_38%,transparent)]" />
       <span className="absolute inset-3 flex items-center justify-center">
@@ -46,8 +51,8 @@ export function GameCardArtworkFrame({
           height={artwork.height}
           loading={artwork.loading}
           priority={artwork.priority}
+          sizes={foregroundSizes}
           src={artworkSrc}
-          unoptimized
           width={artwork.width}
         />
       </span>

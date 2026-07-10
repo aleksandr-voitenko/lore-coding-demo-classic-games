@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { isGameId } from "@/lib/game-catalog";
+import { DEFAULT_MULTIPLAYER_GAME_ID } from "@/lib/multiplayer/game-registry";
 import type {
   PrivateRoomSettingValue,
   PrivateRoomSettings,
@@ -87,7 +88,8 @@ export function parsePrivateRoomSettingsPayload(
     };
   }
 
-  const gameIdValue = settingsSource.gameId ?? value.gameId ?? "pong";
+  const gameIdValue =
+    settingsSource.gameId ?? value.gameId ?? DEFAULT_MULTIPLAYER_GAME_ID;
 
   if (typeof gameIdValue !== "string") {
     return {
@@ -159,6 +161,12 @@ export function createMultiplayerRoomErrorResponse(
       error: result.error,
     },
     {
+      headers:
+        result.code === "room-capacity-reached"
+          ? {
+              "retry-after": "60",
+            }
+          : undefined,
       status: getMultiplayerRoomErrorStatus(result.code),
     },
   );

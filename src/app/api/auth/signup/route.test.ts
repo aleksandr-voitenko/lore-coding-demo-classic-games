@@ -2,9 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SqliteUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
 
-import { createSignupRouteHandlers } from "./route";
+import * as signupRoute from "./route";
+import { createSignupRouteHandlers } from "./route-handlers";
 
 describe("signup route", () => {
+  it("exports only the supported Next.js route fields", () => {
+    expect(Object.keys(signupRoute).sort()).toEqual(["POST", "dynamic", "runtime"]);
+  });
+
   it("registers a user and sets an HTTP-only session cookie", async () => {
     const store = {
       registerUser: vi.fn(async () => ({

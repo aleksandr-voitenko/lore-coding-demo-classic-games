@@ -17,6 +17,8 @@ type GameKeyboardGuardOptions = {
   isHelpVisible?: boolean;
 };
 
+const GAME_MODAL_SELECTOR = "[data-game-modal]";
+
 export type HeldDirectionMovementKey<Direction extends string> = {
   direction: Direction;
   key: string;
@@ -384,11 +386,27 @@ export function isTypingTarget(target: EventTarget | null) {
   );
 }
 
+function isGameModalTarget(target: EventTarget | null) {
+  return target instanceof HTMLElement && target.closest(GAME_MODAL_SELECTOR) !== null;
+}
+
+function isGameModalOpen() {
+  return (
+    typeof document !== "undefined" && document.querySelector(GAME_MODAL_SELECTOR) !== null
+  );
+}
+
 export function shouldIgnoreGameKeyDown(
   event: Pick<KeyboardEvent, "target">,
   { hasPendingLeaderboardEntry = false, isHelpVisible = false }: GameKeyboardGuardOptions = {},
 ) {
-  return isHelpVisible || hasPendingLeaderboardEntry || isTypingTarget(event.target);
+  return (
+    isHelpVisible ||
+    hasPendingLeaderboardEntry ||
+    isGameModalTarget(event.target) ||
+    isGameModalOpen() ||
+    isTypingTarget(event.target)
+  );
 }
 
 export function isGamePauseKey(key: string) {

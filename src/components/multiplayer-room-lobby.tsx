@@ -29,10 +29,12 @@ import {
   useMultiplayerRoomDiagnosticsMode,
 } from "@/components/multiplayer-room-diagnostics";
 import {
-  MultiplayerRoomTransportError,
-  type MultiplayerRoomTransportStatus,
-  useMultiplayerRoomWebSocketTransport,
-} from "@/components/multiplayer-room-transport";
+  MultiplayerRoomRequestError,
+  getMultiplayerRoomRequestErrorMessage,
+  type MultiplayerRoomClientSnapshot,
+  useMultiplayerRoomClient,
+} from "@/components/multiplayer-room-client";
+import { MultiplayerRoomTransportError } from "@/components/multiplayer-room-transport";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { UserAccountControls } from "@/components/user-account-controls";
@@ -45,15 +47,12 @@ import {
   type PrivateRoom,
   type PrivateRoomParticipant,
   type PrivateRoomSeat,
-  type PrivateRoomSettings,
   type PrivateRoomStatus,
 } from "@/lib/multiplayer/room";
 import type {
   MultiplayerGameInputPayload,
   MultiplayerRoomGameSnapshot,
   MultiplayerRoomSnapshot,
-  PrivateRoomClientMessage,
-  PrivateRoomCommandMessage,
   PrivateRoomLifecycleCommand,
 } from "@/lib/multiplayer/protocol";
 import {
@@ -61,30 +60,10 @@ import {
   type UserAuthMode,
 } from "@/lib/user-profile";
 
-export const MULTIPLAYER_ROOMS_API_PATH = "/api/multiplayer/rooms";
-
 const MULTIPLAYER_ROOM_ABANDONED_MESSAGE =
   "Room connection lost. This room is no longer available, so the in-progress game cannot continue. Start or join a new room.";
-
-type RoomFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-
-type RoomApiPayload = {
-  game?: MultiplayerRoomGameSnapshot;
-  participantId?: string;
-  room: PrivateRoom;
-  seq: number;
-};
-
-type HostOnlyRoomCommandMessage = Extract<
-  PrivateRoomCommandMessage,
-  { type: "room.lifecycle" | "room.updateSettings" }
->;
-
-type CreateMultiplayerRoomOptions = {
-  fetcher?: RoomFetch;
-  gameId: GameId;
-  settings?: PrivateRoomSettings;
-};
+const MULTIPLAYER_ROOM_EXPIRED_MESSAGE =
+  "This room expired after being inactive. Start or join a new room.";
 
 type MultiplayerRoomLobbyProps = {
   initialAuthMode?: UserAuthMode | null;
@@ -131,147 +110,21 @@ type RoomSummaryProps = {
   room: PrivateRoom;
 };
 
-export class MultiplayerRoomRequestError extends Error {
-  readonly status: number;
-
-  constructor(message: string, status: number) {
-    super(message);
-    this.name = "MultiplayerRoomRequestError";
-    this.status = status;
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function getDefaultFetcher(fetcher: RoomFetch | undefined) {
-  return fetcher ?? fetch;
-}
-
-function getRoomApiPath(roomCode: string) {
-  const normalizedRoomCode = normalizePrivateRoomCode(roomCode);
-
-  if (normalizedRoomCode === null) {
-    throw new MultiplayerRoomRequestError("Room code is not supported.", 400);
-  }
-
-  return `${MULTIPLAYER_ROOMS_API_PATH}/${encodeURIComponent(normalizedRoomCode)}`;
-}
-
-async function readRoomApiPayload(
-  response: Response,
-  context: string,
-): Promise<RoomApiPayload> {
-  let payload: unknown = null;
-
-  try {
-    payload = await response.json();
-  } catch {
-    payload = null;
-  }
-
-  if (!response.ok) {
-    const message =
-      isRecord(payload) && typeof payload.error === "string"
-        ? payload.error
-        : `${context} failed with status ${response.status}.`;
-
-    throw new MultiplayerRoomRequestError(message, response.status);
-  }
-
-  if (!isRecord(payload) || !isRecord(payload.room)) {
-    throw new MultiplayerRoomRequestError(`${context} response did not include a room.`, response.status);
-  }
-
-  if (typeof payload.seq !== "number") {
-    throw new MultiplayerRoomRequestError(
-      `${context} response did not include a sequence.`,
-      response.status,
-    );
-  }
-
-  const participantId =
-    isRecord(payload.participant) && typeof payload.participant.id === "string"
-      ? payload.participant.id
-      : undefined;
-  const game = isRecord(payload.game)
-    ? (payload.game as MultiplayerRoomGameSnapshot)
-    : undefined;
-
-  return participantId === undefined
-    ? ({
-        ...(game === undefined ? {} : { game }),
-        room: payload.room as PrivateRoom,
-        seq: payload.seq,
-      } satisfies RoomApiPayload)
-    : ({
-        ...(game === undefined ? {} : { game }),
-        participantId,
-        room: payload.room as PrivateRoom,
-        seq: payload.seq,
-      } satisfies RoomApiPayload);
-}
-
-export async function createMultiplayerRoom({
-  fetcher,
-  gameId,
-  settings,
-}: CreateMultiplayerRoomOptions) {
-  const response = await getDefaultFetcher(fetcher)(MULTIPLAYER_ROOMS_API_PATH, {
-    body: JSON.stringify({ gameId, settings }),
-    headers: {
-      "Content-Type": "application/json",
-    },
-    method: "POST",
-  });
-  const payload = await readRoomApiPayload(response, "Create room");
-
-  if (payload.participantId === undefined) {
-    throw new MultiplayerRoomRequestError(
-      "Create room response did not include a participant.",
-      response.status,
-    );
-  }
-
-  return {
-    ...(payload.game === undefined ? {} : { game: payload.game }),
-    participantId: payload.participantId,
-    room: payload.room,
-    seq: payload.seq,
-  };
-}
-
-export async function postMultiplayerRoomCommand(
-  roomCode: string,
-  message: HostOnlyRoomCommandMessage,
-  fetcher?: RoomFetch,
-) {
-  const response = await getDefaultFetcher(fetcher)(getRoomApiPath(roomCode), {
-    body: JSON.stringify(message),
-    headers: {
-      "Content-Type": "application/json",
-    },
-    method: "POST",
-  });
-
-  return readRoomApiPayload(response, "Room command");
-}
-
-function getRequestErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Room request failed.";
-}
-
 export function getMultiplayerRoomConnectionErrorState(error: unknown) {
+  const expiredRoom =
+    error instanceof MultiplayerRoomTransportError &&
+    error.code === "room-expired";
   const abandonRoom =
     error instanceof MultiplayerRoomTransportError &&
-    error.code === "room-not-found";
+    (expiredRoom || error.code === "room-not-found");
 
   return {
     abandonRoom,
-    message: abandonRoom
-      ? MULTIPLAYER_ROOM_ABANDONED_MESSAGE
-      : getRequestErrorMessage(error),
+    message: expiredRoom
+      ? MULTIPLAYER_ROOM_EXPIRED_MESSAGE
+      : abandonRoom
+        ? MULTIPLAYER_ROOM_ABANDONED_MESSAGE
+        : getMultiplayerRoomRequestErrorMessage(error),
   };
 }
 
@@ -356,37 +209,6 @@ function getLifecycleActions(status: PrivateRoomStatus) {
   return [{ command: "restart", label: "Restart", icon: RotateCcwIcon }] as const;
 }
 
-export function shouldPostMultiplayerRoomCommandOverHttp<
-  Game extends GameId = GameId,
-  Input = MultiplayerGameInputPayload<Game>,
->(
-  message: PrivateRoomClientMessage<Game, Input>,
-): message is HostOnlyRoomCommandMessage {
-  return message.type === "room.lifecycle" || message.type === "room.updateSettings";
-}
-
-export function getMultiplayerRoomStreamUnavailableMessage(
-  transportStatus: MultiplayerRoomTransportStatus,
-) {
-  if (transportStatus === "unconfigured") {
-    return "Room stream is not configured. Live room commands require WebSockets.";
-  }
-
-  if (transportStatus === "unavailable") {
-    return "Room stream is unavailable. Live room commands require WebSockets.";
-  }
-
-  if (transportStatus === "reconnecting") {
-    return "Room stream is reconnecting. Try again once the WebSocket stream is ready.";
-  }
-
-  if (transportStatus === "connecting") {
-    return "Room stream is connecting. Try again once the WebSocket stream is ready.";
-  }
-
-  return "Room stream is connected.";
-}
-
 export function getPrivateRoomShareLink(
   roomCode: string | null,
   origin: string | null,
@@ -467,7 +289,7 @@ export function MultiplayerRoomLobby({
   );
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [participantId, setParticipantId] = useState<string | null>(initialParticipantId);
-  const [roomSnapshot, setRoomSnapshot] = useState<RoomApiPayload | null>(() =>
+  const [roomSnapshot, setRoomSnapshot] = useState<MultiplayerRoomClientSnapshot | null>(() =>
     initialRoom === null
       ? null
       : {
@@ -495,7 +317,7 @@ export function MultiplayerRoomLobby({
     () => createParticipantsById(room?.participants ?? []),
     [room?.participants],
   );
-  const applyRoomSnapshot = useCallback((nextSnapshot: RoomApiPayload) => {
+  const applyRoomSnapshot = useCallback((nextSnapshot: MultiplayerRoomClientSnapshot) => {
     const selectedSnapshot = selectFreshMultiplayerRoomSnapshot(
       roomSnapshotRef.current,
       nextSnapshot,
@@ -508,10 +330,16 @@ export function MultiplayerRoomLobby({
 
     return selectedSnapshot;
   }, [setRoomSnapshot]);
-  const handleRoomTransportSnapshot = useCallback(
-    (nextSnapshot: RoomApiPayload) => {
-      recordDiagnosticsSnapshot(nextSnapshot);
-      setLoadError(null);
+  const handleRoomClientSnapshot = useCallback(
+    (
+      nextSnapshot: MultiplayerRoomClientSnapshot,
+      source: "http" | "websocket",
+    ) => {
+      if (source === "websocket") {
+        recordDiagnosticsSnapshot(nextSnapshot);
+        setLoadError(null);
+      }
+
       return applyRoomSnapshot(nextSnapshot);
     },
     [applyRoomSnapshot, recordDiagnosticsSnapshot, setLoadError],
@@ -540,7 +368,7 @@ export function MultiplayerRoomLobby({
     }),
     [roomSnapshot],
   );
-  const roomTransport = useMultiplayerRoomWebSocketTransport({
+  const roomClient = useMultiplayerRoomClient({
     diagnosticsEnabled: diagnosticsMode.enabled,
     displayName,
     enabled: normalizedRoomCode !== null,
@@ -548,19 +376,18 @@ export function MultiplayerRoomLobby({
     onConnectionError: handleRoomTransportConnectionError,
     onDiagnosticsPingSample: recordDiagnosticsPingSample,
     onParticipantId: setParticipantId,
-    onSnapshot: handleRoomTransportSnapshot,
+    onSnapshot: handleRoomClientSnapshot,
     participantId: activeParticipantId ?? participantId,
     roomCode: normalizedRoomCode,
   });
   const {
-    sendGameInput: sendRoomTransportGameInput,
-    sendRoomCommand: sendRoomTransportCommand,
-    status: roomTransportStatus,
-  } = roomTransport;
+    sendMessage: sendRoomClientMessage,
+    status: roomClientStatus,
+  } = roomClient;
 
   useEffect(() => {
-    recordDiagnosticsTransportStatus(roomTransportStatus);
-  }, [recordDiagnosticsTransportStatus, roomTransportStatus]);
+    recordDiagnosticsTransportStatus(roomClientStatus);
+  }, [recordDiagnosticsTransportStatus, roomClientStatus]);
 
   const handleCopyInviteLink = useCallback(() => {
     const currentInviteLink = getPrivateRoomShareLink(
@@ -582,58 +409,6 @@ export function MultiplayerRoomLobby({
         setCopyStatus("Invite link ready");
       });
   }, [browserOrigin, normalizedRoomCode, setCopyStatus]);
-
-  const sendRoomClientMessage = useCallback(
-    async <Game extends GameId = GameId, Input = MultiplayerGameInputPayload<Game>>(
-      message: PrivateRoomClientMessage<Game, Input>,
-    ) => {
-      if (normalizedRoomCode === null) {
-        throw new MultiplayerRoomRequestError("Room code is not supported.", 400);
-      }
-
-      if (shouldPostMultiplayerRoomCommandOverHttp(message)) {
-        const result = await postMultiplayerRoomCommand(normalizedRoomCode, message);
-
-        if (result.participantId !== undefined) {
-          setParticipantId(result.participantId);
-        }
-
-        applyRoomSnapshot(result);
-
-        return result;
-      }
-
-      if (roomTransportStatus === "active") {
-        const ack =
-          message.type === "game.input"
-            ? await sendRoomTransportGameInput(
-                message.gameId,
-                message.input,
-                message.participantId,
-              )
-            : await sendRoomTransportCommand(message);
-
-        if (ack.participantId !== undefined) {
-          setParticipantId(ack.participantId);
-        }
-
-        return ack;
-      }
-
-      throw new MultiplayerRoomRequestError(
-        getMultiplayerRoomStreamUnavailableMessage(roomTransportStatus),
-        0,
-      );
-    },
-    [
-      applyRoomSnapshot,
-      normalizedRoomCode,
-      roomTransportStatus,
-      sendRoomTransportGameInput,
-      sendRoomTransportCommand,
-      setParticipantId,
-    ],
-  );
 
   const handleJoinRoom = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -669,7 +444,7 @@ export function MultiplayerRoomLobby({
 
         setParticipantId(result.participantId);
       } catch (error) {
-        setFormError(getRequestErrorMessage(error));
+        setFormError(getMultiplayerRoomRequestErrorMessage(error));
       } finally {
         setIsJoining(false);
       }
@@ -707,7 +482,7 @@ export function MultiplayerRoomLobby({
         type,
       });
     } catch (error) {
-      setFormError(getRequestErrorMessage(error));
+      setFormError(getMultiplayerRoomRequestErrorMessage(error));
     } finally {
       setPendingAction(null);
     }
@@ -738,7 +513,7 @@ export function MultiplayerRoomLobby({
         type: "room.lifecycle",
       });
     } catch (error) {
-      setFormError(getRequestErrorMessage(error));
+      setFormError(getMultiplayerRoomRequestErrorMessage(error));
     } finally {
       setPendingAction(null);
     }
@@ -760,7 +535,7 @@ export function MultiplayerRoomLobby({
         type: "game.input",
       });
     } catch (error) {
-      setFormError(getRequestErrorMessage(error));
+      setFormError(getMultiplayerRoomRequestErrorMessage(error));
     }
   }
   const activeRoomGameRenderer =

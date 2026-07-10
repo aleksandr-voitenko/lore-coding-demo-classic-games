@@ -3,16 +3,18 @@ import { describe, expect, it } from "vitest";
 
 import { CurrentUserProvider } from "@/hooks/use-current-user";
 import { GAME_CATALOG } from "@/lib/game-catalog";
+import { MULTIPLAYER_GAME_IDS } from "@/lib/multiplayer/game-registry";
 
-import { GameLauncher, createLauncherPrivateRoomSettings } from "./game-launcher";
+import {
+  GameLauncher,
+  createLauncherPrivateRoomSettings,
+  getLauncherPrivateRoomCodeFromSearch,
+} from "./game-launcher";
 import { GAME_CARDS, createDefaultParameterValues } from "./game-launcher-config";
 import { PLAYABLE_GAME_COMPONENTS } from "./game-launcher-playables";
 
-const PRIVATE_ROOM_HOSTABLE_GAME_IDS = [
-  "asteroids",
-  "pong",
-  "space-invaders",
-] as const;
+const LAUNCHER_ARTWORK_SIZES =
+  "(min-width: 1200px) 23.333rem, (min-width: 944px) calc(33.333vw - 1.667rem), (min-width: 640px) calc(50vw - 2rem), calc(100vw - 2rem)";
 
 const EXPECTED_PARAMETER_SELECTS = [
   {
@@ -148,6 +150,14 @@ describe("game launcher", () => {
     expect(markup).not.toContain('data-testid="simon-target"');
   });
 
+  it("matches responsive artwork widths to the launcher grid", () => {
+    const markup = renderToStaticMarkup(<GameLauncher />);
+
+    expect(countOccurrences(markup, `sizes="${LAUNCHER_ARTWORK_SIZES}"`)).toBe(
+      GAME_CARDS.length,
+    );
+  });
+
   it("preserves launcher parameter labels and defaults", () => {
     const markup = renderToStaticMarkup(<GameLauncher />);
 
@@ -166,7 +176,7 @@ describe("game launcher", () => {
   it("keeps private-room host controls out of launcher cards", () => {
     const markup = renderToStaticMarkup(<GameLauncher />);
 
-    for (const gameId of PRIVATE_ROOM_HOSTABLE_GAME_IDS) {
+    for (const gameId of MULTIPLAYER_GAME_IDS) {
       expect(markup).not.toContain(`data-testid="private-room-host-${gameId}-button"`);
       expect(markup).not.toContain(`data-testid="private-room-host-${gameId}-status"`);
     }
@@ -181,7 +191,7 @@ describe("game launcher", () => {
       </CurrentUserProvider>,
     );
 
-    for (const gameId of PRIVATE_ROOM_HOSTABLE_GAME_IDS) {
+    for (const gameId of MULTIPLAYER_GAME_IDS) {
       expect(markup).not.toContain(`data-testid="private-room-host-${gameId}-button"`);
       expect(markup).not.toContain(`data-testid="private-room-host-${gameId}-status"`);
     }
@@ -229,6 +239,12 @@ describe("game launcher", () => {
     });
   });
 
+  it("reads normalized and unsupported room codes from browser search params", () => {
+    expect(getLauncherPrivateRoomCodeFromSearch("")).toBeNull();
+    expect(getLauncherPrivateRoomCodeFromSearch("?room=pong-1")).toBe("PONG-1");
+    expect(getLauncherPrivateRoomCodeFromSearch("?room=bad%20code")).toBe("bad code");
+  });
+
   it("renders the room lobby instead of the launcher grid when a room code is present", () => {
     const markup = renderToStaticMarkup(<GameLauncher initialRoomCode="pong-1" />);
 
@@ -266,4 +282,8 @@ function getButtonMarkup(markup: string, testId: string) {
   expect(elementMatch).not.toBeNull();
 
   return elementMatch?.[0] ?? "";
+}
+
+function countOccurrences(value: string, substring: string) {
+  return value.split(substring).length - 1;
 }
