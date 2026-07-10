@@ -2,9 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SqliteUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
 
-import { createGameSessionRouteHandlers, parseGameSessionSubmission } from "./route";
+import * as gameSessionsRoute from "./route";
+import { createGameSessionRouteHandlers, parseGameSessionSubmission } from "./route-handlers";
 
 describe("game sessions route", () => {
+  it("exports only the supported Next.js route fields", () => {
+    expect(Object.keys(gameSessionsRoute).sort()).toEqual(["POST", "dynamic", "runtime"]);
+  });
+
   it("parses game sessions with server-side validation", () => {
     expect(
       parseGameSessionSubmission({

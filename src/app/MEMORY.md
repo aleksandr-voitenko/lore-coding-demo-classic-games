@@ -66,9 +66,11 @@ This file covers routes and App Router conventions under `src/app/`.
   only Next-supported route configuration and the production `POST` handler.
 - `api/me/route.ts` only returns the current session user on GET and clears the
   current session on DELETE.
-- `api/game-sessions/route.ts` records completed or abandoned signed-in play
-  sessions. It rejects unsigned requests with `401`; guest play should remain a
-  client-side no-op for profile stats.
+- `api/game-sessions/route-handlers.ts` owns game-session payload parsing and
+  the injectable signed-in session-recording handler. `api/game-sessions/route.ts`
+  stays a thin App Router entry that exports only Next-supported route
+  configuration and the production `POST` handler. Unsigned requests return
+  `401`; guest play should remain a client-side no-op for profile stats.
 - `api/replays/route-handlers.ts` owns reusable replay run and latest replay
   route factories. Supported replay games such as Snake, Tetris, Breakout,
   Minesweeper, Space Invaders, Pong, Simon, 2048, and Asteroids expose
