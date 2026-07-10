@@ -3,10 +3,14 @@ import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket, type RawData } from "ws";
 
-import type { MultiplayerRoomStoreResult } from "./multiplayer-room-runtime";
+import {
+  DEFAULT_MULTIPLAYER_ROOM_RETENTION_POLICY,
+  type MultiplayerRoomStoreResult,
+} from "./multiplayer-room-runtime";
 
 import {
   DEFAULT_MULTIPLAYER_SIDECAR_HOST,
+  DEFAULT_MULTIPLAYER_SIDECAR_MAX_ROOMS,
   DEFAULT_MULTIPLAYER_SIDECAR_PORT,
   DEFAULT_MULTIPLAYER_SIDECAR_READINESS_PATH,
   DEFAULT_MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH,
@@ -32,6 +36,7 @@ function createTestConfig(
   return {
     healthPath: MULTIPLAYER_SIDECAR_HEALTH_PATH,
     host: "127.0.0.1",
+    maxRooms: DEFAULT_MULTIPLAYER_SIDECAR_MAX_ROOMS,
     port: 0,
     readinessPath: DEFAULT_MULTIPLAYER_SIDECAR_READINESS_PATH,
     roomServicePath: "/_internal/rooms",
@@ -196,6 +201,7 @@ describe("multiplayer room sidecar", () => {
     expect(parseMultiplayerRoomSidecarConfig({})).toEqual({
       healthPath: MULTIPLAYER_SIDECAR_HEALTH_PATH,
       host: DEFAULT_MULTIPLAYER_SIDECAR_HOST,
+      maxRooms: DEFAULT_MULTIPLAYER_SIDECAR_MAX_ROOMS,
       port: DEFAULT_MULTIPLAYER_SIDECAR_PORT,
       readinessPath: DEFAULT_MULTIPLAYER_SIDECAR_READINESS_PATH,
       roomServicePath: DEFAULT_MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH,
@@ -208,6 +214,7 @@ describe("multiplayer room sidecar", () => {
     expect(
       parseMultiplayerRoomSidecarConfig({
         MULTIPLAYER_SIDECAR_HOST: " 0.0.0.0 ",
+        MULTIPLAYER_SIDECAR_MAX_ROOMS: "512",
         MULTIPLAYER_SIDECAR_PORT: "3002",
         MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH: " /_sidecar/rooms ",
         MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS: "33",
@@ -217,6 +224,7 @@ describe("multiplayer room sidecar", () => {
     ).toEqual({
       healthPath: MULTIPLAYER_SIDECAR_HEALTH_PATH,
       host: "0.0.0.0",
+      maxRooms: 512,
       port: 3002,
       readinessPath: DEFAULT_MULTIPLAYER_SIDECAR_READINESS_PATH,
       roomServiceBearerToken: "service-secret",
@@ -227,6 +235,12 @@ describe("multiplayer room sidecar", () => {
   });
 
   it("rejects invalid sidecar port and path configuration", () => {
+    expect(() =>
+      parseMultiplayerRoomSidecarConfig({
+        MULTIPLAYER_SIDECAR_MAX_ROOMS: "0",
+      }),
+    ).toThrow("MULTIPLAYER_SIDECAR_MAX_ROOMS must be a positive integer");
+
     expect(() =>
       parseMultiplayerRoomSidecarConfig({
         MULTIPLAYER_SIDECAR_PORT: "not-a-port",
@@ -256,6 +270,37 @@ describe("multiplayer room sidecar", () => {
         MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS: "0",
       }),
     ).toThrow("MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS must be a positive integer");
+  });
+
+  it("owns one minute room sweeping and clears it idempotently", async () => {
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+    const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval");
+    const sidecar = createMultiplayerRoomSidecar(createTestConfig());
+
+    try {
+      await sidecar.start();
+
+      const sweepCallIndex = setIntervalSpy.mock.calls.findIndex(
+        (call) =>
+          call[1] === DEFAULT_MULTIPLAYER_ROOM_RETENTION_POLICY.sweepIntervalMs,
+      );
+
+      expect(sweepCallIndex).toBeGreaterThanOrEqual(0);
+
+      const sweepIntervalId = setIntervalSpy.mock.results[sweepCallIndex]?.value;
+
+      await sidecar.close();
+      await sidecar.close();
+      expect(
+        clearIntervalSpy.mock.calls.filter(
+          ([intervalId]) => intervalId === sweepIntervalId,
+        ),
+      ).toHaveLength(1);
+    } finally {
+      await sidecar.close();
+      setIntervalSpy.mockRestore();
+      clearIntervalSpy.mockRestore();
+    }
   });
 
   it("serves health and readiness JSON before closing the HTTP server", async () => {
@@ -305,6 +350,56 @@ describe("multiplayer room sidecar", () => {
     const client = await connectClient(origin.replace("http://", "ws://") + "/rooms");
 
     expect(client.readyState).toBe(WebSocket.OPEN);
+  });
+
+  it("rejects room creation at configured capacity while a participant is connected", async () => {
+    const sidecar = await createStartedSidecar(
+      createTestConfig({ maxRooms: 1 }),
+    );
+    const origin = getOrigin(sidecar);
+    const serviceBaseUrl = `${origin}/_internal/rooms`;
+    const createRoomRequest = () =>
+      fetch(serviceBaseUrl, {
+        body: JSON.stringify({
+          host: {
+            displayName: "Ada Host",
+            id: "user-1",
+          },
+          settings: {
+            gameId: "pong",
+          },
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+    const firstResponse = await createRoomRequest();
+    const firstSnapshot = expectStoreSuccess(await readStoreResult(firstResponse));
+    const client = await connectClient(
+      origin.replace("http://", "ws://") + "/rooms",
+    );
+    const bootstrapPromise = waitForServerMessage(
+      client,
+      (message) => message.type === "connection.bootstrap",
+    );
+
+    sendClientMessage(client, {
+      participantId: firstSnapshot.room.hostParticipantId,
+      requestId: "capacity-bootstrap",
+      roomCode: firstSnapshot.room.code,
+      type: "connection.resume",
+    });
+    await bootstrapPromise;
+
+    const capacityResponse = await createRoomRequest();
+
+    expect(capacityResponse.status).toBe(503);
+    await expect(readStoreResult(capacityResponse)).resolves.toEqual({
+      code: "room-capacity-reached",
+      error: "Room capacity is currently full. Try creating a room again shortly.",
+      success: false,
+    });
   });
 
   it("shares HTTP room endpoints with the WebSocket gateway store", async () => {

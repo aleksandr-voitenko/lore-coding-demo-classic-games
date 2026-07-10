@@ -18,7 +18,16 @@ function createUserStore(user: AuthenticatedUser | null): MultiplayerRoomUserSes
   };
 }
 
-function createRoomStore({ getNowMs }: { getNowMs?: () => number } = {}) {
+function createRoomStore({
+  getNowMs,
+  retentionPolicy,
+}: {
+  getNowMs?: () => number;
+  retentionPolicy?: {
+    lobbyIdleTtlMs?: number;
+    sweepIntervalMs?: number;
+  };
+} = {}) {
   const participantIds = ["host-1", "guest-1", "guest-2"];
   let participantIdIndex = 0;
 
@@ -26,6 +35,7 @@ function createRoomStore({ getNowMs }: { getNowMs?: () => number } = {}) {
     createParticipantId: () => participantIds[participantIdIndex++] ?? "participant-x",
     createRoomCode: () => "ROOM1",
     getNowMs,
+    retentionPolicy,
   });
 }
 
@@ -114,6 +124,35 @@ describe("multiplayer room route", () => {
         status: "lobby",
       },
       seq: 1,
+    });
+  });
+
+  it("distinguishes a recently expired room from an unknown room", async () => {
+    let nowMs = 0;
+    const roomStore = createRoomStore({
+      getNowMs: () => nowMs,
+      retentionPolicy: {
+        lobbyIdleTtlMs: 1_000,
+        sweepIntervalMs: 100,
+      },
+    });
+    const handlers = createMultiplayerRoomRouteHandlers(
+      roomStore,
+      createUserStore(null),
+    );
+
+    expectRoomCreated(roomStore);
+    nowMs = 1_000;
+
+    const response = await handlers.GET(
+      new Request("http://localhost/api/multiplayer/rooms/room1"),
+      { code: "room1" },
+    );
+
+    expect(response.status).toBe(410);
+    await expect(response.json()).resolves.toEqual({
+      code: "room-expired",
+      error: "Room has expired. Create or join a new room.",
     });
   });
 

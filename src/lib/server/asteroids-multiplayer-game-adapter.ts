@@ -113,6 +113,9 @@ export const asteroidsMultiplayerRuntimeAdapter: MultiplayerServerGameRuntimeAda
   isActive({ room, runtime }) {
     return isAsteroidsRuntimeActive(getAsteroidsRuntime(runtime), room);
   },
+  isTerminal({ runtime }) {
+    return getAsteroidsRuntime(runtime).game.status === "lost";
+  },
   shouldAdvanceSnapshot({ room, snapshot }) {
     return shouldAdvanceAsteroidsSnapshot(room, snapshot);
   },

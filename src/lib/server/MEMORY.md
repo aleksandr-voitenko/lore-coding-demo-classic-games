@@ -52,6 +52,16 @@ This file covers Node-only server helpers and storage adapters under
   is intentionally volatile: the in-process store or sidecar owns server
   authority while the room exists, and in-progress games may be abandoned if
   that process restarts.
+  The store bounds that volatile authority to 256 rooms by default. Successful
+  room/game commands refresh meaningful activity; passive reads, snapshot
+  advancement, handshakes, and diagnostics do not. Unconnected lobbies expire
+  after 60 minutes, running/paused rooms after two hours, and explicit or
+  adapter-classified terminal rooms after 30 minutes. Recognized participant
+  WebSocket connections protect a room and the last disconnect starts a full
+  state-specific grace. Capacity eviction prefers expired rooms, then terminal
+  rooms, then lobbies, and never removes connected or nonterminal
+  running/paused rooms. Up-to-five-minute, capacity-bounded tombstones
+  distinguish recent expiry from an unknown room code.
 - `multiplayer-room-websocket.ts` owns the reusable Node WebSocket gateway for
   the realtime sidecar. It adapts the generic protocol envelopes to the room
   runtime, accepts an injectable `MultiplayerRoomStore`, rejects public
@@ -60,15 +70,22 @@ This file covers Node-only server helpers and storage adapters under
   snapshots after accepted WebSocket commands, runs a subscribed-room snapshot
   pump so server-owned games keep advancing when HTTP polling is disabled,
   exposes a narrow snapshot fanout method for sidecar-owned mutations, and keeps
-  game-specific payloads nested behind `game.input` dispatch. Its public factory
-  defaults inbound client messages to 64 KiB through `ws` `maxPayload` while
-  preserving explicit caller overrides.
+  game-specific payloads nested behind `game.input` dispatch. When the injected
+  store exposes the co-located participant-connection capability, the gateway
+  counts only sockets whose participant id matches room membership, promotes a
+  socket after a successful guest join, and releases presence on close, error,
+  or room change; anonymous invite viewers do not protect retention. Its public
+  factory defaults inbound client messages to 64 KiB through `ws` `maxPayload`
+  while preserving explicit caller overrides.
 - `multiplayer-room-sidecar.ts` owns the standalone Node HTTP/WebSocket process
   wrapper around the gateway. It parses `MULTIPLAYER_SIDECAR_HOST`,
   `MULTIPLAYER_SIDECAR_PORT`, `MULTIPLAYER_SIDECAR_WEBSOCKET_PATH`,
   `MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH`,
   `MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS`, and optional
-  `MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN`. It exposes `/healthz`, keeps
+  `MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN`. It also parses the strict
+  positive `MULTIPLAYER_SIDECAR_MAX_ROOMS` capacity override, owns the one-minute
+  room sweep timer, and clears that timer during idempotent shutdown. It exposes
+  `/healthz`, keeps
   public WebSocket upgrades on `/multiplayer/rooms` by default, serves internal
   JSON room create/get/command endpoints on `/_internal/multiplayer/rooms` by
   default, passes one in-process room store to both those HTTP endpoints and the

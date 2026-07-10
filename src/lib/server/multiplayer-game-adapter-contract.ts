@@ -124,6 +124,13 @@ export type MultiplayerServerGameRuntimeAdapter = {
     room: PrivateRoom;
     runtime: unknown;
   }) => boolean;
+  /**
+   * Distinguishes game-over state from ready, paused, or otherwise inactive state.
+   */
+  isTerminal: (options: {
+    room: PrivateRoom;
+    runtime: unknown;
+  }) => boolean;
   shouldAdvanceSnapshot: (options: {
     room: PrivateRoom;
     snapshot: MultiplayerServerGameSnapshot;

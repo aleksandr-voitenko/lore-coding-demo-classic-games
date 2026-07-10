@@ -101,6 +101,11 @@ export const pongMultiplayerRuntimeAdapter: MultiplayerServerGameRuntimeAdapter 
   isActive({ room, runtime }) {
     return isPongRuntimeActive(getPongRuntime(runtime), room);
   },
+  isTerminal({ runtime }) {
+    const status = getPongRuntime(runtime).game.status;
+
+    return status === "won" || status === "lost";
+  },
   shouldAdvanceSnapshot({ room, snapshot }) {
     return snapshot.gameId === "pong" && shouldAdvancePongSnapshot(room, snapshot);
   },

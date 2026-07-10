@@ -62,6 +62,8 @@ import {
 
 const MULTIPLAYER_ROOM_ABANDONED_MESSAGE =
   "Room connection lost. This room is no longer available, so the in-progress game cannot continue. Start or join a new room.";
+const MULTIPLAYER_ROOM_EXPIRED_MESSAGE =
+  "This room expired after being inactive. Start or join a new room.";
 
 type MultiplayerRoomLobbyProps = {
   initialAuthMode?: UserAuthMode | null;
@@ -109,15 +111,20 @@ type RoomSummaryProps = {
 };
 
 export function getMultiplayerRoomConnectionErrorState(error: unknown) {
+  const expiredRoom =
+    error instanceof MultiplayerRoomTransportError &&
+    error.code === "room-expired";
   const abandonRoom =
     error instanceof MultiplayerRoomTransportError &&
-    error.code === "room-not-found";
+    (expiredRoom || error.code === "room-not-found");
 
   return {
     abandonRoom,
-    message: abandonRoom
-      ? MULTIPLAYER_ROOM_ABANDONED_MESSAGE
-      : getMultiplayerRoomRequestErrorMessage(error),
+    message: expiredRoom
+      ? MULTIPLAYER_ROOM_EXPIRED_MESSAGE
+      : abandonRoom
+        ? MULTIPLAYER_ROOM_ABANDONED_MESSAGE
+        : getMultiplayerRoomRequestErrorMessage(error),
   };
 }
 

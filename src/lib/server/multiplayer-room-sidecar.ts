@@ -7,6 +7,8 @@ import {
   type MultiplayerRoomWebSocketGateway,
 } from "./multiplayer-room-websocket";
 import {
+  DEFAULT_MULTIPLAYER_ROOM_MAX_ROOMS,
+  DEFAULT_MULTIPLAYER_ROOM_RETENTION_POLICY,
   InProcessMultiplayerRoomStore,
   getMultiplayerRoomStoreErrorStatus,
   type CreateMultiplayerRoomOptions,
@@ -22,12 +24,16 @@ export const DEFAULT_MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH =
   "/_internal/multiplayer/rooms";
 export const DEFAULT_MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS =
   DEFAULT_MULTIPLAYER_ROOM_SNAPSHOT_INTERVAL_MS;
+export const DEFAULT_MULTIPLAYER_SIDECAR_MAX_ROOMS =
+  DEFAULT_MULTIPLAYER_ROOM_MAX_ROOMS;
 export const DEFAULT_MULTIPLAYER_SIDECAR_READINESS_PATH = "/readyz";
 export const MULTIPLAYER_SIDECAR_HEALTH_PATH = "/healthz";
 export const MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN_ENV =
   "MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN";
 export const MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH_ENV =
   "MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH";
+export const MULTIPLAYER_SIDECAR_MAX_ROOMS_ENV =
+  "MULTIPLAYER_SIDECAR_MAX_ROOMS";
 export const MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS_ENV =
   "MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS";
 
@@ -37,6 +43,7 @@ const MAX_ROOM_SERVICE_JSON_BODY_BYTES = 64 * 1024;
 export type MultiplayerRoomSidecarConfig = {
   healthPath: string;
   host: string;
+  maxRooms: number;
   port: number;
   readinessPath: string;
   roomServiceBearerToken?: string;
@@ -79,6 +86,11 @@ export function parseMultiplayerRoomSidecarConfig(
     host:
       getOptionalEnvString(env.MULTIPLAYER_SIDECAR_HOST) ??
       DEFAULT_MULTIPLAYER_SIDECAR_HOST,
+    maxRooms: parsePositiveIntegerEnv(
+      env[MULTIPLAYER_SIDECAR_MAX_ROOMS_ENV],
+      MULTIPLAYER_SIDECAR_MAX_ROOMS_ENV,
+      DEFAULT_MULTIPLAYER_SIDECAR_MAX_ROOMS,
+    ),
     port: parsePortEnv(
       env.MULTIPLAYER_SIDECAR_PORT,
       "MULTIPLAYER_SIDECAR_PORT",
@@ -99,7 +111,9 @@ export function parseMultiplayerRoomSidecarConfig(
 export function createMultiplayerRoomSidecar(
   config: MultiplayerRoomSidecarConfig = parseMultiplayerRoomSidecarConfig(),
 ): MultiplayerRoomSidecar {
-  const store = new InProcessMultiplayerRoomStore();
+  const store = new InProcessMultiplayerRoomStore({
+    maxRooms: config.maxRooms,
+  });
   const server = createServer((request, response) => {
     void handleHttpRequest(config, store, gateway, request, response).catch(
       (error: unknown) => {
@@ -114,9 +128,20 @@ export function createMultiplayerRoomSidecar(
     store,
   });
   let closePromise: Promise<void> | null = null;
+  let roomSweepIntervalId: ReturnType<typeof setInterval> | null = null;
+
+  function stopRoomSweepTimer() {
+    if (roomSweepIntervalId === null) {
+      return;
+    }
+
+    clearInterval(roomSweepIntervalId);
+    roomSweepIntervalId = null;
+  }
 
   return {
     close: () => {
+      stopRoomSweepTimer();
       closePromise ??= closeSidecar(server, gateway);
 
       return closePromise;
@@ -124,7 +149,17 @@ export function createMultiplayerRoomSidecar(
     config,
     gateway,
     server,
-    start: () => listen(server, config),
+    start: async () => {
+      await listen(server, config);
+
+      if (roomSweepIntervalId === null) {
+        roomSweepIntervalId = setInterval(
+          () => store.sweepExpiredRooms(),
+          DEFAULT_MULTIPLAYER_ROOM_RETENTION_POLICY.sweepIntervalMs,
+        );
+        roomSweepIntervalId.unref?.();
+      }
+    },
   };
 }
 
@@ -143,7 +178,9 @@ export async function runMultiplayerRoomSidecarFromEnv(
       sidecar.config,
     )} with WebSocket path ${sidecar.config.websocketPath} and room service path ${
       sidecar.config.roomServicePath
-    } and snapshot interval ${sidecar.config.snapshotIntervalMs}ms`,
+    }, room capacity ${sidecar.config.maxRooms}, and snapshot interval ${
+      sidecar.config.snapshotIntervalMs
+    }ms`,
   );
 
   return sidecar;
@@ -734,7 +771,7 @@ function parsePositiveIntegerEnv(
 
   const integer = Number(trimmedValue);
 
-  if (!Number.isInteger(integer) || integer <= 0) {
+  if (!Number.isSafeInteger(integer) || integer <= 0) {
     throw new Error(`${envName} must be a positive integer.`);
   }
 

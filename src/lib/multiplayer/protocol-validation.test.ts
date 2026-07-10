@@ -120,6 +120,13 @@ describe("multiplayer protocol validation", () => {
         type: "room.commandRejected",
       },
       {
+        code: "room-expired",
+        error: "Room has expired.",
+        requestId: "connection-2",
+        roomCode: "ROOM1",
+        type: "room.commandRejected",
+      },
+      {
         nonce: "ping-1",
         serverTimeMs: 1_100,
         type: "connection.ping",

@@ -6,6 +6,7 @@ import {
   MULTIPLAYER_GAME_IDS,
   isMultiplayerGameId,
 } from "../multiplayer/game-registry";
+import type { PrivateRoom } from "../multiplayer/room";
 import {
   getDefaultMultiplayerServerGameAdapter,
   getMultiplayerServerGameAdapter,
@@ -29,6 +30,73 @@ describe("multiplayer server game adapter registry", () => {
     for (const game of GAME_CATALOG) {
       if (!isMultiplayerGameId(game.id)) {
         expect(getMultiplayerServerGameAdapter(game.id)).toBeNull();
+      }
+    }
+  });
+
+  it("classifies only each adapter's actual game-over states as terminal", () => {
+    const room = {
+      code: "ROOM1",
+      hostParticipantId: "host-1",
+      participants: [
+        {
+          displayName: "Ada Host",
+          id: "host-1",
+          role: "host",
+          userId: "user-1",
+        },
+      ],
+      seats: [],
+      settings: { gameId: "pong" },
+      status: "running",
+    } satisfies PrivateRoom;
+    const cases = [
+      {
+        gameId: "pong" as const,
+        nonterminalStatuses: ["ready", "running", "paused"],
+        terminalStatuses: ["won", "lost"],
+      },
+      {
+        gameId: "space-invaders" as const,
+        nonterminalStatuses: ["ready", "running", "paused"],
+        terminalStatuses: ["won", "lost"],
+      },
+      {
+        gameId: "asteroids" as const,
+        nonterminalStatuses: ["ready", "running", "paused"],
+        terminalStatuses: ["lost"],
+      },
+    ];
+
+    for (const { gameId, nonterminalStatuses, terminalStatuses } of cases) {
+      const adapter = getMultiplayerServerGameAdapter(gameId);
+
+      if (adapter === null) {
+        throw new Error(`Expected a ${gameId} multiplayer adapter.`);
+      }
+
+      for (const status of nonterminalStatuses) {
+        expect(
+          adapter.isTerminal({
+            room: {
+              ...room,
+              settings: { gameId },
+            },
+            runtime: { game: { status } },
+          }),
+        ).toBe(false);
+      }
+
+      for (const status of terminalStatuses) {
+        expect(
+          adapter.isTerminal({
+            room: {
+              ...room,
+              settings: { gameId },
+            },
+            runtime: { game: { status } },
+          }),
+        ).toBe(true);
       }
     }
   });

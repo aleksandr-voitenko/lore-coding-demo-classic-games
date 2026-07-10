@@ -252,6 +252,18 @@ describe("multiplayer room lobby", () => {
   it("marks missing rooms as abandoned after unrecoverable stream bootstrap rejection", () => {
     expect(
       getMultiplayerRoomConnectionErrorState(
+        new MultiplayerRoomTransportError("Room has expired.", {
+          code: "room-expired",
+        }),
+      ),
+    ).toEqual({
+      abandonRoom: true,
+      message:
+        "This room expired after being inactive. Start or join a new room.",
+    });
+
+    expect(
+      getMultiplayerRoomConnectionErrorState(
         new MultiplayerRoomTransportError("Room was not found.", {
           code: "room-not-found",
         }),

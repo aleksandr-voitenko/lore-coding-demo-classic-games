@@ -364,6 +364,7 @@ function isMultiplayerRealtimeRejectionCode(
     case "participant-not-found":
     case "participant-not-seated":
     case "required-seats-empty":
+    case "room-expired":
     case "room-not-found":
     case "seat-not-found":
     case "seat-occupied":

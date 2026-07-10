@@ -9,6 +9,7 @@ import { isGameId } from "../game-catalog";
 
 import {
   InProcessMultiplayerRoomStore,
+  isMultiplayerRoomParticipantConnectionStore,
   shouldAdvanceRoomGameSnapshot,
   type MultiplayerRoomGameSnapshot,
   type MultiplayerRoomStore,
@@ -26,6 +27,11 @@ export type CreateMultiplayerRoomWebSocketGatewayOptions = ServerOptions & {
 export type MultiplayerRoomWebSocketGateway = {
   broadcastSnapshot: (snapshot: MultiplayerRoomSnapshot) => void;
   close: () => Promise<void>;
+  getTrackedRoomCounts: () => {
+    activeSnapshotRooms: number;
+    broadcastCursors: number;
+    subscribedRooms: number;
+  };
   roomStore: MultiplayerRoomStore;
   webSocketServer: WebSocketServer;
 };
@@ -67,6 +73,11 @@ type GameInputStoreCommand = Extract<
   { type: "game.input" }
 >;
 
+type SocketRoomAssignmentResult =
+  | "assigned"
+  | "participant-rejected"
+  | "socket-closed";
+
 const HOST_ONLY_WEBSOCKET_COMMAND_ERROR =
   "Host-only room commands require the authenticated HTTP room route.";
 const DEFAULT_MULTIPLAYER_ROOM_MAX_PAYLOAD_BYTES = 64 * 1024;
@@ -91,7 +102,13 @@ export function createMultiplayerRoomWebSocketGateway({
       : webSocketServerOptions,
   );
   const roomCodeBySocket = new Map<WebSocket, string>();
+  const participantIdBySocket = new Map<WebSocket, string>();
   const socketsByRoomCode = new Map<string, Set<WebSocket>>();
+  const participantConnectionStore = isMultiplayerRoomParticipantConnectionStore(
+    store,
+  )
+    ? store
+    : null;
   const lastBroadcastCursorByRoomCode = new Map<string, string>();
   const activeSnapshotRoomCodes = new Set<string>();
   const normalizedSnapshotIntervalMs = normalizeSnapshotIntervalMs(snapshotIntervalMs);
@@ -105,12 +122,21 @@ export function createMultiplayerRoomWebSocketGateway({
 
   function removeSocketFromRoom(socket: WebSocket) {
     const roomCode = roomCodeBySocket.get(socket);
+    const participantId = participantIdBySocket.get(socket);
 
     if (roomCode === undefined) {
       return;
     }
 
     roomCodeBySocket.delete(socket);
+    participantIdBySocket.delete(socket);
+
+    if (participantId !== undefined) {
+      participantConnectionStore?.unregisterParticipantConnection(
+        roomCode,
+        participantId,
+      );
+    }
 
     const sockets = socketsByRoomCode.get(roomCode);
 
@@ -123,15 +149,38 @@ export function createMultiplayerRoomWebSocketGateway({
     if (sockets.size === 0) {
       socketsByRoomCode.delete(roomCode);
       activeSnapshotRoomCodes.delete(roomCode);
+      lastBroadcastCursorByRoomCode.delete(roomCode);
     }
   }
 
-  function assignSocketToRoom(socket: WebSocket, roomCode: string) {
-    if (roomCodeBySocket.get(socket) === roomCode) {
-      return;
+  function assignSocketToRoom(
+    socket: WebSocket,
+    roomCode: string,
+    participantId?: string,
+  ): SocketRoomAssignmentResult {
+    if (socket.readyState !== WebSocket.OPEN) {
+      return "socket-closed";
+    }
+
+    if (
+      roomCodeBySocket.get(socket) === roomCode &&
+      participantIdBySocket.get(socket) === participantId
+    ) {
+      return "assigned";
     }
 
     removeSocketFromRoom(socket);
+
+    if (
+      participantId !== undefined &&
+      participantConnectionStore !== null &&
+      !participantConnectionStore.registerParticipantConnection(
+        roomCode,
+        participantId,
+      )
+    ) {
+      return "participant-rejected";
+    }
 
     roomCodeBySocket.set(socket, roomCode);
 
@@ -139,18 +188,26 @@ export function createMultiplayerRoomWebSocketGateway({
 
     sockets.add(socket);
     socketsByRoomCode.set(roomCode, sockets);
+
+    if (participantId !== undefined) {
+      participantIdBySocket.set(socket, participantId);
+    }
+
+    return "assigned";
   }
 
   function broadcastSnapshot(snapshot: MultiplayerRoomSnapshot) {
     const roomCode = snapshot.room.code;
-
-    rememberBroadcastSnapshot(snapshot);
-
     const sockets = socketsByRoomCode.get(roomCode);
 
-    if (sockets === undefined) {
+    if (sockets === undefined || sockets.size === 0) {
+      socketsByRoomCode.delete(roomCode);
+      activeSnapshotRoomCodes.delete(roomCode);
+      lastBroadcastCursorByRoomCode.delete(roomCode);
       return;
     }
+
+    rememberBroadcastSnapshot(snapshot);
 
     const message = {
       roomCode,
@@ -163,7 +220,7 @@ export function createMultiplayerRoomWebSocketGateway({
     }
   }
 
-  function handleStoreResult(
+  async function handleStoreResult(
     socket: WebSocket,
     result: MultiplayerRoomStoreResult,
     requestId: string | undefined,
@@ -180,13 +237,30 @@ export function createMultiplayerRoomWebSocketGateway({
       return;
     }
 
-    assignSocketToRoom(socket, result.snapshot.room.code);
-    sendAck(
+    const assignmentResult = assignSocketToRoom(
       socket,
-      result.snapshot,
-      requestId,
-      result.snapshot.participant?.id ?? getCommandParticipantId(command),
+      result.snapshot.room.code,
+      result.snapshot.participant?.id,
     );
+
+    if (assignmentResult === "participant-rejected") {
+      await rejectFailedParticipantAssignment(
+        socket,
+        result.snapshot.room.code,
+        requestId,
+      );
+      return;
+    }
+
+    if (assignmentResult === "assigned") {
+      sendAck(
+        socket,
+        result.snapshot,
+        requestId,
+        result.snapshot.participant?.id ?? getCommandParticipantId(command),
+      );
+    }
+
     broadcastSnapshot(result.snapshot);
   }
 
@@ -222,8 +296,27 @@ export function createMultiplayerRoomWebSocketGateway({
       result.snapshot,
       getOptionalString(message.participantId),
     );
+    const recognizedParticipantId = snapshot.participant?.id;
 
-    assignSocketToRoom(socket, result.snapshot.room.code);
+    const assignmentResult = assignSocketToRoom(
+      socket,
+      result.snapshot.room.code,
+      recognizedParticipantId,
+    );
+
+    if (assignmentResult === "socket-closed") {
+      return;
+    }
+
+    if (assignmentResult === "participant-rejected") {
+      await rejectFailedParticipantAssignment(
+        socket,
+        result.snapshot.room.code,
+        requestId,
+      );
+      return;
+    }
+
     rememberBroadcastSnapshot(result.snapshot);
     sendServerMessage(socket, {
       ...(getOptionalString(message.displayName) === undefined
@@ -265,7 +358,7 @@ export function createMultiplayerRoomWebSocketGateway({
       return;
     }
 
-    handleStoreResult(
+    await handleStoreResult(
       socket,
       await store.applyCommand(roomCode, parsedCommand.command),
       requestId,
@@ -307,7 +400,7 @@ export function createMultiplayerRoomWebSocketGateway({
       type: "game.input",
     } satisfies GameInputStoreCommand;
 
-    handleStoreResult(
+    await handleStoreResult(
       socket,
       await store.applyCommand(roomCode, command),
       requestId,
@@ -432,6 +525,11 @@ export function createMultiplayerRoomWebSocketGateway({
 
       await closeWebSocketServer(webSocketServer);
     },
+    getTrackedRoomCounts: () => ({
+      activeSnapshotRooms: activeSnapshotRoomCodes.size,
+      broadcastCursors: lastBroadcastCursorByRoomCode.size,
+      subscribedRooms: socketsByRoomCode.size,
+    }),
     roomStore: store,
     webSocketServer,
   };
@@ -447,12 +545,21 @@ export function createMultiplayerRoomWebSocketGateway({
       for (const roomCode of activeSnapshotRoomCodes) {
         if (!socketsByRoomCode.has(roomCode)) {
           activeSnapshotRoomCodes.delete(roomCode);
+          lastBroadcastCursorByRoomCode.delete(roomCode);
           continue;
         }
 
         const result = await store.getRoom(roomCode);
 
-        if (!result.success || !isFreshBroadcastSnapshot(result.snapshot)) {
+        if (!result.success) {
+          if (isDefinitiveRoomLookupFailure(result)) {
+            rejectAndDetachRoomSubscribers(roomCode, result);
+          }
+
+          continue;
+        }
+
+        if (!isFreshBroadcastSnapshot(result.snapshot)) {
           continue;
         }
 
@@ -482,6 +589,60 @@ export function createMultiplayerRoomWebSocketGateway({
       getBroadcastSnapshotCursor(snapshot)
     );
   }
+
+  async function rejectFailedParticipantAssignment(
+    socket: WebSocket,
+    roomCode: string,
+    requestId: string | undefined,
+  ) {
+    if (socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    const result = await store.getRoom(roomCode);
+
+    if (!result.success) {
+      sendRejection(socket, {
+        code: result.code,
+        error: result.error,
+        requestId,
+        roomCode,
+      });
+      return;
+    }
+
+    sendRejection(socket, {
+      code: "invalid-message",
+      error: "Participant connection could not be registered.",
+      requestId,
+      roomCode,
+    });
+  }
+
+  function rejectAndDetachRoomSubscribers(
+    roomCode: string,
+    result: Extract<MultiplayerRoomStoreResult, { success: false }>,
+  ) {
+    const sockets = Array.from(socketsByRoomCode.get(roomCode) ?? []);
+
+    activeSnapshotRoomCodes.delete(roomCode);
+    lastBroadcastCursorByRoomCode.delete(roomCode);
+
+    for (const socket of sockets) {
+      sendRejection(socket, {
+        code: result.code,
+        error: result.error,
+        roomCode,
+      });
+      removeSocketFromRoom(socket);
+    }
+  }
+}
+
+function isDefinitiveRoomLookupFailure(
+  result: Extract<MultiplayerRoomStoreResult, { success: false }>,
+) {
+  return result.code === "room-expired" || result.code === "room-not-found";
 }
 
 function needsNoServerDefault(options: ServerOptions) {
@@ -551,6 +712,7 @@ function getRealtimeRejectionCode(
   code: MultiplayerRealtimeRejectionCode | MultiplayerRoomStoreErrorCode,
 ): MultiplayerRealtimeRejectionCode {
   if (
+    code === "room-capacity-reached" ||
     code === "room-service-invalid-response" ||
     code === "room-service-unavailable"
   ) {

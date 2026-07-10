@@ -161,6 +161,12 @@ export function createMultiplayerRoomErrorResponse(
       error: result.error,
     },
     {
+      headers:
+        result.code === "room-capacity-reached"
+          ? {
+              "retry-after": "60",
+            }
+          : undefined,
       status: getMultiplayerRoomErrorStatus(result.code),
     },
   );

@@ -16,7 +16,9 @@ import type { SpaceInvadersMultiplayerServerGameSnapshot } from "./multiplayer-g
 import {
   InProcessMultiplayerRoomStore,
   shouldAdvanceRoomGameSnapshot,
+  type MultiplayerRoomParticipantConnectionStore,
   type MultiplayerRoomSnapshot,
+  type MultiplayerRoomStore,
   type MultiplayerRoomStoreResult,
 } from "./multiplayer-room-runtime";
 import { createMultiplayerRoomWebSocketGateway } from "./multiplayer-room-websocket";
@@ -40,11 +42,21 @@ afterEach(async () => {
 
 function createTestRoomStore({
   getNowMs,
+  maxRooms,
   participantIds = ["host-1", "guest-1", "guest-2", "observer-1"],
+  retentionPolicy,
   roomCodes = ["ROOM1"],
 }: {
   getNowMs?: () => number;
+  maxRooms?: number;
   participantIds?: string[];
+  retentionPolicy?: {
+    inProgressIdleTtlMs?: number;
+    lobbyIdleTtlMs?: number;
+    sweepIntervalMs?: number;
+    terminalTtlMs?: number;
+    tombstoneTtlMs?: number;
+  };
   roomCodes?: string[];
 } = {}) {
   let participantIdIndex = 0;
@@ -55,6 +67,8 @@ function createTestRoomStore({
       participantIds[participantIdIndex++] ?? `${role}-${participantIdIndex}`,
     createRoomCode: () => roomCodes[roomCodeIndex++] ?? "ROOM-FALLBACK",
     getNowMs,
+    maxRooms,
+    retentionPolicy,
   });
 }
 
@@ -233,7 +247,7 @@ function serveStartedPongRoom(store: InProcessMultiplayerRoomStore) {
 }
 
 async function createGatewayFixture(
-  store = createTestRoomStore(),
+  store: MultiplayerRoomStore = createTestRoomStore(),
   gatewayOptions: {
     maxPayload?: number;
     snapshotIntervalMs?: number;
@@ -261,6 +275,7 @@ async function createGatewayFixture(
   }
 
   return {
+    gateway,
     store,
     url: `ws://127.0.0.1:${(address as AddressInfo).port}/rooms`,
   };
@@ -416,13 +431,18 @@ function sendClientMessage(client: WebSocket, message: unknown) {
   client.send(JSON.stringify(message));
 }
 
-async function bootstrapClient(client: WebSocket, roomCode = "ROOM1") {
+async function bootstrapClient(
+  client: WebSocket,
+  roomCode = "ROOM1",
+  participantId?: string,
+) {
   const bootstrapPromise = waitForServerMessage(
     client,
     (message) => message.type === "connection.bootstrap",
   );
 
   sendClientMessage(client, {
+    ...(participantId === undefined ? {} : { participantId }),
     requestId: `hello-${roomCode}`,
     roomCode,
     type: "connection.hello",
@@ -632,6 +652,255 @@ describe("multiplayer room WebSocket gateway", () => {
     });
   });
 
+  it("rejects bootstrap with a specific code while an expired-room tombstone remains", async () => {
+    let nowMs = 0;
+    const store = createTestRoomStore({
+      getNowMs: () => nowMs,
+      retentionPolicy: {
+        lobbyIdleTtlMs: 1_000,
+        sweepIntervalMs: 100,
+      },
+    });
+
+    createLobbyRoom(store);
+    nowMs = 1_000;
+    const { url } = await createGatewayFixture(store);
+    const client = await connectClient(url);
+    const rejectionPromise = waitForServerMessage(
+      client,
+      (message) =>
+        message.type === "room.commandRejected" &&
+        message.requestId === "resume-expired",
+    );
+
+    sendClientMessage(client, {
+      participantId: "host-1",
+      requestId: "resume-expired",
+      roomCode: "ROOM1",
+      type: "connection.resume",
+    });
+
+    await expect(rejectionPromise).resolves.toEqual({
+      code: "room-expired",
+      error: "Room has expired. Create or join a new room.",
+      requestId: "resume-expired",
+      roomCode: "ROOM1",
+      type: "room.commandRejected",
+    });
+  });
+
+  it("rejects a recognized bootstrap when registration crosses the expiry boundary", async () => {
+    let nowMs = 0;
+    const store = createTestRoomStore({
+      getNowMs: () => nowMs,
+      retentionPolicy: {
+        lobbyIdleTtlMs: 1_000,
+        sweepIntervalMs: 100,
+      },
+    });
+
+    createLobbyRoom(store);
+    nowMs = 999;
+    const registerParticipantConnection = store.registerParticipantConnection.bind(
+      store,
+    );
+
+    vi.spyOn(store, "registerParticipantConnection").mockImplementation(
+      (roomCode, participantId) => {
+        nowMs = 1_000;
+        return registerParticipantConnection(roomCode, participantId);
+      },
+    );
+
+    const { url } = await createGatewayFixture(store);
+    const client = await connectClient(url);
+    const rejectionPromise = waitForServerMessage(
+      client,
+      (message) =>
+        message.type === "room.commandRejected" &&
+        message.requestId === "boundary-bootstrap",
+    );
+
+    sendClientMessage(client, {
+      participantId: "host-1",
+      requestId: "boundary-bootstrap",
+      roomCode: "ROOM1",
+      type: "connection.resume",
+    });
+
+    await expect(rejectionPromise).resolves.toEqual({
+      code: "room-expired",
+      error: "Room has expired. Create or join a new room.",
+      requestId: "boundary-bootstrap",
+      roomCode: "ROOM1",
+      type: "room.commandRejected",
+    });
+  });
+
+  it("does not retain room cursors after unique subscriber churn", async () => {
+    const roomCodes = Array.from(
+      { length: 12 },
+      (_, index) => `ROOM${index + 1}`,
+    );
+    const participantIds = roomCodes.map((_, index) => `host-${index + 1}`);
+    const store = createTestRoomStore({
+      maxRooms: roomCodes.length,
+      participantIds,
+      roomCodes,
+    });
+
+    for (const roomCode of roomCodes) {
+      createLobbyRoom(store);
+      expect(store.getRoom(roomCode).success).toBe(true);
+    }
+
+    const { gateway, url } = await createGatewayFixture(store);
+
+    for (const roomCode of roomCodes) {
+      const client = await connectClient(url);
+
+      await bootstrapClient(client, roomCode);
+      const closePromise = waitForClientClose(client);
+
+      client.close();
+      await closePromise;
+    }
+
+    await vi.waitFor(() => {
+      expect(gateway.getTrackedRoomCounts()).toEqual({
+        activeSnapshotRooms: 0,
+        broadcastCursors: 0,
+        subscribedRooms: 0,
+      });
+    });
+  });
+
+  it("does not retain snapshot tracking when broadcasting without subscribers", async () => {
+    const store = createTestRoomStore();
+    createStartedPongRoom(store);
+    const snapshot = serveStartedPongRoom(store);
+    const { gateway } = await createGatewayFixture(store);
+
+    gateway.broadcastSnapshot(snapshot);
+
+    expect(gateway.getTrackedRoomCounts()).toEqual({
+      activeSnapshotRooms: 0,
+      broadcastCursors: 0,
+      subscribedRooms: 0,
+    });
+  });
+
+  it("protects only recognized participant sockets and starts grace after disconnect", async () => {
+    let nowMs = 0;
+    const store = createTestRoomStore({
+      getNowMs: () => nowMs,
+      retentionPolicy: {
+        lobbyIdleTtlMs: 1_000,
+        sweepIntervalMs: 100,
+      },
+    });
+
+    createLobbyRoom(store);
+    const unregisterParticipantConnection = vi.spyOn(
+      store,
+      "unregisterParticipantConnection",
+    );
+    const { url } = await createGatewayFixture(store);
+    const client = await connectClient(url);
+
+    await bootstrapClient(client, "ROOM1", "host-1");
+    nowMs = 10_000;
+    expectStoreSuccess(store.getRoom("ROOM1"));
+
+    const closePromise = waitForClientClose(client);
+
+    client.close();
+    await closePromise;
+    await vi.waitFor(() => {
+      expect(unregisterParticipantConnection).toHaveBeenCalledWith(
+        "ROOM1",
+        "host-1",
+      );
+    });
+    nowMs += 999;
+    expectStoreSuccess(store.getRoom("ROOM1"));
+    nowMs += 1;
+    await vi.waitFor(() => {
+      expect(store.getRoom("ROOM1")).toMatchObject({
+        code: "room-expired",
+        success: false,
+      });
+    });
+  });
+
+  it("does not let anonymous bootstrap protect an inactive room", async () => {
+    let nowMs = 0;
+    const store = createTestRoomStore({
+      getNowMs: () => nowMs,
+      retentionPolicy: {
+        lobbyIdleTtlMs: 1_000,
+        sweepIntervalMs: 100,
+      },
+    });
+
+    createLobbyRoom(store);
+    const { url } = await createGatewayFixture(store);
+    const client = await connectClient(url);
+
+    await bootstrapClient(client);
+    nowMs = 1_000;
+    expect(store.getRoom("ROOM1")).toMatchObject({
+      code: "room-expired",
+      success: false,
+    });
+  });
+
+  it("promotes a joined socket to protected presence and releases it on room change", async () => {
+    let nowMs = 0;
+    const store = createTestRoomStore({
+      getNowMs: () => nowMs,
+      participantIds: ["host-1", "guest-1", "host-2"],
+      retentionPolicy: {
+        lobbyIdleTtlMs: 1_000,
+        sweepIntervalMs: 100,
+      },
+      roomCodes: ["ROOM1", "ROOM2"],
+    });
+
+    createLobbyRoom(store);
+    const { url } = await createGatewayFixture(store);
+    const client = await connectClient(url);
+
+    await bootstrapClient(client, "ROOM1");
+    const ackPromise = waitForServerMessage(
+      client,
+      (message) =>
+        message.type === "room.commandAck" && message.requestId === "join-retention",
+    );
+
+    sendClientMessage(client, {
+      command: {
+        displayName: "Grace Guest",
+        type: "room.joinObserver",
+      },
+      requestId: "join-retention",
+      roomCode: "ROOM1",
+      type: "room.command",
+    });
+    await ackPromise;
+    nowMs = 10_000;
+    expectStoreSuccess(store.getRoom("ROOM1"));
+
+    createLobbyRoom(store);
+    await bootstrapClient(client, "ROOM2", "host-2");
+    nowMs += 1_000;
+    expect(store.getRoom("ROOM1")).toMatchObject({
+      code: "room-expired",
+      success: false,
+    });
+    expectStoreSuccess(store.getRoom("ROOM2"));
+  });
+
   it("acks room commands and broadcasts authoritative snapshots", async () => {
     const store = createTestRoomStore();
     createLobbyRoom(store);
@@ -718,6 +987,80 @@ describe("multiplayer room WebSocket gateway", () => {
       requestId: "guest-start",
       roomCode: "ROOM1",
       type: "room.commandRejected",
+    });
+  });
+
+  it("broadcasts an accepted delayed command after its sender disconnects", async () => {
+    const backingStore = createTestRoomStore();
+    createLobbyRoom(backingStore);
+    const registerParticipantConnection = vi.fn(
+      backingStore.registerParticipantConnection.bind(backingStore),
+    );
+    let settleCommand: (() => void) | undefined;
+    const store = {
+      applyCommand: (roomCode, command) =>
+        new Promise<MultiplayerRoomStoreResult>((resolve) => {
+          settleCommand = () => {
+            resolve(backingStore.applyCommand(roomCode, command));
+          };
+        }),
+      createRoom: backingStore.createRoom.bind(backingStore),
+      getRoom: backingStore.getRoom.bind(backingStore),
+      registerParticipantConnection,
+      unregisterParticipantConnection:
+        backingStore.unregisterParticipantConnection.bind(backingStore),
+    } satisfies MultiplayerRoomStore & MultiplayerRoomParticipantConnectionStore;
+    const { gateway, url } = await createGatewayFixture(store);
+    const sender = await connectClient(url);
+    const observer = await connectClient(url);
+
+    await bootstrapClient(sender);
+    await bootstrapClient(observer);
+    const observerSnapshotPromise = waitForServerMessage(
+      observer,
+      (message) => message.type === "room.snapshot" && message.snapshot.seq === 2,
+    );
+
+    sendClientMessage(sender, {
+      command: {
+        displayName: "Delayed Guest",
+        type: "room.joinObserver",
+      },
+      requestId: "delayed-join",
+      roomCode: "ROOM1",
+      type: "room.command",
+    });
+    await vi.waitFor(() => {
+      expect(settleCommand).toBeTypeOf("function");
+    });
+    const closePromise = waitForClientClose(sender);
+
+    sender.close();
+    await closePromise;
+    settleCommand?.();
+
+    await expect(observerSnapshotPromise).resolves.toMatchObject({
+      roomCode: "ROOM1",
+      snapshot: {
+        room: {
+          participants: expect.arrayContaining([
+            expect.objectContaining({
+              displayName: "Delayed Guest",
+              id: "guest-1",
+            }),
+          ]),
+        },
+        seq: 2,
+      },
+      type: "room.snapshot",
+    });
+    expect(registerParticipantConnection).not.toHaveBeenCalledWith(
+      "ROOM1",
+      "guest-1",
+    );
+    expect(gateway.webSocketServer.clients.size).toBe(1);
+    expect(gateway.getTrackedRoomCounts()).toMatchObject({
+      subscribedRooms: 1,
     });
   });
 
@@ -1103,6 +1446,102 @@ describe("multiplayer room WebSocket gateway", () => {
     const startedPongGame = expectPongGame(started).snapshot;
 
     expect(gameSnapshot?.ball.position.x).not.toBe(startedPongGame.ball.position.x);
+  });
+
+  it("stops pumping and rejects subscribers after an anonymous active room expires", async () => {
+    let nowMs = 0;
+    const store = createTestRoomStore({
+      getNowMs: () => nowMs,
+      retentionPolicy: {
+        inProgressIdleTtlMs: 1_000,
+        sweepIntervalMs: 100,
+      },
+    });
+    createStartedPongRoom(store);
+    const getRoom = vi.spyOn(store, "getRoom");
+    const { gateway, url } = await createGatewayFixture(store, {
+      snapshotIntervalMs: 16,
+    });
+    const client = await connectClient(url);
+
+    await bootstrapClient(client);
+    nowMs = 1_000;
+    const rejectionPromise = waitForServerMessage(
+      client,
+      (message) =>
+        message.type === "room.commandRejected" &&
+        message.code === "room-expired",
+    );
+
+    await expect(rejectionPromise).resolves.toMatchObject({
+      code: "room-expired",
+      error: "Room has expired. Create or join a new room.",
+      roomCode: "ROOM1",
+      type: "room.commandRejected",
+    });
+    await vi.waitFor(() => {
+      expect(gateway.getTrackedRoomCounts()).toEqual({
+        activeSnapshotRooms: 0,
+        broadcastCursors: 0,
+        subscribedRooms: 0,
+      });
+    });
+    const lookupCountAfterExpiry = getRoom.mock.calls.length;
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(getRoom).toHaveBeenCalledTimes(lookupCountAfterExpiry);
+  });
+
+  it("keeps pumping after a transient room-service lookup failure", async () => {
+    let nowMs = 0;
+    const backingStore = createTestRoomStore({ getNowMs: () => nowMs });
+    createStartedPongRoom(backingStore);
+    const started = serveStartedPongRoom(backingStore);
+    let failNextLookup = false;
+    let transientFailureCount = 0;
+    const getRoom = vi.fn((roomCode: unknown): MultiplayerRoomStoreResult => {
+      if (failNextLookup) {
+        failNextLookup = false;
+        transientFailureCount += 1;
+        return {
+          code: "room-service-unavailable",
+          error: "Room service is temporarily unavailable.",
+          success: false,
+        };
+      }
+
+      return backingStore.getRoom(roomCode);
+    });
+    const store = {
+      applyCommand: backingStore.applyCommand.bind(backingStore),
+      createRoom: backingStore.createRoom.bind(backingStore),
+      getRoom,
+    } satisfies MultiplayerRoomStore;
+    const { gateway, url } = await createGatewayFixture(store, {
+      snapshotIntervalMs: 16,
+    });
+    const observer = await connectClient(url);
+
+    await bootstrapClient(observer);
+    failNextLookup = true;
+    nowMs = 80;
+    const freshSnapshotPromise = waitForServerMessage(
+      observer,
+      (message) =>
+        message.type === "room.snapshot" &&
+        (message.snapshot.game?.seq ?? 0) > (started.game?.seq ?? 0),
+    );
+
+    await expect(freshSnapshotPromise).resolves.toMatchObject({
+      roomCode: "ROOM1",
+      type: "room.snapshot",
+    });
+    expect(transientFailureCount).toBe(1);
+    expect(gateway.getTrackedRoomCounts()).toEqual({
+      activeSnapshotRooms: 1,
+      broadcastCursors: 1,
+      subscribedRooms: 1,
+    });
   });
 
   it("pushes fresh running Space Invaders snapshots without waiting for client input", async () => {

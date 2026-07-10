@@ -97,6 +97,8 @@ export type MultiplayerRoomStoreErrorCode =
   | PrivateRoomErrorCode
   | "duplicate-room"
   | "invalid-command"
+  | "room-capacity-reached"
+  | "room-expired"
   | "room-service-invalid-response"
   | "room-service-unavailable"
   | "room-not-found";
@@ -134,18 +136,57 @@ export type MultiplayerRoomStore = {
   getRoom: (roomCode: unknown) => MultiplayerRoomStoreOperationResult;
 };
 
+/**
+ * Synchronous presence capability for a gateway sharing the same process and
+ * room authority. Remote room-service clients intentionally do not implement it.
+ */
+export type MultiplayerRoomParticipantConnectionStore = {
+  registerParticipantConnection: (
+    roomCode: unknown,
+    participantId: unknown,
+  ) => boolean;
+  unregisterParticipantConnection: (
+    roomCode: unknown,
+    participantId: unknown,
+  ) => void;
+};
+
+type MultiplayerRoomRetentionPolicy = {
+  inProgressIdleTtlMs: number;
+  lobbyIdleTtlMs: number;
+  sweepIntervalMs: number;
+  terminalTtlMs: number;
+  tombstoneTtlMs: number;
+};
+
+export const DEFAULT_MULTIPLAYER_ROOM_MAX_ROOMS = 256;
+export const DEFAULT_MULTIPLAYER_ROOM_RETENTION_POLICY = {
+  inProgressIdleTtlMs: 2 * 60 * 60 * 1_000,
+  lobbyIdleTtlMs: 60 * 60 * 1_000,
+  sweepIntervalMs: 60 * 1_000,
+  terminalTtlMs: 30 * 60 * 1_000,
+  tombstoneTtlMs: 5 * 60 * 1_000,
+} as const satisfies MultiplayerRoomRetentionPolicy;
+
 type CreateInProcessMultiplayerRoomStoreOptions = {
   createParticipantId?: (
     context: MultiplayerRoomParticipantIdFactoryContext,
   ) => string;
   createRoomCode?: () => string;
   getNowMs?: () => number;
+  maxRooms?: number;
+  retentionPolicy?: Partial<MultiplayerRoomRetentionPolicy>;
 };
 
 type StoredMultiplayerRoom = {
+  connectedParticipantCount: number;
+  connectionCountsByParticipantId: Map<string, number>;
   game?: StoredMultiplayerGameRuntime;
+  lastDisconnectedAtMs?: number;
+  lastMeaningfulActivityAtMs: number;
   room: PrivateRoom;
   seq: number;
+  terminalAtMs?: number;
 };
 
 type StoredMultiplayerGameRuntime = {
@@ -154,6 +195,10 @@ type StoredMultiplayerGameRuntime = {
 };
 
 const INITIAL_ROOM_SEQUENCE = 1;
+
+type MultiplayerRoomTombstone = {
+  expiredAtMs: number;
+};
 
 function createDefaultRoomCode() {
   return randomBytes(4).toString("hex").toLocaleUpperCase("en-US");
@@ -165,6 +210,58 @@ function createDefaultParticipantId() {
 
 function createDefaultNowMs() {
   return Date.now();
+}
+
+export function isMultiplayerRoomParticipantConnectionStore(
+  store: MultiplayerRoomStore,
+): store is MultiplayerRoomStore & MultiplayerRoomParticipantConnectionStore {
+  const candidate = store as MultiplayerRoomStore &
+    Partial<MultiplayerRoomParticipantConnectionStore>;
+
+  return (
+    typeof candidate.registerParticipantConnection === "function" &&
+    typeof candidate.unregisterParticipantConnection === "function"
+  );
+}
+
+function normalizePositiveInteger(value: number, name: string) {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+
+  return value;
+}
+
+function normalizeRetentionPolicy(
+  policy: Partial<MultiplayerRoomRetentionPolicy> | undefined,
+): MultiplayerRoomRetentionPolicy {
+  const resolvedPolicy = {
+    ...DEFAULT_MULTIPLAYER_ROOM_RETENTION_POLICY,
+    ...policy,
+  };
+
+  return {
+    inProgressIdleTtlMs: normalizePositiveInteger(
+      resolvedPolicy.inProgressIdleTtlMs,
+      "In-progress room idle TTL",
+    ),
+    lobbyIdleTtlMs: normalizePositiveInteger(
+      resolvedPolicy.lobbyIdleTtlMs,
+      "Lobby room idle TTL",
+    ),
+    sweepIntervalMs: normalizePositiveInteger(
+      resolvedPolicy.sweepIntervalMs,
+      "Room sweep interval",
+    ),
+    terminalTtlMs: normalizePositiveInteger(
+      resolvedPolicy.terminalTtlMs,
+      "Terminal room TTL",
+    ),
+    tombstoneTtlMs: normalizePositiveInteger(
+      resolvedPolicy.tombstoneTtlMs,
+      "Room tombstone TTL",
+    ),
+  };
 }
 
 function clonePrivateRoomSettingValue(
@@ -238,6 +335,8 @@ export function isMultiplayerRoomStoreErrorCode(
     case "participant-not-found":
     case "participant-not-seated":
     case "required-seats-empty":
+    case "room-capacity-reached":
+    case "room-expired":
     case "room-not-found":
     case "room-service-invalid-response":
     case "room-service-unavailable":
@@ -252,8 +351,16 @@ export function isMultiplayerRoomStoreErrorCode(
 export function getMultiplayerRoomStoreErrorStatus(
   code: MultiplayerRoomStoreErrorCode,
 ) {
+  if (code === "room-expired") {
+    return 410;
+  }
+
   if (code === "room-not-found") {
     return 404;
+  }
+
+  if (code === "room-capacity-reached") {
+    return 503;
   }
 
   if (code === "not-host") {
@@ -363,21 +470,6 @@ function getPrivateRoomOperationFailure(
   };
 }
 
-function getStoredRoom(
-  rooms: ReadonlyMap<string, StoredMultiplayerRoom>,
-  roomCode: unknown,
-): MultiplayerRoomStoreFailure | StoredMultiplayerRoom {
-  const normalizedRoomCode = normalizePrivateRoomCode(roomCode);
-
-  if (normalizedRoomCode === null) {
-    return createStoreFailure("invalid-room-code", "Room code is not supported.");
-  }
-
-  const storedRoom = rooms.get(normalizedRoomCode);
-
-  return storedRoom ?? createStoreFailure("room-not-found", "Room was not found.");
-}
-
 function applyLifecycleCommand(
   room: PrivateRoom,
   command: Extract<MultiplayerRoomStoreCommand, { type: "room.lifecycle" }>,
@@ -412,6 +504,32 @@ function advanceGameRuntimeTo(storedRoom: StoredMultiplayerRoom, nowMs: number) 
     room: storedRoom.room,
     runtime: storedRoom.game.runtime,
   });
+}
+
+function isStoredRoomTerminal(storedRoom: StoredMultiplayerRoom) {
+  if (storedRoom.room.status === "finished") {
+    return true;
+  }
+
+  if (storedRoom.game === undefined) {
+    return false;
+  }
+
+  return storedRoom.game.adapter.isTerminal({
+    room: storedRoom.room,
+    runtime: storedRoom.game.runtime,
+  });
+}
+
+function refreshStoredRoomTerminalAt(
+  storedRoom: StoredMultiplayerRoom,
+  nowMs: number,
+) {
+  if (isStoredRoomTerminal(storedRoom)) {
+    storedRoom.terminalAtMs ??= nowMs;
+  } else {
+    storedRoom.terminalAtMs = undefined;
+  }
 }
 
 function applyGameLifecycleCommand(
@@ -505,22 +623,33 @@ function getCreateRoomSeats(
   return adapter?.defaultSeats ?? seats ?? getDefaultMultiplayerServerGameAdapter().defaultSeats;
 }
 
-export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
+export class InProcessMultiplayerRoomStore
+  implements MultiplayerRoomStore, MultiplayerRoomParticipantConnectionStore
+{
   readonly #createParticipantId: (
     context: MultiplayerRoomParticipantIdFactoryContext,
   ) => string;
   readonly #createRoomCode: () => string;
   readonly #getNowMs: () => number;
+  readonly #maxRooms: number;
+  readonly #retentionPolicy: MultiplayerRoomRetentionPolicy;
   readonly #rooms = new Map<string, StoredMultiplayerRoom>();
+  readonly #tombstones = new Map<string, MultiplayerRoomTombstone>();
+  #lastSweepAtMs: number;
 
   constructor({
     createParticipantId = createDefaultParticipantId,
     createRoomCode = createDefaultRoomCode,
     getNowMs = createDefaultNowMs,
+    maxRooms = DEFAULT_MULTIPLAYER_ROOM_MAX_ROOMS,
+    retentionPolicy,
   }: CreateInProcessMultiplayerRoomStoreOptions = {}) {
     this.#createParticipantId = createParticipantId;
     this.#createRoomCode = createRoomCode;
     this.#getNowMs = getNowMs;
+    this.#maxRooms = normalizePositiveInteger(maxRooms, "Room capacity");
+    this.#retentionPolicy = normalizeRetentionPolicy(retentionPolicy);
+    this.#lastSweepAtMs = getNowMs();
   }
 
   createRoom({
@@ -528,10 +657,19 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
     seats,
     settings = getDefaultMultiplayerServerGameAdapter().defaultSettings,
   }: CreateMultiplayerRoomOptions): MultiplayerRoomStoreResult {
+    const nowMs = this.#getNowMs();
+
+    this.#sweepIfDue(nowMs);
+    this.#pruneTombstones(nowMs);
+
     const roomCode = this.#createRoomCode();
     const normalizedRoomCode = normalizePrivateRoomCode(roomCode);
 
-    if (normalizedRoomCode !== null && this.#rooms.has(normalizedRoomCode)) {
+    if (
+      normalizedRoomCode !== null &&
+      (this.#rooms.has(normalizedRoomCode) ||
+        this.#tombstones.has(normalizedRoomCode))
+    ) {
       return createStoreFailure("duplicate-room", "Room code is already in use.");
     }
 
@@ -554,7 +692,17 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
       return getPrivateRoomOperationFailure(result);
     }
 
-    const storedRoom = {
+    if (!this.#makeRoomCapacity(nowMs)) {
+      return createStoreFailure(
+        "room-capacity-reached",
+        "Room capacity is currently full. Try creating a room again shortly.",
+      );
+    }
+
+    const storedRoom: StoredMultiplayerRoom = {
+      connectedParticipantCount: 0,
+      connectionCountsByParticipantId: new Map(),
+      lastMeaningfulActivityAtMs: nowMs,
       room: result.room,
       seq: INITIAL_ROOM_SEQUENCE,
     };
@@ -563,20 +711,24 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
 
     return createStoredRoomSnapshot(
       storedRoom,
-      this.#getNowMs(),
+      nowMs,
       result.room.hostParticipantId,
     );
   }
 
   getRoom(roomCode: unknown): MultiplayerRoomStoreResult {
-    const storedRoom = getStoredRoom(this.#rooms, roomCode);
+    const nowMs = this.#getNowMs();
+
+    this.#sweepIfDue(nowMs);
+
+    const storedRoom = this.#getStoredRoom(roomCode, nowMs);
 
     if (!("room" in storedRoom)) {
       return storedRoom;
     }
 
-    const nowMs = this.#getNowMs();
     advanceGameRuntimeTo(storedRoom, nowMs);
+    refreshStoredRoomTerminalAt(storedRoom, nowMs);
 
     return createStoredRoomSnapshot(storedRoom, nowMs);
   }
@@ -585,14 +737,18 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
     roomCode: unknown,
     command: MultiplayerRoomStoreCommand,
   ): MultiplayerRoomStoreResult {
-    const storedRoom = getStoredRoom(this.#rooms, roomCode);
+    const nowMs = this.#getNowMs();
+
+    this.#sweepIfDue(nowMs);
+
+    const storedRoom = this.#getStoredRoom(roomCode, nowMs);
 
     if (!("room" in storedRoom)) {
       return storedRoom;
     }
 
-    const nowMs = this.#getNowMs();
     advanceGameRuntimeTo(storedRoom, nowMs);
+    refreshStoredRoomTerminalAt(storedRoom, nowMs);
 
     if (command.type === "game.input") {
       const inputResult = applyGameInputCommand(storedRoom, command, nowMs);
@@ -600,6 +756,9 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
       if (!inputResult.success) {
         return inputResult;
       }
+
+      storedRoom.lastMeaningfulActivityAtMs = nowMs;
+      refreshStoredRoomTerminalAt(storedRoom, nowMs);
 
       return createStoredRoomSnapshot(
         storedRoom,
@@ -656,7 +815,246 @@ export class InProcessMultiplayerRoomStore implements MultiplayerRoomStore {
     }
 
     storedRoom.seq += 1;
+    storedRoom.lastMeaningfulActivityAtMs = nowMs;
+    refreshStoredRoomTerminalAt(storedRoom, nowMs);
 
     return createStoredRoomSnapshot(storedRoom, nowMs, participantId);
+  }
+
+  registerParticipantConnection(roomCode: unknown, participantId: unknown) {
+    const nowMs = this.#getNowMs();
+
+    this.#sweepIfDue(nowMs);
+
+    const storedRoom = this.#getStoredRoom(roomCode, nowMs);
+    const normalizedParticipantId =
+      typeof participantId === "string" ? participantId.trim() : "";
+
+    if (
+      !("room" in storedRoom) ||
+      normalizedParticipantId.length === 0 ||
+      !storedRoom.room.participants.some(
+        (participant) => participant.id === normalizedParticipantId,
+      )
+    ) {
+      return false;
+    }
+
+    const previousCount =
+      storedRoom.connectionCountsByParticipantId.get(normalizedParticipantId) ?? 0;
+
+    storedRoom.connectionCountsByParticipantId.set(
+      normalizedParticipantId,
+      previousCount + 1,
+    );
+    storedRoom.connectedParticipantCount += 1;
+
+    return true;
+  }
+
+  unregisterParticipantConnection(roomCode: unknown, participantId: unknown) {
+    const normalizedRoomCode = normalizePrivateRoomCode(roomCode);
+    const normalizedParticipantId =
+      typeof participantId === "string" ? participantId.trim() : "";
+
+    if (normalizedRoomCode === null || normalizedParticipantId.length === 0) {
+      return;
+    }
+
+    const storedRoom = this.#rooms.get(normalizedRoomCode);
+    const previousCount = storedRoom?.connectionCountsByParticipantId.get(
+      normalizedParticipantId,
+    );
+
+    if (storedRoom === undefined || previousCount === undefined) {
+      return;
+    }
+
+    if (previousCount === 1) {
+      storedRoom.connectionCountsByParticipantId.delete(normalizedParticipantId);
+    } else {
+      storedRoom.connectionCountsByParticipantId.set(
+        normalizedParticipantId,
+        previousCount - 1,
+      );
+    }
+
+    storedRoom.connectedParticipantCount -= 1;
+
+    if (storedRoom.connectedParticipantCount === 0) {
+      storedRoom.lastDisconnectedAtMs = this.#getNowMs();
+    }
+  }
+
+  sweepExpiredRooms() {
+    return this.#sweepExpiredRooms(this.#getNowMs());
+  }
+
+  #getStoredRoom(
+    roomCode: unknown,
+    nowMs: number,
+  ): MultiplayerRoomStoreFailure | StoredMultiplayerRoom {
+    const normalizedRoomCode = normalizePrivateRoomCode(roomCode);
+
+    if (normalizedRoomCode === null) {
+      return createStoreFailure("invalid-room-code", "Room code is not supported.");
+    }
+
+    const storedRoom = this.#rooms.get(normalizedRoomCode);
+
+    if (storedRoom !== undefined) {
+      if (this.#isRoomExpired(storedRoom, nowMs)) {
+        this.#expireRoom(normalizedRoomCode, nowMs);
+      } else {
+        return storedRoom;
+      }
+    }
+
+    this.#pruneTombstones(nowMs);
+
+    return this.#tombstones.has(normalizedRoomCode)
+      ? createStoreFailure(
+          "room-expired",
+          "Room has expired. Create or join a new room.",
+        )
+      : createStoreFailure("room-not-found", "Room was not found.");
+  }
+
+  #makeRoomCapacity(nowMs: number) {
+    if (this.#rooms.size < this.#maxRooms) {
+      return true;
+    }
+
+    this.#sweepExpiredRooms(nowMs);
+
+    if (this.#rooms.size < this.#maxRooms) {
+      return true;
+    }
+
+    const terminalCandidate = this.#findOldestEvictionCandidate(
+      nowMs,
+      (storedRoom) => storedRoom.terminalAtMs !== undefined,
+    );
+    const candidate =
+      terminalCandidate ??
+      this.#findOldestEvictionCandidate(
+        nowMs,
+        (storedRoom) =>
+          storedRoom.terminalAtMs === undefined &&
+          storedRoom.room.status === "lobby",
+      );
+
+    if (candidate === null) {
+      return false;
+    }
+
+    this.#expireRoom(candidate.room.code, nowMs);
+
+    return true;
+  }
+
+  #findOldestEvictionCandidate(
+    nowMs: number,
+    matchesTier: (storedRoom: StoredMultiplayerRoom) => boolean,
+  ) {
+    let oldest: StoredMultiplayerRoom | null = null;
+    let oldestBaselineMs = Number.POSITIVE_INFINITY;
+
+    for (const storedRoom of this.#rooms.values()) {
+      refreshStoredRoomTerminalAt(storedRoom, nowMs);
+
+      if (storedRoom.connectedParticipantCount > 0 || !matchesTier(storedRoom)) {
+        continue;
+      }
+
+      const baselineMs = this.#getRoomExpiryBaselineMs(storedRoom);
+
+      if (baselineMs < oldestBaselineMs) {
+        oldest = storedRoom;
+        oldestBaselineMs = baselineMs;
+      }
+    }
+
+    return oldest;
+  }
+
+  #sweepIfDue(nowMs: number) {
+    if (
+      nowMs < this.#lastSweepAtMs ||
+      nowMs - this.#lastSweepAtMs >= this.#retentionPolicy.sweepIntervalMs
+    ) {
+      this.#sweepExpiredRooms(nowMs);
+    }
+  }
+
+  #sweepExpiredRooms(nowMs: number) {
+    let expiredRoomCount = 0;
+
+    for (const [roomCode, storedRoom] of this.#rooms) {
+      if (!this.#isRoomExpired(storedRoom, nowMs)) {
+        continue;
+      }
+
+      this.#expireRoom(roomCode, nowMs);
+      expiredRoomCount += 1;
+    }
+
+    this.#lastSweepAtMs = nowMs;
+    this.#pruneTombstones(nowMs);
+
+    return expiredRoomCount;
+  }
+
+  #isRoomExpired(storedRoom: StoredMultiplayerRoom, nowMs: number) {
+    refreshStoredRoomTerminalAt(storedRoom, nowMs);
+
+    if (storedRoom.connectedParticipantCount > 0) {
+      return false;
+    }
+
+    const ttlMs =
+      storedRoom.terminalAtMs !== undefined
+        ? this.#retentionPolicy.terminalTtlMs
+        : storedRoom.room.status === "lobby"
+          ? this.#retentionPolicy.lobbyIdleTtlMs
+          : this.#retentionPolicy.inProgressIdleTtlMs;
+
+    return nowMs - this.#getRoomExpiryBaselineMs(storedRoom) >= ttlMs;
+  }
+
+  #getRoomExpiryBaselineMs(storedRoom: StoredMultiplayerRoom) {
+    // A recognized connection defers eviction and the final disconnect grants
+    // the full TTL again, including for rooms that finished while connected.
+    return Math.max(
+      storedRoom.terminalAtMs ?? storedRoom.lastMeaningfulActivityAtMs,
+      storedRoom.lastDisconnectedAtMs ?? Number.NEGATIVE_INFINITY,
+    );
+  }
+
+  #expireRoom(roomCode: string, nowMs: number) {
+    this.#rooms.delete(roomCode);
+    this.#tombstones.set(roomCode, { expiredAtMs: nowMs });
+    this.#pruneTombstones(nowMs);
+  }
+
+  #pruneTombstones(nowMs: number) {
+    for (const [roomCode, tombstone] of this.#tombstones) {
+      if (
+        nowMs - tombstone.expiredAtMs >=
+        this.#retentionPolicy.tombstoneTtlMs
+      ) {
+        this.#tombstones.delete(roomCode);
+      }
+    }
+
+    while (this.#tombstones.size > this.#maxRooms) {
+      const oldestRoomCode = this.#tombstones.keys().next().value;
+
+      if (oldestRoomCode === undefined) {
+        break;
+      }
+
+      this.#tombstones.delete(oldestRoomCode);
+    }
   }
 }

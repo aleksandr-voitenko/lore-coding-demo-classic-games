@@ -54,6 +54,32 @@ describe("multiplayer rooms route", () => {
     });
   });
 
+  it("returns a retryable capacity response without evicting active rooms", async () => {
+    const roomStore = {
+      applyCommand: vi.fn(),
+      createRoom: vi.fn(async () => ({
+        code: "room-capacity-reached" as const,
+        error: "Room capacity is currently full. Try creating a room again shortly.",
+        success: false as const,
+      })),
+      getRoom: vi.fn(),
+    };
+    const handlers = createMultiplayerRoomsRouteHandlers(
+      roomStore,
+      createUserStore(SIGNED_IN_USER),
+    );
+    const response = await handlers.POST(
+      createCreateRoomRequest({ gameId: "pong" }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("retry-after")).toBe("60");
+    await expect(response.json()).resolves.toEqual({
+      code: "room-capacity-reached",
+      error: "Room capacity is currently full. Try creating a room again shortly.",
+    });
+  });
+
   it("creates private Pong rooms for signed-in hosts", async () => {
     const roomStore = new InProcessMultiplayerRoomStore({
       createParticipantId: () => "host-1",

@@ -230,6 +230,45 @@ describe("multiplayer room service client", () => {
 
   it.each([
     {
+      code: "room-expired" as const,
+      error: "Room has expired. Create or join a new room.",
+      operation: "get" as const,
+      status: 410,
+    },
+    {
+      code: "room-capacity-reached" as const,
+      error: "Room capacity is currently full. Try creating a room again shortly.",
+      operation: "create" as const,
+      status: 503,
+    },
+  ])("preserves $code failures from the room authority", async (testCase) => {
+    const client = new MultiplayerRoomServiceClient({
+      baseUrl: "http://service.local/_internal/multiplayer/rooms",
+      fetcher: vi.fn<typeof fetch>(async () =>
+        Response.json(
+          {
+            code: testCase.code,
+            error: testCase.error,
+            success: false,
+          },
+          { status: testCase.status },
+        ),
+      ),
+    });
+    const result =
+      testCase.operation === "get"
+        ? await client.getRoom("ROOM1")
+        : await client.createRoom({ host: HOST_USER });
+
+    expect(result).toEqual({
+      code: testCase.code,
+      error: testCase.error,
+      success: false,
+    });
+  });
+
+  it.each([
+    {
       name: "invalid room sequence",
       snapshot: {
         ...ROOM_SNAPSHOT,
