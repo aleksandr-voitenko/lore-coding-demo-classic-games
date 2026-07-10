@@ -22,10 +22,6 @@ export type GameSessionSubmission = {
   sortDirection?: LeaderboardSortDirection;
 };
 
-export type RecordedGameSession = {
-  id: string;
-};
-
 export type UserProfileGameStat = {
   abandons: number;
   bestScore: number | null;

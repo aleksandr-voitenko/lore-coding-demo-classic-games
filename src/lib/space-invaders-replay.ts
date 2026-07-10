@@ -16,8 +16,6 @@ import {
   createGameReplayRandom,
   createGameReplayRun as createGenericGameReplayRun,
   fetchGameReplay,
-  getGameReplayApiPath,
-  getGameReplayRunApiPath,
   isNonNegativeInteger,
   isRecord,
   normalizeGameReplayRunId,
@@ -85,12 +83,6 @@ export type ParseSpaceInvadersReplayPayloadResult =
 
 export const SPACE_INVADERS_REPLAY_SCHEMA_VERSION = 1;
 export const SPACE_INVADERS_REPLAY_GAME_ID = "space-invaders";
-export const SPACE_INVADERS_REPLAY_API_PATH = getGameReplayApiPath(
-  SPACE_INVADERS_REPLAY_GAME_ID,
-);
-export const SPACE_INVADERS_REPLAY_RUN_API_PATH = getGameReplayRunApiPath(
-  SPACE_INVADERS_REPLAY_GAME_ID,
-);
 export const MAX_SPACE_INVADERS_REPLAY_EVENTS = 240_000;
 
 const SPACE_INVADERS_MIN_BOARD_WIDTH = 360;

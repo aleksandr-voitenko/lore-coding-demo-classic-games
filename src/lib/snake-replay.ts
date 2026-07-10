@@ -13,8 +13,6 @@ import {
   createGameReplayRandom,
   createGameReplayRun as createGenericGameReplayRun,
   fetchGameReplay,
-  getGameReplayApiPath,
-  getGameReplayRunApiPath,
   isNonNegativeInteger,
   isRecord,
   normalizeGameReplayRunId,
@@ -80,8 +78,6 @@ export type ParseSnakeReplayPayloadResult =
 
 export const SNAKE_REPLAY_SCHEMA_VERSION = 1;
 export const SNAKE_REPLAY_GAME_ID = "snake";
-export const SNAKE_REPLAY_API_PATH = getGameReplayApiPath(SNAKE_REPLAY_GAME_ID);
-export const SNAKE_REPLAY_RUN_API_PATH = getGameReplayRunApiPath(SNAKE_REPLAY_GAME_ID);
 export const MAX_SNAKE_REPLAY_EVENTS = 50_000;
 
 const DIRECTIONS = ["up", "right", "down", "left"] as const;

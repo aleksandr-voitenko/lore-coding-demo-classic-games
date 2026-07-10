@@ -2,8 +2,6 @@ import {
   createGameReplayRandom,
   createGameReplayRun as createGenericGameReplayRun,
   fetchGameReplay,
-  getGameReplayApiPath,
-  getGameReplayRunApiPath,
   isNonNegativeInteger,
   isRecord,
   normalizeGameReplayRunId,
@@ -64,12 +62,6 @@ export type ParseTwentyFortyEightReplayPayloadResult =
 
 export const TWENTY_FORTY_EIGHT_REPLAY_SCHEMA_VERSION = 1;
 export const TWENTY_FORTY_EIGHT_REPLAY_GAME_ID = "twenty-forty-eight";
-export const TWENTY_FORTY_EIGHT_REPLAY_API_PATH = getGameReplayApiPath(
-  TWENTY_FORTY_EIGHT_REPLAY_GAME_ID,
-);
-export const TWENTY_FORTY_EIGHT_REPLAY_RUN_API_PATH = getGameReplayRunApiPath(
-  TWENTY_FORTY_EIGHT_REPLAY_GAME_ID,
-);
 export const MAX_TWENTY_FORTY_EIGHT_REPLAY_EVENTS = 50_000;
 
 const TWENTY_FORTY_EIGHT_MIN_BOARD_SIZE = 2;

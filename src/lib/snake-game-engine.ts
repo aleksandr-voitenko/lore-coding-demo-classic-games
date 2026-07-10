@@ -149,10 +149,6 @@ export const SPEED_FOOD_SCORE = 3;
 export const SPEED_FOOD_SPEED_INCREASE = 1;
 export const STARTING_GAME_SPEED = 4;
 export const PICKUPS_PER_BASE_SPEED_INCREASE = 5;
-export const BOARD_SIZE_OPTIONS = Array.from(
-  { length: Math.floor((MAX_BOARD_SIZE - MIN_BOARD_SIZE) / BOARD_SIZE_STEP) + 1 },
-  (_, index) => MIN_BOARD_SIZE + index * BOARD_SIZE_STEP,
-);
 export const TIMED_FOOD_RULES: Record<TimedFoodKind, TimedFoodRule> = {
   bonusFood: {
     label: "Yellow apple",

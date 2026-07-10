@@ -15,8 +15,6 @@ import {
   createGameReplayRandom,
   createGameReplayRun as createGenericGameReplayRun,
   fetchGameReplay,
-  getGameReplayApiPath,
-  getGameReplayRunApiPath,
   isNonNegativeInteger,
   isRecord,
   normalizeGameReplayRunId,
@@ -70,10 +68,6 @@ export type ParseBreakoutReplayPayloadResult =
 
 export const BREAKOUT_REPLAY_SCHEMA_VERSION = 1;
 export const BREAKOUT_REPLAY_GAME_ID = "breakout";
-export const BREAKOUT_REPLAY_API_PATH = getGameReplayApiPath(BREAKOUT_REPLAY_GAME_ID);
-export const BREAKOUT_REPLAY_RUN_API_PATH = getGameReplayRunApiPath(
-  BREAKOUT_REPLAY_GAME_ID,
-);
 export const MAX_BREAKOUT_REPLAY_EVENTS = 120_000;
 
 const BREAKOUT_MIN_BOARD_WIDTH = 240;

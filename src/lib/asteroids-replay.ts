@@ -16,8 +16,6 @@ import {
   createGameReplayRandom,
   createGameReplayRun as createGenericGameReplayRun,
   fetchGameReplay,
-  getGameReplayApiPath,
-  getGameReplayRunApiPath,
   isNonNegativeInteger,
   isRecord,
   normalizeGameReplayRunId,
@@ -89,10 +87,6 @@ export type ParseAsteroidsReplayPayloadResult =
 
 export const ASTEROIDS_REPLAY_SCHEMA_VERSION = 3;
 export const ASTEROIDS_REPLAY_GAME_ID = "asteroids";
-export const ASTEROIDS_REPLAY_API_PATH = getGameReplayApiPath(ASTEROIDS_REPLAY_GAME_ID);
-export const ASTEROIDS_REPLAY_RUN_API_PATH = getGameReplayRunApiPath(
-  ASTEROIDS_REPLAY_GAME_ID,
-);
 export const MAX_ASTEROIDS_REPLAY_EVENTS = 240_000;
 
 const ASTEROIDS_MIN_BOARD_WIDTH = 320;

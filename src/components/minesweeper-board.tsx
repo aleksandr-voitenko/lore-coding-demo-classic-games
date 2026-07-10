@@ -17,8 +17,6 @@ import {
   type MinesweeperBoardFocusPosition,
 } from "./minesweeper-board-focus";
 import {
-  MINESWEEPER_BOARD_HEIGHT,
-  MINESWEEPER_BOARD_WIDTH,
   type MinesweeperCell,
   type MinesweeperGameState,
 } from "@/lib/minesweeper-game-engine";
@@ -303,5 +301,3 @@ export function MinesweeperStartPreview() {
     </div>
   );
 }
-
-export const minesweeperBoardSizeLabel = `${MINESWEEPER_BOARD_WIDTH} x ${MINESWEEPER_BOARD_HEIGHT}`;
