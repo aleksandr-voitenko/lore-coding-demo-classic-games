@@ -581,7 +581,7 @@ function GameCardArticle({
           accentClassName={game.accentClassName}
           artwork={game.artwork}
           artworkSrc={versionedArtworkSrc}
-          backgroundSizes="(min-width: 640px) 24rem, calc(100vw - 2rem)"
+          backgroundSizes="(min-width: 1200px) 23.333rem, (min-width: 944px) calc(33.333vw - 1.667rem), (min-width: 640px) calc(50vw - 2rem), calc(100vw - 2rem)"
         />
 
         <span className="flex flex-1 flex-col p-4 pb-0">

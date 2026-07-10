@@ -11,6 +11,14 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: multiplayerDevPublicHost
     ? [multiplayerDevPublicHost]
     : undefined,
+  images: {
+    localPatterns: [
+      {
+        pathname: "/images/*-game-card.png",
+        search: "?v=ai-key-art-v2",
+      },
+    ],
+  },
   output: "standalone",
   reactCompiler: true,
   serverExternalPackages: ["better-sqlite3"],

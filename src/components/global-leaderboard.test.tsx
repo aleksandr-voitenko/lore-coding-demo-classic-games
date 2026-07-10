@@ -9,6 +9,9 @@ import {
 
 import { GlobalLeaderboardScreen } from "./global-leaderboard";
 
+const LEADERBOARD_ARTWORK_SIZES =
+  "(min-width: 1280px) 23.333rem, (min-width: 1200px) 35.5rem, (min-width: 768px) calc(50vw - 2rem), (min-width: 640px) calc(100vw - 3rem), calc(100vw - 2rem)";
+
 describe("global leaderboard screen", () => {
   it("renders a leaderboard card for every catalog game", () => {
     const markup = renderToStaticMarkup(
@@ -24,7 +27,7 @@ describe("global leaderboard screen", () => {
 
       expect(markup).toContain(`data-testid="global-leaderboard-${game.id}"`);
       expect(markup).toContain(`data-testid="global-leaderboard-${game.id}-slot-1"`);
-      expect(markup).toContain(artworkSrc);
+      expect(getArtworkImageMarkup(markup, artworkSrc)).toHaveLength(2);
       expect(markup).toContain(game.label);
     }
 
@@ -41,14 +44,25 @@ describe("global leaderboard screen", () => {
 
     expect(markup).toContain("blur-[2px]");
     expect(markup).toContain("object-contain");
+    expect(countOccurrences(markup, `sizes="${LEADERBOARD_ARTWORK_SIZES}"`)).toBe(
+      GAME_CATALOG.length,
+    );
 
     for (const game of GAME_CATALOG) {
       const artworkSrc = getVersionedGameCatalogArtworkSrc(getGameCatalogArtwork(game.id));
 
-      expect(countOccurrences(markup, artworkSrc)).toBe(2);
+      expect(getArtworkImageMarkup(markup, artworkSrc)).toHaveLength(2);
     }
   });
 });
+
+function getArtworkImageMarkup(markup: string, artworkSrc: string) {
+  const encodedArtworkSrc = encodeURIComponent(artworkSrc);
+
+  return (markup.match(/<img\b[^>]*>/g) ?? []).filter((image) =>
+    image.includes(encodedArtworkSrc),
+  );
+}
 
 function countOccurrences(value: string, substring: string) {
   return value.split(substring).length - 1;

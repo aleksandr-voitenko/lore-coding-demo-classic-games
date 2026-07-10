@@ -70,8 +70,9 @@ This file covers React component ownership and shared game UI conventions under
   shell behavior.
 - `game-card-artwork-frame.tsx` owns the shared launcher-style key-art frame
   used by launcher cards and the global leaderboard cards. Keep the blurred
-  background, dark overlay, centered rounded foreground image, direct versioned
-  public URL behavior, and button-safe `<span>` structure together there.
+  background, dark overlay, centered rounded foreground image, responsive
+  optimizer sizing, versioned source URL, and button-safe `<span>` structure
+  together there.
 - `game-leaderboard.tsx` renders the shared top-three panel and save-score form.
   `use-game-leaderboard.ts` in `src/hooks/` owns the client state feeding those
   components and pre-fills the signed-in display name when available.

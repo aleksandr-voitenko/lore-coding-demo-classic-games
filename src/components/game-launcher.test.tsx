@@ -18,6 +18,9 @@ const PRIVATE_ROOM_HOSTABLE_GAME_IDS = [
   "space-invaders",
 ] as const;
 
+const LAUNCHER_ARTWORK_SIZES =
+  "(min-width: 1200px) 23.333rem, (min-width: 944px) calc(33.333vw - 1.667rem), (min-width: 640px) calc(50vw - 2rem), calc(100vw - 2rem)";
+
 const EXPECTED_PARAMETER_SELECTS = [
   {
     defaultLabel: "10 x 20",
@@ -152,6 +155,14 @@ describe("game launcher", () => {
     expect(markup).not.toContain('data-testid="simon-target"');
   });
 
+  it("matches responsive artwork widths to the launcher grid", () => {
+    const markup = renderToStaticMarkup(<GameLauncher />);
+
+    expect(countOccurrences(markup, `sizes="${LAUNCHER_ARTWORK_SIZES}"`)).toBe(
+      GAME_CARDS.length,
+    );
+  });
+
   it("preserves launcher parameter labels and defaults", () => {
     const markup = renderToStaticMarkup(<GameLauncher />);
 
@@ -276,4 +287,8 @@ function getButtonMarkup(markup: string, testId: string) {
   expect(elementMatch).not.toBeNull();
 
   return elementMatch?.[0] ?? "";
+}
+
+function countOccurrences(value: string, substring: string) {
+  return value.split(substring).length - 1;
 }
