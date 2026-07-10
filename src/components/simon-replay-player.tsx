@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeftIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { GameReplayCursor } from "@/components/game-replay-cursor";
@@ -21,6 +21,7 @@ import {
   getReplayEventElapsedMs,
   getReplayPlaybackDelayMs,
   type GameReplayTimedPlayback,
+  useGameReplayPlayback,
 } from "@/components/game-replay-playback";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { SimonBoard } from "@/components/simon-board";
@@ -156,16 +157,83 @@ function SimonReplayMessage({
 }
 
 export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
-  const [game, setGame] = useState<SimonGameState | null>(null);
   const [cursorPosition, setCursorPosition] =
     useState<SimonReplayCursorPosition | null>(null);
   const [cursorStep, setCursorStep] = useState(0);
-  const [isFinished, setIsFinished] = useState(false);
-  const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">("loading");
-  const [playbackStep, setPlaybackStep] = useState(0);
-  const [replay, setReplay] = useState<SimonReplayPayload | null>(null);
-  const gameRef = useRef<SimonGameState | null>(null);
-  const playbackRef = useRef<PlaybackState | null>(null);
+  const initializeReplay = useCallback(
+    (latestReplay: SimonReplayPayload) => {
+      const initialReplay = createInitialSimonReplayGame(latestReplay);
+
+      setCursorPosition(null);
+
+      return {
+        game: initialReplay.game,
+        playback: {
+          cursorEventIndex: 0,
+          cursorEvents: latestReplay.cursorEvents,
+          eventIndex: 0,
+          events: latestReplay.events,
+          lastElapsedMs: 0,
+          random: initialReplay.random,
+        } satisfies PlaybackState,
+      };
+    },
+    [],
+  );
+
+  const advanceReplayFrame = useCallback(
+    ({
+      game,
+      playback,
+    }: {
+      game: SimonGameState;
+      playback: PlaybackState;
+    }) => {
+      const event = playback.events[playback.eventIndex];
+
+      if (event === undefined) {
+        return { game, isFinished: true };
+      }
+
+      const nextGame = applySimonReplayEvent(game, event, playback.random);
+
+      playback.lastElapsedMs = getReplayEventElapsedMs(event) ?? playback.lastElapsedMs;
+      playback.eventIndex += 1;
+
+      return {
+        game: nextGame,
+        isFinished:
+          playback.eventIndex >= playback.events.length ||
+          nextGame.status === "lost" ||
+          nextGame.status === "won",
+      };
+    },
+    [],
+  );
+  const canAdvanceReplay = useCallback(
+    ({
+      playback,
+    }: {
+      game: SimonGameState;
+      playback: PlaybackState;
+    }) => {
+      const nextEvent = playback.events[playback.eventIndex];
+      const nextCursorEvent = playback.cursorEvents[playback.cursorEventIndex];
+
+      return !shouldAdvanceSimonReplayCursorBeforeAction({
+        cursorEvent: nextCursorEvent,
+        event: nextEvent,
+      });
+    },
+    [],
+  );
+  const { game, isFinished, loadStatus, playbackRef, replay } = useGameReplayPlayback({
+    advanceFrame: advanceReplayFrame,
+    canAdvance: canAdvanceReplay,
+    initializeReplay,
+    loadReplay: fetchSimonReplay,
+    scheduleVersion: cursorStep,
+  });
   const leaderboardKey = replay?.leaderboardKey ?? createDefaultSimonReplayLeaderboardKey();
   const { finalLeaderboardProps } = useGameLeaderboardPresenter({
     leaderboardKey,
@@ -176,108 +244,6 @@ export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
     isGameStarted: false,
     onBackToMenu: onBackToProfile,
   });
-
-  useEffect(() => {
-    let isCurrent = true;
-
-    fetchSimonReplay()
-      .then((latestReplay) => {
-        if (!isCurrent) {
-          return;
-        }
-
-        const initialReplay = createInitialSimonReplayGame(latestReplay);
-
-        gameRef.current = initialReplay.game;
-        playbackRef.current = {
-          cursorEventIndex: 0,
-          cursorEvents: latestReplay.cursorEvents,
-          eventIndex: 0,
-          events: latestReplay.events,
-          lastElapsedMs: 0,
-          random: initialReplay.random,
-        };
-        setCursorPosition(null);
-        setGame(initialReplay.game);
-        setIsFinished(false);
-        setLoadStatus("ready");
-        setReplay(latestReplay);
-      })
-      .catch(() => {
-        if (isCurrent) {
-          setLoadStatus("failed");
-        }
-      });
-
-    return () => {
-      isCurrent = false;
-    };
-  }, []);
-
-  const advanceReplayFrame = useCallback(() => {
-    const playback = playbackRef.current;
-    const currentGame = gameRef.current;
-
-    if (playback === null || currentGame === null || isFinished) {
-      return;
-    }
-
-    const event = playback.events[playback.eventIndex];
-
-    if (event === undefined) {
-      setIsFinished(true);
-      return;
-    }
-
-    const nextGame = applySimonReplayEvent(currentGame, event, playback.random);
-
-    playback.lastElapsedMs = getReplayEventElapsedMs(event) ?? playback.lastElapsedMs;
-    playback.eventIndex += 1;
-    gameRef.current = nextGame;
-    setGame(nextGame);
-    setPlaybackStep((current) => current + 1);
-
-    if (
-      playback.eventIndex >= playback.events.length ||
-      nextGame.status === "lost" ||
-      nextGame.status === "won"
-    ) {
-      setIsFinished(true);
-    }
-  }, [isFinished]);
-
-  useEffect(() => {
-    if (loadStatus !== "ready" || isFinished) {
-      return;
-    }
-
-    const playback = playbackRef.current;
-    const nextEvent = playback?.events[playback.eventIndex];
-    const nextCursorEvent = playback?.cursorEvents[playback.cursorEventIndex];
-
-    if (playback === null || nextEvent === undefined) {
-      return;
-    }
-
-    if (
-      shouldAdvanceSimonReplayCursorBeforeAction({
-        cursorEvent: nextCursorEvent,
-        event: nextEvent,
-      })
-    ) {
-      return;
-    }
-
-    const timeout = window.setTimeout(
-      advanceReplayFrame,
-      getReplayPlaybackDelayMs({
-        event: nextEvent,
-        playback,
-      }),
-    );
-
-    return () => window.clearTimeout(timeout);
-  }, [advanceReplayFrame, cursorStep, isFinished, loadStatus, playbackStep]);
 
   useEffect(() => {
     if (loadStatus !== "ready" || isFinished) {
@@ -313,7 +279,7 @@ export function SimonReplayPlayer({ onBackToProfile }: SimonReplayPlayerProps) {
     }));
 
     return () => window.clearTimeout(timeout);
-  }, [cursorStep, isFinished, loadStatus]);
+  }, [cursorStep, isFinished, loadStatus, playbackRef]);
 
   const ignorePadPress = useCallback(() => undefined, []);
 

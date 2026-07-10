@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeftIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import {
@@ -18,9 +18,9 @@ import {
 } from "@/components/game-layout";
 import {
   getReplayEventElapsedMs,
-  getReplayPlaybackDelayMs,
   isFutureReplayEventFrame,
   type GameReplayTimedPlayback,
+  useGameReplayPlayback,
 } from "@/components/game-replay-playback";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { PongBoard } from "@/components/pong-board";
@@ -79,13 +79,72 @@ function PongReplayMessage({
 }
 
 export function PongReplayPlayer({ onBackToProfile }: PongReplayPlayerProps) {
-  const [game, setGame] = useState<PongGameState | null>(null);
-  const [isFinished, setIsFinished] = useState(false);
-  const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">("loading");
-  const [playbackStep, setPlaybackStep] = useState(0);
-  const [replay, setReplay] = useState<PongReplayPayload | null>(null);
-  const gameRef = useRef<PongGameState | null>(null);
-  const playbackRef = useRef<PlaybackState | null>(null);
+  const initializeReplay = useCallback(
+    (latestReplay: PongReplayPayload) => {
+      const initialReplay = createInitialPongReplayGame(latestReplay);
+
+      return {
+        game: initialReplay.game,
+        playback: {
+          eventIndex: 0,
+          events: latestReplay.events,
+          lastElapsedMs: 0,
+        } satisfies PlaybackState,
+      };
+    },
+    [],
+  );
+
+  const advanceReplayFrame = useCallback(
+    ({
+      game,
+      playback,
+    }: {
+      game: PongGameState;
+      playback: PlaybackState;
+    }) => {
+      let nextGame = game;
+      let lastElapsedMs: number | null = null;
+      let processedFrame = false;
+      const frameElapsedMs = getReplayEventElapsedMs(
+        playback.events[playback.eventIndex],
+      );
+      const isTimedFrame = frameElapsedMs !== null;
+
+      while (
+        playback.eventIndex < playback.events.length &&
+        (isTimedFrame || !processedFrame)
+      ) {
+        const event = playback.events[playback.eventIndex]!;
+
+        if (isFutureReplayEventFrame(frameElapsedMs, event)) {
+          break;
+        }
+
+        playback.eventIndex += 1;
+        nextGame = applyPongReplayEvent(nextGame, event);
+        lastElapsedMs = getReplayEventElapsedMs(event) ?? lastElapsedMs;
+        processedFrame = isTimedFrame ? false : isReplayFrameBoundary(event);
+      }
+
+      playback.lastElapsedMs = lastElapsedMs ?? playback.lastElapsedMs;
+
+      return {
+        game: nextGame,
+        isFinished:
+          playback.eventIndex >= playback.events.length ||
+          nextGame.status === "lost" ||
+          nextGame.status === "won",
+      };
+    },
+    [],
+  );
+
+  const { game, isFinished, loadStatus, replay } = useGameReplayPlayback({
+    advanceFrame: advanceReplayFrame,
+    initializeReplay,
+    loadReplay: fetchPongReplay,
+  });
   const leaderboardKey = replay?.leaderboardKey ?? createDefaultPongReplayLeaderboardKey();
   const { finalLeaderboardProps } = useGameLeaderboardPresenter({
     leaderboardKey,
@@ -96,105 +155,6 @@ export function PongReplayPlayer({ onBackToProfile }: PongReplayPlayerProps) {
     isGameStarted: false,
     onBackToMenu: onBackToProfile,
   });
-
-  useEffect(() => {
-    let isCurrent = true;
-
-    fetchPongReplay()
-      .then((latestReplay) => {
-        if (!isCurrent) {
-          return;
-        }
-
-        const initialReplay = createInitialPongReplayGame(latestReplay);
-
-        gameRef.current = initialReplay.game;
-        playbackRef.current = {
-          eventIndex: 0,
-          events: latestReplay.events,
-          lastElapsedMs: 0,
-        };
-        setGame(initialReplay.game);
-        setIsFinished(false);
-        setLoadStatus("ready");
-        setReplay(latestReplay);
-      })
-      .catch(() => {
-        if (isCurrent) {
-          setLoadStatus("failed");
-        }
-      });
-
-    return () => {
-      isCurrent = false;
-    };
-  }, []);
-
-  const advanceReplayFrame = useCallback(() => {
-    const playback = playbackRef.current;
-    const currentGame = gameRef.current;
-
-    if (playback === null || currentGame === null || isFinished) {
-      return;
-    }
-
-    let nextGame = currentGame;
-    let lastElapsedMs: number | null = null;
-    let processedFrame = false;
-    const frameElapsedMs = getReplayEventElapsedMs(
-      playback.events[playback.eventIndex],
-    );
-    const isTimedFrame = frameElapsedMs !== null;
-
-    while (playback.eventIndex < playback.events.length && (isTimedFrame || !processedFrame)) {
-      const event = playback.events[playback.eventIndex]!;
-
-      if (isFutureReplayEventFrame(frameElapsedMs, event)) {
-        break;
-      }
-
-      playback.eventIndex += 1;
-      nextGame = applyPongReplayEvent(nextGame, event);
-      lastElapsedMs = getReplayEventElapsedMs(event) ?? lastElapsedMs;
-      processedFrame = isTimedFrame ? false : isReplayFrameBoundary(event);
-    }
-
-    playback.lastElapsedMs = lastElapsedMs ?? playback.lastElapsedMs;
-    gameRef.current = nextGame;
-    setGame(nextGame);
-    setPlaybackStep((current) => current + 1);
-
-    if (
-      playback.eventIndex >= playback.events.length ||
-      nextGame.status === "lost" ||
-      nextGame.status === "won"
-    ) {
-      setIsFinished(true);
-    }
-  }, [isFinished]);
-
-  useEffect(() => {
-    if (loadStatus !== "ready" || isFinished) {
-      return;
-    }
-
-    const playback = playbackRef.current;
-    const nextEvent = playback?.events[playback.eventIndex];
-
-    if (playback === null || nextEvent === undefined) {
-      return;
-    }
-
-    const timeout = window.setTimeout(
-      advanceReplayFrame,
-      getReplayPlaybackDelayMs({
-        event: nextEvent,
-        playback,
-      }),
-    );
-
-    return () => window.clearTimeout(timeout);
-  }, [advanceReplayFrame, isFinished, loadStatus, playbackStep]);
 
   if (loadStatus === "loading") {
     return (

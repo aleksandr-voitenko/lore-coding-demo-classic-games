@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeftIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import {
@@ -18,9 +18,9 @@ import {
 } from "@/components/game-layout";
 import {
   getReplayEventElapsedMs,
-  getReplayPlaybackDelayMs,
   isFutureReplayEventFrame,
   type GameReplayTimedPlayback,
+  useGameReplayPlayback,
 } from "@/components/game-replay-playback";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { TwentyFortyEightBoard } from "@/components/twenty-forty-eight-board";
@@ -137,13 +137,54 @@ export function advanceTwentyFortyEightReplayFrame({
 export function TwentyFortyEightReplayPlayer({
   onBackToProfile,
 }: TwentyFortyEightReplayPlayerProps) {
-  const [game, setGame] = useState<TwentyFortyEightGameState | null>(null);
-  const [isFinished, setIsFinished] = useState(false);
-  const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">("loading");
-  const [playbackStep, setPlaybackStep] = useState(0);
-  const [replay, setReplay] = useState<TwentyFortyEightReplayPayload | null>(null);
-  const gameRef = useRef<TwentyFortyEightGameState | null>(null);
-  const playbackRef = useRef<PlaybackState | null>(null);
+  const initializeReplay = useCallback(
+    (latestReplay: TwentyFortyEightReplayPayload) => {
+      const initialReplay = createInitialTwentyFortyEightReplayGame(latestReplay);
+
+      return {
+        game: initialReplay.game,
+        playback: {
+          eventIndex: 0,
+          events: latestReplay.events,
+          lastElapsedMs: 0,
+          random: initialReplay.random,
+        } satisfies PlaybackState,
+      };
+    },
+    [],
+  );
+
+  const advanceReplayFrame = useCallback(
+    ({
+      game,
+      playback,
+    }: {
+      game: TwentyFortyEightGameState;
+      playback: PlaybackState;
+    }) => {
+      const nextFrame = advanceTwentyFortyEightReplayFrame({
+        eventIndex: playback.eventIndex,
+        events: playback.events,
+        game,
+        random: playback.random,
+      });
+
+      playback.eventIndex = nextFrame.eventIndex;
+      playback.lastElapsedMs = nextFrame.lastElapsedMs ?? playback.lastElapsedMs;
+
+      return {
+        game: nextFrame.game,
+        isFinished: nextFrame.isFinished,
+      };
+    },
+    [],
+  );
+
+  const { game, isFinished, loadStatus, replay } = useGameReplayPlayback({
+    advanceFrame: advanceReplayFrame,
+    initializeReplay,
+    loadReplay: fetchTwentyFortyEightReplay,
+  });
   const leaderboardKey =
     replay?.leaderboardKey ??
     createTwentyFortyEightReplayLeaderboardKey({
@@ -159,89 +200,6 @@ export function TwentyFortyEightReplayPlayer({
     isGameStarted: false,
     onBackToMenu: onBackToProfile,
   });
-
-  useEffect(() => {
-    let isCurrent = true;
-
-    fetchTwentyFortyEightReplay()
-      .then((latestReplay) => {
-        if (!isCurrent) {
-          return;
-        }
-
-        const initialReplay = createInitialTwentyFortyEightReplayGame(latestReplay);
-
-        gameRef.current = initialReplay.game;
-        playbackRef.current = {
-          eventIndex: 0,
-          events: latestReplay.events,
-          lastElapsedMs: 0,
-          random: initialReplay.random,
-        };
-        setGame(initialReplay.game);
-        setIsFinished(false);
-        setLoadStatus("ready");
-        setReplay(latestReplay);
-      })
-      .catch(() => {
-        if (isCurrent) {
-          setLoadStatus("failed");
-        }
-      });
-
-    return () => {
-      isCurrent = false;
-    };
-  }, []);
-
-  const advanceReplayFrame = useCallback(() => {
-    const playback = playbackRef.current;
-    const currentGame = gameRef.current;
-
-    if (playback === null || currentGame === null || isFinished) {
-      return;
-    }
-
-    const nextFrame = advanceTwentyFortyEightReplayFrame({
-      eventIndex: playback.eventIndex,
-      events: playback.events,
-      game: currentGame,
-      random: playback.random,
-    });
-
-    playback.eventIndex = nextFrame.eventIndex;
-    playback.lastElapsedMs = nextFrame.lastElapsedMs ?? playback.lastElapsedMs;
-    gameRef.current = nextFrame.game;
-    setGame(nextFrame.game);
-    setPlaybackStep((current) => current + 1);
-
-    if (nextFrame.isFinished) {
-      setIsFinished(true);
-    }
-  }, [isFinished]);
-
-  useEffect(() => {
-    if (loadStatus !== "ready" || isFinished) {
-      return;
-    }
-
-    const playback = playbackRef.current;
-    const nextEvent = playback?.events[playback.eventIndex];
-
-    if (playback === null || nextEvent === undefined) {
-      return;
-    }
-
-    const timeout = window.setTimeout(
-      advanceReplayFrame,
-      getReplayPlaybackDelayMs({
-        event: nextEvent,
-        playback,
-      }),
-    );
-
-    return () => window.clearTimeout(timeout);
-  }, [advanceReplayFrame, isFinished, loadStatus, playbackStep]);
 
   if (loadStatus === "loading") {
     return (

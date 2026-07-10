@@ -162,7 +162,16 @@ This file covers React component ownership and shared game UI conventions under
   stamp active elapsed milliseconds on each event and pause that replay clock
   while Pause, Help, or abandon-confirm overlays stop the player's active view;
   replay players schedule playback from those elapsed timestamps instead of
-  fixed per-turn delays.
+  fixed per-turn delays. `game-replay-playback.ts` ignores stale saved-replay
+  load settlements and owns the main elapsed-frame timeout, shared
+  ready/finished state, and ref cleanup on player unmount. Focused replay
+  players keep their game-specific frame reducers and visual side effects;
+  Minesweeper and Simon also keep their cursor timers local so
+  cursor-before-action ordering remains explicit. Replacing a loader or
+  initializer must synchronously cancel the current main-frame timeout before
+  replacement playback refs can be installed. Every accepted load increments an
+  internal scheduling generation so replacement playback starts even when its
+  initialized game keeps the same object identity.
   Minesweeper and Simon live recordings also sample mouse movement over the
   board into a separate cursor event stream every 50ms, and their replay
   playback draws that stream as a schematic board-local cursor without moving

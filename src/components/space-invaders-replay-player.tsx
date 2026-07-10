@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeftIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import {
@@ -15,9 +15,9 @@ import {
 } from "@/components/game-layout";
 import {
   getReplayEventElapsedMs,
-  getReplayPlaybackDelayMs,
   isFutureReplayEventFrame,
   type GameReplayTimedPlayback,
+  useGameReplayPlayback,
 } from "@/components/game-replay-playback";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { SpaceInvadersBoard } from "@/components/space-invaders-board";
@@ -86,14 +86,73 @@ function SpaceInvadersReplayMessage({
 export function SpaceInvadersReplayPlayer({
   onBackToProfile,
 }: SpaceInvadersReplayPlayerProps) {
-  const [game, setGame] = useState<SpaceInvadersGameState | null>(null);
-  const [isFinished, setIsFinished] = useState(false);
-  const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">(
-    "loading",
+  const initializeReplay = useCallback(
+    (latestReplay: SpaceInvadersReplayPayload) => {
+      const initialReplay = createInitialSpaceInvadersReplayGame(latestReplay);
+
+      return {
+        game: initialReplay.game,
+        playback: {
+          eventIndex: 0,
+          events: latestReplay.events,
+          lastElapsedMs: 0,
+          replayState: initialReplay,
+        } satisfies PlaybackState,
+      };
+    },
+    [],
   );
-  const [playbackStep, setPlaybackStep] = useState(0);
-  const [replay, setReplay] = useState<SpaceInvadersReplayPayload | null>(null);
-  const playbackRef = useRef<PlaybackState | null>(null);
+
+  const advanceReplayFrame = useCallback(
+    ({
+      playback,
+    }: {
+      game: SpaceInvadersGameState;
+      playback: PlaybackState;
+    }) => {
+      let nextReplayState = playback.replayState;
+      let lastElapsedMs: number | null = null;
+      let processedFrame = false;
+      const frameElapsedMs = getReplayEventElapsedMs(
+        playback.events[playback.eventIndex],
+      );
+      const isTimedFrame = frameElapsedMs !== null;
+
+      while (
+        playback.eventIndex < playback.events.length &&
+        (isTimedFrame || !processedFrame)
+      ) {
+        const event = playback.events[playback.eventIndex]!;
+
+        if (isFutureReplayEventFrame(frameElapsedMs, event)) {
+          break;
+        }
+
+        playback.eventIndex += 1;
+        nextReplayState = applySpaceInvadersReplayEvent(nextReplayState, event);
+        lastElapsedMs = getReplayEventElapsedMs(event) ?? lastElapsedMs;
+        processedFrame = isTimedFrame ? false : isReplayFrameBoundary(event);
+      }
+
+      playback.lastElapsedMs = lastElapsedMs ?? playback.lastElapsedMs;
+      playback.replayState = nextReplayState;
+
+      return {
+        game: nextReplayState.game,
+        isFinished:
+          playback.eventIndex >= playback.events.length ||
+          nextReplayState.game.status === "lost" ||
+          nextReplayState.game.status === "won",
+      };
+    },
+    [],
+  );
+
+  const { game, isFinished, loadStatus, replay } = useGameReplayPlayback({
+    advanceFrame: advanceReplayFrame,
+    initializeReplay,
+    loadReplay: fetchSpaceInvadersReplay,
+  });
   const leaderboardKey =
     replay?.leaderboardKey ?? createDefaultSpaceInvadersReplayLeaderboardKey();
   const { finalLeaderboardProps } = useGameLeaderboardPresenter({
@@ -105,104 +164,6 @@ export function SpaceInvadersReplayPlayer({
     isGameStarted: false,
     onBackToMenu: onBackToProfile,
   });
-
-  useEffect(() => {
-    let isCurrent = true;
-
-    fetchSpaceInvadersReplay()
-      .then((latestReplay) => {
-        if (!isCurrent) {
-          return;
-        }
-
-        const initialReplay = createInitialSpaceInvadersReplayGame(latestReplay);
-
-        playbackRef.current = {
-          eventIndex: 0,
-          events: latestReplay.events,
-          lastElapsedMs: 0,
-          replayState: initialReplay,
-        };
-        setGame(initialReplay.game);
-        setIsFinished(false);
-        setLoadStatus("ready");
-        setReplay(latestReplay);
-      })
-      .catch(() => {
-        if (isCurrent) {
-          setLoadStatus("failed");
-        }
-      });
-
-    return () => {
-      isCurrent = false;
-    };
-  }, []);
-
-  const advanceReplayFrame = useCallback(() => {
-    const playback = playbackRef.current;
-
-    if (playback === null || isFinished) {
-      return;
-    }
-
-    let nextReplayState = playback.replayState;
-    let lastElapsedMs: number | null = null;
-    let processedFrame = false;
-    const frameElapsedMs = getReplayEventElapsedMs(
-      playback.events[playback.eventIndex],
-    );
-    const isTimedFrame = frameElapsedMs !== null;
-
-    while (playback.eventIndex < playback.events.length && (isTimedFrame || !processedFrame)) {
-      const event = playback.events[playback.eventIndex]!;
-
-      if (isFutureReplayEventFrame(frameElapsedMs, event)) {
-        break;
-      }
-
-      playback.eventIndex += 1;
-      nextReplayState = applySpaceInvadersReplayEvent(nextReplayState, event);
-      lastElapsedMs = getReplayEventElapsedMs(event) ?? lastElapsedMs;
-      processedFrame = isTimedFrame ? false : isReplayFrameBoundary(event);
-    }
-
-    playback.lastElapsedMs = lastElapsedMs ?? playback.lastElapsedMs;
-    playback.replayState = nextReplayState;
-    setGame(nextReplayState.game);
-    setPlaybackStep((current) => current + 1);
-
-    if (
-      playback.eventIndex >= playback.events.length ||
-      nextReplayState.game.status === "lost" ||
-      nextReplayState.game.status === "won"
-    ) {
-      setIsFinished(true);
-    }
-  }, [isFinished]);
-
-  useEffect(() => {
-    if (loadStatus !== "ready" || isFinished) {
-      return;
-    }
-
-    const playback = playbackRef.current;
-    const nextEvent = playback?.events[playback.eventIndex];
-
-    if (playback === null || nextEvent === undefined) {
-      return;
-    }
-
-    const timeout = window.setTimeout(
-      advanceReplayFrame,
-      getReplayPlaybackDelayMs({
-        event: nextEvent,
-        playback,
-      }),
-    );
-
-    return () => window.clearTimeout(timeout);
-  }, [advanceReplayFrame, isFinished, loadStatus, playbackStep]);
 
   if (loadStatus === "loading") {
     return (

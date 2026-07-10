@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeftIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { GameLeaderboardPanel } from "@/components/game-leaderboard";
 import { GameReplayCursor } from "@/components/game-replay-cursor";
@@ -22,6 +22,7 @@ import {
   getReplayPlaybackDelayMs,
   isFutureReplayEventFrame,
   type GameReplayTimedPlayback,
+  useGameReplayPlayback,
 } from "@/components/game-replay-playback";
 import { useGameLeaderboardPresenter } from "@/components/game-leaderboard-presenter";
 import { MinesweeperBoard } from "@/components/minesweeper-board";
@@ -155,16 +156,79 @@ function MinesweeperReplayMessage({
 export function MinesweeperReplayPlayer({
   onBackToProfile,
 }: MinesweeperReplayPlayerProps) {
-  const [game, setGame] = useState<MinesweeperGameState | null>(null);
   const [cursorPosition, setCursorPosition] =
     useState<MinesweeperReplayCursorPosition | null>(null);
   const [cursorStep, setCursorStep] = useState(0);
-  const [isFinished, setIsFinished] = useState(false);
-  const [loadStatus, setLoadStatus] = useState<"failed" | "loading" | "ready">("loading");
-  const [playbackStep, setPlaybackStep] = useState(0);
-  const [replay, setReplay] = useState<MinesweeperReplayPayload | null>(null);
-  const gameRef = useRef<MinesweeperGameState | null>(null);
-  const playbackRef = useRef<PlaybackState | null>(null);
+  const initializeReplay = useCallback(
+    (latestReplay: MinesweeperReplayPayload) => {
+      const initialReplay = createInitialMinesweeperReplayGame(latestReplay);
+
+      setCursorPosition(null);
+
+      return {
+        game: initialReplay.game,
+        playback: {
+          cursorEventIndex: 0,
+          cursorEvents: latestReplay.cursorEvents,
+          eventIndex: 0,
+          events: latestReplay.events,
+          lastElapsedMs: 0,
+          random: initialReplay.random,
+        } satisfies PlaybackState,
+      };
+    },
+    [],
+  );
+
+  const advanceReplayFrame = useCallback(
+    ({
+      game,
+      playback,
+    }: {
+      game: MinesweeperGameState;
+      playback: PlaybackState;
+    }) => {
+      const nextFrame = advanceMinesweeperReplayFrame({
+        eventIndex: playback.eventIndex,
+        events: playback.events,
+        game,
+        random: playback.random,
+      });
+
+      playback.eventIndex = nextFrame.eventIndex;
+      playback.lastElapsedMs = nextFrame.lastElapsedMs ?? playback.lastElapsedMs;
+
+      return {
+        game: nextFrame.game,
+        isFinished: nextFrame.isFinished,
+      };
+    },
+    [],
+  );
+  const canAdvanceReplay = useCallback(
+    ({
+      playback,
+    }: {
+      game: MinesweeperGameState;
+      playback: PlaybackState;
+    }) => {
+      const nextEvent = playback.events[playback.eventIndex];
+      const nextCursorEvent = playback.cursorEvents[playback.cursorEventIndex];
+
+      return !shouldAdvanceMinesweeperReplayCursorBeforeAction({
+        cursorEvent: nextCursorEvent,
+        event: nextEvent,
+      });
+    },
+    [],
+  );
+  const { game, isFinished, loadStatus, playbackRef, replay } = useGameReplayPlayback({
+    advanceFrame: advanceReplayFrame,
+    canAdvance: canAdvanceReplay,
+    initializeReplay,
+    loadReplay: fetchMinesweeperReplay,
+    scheduleVersion: cursorStep,
+  });
   const leaderboardKey =
     replay?.leaderboardKey ??
     createMinesweeperReplayLeaderboardKey({
@@ -182,103 +246,6 @@ export function MinesweeperReplayPlayer({
     isGameStarted: false,
     onBackToMenu: onBackToProfile,
   });
-
-  useEffect(() => {
-    let isCurrent = true;
-
-    fetchMinesweeperReplay()
-      .then((latestReplay) => {
-        if (!isCurrent) {
-          return;
-        }
-
-        const initialReplay = createInitialMinesweeperReplayGame(latestReplay);
-
-        gameRef.current = initialReplay.game;
-        playbackRef.current = {
-          cursorEventIndex: 0,
-          cursorEvents: latestReplay.cursorEvents,
-          eventIndex: 0,
-          events: latestReplay.events,
-          lastElapsedMs: 0,
-          random: initialReplay.random,
-        };
-        setCursorPosition(null);
-        setGame(initialReplay.game);
-        setIsFinished(false);
-        setLoadStatus("ready");
-        setReplay(latestReplay);
-      })
-      .catch(() => {
-        if (isCurrent) {
-          setLoadStatus("failed");
-        }
-      });
-
-    return () => {
-      isCurrent = false;
-    };
-  }, []);
-
-  const advanceReplayFrame = useCallback(() => {
-    const playback = playbackRef.current;
-    const currentGame = gameRef.current;
-
-    if (playback === null || currentGame === null || isFinished) {
-      return;
-    }
-
-    const nextFrame = advanceMinesweeperReplayFrame({
-      eventIndex: playback.eventIndex,
-      events: playback.events,
-      game: currentGame,
-      random: playback.random,
-    });
-    const nextGame = nextFrame.game;
-
-    playback.eventIndex = nextFrame.eventIndex;
-    playback.lastElapsedMs = nextFrame.lastElapsedMs ?? playback.lastElapsedMs;
-    gameRef.current = nextGame;
-    setGame(nextGame);
-    setPlaybackStep((current) => current + 1);
-
-    if (nextFrame.isFinished) {
-      setIsFinished(true);
-    }
-  }, [isFinished]);
-
-  useEffect(() => {
-    if (loadStatus !== "ready" || isFinished) {
-      return;
-    }
-
-    const playback = playbackRef.current;
-    const nextEvent = playback?.events[playback.eventIndex];
-    const nextCursorEvent = playback?.cursorEvents[playback.cursorEventIndex];
-
-    if (playback === null || nextEvent === undefined) {
-      return;
-    }
-
-    if (
-      shouldAdvanceMinesweeperReplayCursorBeforeAction({
-        cursorEvent: nextCursorEvent,
-        event: nextEvent,
-      })
-    ) {
-      return;
-    }
-
-    const timeout = window.setTimeout(
-      advanceReplayFrame,
-      getReplayPlaybackDelayMs({
-        event: nextEvent,
-        playback,
-      }),
-    );
-
-    return () => window.clearTimeout(timeout);
-  }, [advanceReplayFrame, cursorStep, isFinished, loadStatus, playbackStep]);
 
   useEffect(() => {
     if (loadStatus !== "ready" || isFinished) {
@@ -314,7 +281,7 @@ export function MinesweeperReplayPlayer({
     }));
 
     return () => window.clearTimeout(timeout);
-  }, [cursorStep, isFinished, loadStatus]);
+  }, [cursorStep, isFinished, loadStatus, playbackRef]);
 
   if (loadStatus === "loading") {
     return (
