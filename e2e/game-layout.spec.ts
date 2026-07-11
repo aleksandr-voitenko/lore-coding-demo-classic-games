@@ -2,6 +2,12 @@ import type { Page } from "@playwright/test";
 
 import { expect, test } from "./support/fixtures";
 import { openGame, openLauncher } from "./support/app";
+import {
+  compositeOverWhite,
+  getContrastRatio,
+  getRelativeLuminance,
+  getResolvedCssColorRgb,
+} from "./support/css-color";
 
 const desktopViewport = {
   height: 900,
@@ -289,73 +295,6 @@ const replayMessageCases = [
 ] as const;
 
 test.use({ viewport: desktopViewport });
-
-type RgbColor = {
-  alpha: number;
-  blue: number;
-  green: number;
-  red: number;
-};
-
-function compositeOverWhite(color: RgbColor) {
-  return {
-    alpha: 1,
-    blue: color.blue * color.alpha + 255 * (1 - color.alpha),
-    green: color.green * color.alpha + 255 * (1 - color.alpha),
-    red: color.red * color.alpha + 255 * (1 - color.alpha),
-  };
-}
-
-function getRelativeLuminance(color: RgbColor) {
-  const channels = [color.red, color.green, color.blue].map((channel) => {
-    const normalized = channel / 255;
-
-    return normalized <= 0.03928
-      ? normalized / 12.92
-      : ((normalized + 0.055) / 1.055) ** 2.4;
-  });
-
-  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
-}
-
-function getContrastRatio(foreground: RgbColor, background: RgbColor) {
-  const foregroundLuminance = getRelativeLuminance(foreground);
-  const backgroundLuminance = getRelativeLuminance(background);
-  const lighter = Math.max(foregroundLuminance, backgroundLuminance);
-  const darker = Math.min(foregroundLuminance, backgroundLuminance);
-
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-async function getResolvedCssColorRgb(page: Page, value: string) {
-  return page.evaluate((cssColor) => {
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-
-    if (cssColor.length === 0) {
-      throw new Error("Unable to resolve empty CSS color.");
-    }
-
-    if (!context) {
-      throw new Error("Unable to resolve CSS color: canvas context unavailable.");
-    }
-
-    canvas.height = 1;
-    canvas.width = 1;
-    context.clearRect(0, 0, 1, 1);
-    context.fillStyle = cssColor;
-    context.fillRect(0, 0, 1, 1);
-
-    const [red, green, blue, alpha] = context.getImageData(0, 0, 1, 1).data;
-
-    return {
-      alpha: alpha / 255,
-      blue,
-      green,
-      red,
-    };
-  }, value);
-}
 
 async function getResolvedCssVariableRgb(page: Page, variableName: string) {
   const value = await page.evaluate((cssVariable) => {

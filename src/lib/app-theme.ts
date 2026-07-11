@@ -18,6 +18,12 @@ export const APP_THEME_CSS_VARIABLES = {
     "--chrome-accent-faint": "color-mix(in oklch, var(--chrome-accent) 10%, var(--chrome-panel))",
     "--chrome-accent-hover": "color-mix(in oklch, var(--chrome-accent) 24%, var(--chrome-panel))",
     "--chrome-focus-ring": "color-mix(in oklch, var(--chrome-accent) 25%, transparent)",
+    "--chrome-selection": "oklch(0.84 0.115 132)",
+    "--chrome-selection-ink": "oklch(0.18 0.035 150)",
+    "--chrome-selection-soft":
+      "color-mix(in oklch, var(--chrome-selection-ink) 12%, transparent)",
+    "--chrome-selection-border":
+      "color-mix(in oklch, var(--chrome-selection-ink) 32%, transparent)",
     "--chrome-shadow-soft": "oklch(0.24 0.04 158 / 14%)",
     "--chrome-shadow-modal": "oklch(0.2 0.03 255 / 28%)",
   },
@@ -33,6 +39,12 @@ export const APP_THEME_CSS_VARIABLES = {
     "--chrome-accent-faint": "color-mix(in oklch, var(--chrome-accent) 12%, var(--chrome-panel))",
     "--chrome-accent-hover": "color-mix(in oklch, var(--chrome-accent) 28%, var(--chrome-panel))",
     "--chrome-focus-ring": "color-mix(in oklch, var(--chrome-accent) 35%, transparent)",
+    "--chrome-selection": "oklch(0.84 0.115 132)",
+    "--chrome-selection-ink": "oklch(0.15 0.025 145)",
+    "--chrome-selection-soft":
+      "color-mix(in oklch, var(--chrome-selection-ink) 12%, transparent)",
+    "--chrome-selection-border":
+      "color-mix(in oklch, var(--chrome-selection-ink) 32%, transparent)",
     "--chrome-shadow-soft": "oklch(0 0 0 / 42%)",
     "--chrome-shadow-modal": "oklch(0 0 0 / 58%)",
   },

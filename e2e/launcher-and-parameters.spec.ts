@@ -2,6 +2,11 @@ import type { Page } from "@playwright/test";
 
 import { expect, test } from "./support/fixtures";
 import {
+  compositeColors,
+  getContrastRatio,
+  getResolvedCssColorRgb,
+} from "./support/css-color";
+import {
   expectSignedInProfileMenu,
   logInFromLauncher,
   openGame,
@@ -19,6 +24,8 @@ const cookieNoticeDismissedValue = "dismissed";
 const cookieNoticeStorageKey = "game-library-cookie-notice:v1";
 const themeCleanupSessionFlag = "game-library-theme-cleaned";
 const themeSeedSessionFlag = "game-library-theme-seeded";
+const minimumGameLibraryTabBoundaryContrastRatio = 3;
+const minimumGameLibraryTabTextContrastRatio = 4.5;
 
 const gameCardIds = [
   "snake",
@@ -238,6 +245,114 @@ async function expectThemeToggleSwitchChrome(page: Page, testId: string) {
   await expect(toggle.locator('[data-theme-icon="moon"]')).toHaveCount(1);
 }
 
+async function expectSelectedGameLibraryTabContrast(
+  page: Page,
+  tab: "multiplayer" | "single-player",
+) {
+  const tabElement = page.getByTestId(`game-library-${tab}-tab`);
+  await tabElement.press(tab === "single-player" ? "Home" : "End");
+  const sample = await tabElement.evaluate((element) => {
+    const count = element.querySelector<HTMLElement>("[data-testid$='-count']");
+    const icon = element.querySelector<SVGElement>("svg");
+    const label = element.querySelector<HTMLElement>("[data-testid$='-label']");
+    const tablist = element.parentElement;
+
+    if (count === null || icon === null || label === null || tablist === null) {
+      throw new Error("Unable to sample the selected game library tab.");
+    }
+
+    const countStyles = getComputedStyle(count);
+    const iconStyles = getComputedStyle(icon);
+    const labelStyles = getComputedStyle(label);
+    const tabStyles = getComputedStyle(element);
+
+    return {
+      backgroundColor: tabStyles.backgroundColor,
+      borderColor: tabStyles.borderColor,
+      countBackgroundColor: countStyles.backgroundColor,
+      countColor: countStyles.color,
+      countTransitionDuration: countStyles.transitionDuration,
+      countTransitionProperty: countStyles.transitionProperty,
+      iconColor: iconStyles.color,
+      labelColor: labelStyles.color,
+      labelTransitionDuration: labelStyles.transitionDuration,
+      labelTransitionProperty: labelStyles.transitionProperty,
+      outlineColor: tabStyles.outlineColor,
+      outlineStyle: tabStyles.outlineStyle,
+      outlineWidth: tabStyles.outlineWidth,
+      tablistBackgroundColor: getComputedStyle(tablist).backgroundColor,
+      tabTransitionDuration: tabStyles.transitionDuration,
+      tabTransitionProperty: tabStyles.transitionProperty,
+    };
+  });
+  const [
+    background,
+    border,
+    countBackground,
+    countForeground,
+    labelForeground,
+    outline,
+    tablistBackground,
+  ] = await Promise.all([
+    getResolvedCssColorRgb(page, sample.backgroundColor),
+    getResolvedCssColorRgb(page, sample.borderColor),
+    getResolvedCssColorRgb(page, sample.countBackgroundColor),
+    getResolvedCssColorRgb(page, sample.countColor),
+    getResolvedCssColorRgb(page, sample.labelColor),
+    getResolvedCssColorRgb(page, sample.outlineColor),
+    getResolvedCssColorRgb(page, sample.tablistBackgroundColor),
+  ]);
+  const effectiveBorder = compositeColors(border, background);
+  const effectiveCountBackground = compositeColors(countBackground, background);
+  const effectiveCountForeground = compositeColors(
+    countForeground,
+    effectiveCountBackground,
+  );
+  const effectiveLabelForeground = compositeColors(labelForeground, background);
+  const effectiveOutline = compositeColors(outline, tablistBackground);
+
+  expect(sample.iconColor).toBe(sample.labelColor);
+  expect(getContrastRatio(effectiveLabelForeground, background)).toBeGreaterThanOrEqual(
+    minimumGameLibraryTabTextContrastRatio,
+  );
+  expect(
+    getContrastRatio(effectiveCountForeground, effectiveCountBackground),
+  ).toBeGreaterThanOrEqual(minimumGameLibraryTabTextContrastRatio);
+  expect(getContrastRatio(effectiveBorder, tablistBackground)).toBeGreaterThanOrEqual(
+    minimumGameLibraryTabBoundaryContrastRatio,
+  );
+  expect(sample.outlineStyle).not.toBe("none");
+  expect(Number.parseFloat(sample.outlineWidth)).toBeGreaterThanOrEqual(2);
+  expect(getContrastRatio(effectiveOutline, tablistBackground)).toBeGreaterThanOrEqual(
+    minimumGameLibraryTabBoundaryContrastRatio,
+  );
+  expectOnlySafeAnimatedTransitions(
+    sample.tabTransitionProperty,
+    sample.tabTransitionDuration,
+  );
+  expectOnlySafeAnimatedTransitions(
+    sample.labelTransitionProperty,
+    sample.labelTransitionDuration,
+  );
+  expectOnlySafeAnimatedTransitions(
+    sample.countTransitionProperty,
+    sample.countTransitionDuration,
+  );
+}
+
+function expectOnlySafeAnimatedTransitions(propertiesValue: string, durationsValue: string) {
+  const properties = propertiesValue.split(",").map((property) => property.trim());
+  const durations = durationsValue.split(",").map((duration) => duration.trim());
+  const safeAnimatedProperties = new Set(["rotate", "scale", "transform", "translate"]);
+  const hasUnsafeAnimatedTransition = properties.some((property, index) => {
+    const duration = durations[index % durations.length] ?? "0s";
+
+    return Number.parseFloat(duration) > 0 && !safeAnimatedProperties.has(property);
+  });
+
+  expect(hasUnsafeAnimatedTransition).toBe(false);
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(({ cleanupFlag, seedFlag, storageKey }) => {
     if (window.sessionStorage.getItem(cleanupFlag) === "1") {
@@ -271,6 +386,8 @@ test("launcher renders game cards and configurable parameters", async ({ page })
   );
   await expect(page.getByTestId("game-library-single-player-count")).toHaveText("9");
   await expect(page.getByTestId("game-library-multiplayer-count")).toHaveText("3");
+  await expect(page.getByTestId("game-library-single-player-panel")).toBeVisible();
+  await expect(page.getByTestId("game-library-multiplayer-panel")).toBeHidden();
 
   for (const gameId of gameCardIds) {
     await expect(page.getByTestId(`game-card-${gameId}`)).toBeVisible();
@@ -298,6 +415,8 @@ test("launcher renders game cards and configurable parameters", async ({ page })
     "aria-selected",
     "true",
   );
+  await expect(page.getByTestId("game-library-single-player-panel")).toBeHidden();
+  await expect(page.getByTestId("game-library-multiplayer-panel")).toBeVisible();
   const tabTopAfterSwitch = await page
     .getByTestId("game-library-tabs")
     .evaluate((element) => element.getBoundingClientRect().top);
@@ -315,6 +434,122 @@ test("launcher renders game cards and configurable parameters", async ({ page })
   await expect(page.getByTestId("private-room-host-pong-button")).toHaveCount(0);
   await expect(page.getByTestId("private-room-host-space-invaders-button")).toHaveCount(0);
   await expect(page.getByTestId("private-room-host-asteroids-button")).toHaveCount(0);
+});
+
+test("game library tabs support roving keyboard navigation", async ({ page }) => {
+  await openLauncher(page);
+
+  const singlePlayerTab = page.getByTestId("game-library-single-player-tab");
+  const multiplayerTab = page.getByTestId("game-library-multiplayer-tab");
+
+  await expect(singlePlayerTab).toHaveAccessibleName("Single player 9 games");
+  await expect(multiplayerTab).toHaveAccessibleName("Multiplayer 3 games");
+  await expect(singlePlayerTab).toHaveAttribute("tabindex", "0");
+  await expect(multiplayerTab).toHaveAttribute("tabindex", "-1");
+
+  await singlePlayerTab.focus();
+  await page.keyboard.press("Tab");
+  await expect(page.getByTestId("game-card-snake")).toBeFocused();
+
+  await singlePlayerTab.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(multiplayerTab).toBeFocused();
+  await expect(multiplayerTab).toHaveAttribute("aria-selected", "true");
+  await expect(multiplayerTab).toHaveAttribute("tabindex", "0");
+  await expect(singlePlayerTab).toHaveAttribute("tabindex", "-1");
+  await expect(page.getByTestId("game-library-single-player-panel")).toBeHidden();
+  await expect(page.getByTestId("game-library-multiplayer-panel")).toBeVisible();
+
+  await page.keyboard.press("ArrowRight");
+  await expect(singlePlayerTab).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(multiplayerTab).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(singlePlayerTab).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(multiplayerTab).toBeFocused();
+});
+
+test("game library tabs are compact on desktop and fill mobile width", async ({ page }) => {
+  await page.setViewportSize({ height: 900, width: 1280 });
+  await openLauncher(page);
+
+  const desktopWidths = await page.getByTestId("game-library-tabs").evaluate((element) => ({
+    parent: element.parentElement?.getBoundingClientRect().width ?? 0,
+    tablist: element.getBoundingClientRect().width,
+  }));
+
+  expect(desktopWidths.parent - desktopWidths.tablist).toBeGreaterThanOrEqual(16);
+  await expect(page.getByTestId("game-library-single-player-tab")).toHaveCSS(
+    "height",
+    "44px",
+  );
+
+  await page.setViewportSize({ height: 844, width: 320 });
+
+  const mobileWidths = await page.getByTestId("game-library-tabs").evaluate((element) => ({
+    parent: element.parentElement?.getBoundingClientRect().width ?? 0,
+    tablist: element.getBoundingClientRect().width,
+  }));
+
+  expect(Math.abs(mobileWidths.parent - mobileWidths.tablist)).toBeLessThanOrEqual(1);
+  await expect(page.getByTestId("game-library-single-player-tab").locator("svg")).toBeHidden();
+
+  await page.locator("html").evaluate((element) => {
+    element.setAttribute("style", `${element.getAttribute("style") ?? ""};font-size:200%`);
+  });
+
+  const zoomedLayout = await page.getByTestId("game-library-tabs").evaluate((element) => {
+    const labels = Array.from(
+      element.querySelectorAll<HTMLElement>("[data-testid$='-label']"),
+    );
+    const buttons = Array.from(element.querySelectorAll<HTMLButtonElement>("[role='tab']"));
+
+    return {
+      buttonCount: buttons.length,
+      labels: labels.map((label) => ({
+        clientWidth: label.clientWidth,
+        overflowWrap: getComputedStyle(label).overflowWrap,
+        scrollWidth: label.scrollWidth,
+        whiteSpace: getComputedStyle(label).whiteSpace,
+      })),
+      minimumButtonHeight: Math.min(
+        ...buttons.map((button) => button.getBoundingClientRect().height),
+      ),
+      tablistFits: element.scrollWidth <= element.clientWidth + 1,
+    };
+  });
+
+  expect(zoomedLayout.buttonCount).toBe(2);
+  expect(zoomedLayout.labels).toHaveLength(2);
+
+  for (const label of zoomedLayout.labels) {
+    expect(label.overflowWrap).toBe("anywhere");
+    expect(label.whiteSpace).toBe("normal");
+    expect(label.scrollWidth - label.clientWidth).toBeLessThanOrEqual(1);
+  }
+
+  expect(zoomedLayout.minimumButtonHeight).toBeGreaterThanOrEqual(44);
+  expect(zoomedLayout.tablistFits).toBe(true);
+});
+
+test("selected game library tabs meet contrast requirements in both themes", async ({
+  page,
+}) => {
+  await openLauncher(page);
+
+  await expectSelectedGameLibraryTabContrast(page, "single-player");
+  await page.getByTestId("game-library-multiplayer-tab").click();
+  await expectSelectedGameLibraryTabContrast(page, "multiplayer");
+
+  await page.getByTestId("launcher-theme-toggle").click();
+  await expect(page.getByTestId("launcher-theme-toggle")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expectSelectedGameLibraryTabContrast(page, "multiplayer");
+  await page.getByTestId("game-library-single-player-tab").click();
+  await expectSelectedGameLibraryTabContrast(page, "single-player");
 });
 
 test("cookie notice explains essential storage and stays dismissed", async ({

@@ -30,6 +30,12 @@ This file covers React component ownership and shared game UI conventions under
   stale response cannot navigate or replace a newer creation status.
   Multiplayer card availability and count come from the pure registry in
   `src/lib/multiplayer/game-registry.ts`, not a launcher-local game-id list.
+  The launcher tablist uses automatic activation with a roving tab stop, so
+  keyboard navigation must remain relative to the focused tab. Selected tab
+  colors use the paired `--chrome-selection*` tokens and switch without a color
+  transition so every rendered frame keeps readable foreground contrast. Keep
+  both tabpanel shells mounted so each `aria-controls` target exists, while
+  rendering cards only inside the active panel to avoid duplicate form ids.
 - `multiplayer-room-lobby.tsx` owns the generic private-room lobby/shell UI and
   browser session state: participant resolution, fresh snapshot selection,
   host derivation, diagnostics presentation, and pending form/action state.

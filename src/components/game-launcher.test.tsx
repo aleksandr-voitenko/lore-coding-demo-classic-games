@@ -117,13 +117,22 @@ describe("game launcher", () => {
     const multiplayerTabMarkup = getButtonMarkup(markup, "game-library-multiplayer-tab");
 
     expect(singlePlayerTabMarkup).toContain('aria-selected="true"');
+    expect(singlePlayerTabMarkup).toContain('tabindex="0"');
+    expect(singlePlayerTabMarkup).toContain("lucide-user");
+    expect(singlePlayerTabMarkup).not.toContain("lucide-gamepad-2");
     expect(singlePlayerTabMarkup).toContain(">Single player<");
     expect(singlePlayerTabMarkup).toContain(">9<");
+    expect(singlePlayerTabMarkup).toContain(">9 games<");
     expect(multiplayerTabMarkup).toContain('aria-selected="false"');
+    expect(multiplayerTabMarkup).toContain('tabindex="-1"');
+    expect(multiplayerTabMarkup).toContain("lucide-users");
     expect(multiplayerTabMarkup).toContain(">Multiplayer<");
     expect(multiplayerTabMarkup).toContain(">3<");
+    expect(multiplayerTabMarkup).toContain(">3 games<");
     expect(markup).toContain('data-testid="game-library-single-player-panel"');
-    expect(markup).not.toContain('data-testid="game-library-multiplayer-panel"');
+    expect(markup).toMatch(
+      /<div(?=[^>]*data-testid="game-library-multiplayer-panel")(?=[^>]*hidden="")[^>]*>/,
+    );
     expect(markup).not.toContain("single player games available");
     expect(markup).not.toContain("multiplayer games available");
   });

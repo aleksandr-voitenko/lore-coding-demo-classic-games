@@ -1,6 +1,6 @@
 "use client";
 
-import { Gamepad2Icon, PlayIcon, TrophyIcon, UsersIcon } from "lucide-react";
+import { Gamepad2Icon, PlayIcon, TrophyIcon, UserIcon, UsersIcon } from "lucide-react";
 import {
   type KeyboardEvent,
   type ReactNode,
@@ -212,9 +212,9 @@ export function GameLauncher({
   }, []);
 
   const handleGameLibraryTabKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLButtonElement>) => {
+    (event: KeyboardEvent<HTMLButtonElement>, focusedTab: GameLibraryTab) => {
       const currentIndex = GAME_LIBRARY_TAB_CONFIGS.findIndex(
-        (tab) => tab.id === activeGameLibraryTab,
+        (tab) => tab.id === focusedTab,
       );
       const lastIndex = GAME_LIBRARY_TAB_CONFIGS.length - 1;
       let nextIndex: number | null = null;
@@ -239,7 +239,7 @@ export function GameLauncher({
       switchGameLibraryTab(nextTab.id);
       document.getElementById(getGameLibraryTabId(nextTab.id))?.focus();
     },
-    [activeGameLibraryTab, switchGameLibraryTab],
+    [switchGameLibraryTab],
   );
 
   const returnToMenu = useCallback(() => {
@@ -444,13 +444,13 @@ export function GameLauncher({
         <div className="flex flex-col gap-3">
           <div
             aria-label="Game library mode"
-            className="grid w-full grid-cols-2 gap-1 rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] p-1 shadow-sm sm:inline-grid sm:w-auto"
+            className="grid w-full max-w-full grid-cols-2 gap-1 rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] p-1 shadow-sm sm:inline-grid sm:w-fit sm:self-start"
             data-testid="game-library-tabs"
             role="tablist"
           >
             {GAME_LIBRARY_TAB_CONFIGS.map((tab) => {
               const isSelected = tab.id === activeGameLibraryTab;
-              const TabIcon = tab.id === "multiplayer" ? UsersIcon : Gamepad2Icon;
+              const TabIcon = tab.id === "multiplayer" ? UsersIcon : UserIcon;
 
               return (
                 <button
@@ -461,17 +461,27 @@ export function GameLauncher({
                   id={getGameLibraryTabId(tab.id)}
                   key={tab.id}
                   onClick={() => switchGameLibraryTab(tab.id)}
-                  onKeyDown={handleGameLibraryTabKeyDown}
+                  onKeyDown={(event) => handleGameLibraryTabKeyDown(event, tab.id)}
                   role="tab"
+                  tabIndex={isSelected ? 0 : -1}
                   type="button"
                 >
-                  <TabIcon className="size-4" aria-hidden="true" />
-                  <span>{tab.label}</span>
+                  <TabIcon className="hidden size-4 shrink-0 sm:block" aria-hidden="true" />
                   <span
+                    className="min-w-[4ch] text-center leading-tight [overflow-wrap:anywhere]"
+                    data-testid={`game-library-${tab.id}-label`}
+                  >
+                    {tab.label}
+                  </span>
+                  <span
+                    aria-hidden="true"
                     className={getGameLibraryTabCountClassName(isSelected)}
                     data-testid={`game-library-${tab.id}-count`}
                   >
                     {tab.count}
+                  </span>
+                  <span className="sr-only">
+                    {tab.count} {tab.count === 1 ? "game" : "games"}
                   </span>
                 </button>
               );
@@ -494,37 +504,46 @@ export function GameLauncher({
           )}
         </div>
 
-        <div
-          aria-labelledby={getGameLibraryTabId(activeGameLibraryTab)}
-          className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))]"
-          data-testid={`game-library-${activeGameLibraryTab}-panel`}
-          id={getGameLibraryTabPanelId(activeGameLibraryTab)}
-          role="tabpanel"
-        >
-          {activeGameCards.map((game) => (
-            <GameCardArticle
-              action={activeGameLibraryTab === "multiplayer" ? "host-room" : "play"}
-              descriptionId={
-                activeGameLibraryTab === "multiplayer" && multiplayerStatusMessage !== null
-                  ? MULTIPLAYER_STATUS_ID
-                  : undefined
-              }
-              game={game}
-              isPending={privateRoomCreatingGameId === game.id}
-              key={game.id}
-              onSelectGame={() => {
-                if (activeGameLibraryTab === "multiplayer") {
-                  void createPrivateRoomForGame(game);
-                  return;
-                }
+        {GAME_LIBRARY_TAB_CONFIGS.map((tab) => {
+          const isActive = tab.id === activeGameLibraryTab;
 
-                selectGame(game.id);
-              }}
-              renderGameParameter={renderGameParameter}
-              versionedArtworkSrc={getVersionedGameArtworkSrc(game)}
-            />
-          ))}
-        </div>
+          return (
+            <div
+              aria-labelledby={getGameLibraryTabId(tab.id)}
+              className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))]"
+              data-testid={`game-library-${tab.id}-panel`}
+              hidden={!isActive}
+              id={getGameLibraryTabPanelId(tab.id)}
+              key={tab.id}
+              role="tabpanel"
+            >
+              {isActive &&
+                activeGameCards.map((game) => (
+                  <GameCardArticle
+                    action={tab.id === "multiplayer" ? "host-room" : "play"}
+                    descriptionId={
+                      tab.id === "multiplayer" && multiplayerStatusMessage !== null
+                        ? MULTIPLAYER_STATUS_ID
+                        : undefined
+                    }
+                    game={game}
+                    isPending={privateRoomCreatingGameId === game.id}
+                    key={game.id}
+                    onSelectGame={() => {
+                      if (tab.id === "multiplayer") {
+                        void createPrivateRoomForGame(game);
+                        return;
+                      }
+
+                      selectGame(game.id);
+                    }}
+                    renderGameParameter={renderGameParameter}
+                    versionedArtworkSrc={getVersionedGameArtworkSrc(game)}
+                  />
+                ))}
+            </div>
+          );
+        })}
       </section>
     </main>
   );
@@ -697,19 +716,20 @@ function getGameLibraryTabPanelId(tab: GameLibraryTab) {
 }
 
 function getGameLibraryTabButtonClassName(isSelected: boolean) {
+  // Selection colors switch together so intermediate animation frames retain contrast.
   return cn(
-    "inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--chrome-focus-ring)]",
+    "inline-flex min-h-11 min-w-0 flex-wrap items-center justify-center gap-1.5 rounded-md border px-2 py-2 text-sm font-semibold transition-transform active:translate-y-px focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--chrome-ink)] forced-colors:focus-visible:outline-[Highlight] sm:gap-2 sm:px-3",
     isSelected
-      ? "bg-[oklch(0.84_0.115_132)] text-[var(--chrome-ink)] shadow-sm"
-      : "text-[var(--chrome-muted)] hover:bg-[var(--chrome-accent-faint)] hover:text-[var(--chrome-ink)]",
+      ? "border-[var(--chrome-selection-border)] bg-[var(--chrome-selection)] text-[var(--chrome-selection-ink)] shadow-sm forced-colors:border-[Highlight] forced-colors:bg-[Highlight] forced-colors:text-[HighlightText]"
+      : "border-transparent text-[var(--chrome-muted)] hover:bg-[var(--chrome-accent-faint)] hover:text-[var(--chrome-ink)] active:bg-[var(--chrome-accent-soft)]",
   );
 }
 
 function getGameLibraryTabCountClassName(isSelected: boolean) {
   return cn(
-    "inline-flex min-w-6 items-center justify-center rounded-md px-1.5 py-0.5 text-xs",
+    "inline-flex min-w-6 shrink-0 items-center justify-center rounded-md px-1.5 py-0.5 text-xs tabular-nums",
     isSelected
-      ? "bg-[oklch(0.72_0.13_132_/_28%)] text-[var(--chrome-ink)]"
+      ? "bg-[var(--chrome-selection-soft)] text-[var(--chrome-selection-ink)] forced-colors:bg-transparent forced-colors:text-[HighlightText]"
       : "bg-[var(--chrome-accent-faint)] text-[var(--chrome-muted)]",
   );
 }
