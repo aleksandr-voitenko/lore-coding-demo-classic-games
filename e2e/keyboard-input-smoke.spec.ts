@@ -259,22 +259,28 @@ test("Tank Patrol keyboard input moves the player and fires a shell", async ({ p
 
   expect(shieldAlignment.offsetY / shieldAlignment.playerHeight).toBeCloseTo(0.097, 2);
   const initialLeft = await player.evaluate((element) => getComputedStyle(element).left);
-  const movementSamples: Array<{ left: number; width: number }> = [];
 
-  await page.keyboard.down("ArrowRight");
-  for (let sample = 0; sample < 6; sample += 1) {
-    await page.waitForTimeout(32);
-    movementSamples.push(
-      await player.evaluate((element) => {
-        const style = getComputedStyle(element);
-        return {
-          left: Number.parseFloat(style.left),
-          width: Number.parseFloat(style.width),
-        };
-      }),
-    );
-  }
-  await page.keyboard.up("ArrowRight");
+  await page.keyboard.down("ArrowLeft");
+  const movementSamples = await player.evaluate(async (element) => {
+    const samples: Array<{ left: number; width: number }> = [];
+
+    // Stage 1 has only one open cell to the player's right before the base
+    // wall, so sample left on the browser clock to retain an open runway and
+    // avoid slow CI round trips skipping the intermediate smooth positions.
+    for (let sample = 0; sample < 12; sample += 1) {
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => resolve()),
+      );
+      const style = getComputedStyle(element);
+      samples.push({
+        left: Number.parseFloat(style.left),
+        width: Number.parseFloat(style.width),
+      });
+    }
+
+    return samples;
+  });
+  await page.keyboard.up("ArrowLeft");
 
   await expect.poll(() => player.evaluate((element) => getComputedStyle(element).left)).not.toBe(
     initialLeft,
