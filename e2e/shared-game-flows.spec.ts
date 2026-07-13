@@ -74,6 +74,13 @@ const realtimeSharedFlowCases: RealtimeSharedFlowCase[] = [
     prefix: "asteroids",
     startButtonTestId: "asteroids-start-button",
   },
+  {
+    activeStatus: "Running",
+    gameId: "battle-city",
+    name: "Tank Patrol",
+    prefix: "battle-city",
+    startButtonTestId: "battle-city-start-button",
+  },
 ];
 
 const sharedHelpThemeCases: SharedHelpThemeCase[] = [
@@ -94,6 +101,7 @@ const sharedHelpThemeCases: SharedHelpThemeCase[] = [
   { gameId: "pong", name: "Pong", prefix: "pong" },
   { gameId: "simon", name: "Simon", prefix: "simon" },
   { gameId: "asteroids", name: "Asteroids", prefix: "asteroids" },
+  { gameId: "battle-city", name: "Tank Patrol", prefix: "battle-city" },
 ];
 
 const appThemeStorageKey = "game-library-theme";

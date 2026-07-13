@@ -6,13 +6,15 @@ This file covers public image assets under `public/images/`.
 
 - Launcher cards use local PNG key-art files named `<game>-game-card.png`.
 - Keep card artwork wide, centered, and text-free so the shared launcher card
-  frame can crop it cleanly behind each game title.
+  frame can crop it cleanly behind each game title. `tank-patrol-game-card.png`
+  is an explicitly approved title-bearing exception.
 - Launcher and global leaderboard cards keep these PNGs as source masters and
   render responsive variants through the Next image optimizer in
   `GameCardArtworkFrame` (WebP when supported). Keep the version query in the
   optimizer source URL, and update both `GAME_CARD_ARTWORK_VERSION` and the exact
-  `next.config.ts` local-pattern search when a source image changes so cached
-  blurred and foreground variants cannot outlive the replacement artwork.
+  `next.config.ts` local-pattern search when a source image changes in place so
+  cached blurred and foreground variants cannot outlive the replacement
+  artwork. A renamed source path supplies its own cache boundary.
 
 ## Board Artwork
 
@@ -40,6 +42,13 @@ This file covers public image assets under `public/images/`.
   the engine's power-up kind strings. `SpaceInvadersBoard` references these with
   versioned public URLs and moves sprites with board-relative `translate3d(...)`
   transforms.
+- Tank Patrol retains the internal `battle-city/` sprite namespace for
+  compatibility. Its `modern-v1` art keeps the classic
+  top-down silhouettes and 64x64 gameplay footprint while adding detailed
+  player upgrade tiers, canonical enemy roles, transparent foliage, animated
+  water variants, framed power-ups, generated effects, and intact/destroyed
+  phoenix-headquarters states. `tank-patrol-game-card.png` is its title-bearing
+  launcher artwork.
 - Alien player-shot collision in `src/lib/space-invaders-game-engine.ts` uses
   occupied-pixel hitbox ratios derived from the non-transparent bounds of these
   112x112 alien PNGs. When alien sprites change shape or padding, update those
@@ -49,7 +58,7 @@ This file covers public image assets under `public/images/`.
   obstacle, door/key, head, tail, straight-body, and corner-body assets.
   `SnakeBoard` references these with versioned public URLs and derives segment
   orientation with CSS rotation from neighboring snake coordinates.
-- Keep deeper Snake and Space Invaders asset details here because the immediate
-  child folders are asset-only folders, and their public URL/versioning
-  conventions are part of the `public/images` contract rather than independent
-  source modules.
+- Keep deeper Snake, Space Invaders, and Tank Patrol asset details here because
+  the immediate child folders are asset-only folders, and their public
+  URL/versioning conventions are part of the `public/images` contract rather
+  than independent source modules.

@@ -22,12 +22,14 @@ describe("game catalog", () => {
       { id: "pong", label: "Pong" },
       { id: "simon", label: "Simon" },
       { id: "asteroids", label: "Asteroids" },
+      { id: "battle-city", label: "Tank Patrol" },
     ]);
   });
 
   it("formats profile game ids from the shared catalog with a readable fallback", () => {
     expect(formatGameCatalogLabel("space-invaders")).toBe("Space Invaders");
     expect(formatGameCatalogLabel("asteroids")).toBe("Asteroids");
+    expect(formatGameCatalogLabel("battle-city")).toBe("Tank Patrol");
     expect(formatGameCatalogLabel("twenty-forty-eight")).toBe("2048");
     expect(formatGameCatalogLabel("custom-game")).toBe("Custom Game");
   });
@@ -50,14 +52,33 @@ describe("game catalog", () => {
     expect(getVersionedGameCatalogArtworkSrc(artwork)).toBe(
       "/images/snake-game-card.png?v=ai-key-art-v2",
     );
+    expect(getGameCatalogArtwork("battle-city")).toEqual({
+      height: 941,
+      src: "/images/tank-patrol-game-card.png",
+      width: 1672,
+    });
     expect(getGameCatalogArtwork("custom-game")).toBeNull();
   });
 
   it("sorts persisted profile game ids in launcher menu order", () => {
     expect(
-      ["custom-game", "asteroids", "snake", "pong", "breakout", "unknown-game"].sort(
-        compareGameCatalogOrder,
-      ),
-    ).toEqual(["snake", "breakout", "pong", "asteroids", "custom-game", "unknown-game"]);
+      [
+        "custom-game",
+        "battle-city",
+        "asteroids",
+        "snake",
+        "pong",
+        "breakout",
+        "unknown-game",
+      ].sort(compareGameCatalogOrder),
+    ).toEqual([
+      "snake",
+      "breakout",
+      "pong",
+      "asteroids",
+      "battle-city",
+      "custom-game",
+      "unknown-game",
+    ]);
   });
 });

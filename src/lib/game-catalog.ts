@@ -35,6 +35,10 @@ export const GAME_CATALOG = [
     id: "asteroids",
     label: "Asteroids",
   },
+  {
+    id: "battle-city",
+    label: "Tank Patrol",
+  },
 ] as const;
 
 export type GameCatalogEntry = (typeof GAME_CATALOG)[number];
@@ -99,6 +103,11 @@ const GAME_CATALOG_ARTWORK_BY_ID = {
   asteroids: {
     height: 941,
     src: "/images/asteroids-game-card.png",
+    width: 1672,
+  },
+  "battle-city": {
+    height: 941,
+    src: "/images/tank-patrol-game-card.png",
     width: 1672,
   },
 } satisfies Readonly<Record<GameId, GameCatalogArtwork>>;

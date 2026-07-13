@@ -9,6 +9,20 @@ This file covers React component ownership and shared game UI conventions under
   pause/resume/restart flows, leaderboard hook usage, and menu return behavior.
 - `*-board.tsx` files render board cells, game pieces, code-native board art, and
   board accessibility labels for the active state.
+- Tank Patrol retains the internal `battle-city` namespace and follows the same
+  split with `battle-city-game.tsx` owning the
+  single-player campaign flow and `battle-city-board.tsx` layering fragment-
+  rendered terrain, tanks, projectiles, explosions, and foreground forest
+  cover. Its held-direction state is sampled by one fixed-step NTSC loop; do
+  not add a second movement interval because frame ordering is part of
+  collision behavior. Latch each fire press for that same loop so the engine
+  can apply movement before creating the shell on its first eligible frame.
+  Player protection uses one code-native four-arc shield layer instead of
+  pulsing the tank texture. Center it on the player sprites' measured visual
+  centroid, 9.7% below their PNG canvas center; only the final 64-frame clock
+  count blinks, and reduced-motion mode keeps the arcs static.
+  The ready overlay owns the original wrapping Stage 1-35
+  selector; after confirmation, the engine owns the fixed map-reveal interval.
 - `game-launcher-config.ts` owns the launcher-only game-card catalog,
   descriptions, accent styling, parameter registry, and pure
   default-value/initial-prop helpers. `game-launcher-playables.ts` owns the lazy

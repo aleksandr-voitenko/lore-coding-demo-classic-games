@@ -1,0 +1,2592 @@
+[
+  {
+    "stage": 1,
+    "difficulty": "★",
+    "terrain": [
+      "..........................",
+      "..........................",
+      "..BB..BB..BB..BB..BB..BB..",
+      "..BB..BB..BB..BB..BB..BB..",
+      "..BB..BB..BB..BB..BB..BB..",
+      "..BB..BB..BB..BB..BB..BB..",
+      "..BB..BB..BBSSBB..BB..BB..",
+      "..BB..BB..BBSSBB..BB..BB..",
+      "..BB..BB..BB..BB..BB..BB..",
+      "..BB..BB..........BB..BB..",
+      "..BB..BB..........BB..BB..",
+      "..........BB..BB..........",
+      "..........BB..BB..........",
+      "BB..BBBB..........BBBB..BB",
+      "SS..BBBB..........BBBB..SS",
+      "..........BB..BB..........",
+      "..........BBBBBB..........",
+      "..BB..BB..BBBBBB..BB..BB..",
+      "..BB..BB..BB..BB..BB..BB..",
+      "..BB..BB..BB..BB..BB..BB..",
+      "..BB..BB..BB..BB..BB..BB..",
+      "..BB..BB..........BB..BB..",
+      "..BB..BB..........BB..BB..",
+      "..BB..BB...BBBB...BB..BB..",
+      "...........BHHB...........",
+      "...........BHHB..........."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "fast",
+      "fast"
+    ]
+  },
+  {
+    "stage": 2,
+    "difficulty": "★",
+    "terrain": [
+      "......SS......SS..........",
+      "......SS......SS..........",
+      "..BB..SS......BB..BB..BB..",
+      "......SS......BB..BB..BB..",
+      "..BB........BBBB..BBSSBB..",
+      "..BB........BBBB..BBSSBB..",
+      "......BB..........SS......",
+      "......BB..........SS......",
+      "TT....BB....SS....BBTTBBSS",
+      "TT....BB....SS....BBTTBBSS",
+      "TTTT......BB....SS..TT....",
+      "TTTT......BB....SS..TT....",
+      "..BBBBBBTTTTTTSS....TTBB..",
+      "..BBBBBBTTTTTTSS....TTBB..",
+      "......SSTTBB..BB..BB..BB..",
+      "......SSTTBB..BB..BB..BB..",
+      "SSBB..SS..BB..BB......BB..",
+      "SSBB..SS..BB..BB......BB..",
+      "..BB..BB..BBBBBB..BBSSBB..",
+      "..BB..BB..BBBBBB..BBSSBB..",
+      "..BB..BB..BBBBBB..........",
+      "..BB..BB..BBBBBB..........",
+      "..BB..............BB..BB..",
+      "..BB.......BBBB...BB..BB..",
+      "..BB..BB...BHHB...BBBBBB..",
+      "..BB..BB...BHHB...BBBBBB.."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "armor",
+      "armor",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic"
+    ]
+  },
+  {
+    "stage": 3,
+    "difficulty": "★",
+    "terrain": [
+      "........BB......BB........",
+      "........BB......BB........",
+      "..TTTTTTBB................",
+      "..TTTTTTBB..........SSSSSS",
+      "BBTTTTTT..................",
+      "BBTTTTTT..................",
+      "TTTTTTTT......BB..BBBBBBB.",
+      "TTTTTTTT......BB..BBBBBBB.",
+      "TTTTTTTTBBBBBBBB..BB...B..",
+      "TTTTTTTTBBBBBB....BB...B..",
+      "TTTTTTTT....BB.........B..",
+      "TTTTTTTT....BB.........B..",
+      "..TT........SSSSSS....TT..",
+      "..TT........SSSSSS....TT..",
+      "......BB..........TTTTTTTT",
+      "..BB..BB..........TTTTTTTT",
+      "BBB..BBBB...BBBBBBTTTTTTTT",
+      "BBB..BBBB.BB......TTTTTTTT",
+      "..........BB......TTTTTTTT",
+      "..........BB..BBBBTTTTTTTT",
+      "BB....S.......BBBBTTTTTT..",
+      "BB....S...........TTTTTT..",
+      "BBBB..S...........TTTTTT..",
+      "BBBB..S....BBBB...TTTTTT..",
+      "SSBBBB.....BHHB...BB......",
+      "SSBBBB.....BHHB...BB......"
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "armor",
+      "armor"
+    ]
+  },
+  {
+    "stage": 4,
+    "difficulty": "★★",
+    "terrain": [
+      "..TTTT................TT..",
+      "..TTTT................TT..",
+      "TTTT......BBBB..........TT",
+      "TTTT....BBBBBBBBBB......TT",
+      "TT.....BBBBBBBBBBBBB....SS",
+      "TT.....BBBBBBBBBBBBBBB....",
+      "SS....BBBBBBBBBBBBBBBBB...",
+      "......BBBBBBBBBBBBBBBBB...",
+      ".....BBB......BBBBBB..B...",
+      ".....B..........BBBB..B...",
+      "WW...B..S...S...BBB.......",
+      "WW...B..S...S...BBB.......",
+      "....BB..........BBB...WWWW",
+      "....BB..BBBB....BBB...WWWW",
+      "....BBBBBBBBBBBBBBBB......",
+      "....BBBBBBBBBBBBBBBB......",
+      "...BBBBBBBBBBBBBBBBBB.....",
+      "...BBBBBBBBBBBBBBBBBB.....",
+      "..BBBBBBBBBBBBBBBBBBBB....",
+      "......BBBBBBBBBBBB........",
+      "..BBBB..BBBBBBBB..BBBB..TT",
+      "..BBBBBB..BBBB..BBBBBB..TT",
+      "TT..BBBB........BBBB..TTTT",
+      "TT.........BBBB.......TTTT",
+      "SSTT.......BHHB.....TTTTSS",
+      "SSTT.......BHHB.....TTTTSS"
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "basic",
+      "basic",
+      "armor",
+      "armor",
+      "armor"
+    ]
+  },
+  {
+    "stage": 5,
+    "difficulty": "★",
+    "terrain": [
+      "........BBBB..............",
+      "........BBBB..............",
+      "........BB......SSSSSS....",
+      "SS..BB..BB..........SS....",
+      "SS..BB......BB............",
+      "SS..BB......BB............",
+      "BB..BBBBBB..BBBB..WWWW..WW",
+      "BB..BBBBBB..BBBB..WWWW..WW",
+      "BB......BB........WW......",
+      "..................WW......",
+      "........WWWW..WWWWWW..BBBB",
+      "....BB..WWWW..WWWWWW..BBBB",
+      "BBBB....WWBB..BBBB........",
+      "BBBB....WWBB..BBBB........",
+      "........WW...........SS...",
+      "........WW...........SS...",
+      "WWWWWW..WW..SS..BB...S....",
+      "WWWWWW..WW..SS..BB...S....",
+      ".....................SBBBB",
+      "......BBBB...........SBBBB",
+      "........BBBBBBBBBB........",
+      "........BB......BBBB......",
+      "BBBBBB............BBBB....",
+      "BBBB.......BBBB.....BB....",
+      "BB.........BHHB...........",
+      "...........BHHB..........."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "armor",
+      "armor",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast"
+    ]
+  },
+  {
+    "stage": 6,
+    "difficulty": "★",
+    "terrain": [
+      "...........B..B.TTTT......",
+      "...........B..B.TTTT......",
+      "..B..S..B........BTTB..BTT",
+      "..B..S..B........BTTB..BTT",
+      "..B..S..B...BB...BTTB..BTT",
+      "..B..S..B...BB...BTTB..BTT",
+      "..BB....BB..SS..BBTT..BBTT",
+      "..BB....BB..SS..BBTT..BBTT",
+      ".......BSS..BB..BBS...TTTT",
+      ".......B....BB....S...TTTT",
+      "BBBBB.....TTBBTT.....BBBBB",
+      "BBBBB.....TTBBTT.....BBBBB",
+      ".........BTTTTTTB.........",
+      ".........BTTTTTTB.........",
+      "SSBBBB..BBTTTTTTBB.BBBBBSS",
+      "SSBBBB....TTTTTT...BBBBBSS",
+      "SSSSSS......TT......SSSSSS",
+      "........BB..TT..BB........",
+      "..BB....BB......BB........",
+      "..BB....BB......BB........",
+      "..BBB.....BB..BB.....BBBTT",
+      "..BBB................BBBTT",
+      "....BB..............TTTTTT",
+      "...........BBBB.....TTTTTT",
+      "...........BHHB.......TTTT",
+      "....BB.....BHHB.....BBTTTT"
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "fast",
+      "fast",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "armor",
+      "armor"
+    ]
+  },
+  {
+    "stage": 7,
+    "difficulty": "★★",
+    "terrain": [
+      "..............SSSS........",
+      "..........................",
+      "....SSSSSSSS........SS....",
+      "....SS..............SS....",
+      "....SS......TT..SSSSSS....",
+      "....SS......TT....SSSS....",
+      "..SS......TTSS......SS....",
+      "..SS......TTSS......SS....",
+      "........TTSSSS......SSSS..",
+      "........TTSSSS........SS..",
+      "..SS..TTSSSSSS..SS........",
+      "..SS..TTSSSSSS..SS........",
+      "...S..SSSS......SSSS......",
+      "...S..SSSS......SSSS......",
+      "S.......SS..SSSSSS.....S..",
+      "S.......SS..SSSSSS.....S..",
+      "...SSS......SSSSTT....SS..",
+      "...SSS......SSSSTT....SS..",
+      "..SS........SSTT....SSSS..",
+      "..SS........SSTT....SSSS..",
+      "..SSSSSS....TT....SS......",
+      "......SS....TT....SS......",
+      "..................SS....SS",
+      "...........BBBB.......SSSS",
+      "...........BHHB...........",
+      "SSSS.......BHHB..........."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "basic",
+      "basic",
+      "basic",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic"
+    ]
+  },
+  {
+    "stage": 8,
+    "difficulty": "★★★",
+    "terrain": [
+      "....BB....BB......BB......",
+      "....BB....BB..BB..BB......",
+      "TTBBBBBB..BB......BBB.....",
+      "TTBBBBBB..BB..SS..BBB.....",
+      "TTTTTT....BB..BB..BB...BB.",
+      "TTTTTT........BB.......BB.",
+      "TTWWWWWWWWWWWWWWWWWWWW..WW",
+      "TTWWWWWWWWWWWWWWWWWWWW..WW",
+      "..BB......................",
+      "..BB........BBBB..........",
+      "....BB.....BBBBBBBBBBBSSSS",
+      "....BB.....BBBBB..BB......",
+      "BBBB..BB...BBBBBTTBB....BB",
+      "BBBB..BB...BBBBBTTBBSSSSBB",
+      "......SS......TTTTTTTT....",
+      "......SS..SS..TTTTTTTT....",
+      "WWWW..WWWWWWWWWW..WWWWWWWW",
+      "WWWW..WWWWWWWWWW..WWWWWWWW",
+      "TTTT...B..................",
+      "TTTT...B....BBBB..........",
+      "TTTTBB..B......B......BB..",
+      "TTTTBB..B......B..SSBBBB..",
+      "TT..BB..B.........BB..BB..",
+      "TTSSBB..B..BBBB.......BB..",
+      "...........BHHB.......BB..",
+      "...........BHHB...BB......"
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "armor",
+      "armor",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic"
+    ]
+  },
+  {
+    "stage": 9,
+    "difficulty": "★",
+    "terrain": [
+      "......BB............TT....",
+      "......BB..........SSTT....",
+      "BB............TT.SSSS...BB",
+      "BB..........SSTT.SSSS...BB",
+      "........TT.SSSS...SSTT....",
+      "......SSTT.SSSS.....TT....",
+      ".....SSSS...SSTT..........",
+      ".....SSSS.....TT..........",
+      "......SSTT................",
+      "........TT................",
+      "......TT..TT..TT..TT......",
+      "......TTSSTT..TTSSTT......",
+      "SSBB...SSSS....SSSS...BBSS",
+      "SSBB...SSSS....SSSS...BBSS",
+      "......TTSSTT..TTSSTT......",
+      "......TT..TT..TT..TT......",
+      "..........................",
+      "........SS......SS........",
+      "BB.....SSSS....SSSS.....BB",
+      "BB.....SSSS....SSSS.....BB",
+      "BB....TTSSTT..TTSSTT....BB",
+      "BB....TT..TT..TT..TT....BB",
+      "..........................",
+      "....BB.....BBBB.....BB....",
+      "....BBBB...BHHB...BBBB....",
+      "....BBBB...BHHB...BBBB...."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "armor",
+      "armor",
+      "armor"
+    ]
+  },
+  {
+    "stage": 10,
+    "difficulty": "★",
+    "terrain": [
+      "..........................",
+      "..........................",
+      "...BBBBB............BBBBB.",
+      "...B..BB............BB..B.",
+      ".BBB....BB..TTTT..BB.....B",
+      ".B......BB..TTTT..BB.....B",
+      "BB......BBTTTTTTTTBB.....B",
+      "BB......BBTTTTTTTTBB.....B",
+      "BB......BBTTSSSSTTBB....BB",
+      "BB......BBTTSSSSTTBB....BB",
+      ".B....BBWWWWWWWWWWWWBBBBBB",
+      ".BBBBBBBWWWWWWWWWWWWBBBBBB",
+      "..BBBBBBSSSSBBSSSSBBBBBBB.",
+      "..BBBBBBSSSSBBSSSSBBBBBBB.",
+      "....BBBBSS..BB..SSBBBBB...",
+      "....BBBBSS..BB..SSBBBBB...",
+      "....BBBBBBBBBBBBBBBBBBB...",
+      "....BBBBBBBBBBBBBBBBBBB...",
+      "BBTTBBBBBBSSSSBBBBBBBBTTBB",
+      "BBTT......SSSS........TTBB",
+      "BBTTTTTTTTTTTTTTTTTTTTTTBB",
+      "BBTTTTTTTTTTTTTTTTTTTTTTBB",
+      "....TTTTTT......TTTTTTTT..",
+      "....TTTTTT.BBBB.TTTTTTTT..",
+      "......B....BHHB.....B.....",
+      "......B....BHHB.....B....."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "fast",
+      "fast",
+      "power",
+      "power",
+      "power",
+      "power",
+      "armor",
+      "armor"
+    ]
+  },
+  {
+    "stage": 11,
+    "difficulty": "★★",
+    "terrain": [
+      "..........SS..BB..BBBB....",
+      "..........SS..BB..BBBB....",
+      "...BBBBBBBBB..BB..........",
+      "...BBBBBBBBB..BB..........",
+      "......B...BB..BBBB..TTTTTT",
+      "......B...BB..BBBB..TTTTTT",
+      "...B..........SS..TTTTTTTT",
+      "...B..........SS..TTTTTTTT",
+      "...B..BBBBBBSSBBBBTTTTBBSS",
+      "...B..BBBBBBSSBBBBTTTT..SS",
+      "..BBBBBBSS....BB..TTTT...B",
+      "........SS....BB..TTTT...B",
+      ".BBBBBBB..SSTTTTTTTTTT....",
+      ".BBBBBBB..SSTTTTTTTTTT....",
+      "......SS....TTTTTTTTTTBB..",
+      "......SS....TTTTTTTTTTBB..",
+      "SSBB..TTTTTTTTSSTTTTTTBB..",
+      "SSBB..TTTTTTTTSSTTTTTTBB..",
+      ".BBBTTTTTTTTTT........BBB.",
+      ".BBBTTTTTTTTTT........BBB.",
+      "..BBTTTT........SSBBBBBB..",
+      "..BBTTTT..........BBBBBB..",
+      "....TTTT..........BB...B..",
+      "....TTTT...BBBB...BB...B..",
+      "....TTTT...BHHB...........",
+      "..BBTTTT...BHHB..........."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "power",
+      "power",
+      "power",
+      "power",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast"
+    ]
+  },
+  {
+    "stage": 12,
+    "difficulty": "★",
+    "terrain": [
+      "..............BBBBBB......",
+      "..............BBBBBB......",
+      "..BBBBBB..........BB......",
+      "..BBBBBBBB..BB....BB......",
+      "........BB..BB........BBBB",
+      "........BB............BBBB",
+      "..WWWWWWWWWW..BBB.....BBSS",
+      "..WWWWWWWWWW..BBB.....BB..",
+      "..........WW..BB..SSS.BB..",
+      "....SSSSSSWW..BB..SSS.BB..",
+      "BB..BBBBBBWWWWWW..WWBBBB..",
+      "BB..BBBBBBWWWWWW..WWBBBB..",
+      "........SSWW......WWSS....",
+      "........SSWW......WW......",
+      "WWWWWW..WWWWBBBB..WW......",
+      "WWWWWW..WWWWBBBB..WW......",
+      "..........BBSSSS..WWWWWW..",
+      "..........BB......WWWWWW..",
+      "BBBBBB....................",
+      "BBBBBB....................",
+      "....BB..SSSS......BBBB...B",
+      "....BB............BBBB...B",
+      "BB................BB....BB",
+      "BB.........BBBB...BB....BB",
+      "...........BHHB...........",
+      "...........BHHB..........."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor"
+    ]
+  },
+  {
+    "stage": 13,
+    "difficulty": "★★★",
+    "terrain": [
+      "..........................",
+      "........BB......BB........",
+      "..BBBBBBBB......BBBBBBBB..",
+      "..BBBBBBBB......BBBBBBBB..",
+      "..BB........BB........SS..",
+      "..BB........BB........SS..",
+      "..SS..BBBB......BBBB..BBBB",
+      "..SS..BB..........BB..BBBB",
+      "..BB..B.TT..SS..TT.B..SSBB",
+      "..BB..B.TTSSSSSSTT.B..SSBB",
+      "..BB....TTTTTTTTTT....SSBB",
+      "........TTTTTTTTTT......BB",
+      "BB......TTTTTTTTTT......BB",
+      "BBSS....TTTTTTTTTT....BBBB",
+      "BBSS..B.TTSSSSSSTT.B..BB..",
+      "BBSS..B.TT..SS..TT.B..BB..",
+      "BBBB..BB..........BB..SS..",
+      "BBBB..BBBB......BBBB..SS..",
+      "BBSS........BB........BB..",
+      "BBSS........BB........BB..",
+      "BBBBBBBBBB......BBBBBBSSSS",
+      "BBBBBBBBBB......BBBBBBSSSS",
+      "BBBB....BB......BB....BB..",
+      "BBBB.......BBBB.......BB..",
+      "BBBB.......BHHB...........",
+      "BBBB.......BHHB..........."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "armor",
+      "armor",
+      "armor",
+      "armor"
+    ]
+  },
+  {
+    "stage": 14,
+    "difficulty": "★★★",
+    "terrain": [
+      "..........................",
+      "..........................",
+      "TTTT......BBBBBB......TTTT",
+      "TTTT....BBBBBBBBBB....TTTT",
+      "TT.....BBBBBBBBBBBB.....TT",
+      "TT.....BBBBBBBBBBBB.....TT",
+      "......BBBBTTBBTTBBBB......",
+      "......BBBBTTBBTTBBBB......",
+      "......BBTTTTBBTTTTBB......",
+      "......BBTTTTBBTTTTBB......",
+      "TT....BBBBBBBBBBBBBB....TT",
+      "TT....BBBBBBBBBBBBBB....TT",
+      "TTTT....BBTTBBTTBB....TTTT",
+      "TTTT....BBTTBBTTBB....TTTT",
+      "WWWWWW..BBBBBBBBBB..WWWWWW",
+      "WWWWWW..BBBBBBBBBB..WWWWWW",
+      ".........B.B.B.B.B........",
+      ".........B.B.B.B.B........",
+      "........B.B.B.B.B.........",
+      "........B.B.B.B.B.........",
+      ".S.S.S..............S.S.S.",
+      ".S.S.S..............S.S.S.",
+      "B.B.B................B.B.B",
+      "B.B.B......BBBB......B.B.B",
+      "S.S.S..S...BHHB...S..S.S.S",
+      "S.S.S..S...BHHB...S..S.S.S"
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor"
+    ]
+  },
+  {
+    "stage": 15,
+    "difficulty": "★★",
+    "terrain": [
+      "........BBBB....BB........",
+      "........BBBB....BB........",
+      "..TTTTBBBB......BB........",
+      "..TTTTBBBB......BB........",
+      "TTTTTTTTTTTTTTTTBBBB......",
+      "TTTTTTTTTTTTTTTTBBBB......",
+      "TTSSBBTTBBBBBBTTTTTTTTBBSS",
+      "TT..BBTTBBBBBBTTTTTTTTBBSS",
+      "TTTTBBTTTTTTSSTTTTBBS.BB..",
+      "TTTTBBTTTTTT..TTTTBBS.BB..",
+      "..TTTTBB..TTTTTTTTBB..BB..",
+      "..TTTTBBSSTTTTTTTTBB..BB..",
+      "..BBBBBBBBBBTTTTBBBBB.TTTT",
+      "..BBBBBBBBBBTTTTBBBBB.TTTT",
+      ".SSSBBBB......BBBB......TT",
+      ".S..BBBB......BB........TT",
+      "..BB..BB......BBTTTTBBB.TT",
+      "..BB..BB..SSBB..TTTTBBB.TT",
+      "..BB.....BBBBBTTTTBB....TT",
+      "..BB.....BBB..TTTTBB....TT",
+      "..BBBBB..BBBTTTT..TTBBTTTT",
+      "..BBBBB..B..TTTTBBTTBBTTTT",
+      "....BB..TT......BBTTBBTT..",
+      "....BB..TT.BBBB.BBTT..TT..",
+      "....BB.....BHHB...TTTTTT..",
+      "...........BHHB...TTTTTT.."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "basic",
+      "basic",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor"
+    ]
+  },
+  {
+    "stage": 16,
+    "difficulty": "★",
+    "terrain": [
+      "..........................",
+      "..........................",
+      "....SSTTSS................",
+      "....SSTTSS................",
+      "......TT..TT..............",
+      "......TT..TTSS............",
+      "..TT........TT............",
+      "..TT........TTBB..........",
+      "..TTTT....TT..TT..........",
+      "..TTTT....TT..TTSS........",
+      "..TT..TT..TT....TT........",
+      "..TT..TT..TT....TTBB......",
+      "..TT....TT......TTTT......",
+      "..TT....TT......TTTTSS....",
+      "....TT........TTTTTTTT....",
+      "....TT........TTTTTTTTBB..",
+      "......TT....TT..TTTTTTTT..",
+      "......TT....TT..TTTTTTTT..",
+      "BB..........TT....TTTTTTSS",
+      "BB..........TT....TTTTTTSS",
+      "BBBB..........TT..TTTTTTTT",
+      "BBBB..........TT..TTTTTTTT",
+      "SSBBBB..........TT..TTTTTT",
+      "SSBBBB.....BBBB.TT..TTTTTT",
+      "SSSSBBBB...BHHB.TT....TTTT",
+      "SSSSBBBB...BHHB.TT....TTTT"
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "fast",
+      "fast",
+      "armor",
+      "armor"
+    ]
+  },
+  {
+    "stage": 17,
+    "difficulty": "★★",
+    "terrain": [
+      "..........................",
+      "........BB..........BB....",
+      "..BB..BBBB....IIIIIIBBBB..",
+      "..BB..BBBB....IIIIIIBBBB..",
+      "..BB....BB..SSIIIIIIIIII..",
+      "..BB....BB..SSIIIIIIIIII..",
+      "IIIIIIS.BB....BBIIIIIIII..",
+      "IIIIIIS.BB....BBIIIIIIII..",
+      "IIIIIIIIIIIIBBBB.BB.......",
+      "IIIIIIIIIIIIBBBB.BB.......",
+      ".....SIIIIIIIIBB.BB...SSSS",
+      ".....SIIIIIIIIBB.BB.......",
+      "BBBBBBBBIIIIIIIIIIIIIIBBBB",
+      "BBBBBBBBIIIIIIIIIIIIIIBBBB",
+      "......BBBBIIIIIIIIS.......",
+      "......BBBBIIIIIIIIS.......",
+      "..BBBBBB..IIIIIIBBBB..BB..",
+      "..BBBBBB..IIIIIIBBBB..BB..",
+      "IIIIIIBBII........BB..BB..",
+      "IIIIIIBBII........BB..BB..",
+      "IIIIIIIIIISS..SS......BB..",
+      "IIIIIIIIII..........BBBB..",
+      "BBIIIIIIII........BB......",
+      "BBIIIIIIII.BBBB...BB......",
+      "BBBBS......BHHB...BB..BB..",
+      "BBBBS......BHHB...BB..BB.."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "armor",
+      "armor",
+      "fast",
+      "fast",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic"
+    ]
+  },
+  {
+    "stage": 18,
+    "difficulty": "★★",
+    "terrain": [
+      "................SSSSSSTT..",
+      "................SSSSSSTT..",
+      "..BB............SS....SS..",
+      "..BB............SS....SS..",
+      "BBTTBB......BBBBBBBB..SS..",
+      "BBTTBB......BBBBBBBB..SS..",
+      "..BBTTBB....BB..TTBBSSSS..",
+      "..BBTTBB....BB..TTBBSSSS..",
+      "....BB..TTSSBBTT..BB......",
+      "....BB..TTSSBBTT..BB......",
+      "........SS..BBSSBBBB......",
+      "........SS..BBSSBBBB......",
+      "....BBBBSSBB..SS..........",
+      "....BBBBSSBB..SS..........",
+      "....BB..TTBBSSTT..........",
+      "....BB..TTBBSSTT..........",
+      "SSSSSSTT..BB....BBBB......",
+      "SSSSSSTT..BB....BBBB......",
+      "SS..BBBBBBBB....BBSSSS....",
+      "SS..BBBBBBBB....BBSSSS....",
+      "SS....SS..........SSBBBB..",
+      "SS....SS..........SSBBBB..",
+      "TTSSSSSS............BBSSSS",
+      "TTSSSSSS...BBBB.....BBSSSS",
+      "...........BHHB.......SSSS",
+      "...........BHHB.......SSSS"
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "basic",
+      "basic",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast"
+    ]
+  },
+  {
+    "stage": 19,
+    "difficulty": "★★★",
+    "terrain": [
+      "..BB..BB..BB..BB..BB..BB..",
+      "..BB..BB..BB..BB..BB..BB..",
+      "..BB..BB..BB..BB..BB..BB..",
+      "..BB..BB..BB..BB..BB..BB..",
+      "..SS..SS..SS..SS..SS..SS..",
+      "..........................",
+      "........BB......BB........",
+      "BB..BB..BB......BB..BB..BB",
+      "BB..BBBBBB..BB..BBBBBB..BB",
+      "BB..BB..BB..BB..BB..BB..BB",
+      "SS..SS..SS..SS..SS..SS..SS",
+      "........SS......SS........",
+      "TTTT....BB..TT..BB....TTTT",
+      "TTTT....BB..TT..BB....TTTT",
+      "TTTTTTTTBBBBTTBBBBTTTTTTTT",
+      "TTTTTTTTBB..TT..BBTTTTTTTT",
+      "TTTTTTTTTTTTTTTTTTTTTTTTTT",
+      "TTTTTTTTTTTTTTTTTTTTTTTTTT",
+      "........BBTTTTTTBB........",
+      "BB..BB..BBTTTTTTBB..BB..BB",
+      "..BB..BB....TT....BB..BB..",
+      "..BB..BB....TT....BB..BB..",
+      "..BB..BB..........BB..BB..",
+      "..BB..BB...BBBB...BB..BB..",
+      "..BB..BB...BHHB...BB..BB..",
+      "...........BHHB..........."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "power",
+      "power",
+      "power",
+      "power"
+    ]
+  },
+  {
+    "stage": 20,
+    "difficulty": "★★★★",
+    "terrain": [
+      "......WW..BB....BB..BB....",
+      "......WW..BB....BB..BB....",
+      "................BB..SS....",
+      "................BB..SS....",
+      "......WW....SS..BB..BB....",
+      "......WW..BBSS..BB..BB....",
+      "SS..BBWW..SS....BB..BB....",
+      "....BBWW..SS..BB....BB....",
+      "....BBWW......BB..........",
+      "....BBWW......BB..........",
+      "BB..BBWWWW..WWWWWWWW....BB",
+      "BB..BBWWWW..WWWWWWWW....BB",
+      "..............TT..WW..SSSS",
+      "......BB......TT..WW......",
+      "BBBB.BBB..SSTTTTTTWW......",
+      "BBBB.BBB..SSTTTTTTWW..BBBB",
+      "BB...B....BBTTTTTTWW..BB..",
+      ".....B....BBTTTTTTWW..BB..",
+      "..........BB..TT..WW..TT..",
+      "..SS......BB..TT..WW..TT..",
+      "..BB......BBBBBB....TTTTTT",
+      "..BB..SS............TTTTTT",
+      "..BB..BB..........WWTTTTTT",
+      "..BB..BB...BBBB...WWTTTTTT",
+      "...........BHHB...WW..TT..",
+      "...........BHHB...WW..TT.."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "basic",
+      "basic",
+      "power",
+      "power",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor"
+    ]
+  },
+  {
+    "stage": 21,
+    "difficulty": "★★★",
+    "terrain": [
+      "..........................",
+      "......BBBBBB....BB........",
+      "....BBBBBBBBBBBBBBBB......",
+      "..BBBBBBBBBBBBBBBBBB......",
+      "..TTTTTTTTTTTTTTTTBBBB....",
+      "..TTTTTTTTTTTTTTTTBBBB....",
+      "TTTT............TTTTBBBB..",
+      "TTTT............TTTTBBBB..",
+      "TT..SS....SS......TTTTTT..",
+      "TT..SS....SS......TTTTTT..",
+      "TT..SS....SS......TTTTTT..",
+      "TT..SS....SS......TTTTTT..",
+      "TT....TT........TTTTBBBBB.",
+      "TT....TT........TTTTBBBBB.",
+      "TTTTTTTTTTTTTTTTTTBBBBBBB.",
+      "TTTTTTTTTTTTTTTTTTBBBBBBB.",
+      "BBTTTTBBBBTTTTTTBBBBBBBB..",
+      "BBTTTTBBBBTTTTTTBBBBBBBB..",
+      "..BBBBBBBBBBBBBBBBBBBB..SS",
+      "..BBBBBBBBBBBBBBBBBBBB..SS",
+      "SS..BBSSBBBBBBBBBBBBB...SS",
+      "SS..BBSSBBBBBBBBBBBBB...SS",
+      "..SSBBBBSS......BBBBSSSSSS",
+      "..SSBB..SS.BBBB.BBBBSSSSSS",
+      "...........BHHB...........",
+      "...........BHHB..........."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "fast",
+      "fast",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "armor",
+      "armor",
+      "armor",
+      "armor"
+    ]
+  },
+  {
+    "stage": 22,
+    "difficulty": "★★★",
+    "terrain": [
+      "..........TT..............",
+      "..........TT..............",
+      "........TTSSTT............",
+      "........TTSSTT............",
+      "....TT....TT....TTTT......",
+      "....TT....TT....TTTT......",
+      "..TTBBTT......TTBBBBTT....",
+      "..TTBBTT......TTBBBBTT....",
+      "....TTBBTT......TTTT....TT",
+      "....TTBBTT......TTTT....TT",
+      "TT....TT....TT........TTSS",
+      "TT....TT....TT........TTSS",
+      "BBTT......TTSSTT....TT..TT",
+      "BBTT......TTSSTT....TT..TT",
+      "SSBBTT......TT....TTSSTT..",
+      "SSBBTT......TT....TTSSTT..",
+      "BBTT....TT......TT..TT....",
+      "BBTT....TT......TT..TT....",
+      "TT....TTBBTT..TTBBTT......",
+      "TT....TTBBTT..TTBBTT......",
+      "......TTBBTT....TT....TT..",
+      "......TTBBTT....TT....TT..",
+      "..TT....TT..........TTSSTT",
+      "..TT....TT.BBBB.....TTSSTT",
+      "TTSSTT.....BHHB...TTBBTT..",
+      "TTSSTT.....BHHB...TTBBTT.."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "power",
+      "power",
+      "armor",
+      "armor",
+      "armor",
+      "armor"
+    ]
+  },
+  {
+    "stage": 23,
+    "difficulty": "★★",
+    "terrain": [
+      "..........................",
+      "..........................",
+      "..........SSSS............",
+      "..........SSSS............",
+      "............SS............",
+      "............SS............",
+      "..SSSSTTTTBBSSBBTTTTSSSS..",
+      "..SSSSTTTTBBSSBBTTTTSSSS..",
+      "......SSTTTTSSTTTTSS......",
+      "......SSTTTTSSTTTTSS......",
+      "TT......SSTTTTTTSS......TT",
+      "TT......SSTTTTTTSS......TT",
+      "SSTT......TTTTTT......TTSS",
+      "SSTT......TTTTTT......TTSS",
+      "TT........SSTTSS........TT",
+      "TT......SS..TT..SS......TT",
+      "........SS......SS........",
+      "........SS..SS..SS........",
+      "......SS....SS....SS......",
+      "......SS....SS....SS......",
+      "..........................",
+      "..........................",
+      "..........................",
+      "...........BBBB...........",
+      "....SS.....BHHB.....SS....",
+      "....SS.....BHHB.....SS...."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "power",
+      "power",
+      "power",
+      "power",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast"
+    ]
+  },
+  {
+    "stage": 24,
+    "difficulty": "★★★",
+    "terrain": [
+      "....SS..BBSS.........B....",
+      "....SS..BB...........B....",
+      "....BB..BBTT..BBBBBBBB....",
+      "....BB..BBTT....BBBBBB....",
+      "..TTTT..BBTT.BB.......SSSS",
+      "..TTTT..BBTT.BB.......SSSS",
+      "TTTTTTTTTTTTBBBBBB...BBB..",
+      "TTTTTTTTTTTTBBBBBB...BBB..",
+      "....TTTT....SSBB...BBBBB.B",
+      "....TTTTBBBB..BB...BBB...B",
+      "BBSS....BBBB......BBBB...B",
+      "BB....BB..........BB.....B",
+      ".B....BBIIIIIIIIIIIIIIIIII",
+      ".B..BBBBIIIIIIIIIIIIIIIIII",
+      ".B..BB..IIIIIIIIIIIIIIIIII",
+      ".B......IIIIIIIIIIIIIIIIII",
+      "....SS..IIIIIIIIIIIIIIIIII",
+      "....SS..IIIIIIIIIIIIIIIIII",
+      "BB..BB..IIIIIIIIIIIIIIIIII",
+      "BB..BB..IIIIIIIIIIIIIIIIII",
+      ".B..BB..IIIIIIIIIIIIIIIIII",
+      ".B..BB..IIIIIIIIIIIIIIIIII",
+      ".B..BB..........IIIIIIIIII",
+      ".B..BB.....BBBB.IIIIIIIIII",
+      "....BB.....BHHB...IIIIIIII",
+      "...........BHHB...IIIIIIII"
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "power",
+      "power",
+      "power",
+      "power",
+      "armor",
+      "armor",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic"
+    ]
+  },
+  {
+    "stage": 25,
+    "difficulty": "★★★",
+    "terrain": [
+      "......SS..BB..BB..BB..SS..",
+      "......SS..BB..BB..BB..SS..",
+      "..BB..BB..........SS......",
+      "..BB..BB..........SS......",
+      "..BB..BB....SS....SS..SSSS",
+      "..BB..BB....SS....SS..SSSS",
+      "..BB......BB..SSBB......SS",
+      "..BB......BB..SSBB......SS",
+      "........BBBB..BBBB..SS....",
+      "........BBBB..BBBB..SS....",
+      "....SS..BB....BBBB..BBBB..",
+      "....SS..BB....BBBB..BBBB..",
+      "SS..SS....BB..SS....SSBB..",
+      "SS..SS....BB..SS....SSBB..",
+      "....BBBB..BB......BBSS....",
+      "....BBBB..BB......BBSS....",
+      "..SSBBBB..BBBB..BBBB....BB",
+      "..SSBBBB..BBBB..BBBB....BB",
+      "..BB......BBSS........BBBB",
+      "..BB......BBSS........BBBB",
+      "......BB..BBBBSS..SS....BB",
+      "......BB..BBBBSS..SS....BB",
+      "BB..BBBB..........BBSS....",
+      "BB..BBBB...BBBB...BBSS....",
+      "BB..BB.....BHHB...BBBBBB..",
+      "BB..BB.....BHHB...BBBBBB.."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "power",
+      "power",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor"
+    ]
+  },
+  {
+    "stage": 26,
+    "difficulty": "★★",
+    "terrain": [
+      "....WWWW..................",
+      "....WWWW..................",
+      "......WWTT..B.............",
+      "SS....WWTT..B.............",
+      "TT..........S...B...WWWW..",
+      "TTSS........S...B...WWWW..",
+      "TTTT..SS...B....S.TTWW....",
+      "TTTT....BB.B....S.TTWW....",
+      "TTTTTT....SS...B..........",
+      "TTTTTT....SSBB.B........SS",
+      "TTTTSS.....B..SS........TT",
+      "TTTT..SS...B..SSBB....SSTT",
+      "TTSS....BBSS...B..SS..TTTT",
+      "TT........SS...B......TTTT",
+      "..........B.BBSS....TTTTTT",
+      "..........B...SS....TTTTTT",
+      "....WWTT.S....B.BB..SSTTTT",
+      "....WWTT.S....B...SS..TTTT",
+      "..WWWW...B...S..........TT",
+      "..WWWW...B...S..........TT",
+      ".............B..TTWW....SS",
+      ".............B..TTWW......",
+      "SS................WWWW....",
+      "SS.........BBBB...WWWW....",
+      "SSSS.......BHHB.........SS",
+      "SSSS.......BHHB.........SS"
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "power",
+      "power",
+      "power",
+      "power"
+    ]
+  },
+  {
+    "stage": 27,
+    "difficulty": "★★★★",
+    "terrain": [
+      "........SS................",
+      "........SS................",
+      "SSSS....SS....SSSS........",
+      "SSSS....SS....SSSS........",
+      "..SS....SS......SS..SSSSTT",
+      "..SS....SS......SS..SSSSTT",
+      "..SS....SSSSSS..TT..SS....",
+      "..SS....SSSSSS..TT..SS....",
+      "..BB........SS..SSSSSS....",
+      "..BB........SS..SSSSSS....",
+      "TTSSSS..SSBBSSBBBB........",
+      "TTSSSS..SSBBSSBBBB........",
+      "....SSTTSSTT....BB....SSSS",
+      "....SSTTSSTT....BB....SSSS",
+      "....SS....TT....SS....SS..",
+      "....SS....TT....SS....SS..",
+      "....BB....SS....SSSSBBSS..",
+      "....BB....SS....SSSSBBSS..",
+      "TTSSSSSSTTTTBBSSSS..BBSS..",
+      "TTSSSSSSTTTTBBSSSS..BBSS..",
+      "......BB........TTTT..BB..",
+      "......BB........TTTT..BB..",
+      "......SS..........TT..BB..",
+      "......SS...BBBB...TT..BB..",
+      "......SS...BHHB...SS..BB..",
+      "......SS...BHHB...SS..BB.."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "power",
+      "power",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "basic",
+      "basic"
+    ]
+  },
+  {
+    "stage": 28,
+    "difficulty": "★★★",
+    "terrain": [
+      ".....................SS...",
+      ".....................SS...",
+      "....................SS....",
+      "............SS......SS....",
+      "............TT....BBB.....",
+      "..........BBTTBB..BBB.....",
+      "..........TTTTTT..BBB.....",
+      "........SSTTTTTTSSBBB.....",
+      "........TTTTIITTTTBBB.....",
+      "......BBTTTTIITTTTBBB.....",
+      "......TTTTIIIIIITTTTB.....",
+      "....SSTTTTIIIIIITTTTB.....",
+      "....TTTTIIIIIIIIIITTTT....",
+      "..BBTTTTIIIIIIIIIITTTTBB..",
+      "..TTTTIIIIIIIIIIIIIITTTT..",
+      "SSTTTTIIIIIIIIIIIIIITTTTSS",
+      "TTTTIIIIIIIIIIIIIIIIIITTTT",
+      "TTTTIIIIIIIIIIIIIIIIIITTTT",
+      "..TTIIIIIIIIIIIIIIIIIITT..",
+      "..TTIIIIIIIIIIIIIIIIIITT..",
+      "..TTIIIIIIIIIIIIIIIIIITT..",
+      "..TTIIIIIIIIIIIIIIIIIITT..",
+      "..TTIIIIII......IIIIIITT..",
+      "..TTIIIIII.BBBB.IIIIIITT..",
+      "..TTIIII...BHHB...IIIITT..",
+      "..TTIIII...BHHB...IIIITT.."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "fast",
+      "fast",
+      "armor",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "power",
+      "power"
+    ]
+  },
+  {
+    "stage": 29,
+    "difficulty": "★★★",
+    "terrain": [
+      "....................BB....",
+      "....................BB....",
+      "..BBWWWW..SS..BB..........",
+      "..BBWWWW..SS..BB..........",
+      "....WWWWBBTTTTTTWWWW..SS..",
+      "....WWWWBBTTTTTTWWWW..SS..",
+      "..........TTTTTTWWWWBB....",
+      "..........TTTTTTWWWWBB....",
+      "..SS....WWWW..TT..........",
+      "..SS....WWWW..TT..........",
+      "TTTTBB..WWWWSS........BB..",
+      "TTTTBB..WWWWSS........BB..",
+      "TTTTTT............SS....SS",
+      "TTTTTT............SS....SS",
+      "..BBWWWW..BB..............",
+      "..BBWWWW..BB..............",
+      "SS..WWWWTTTTWWWWTTTT..BB..",
+      "SS..WWWWTTTTWWWWTTTT..BB..",
+      "........TT..WWWWTTTTWWWW..",
+      "........TT..WWWWTTTTWWWW..",
+      "......SSTT......TTTTWWWW..",
+      "......SSTT......TTTTWWWW..",
+      "....BB..BB................",
+      "....BB..BB.BBBB...........",
+      "BB.........BHHB...BBSS....",
+      "BB.........BHHB...BBSS...."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "power",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor"
+    ]
+  },
+  {
+    "stage": 30,
+    "difficulty": "★★",
+    "terrain": [
+      "..........................",
+      "..........................",
+      "..........................",
+      "..........BBBB......SS....",
+      "..........TTTT......TT....",
+      "..SSSS..BBTTTTSS..BBTTBB..",
+      "..TTTT..TTTTTTTT..TTTTTT..",
+      "BBTTTTBBTTTTTTTTBBTTTTTTBB",
+      "TTTTTTTTTTTTTTTTTTTTTTTTTT",
+      "TTTTTTTTTTTTTTTTTTTTTTTTTT",
+      "SSTTWWTTTTTTTTTTWWTTTTTTTT",
+      "SSTTWWTTTTTTTTTTWWTTTTTTTT",
+      "TTTTWWWWWWTTTTTTWWWWWWTTSS",
+      "TTTTWWWWWWTTTTTTWWWWWWTTSS",
+      "TTTTTTTTWWTTSSTTTTTTWWTTTT",
+      "TTTTTTTTWWTTSSTTTTTTWWTTTT",
+      "TTTTTTTTTTTTTTTTTTTTTTTTTT",
+      "TTTTTTTTTTTTTTTTTTTTTTTTTT",
+      "TTTTTTTTTTBBBBTTTTTTTTTTSS",
+      "TTTTTTTTTT....TTTTTTTTTT..",
+      "SSTTTTTTBB....BBTTTTTTSS..",
+      "..TTTTTT........TTTTTT....",
+      "..SSBBBB........BBBBBB....",
+      "...........BBBB...........",
+      "...........BHHB...........",
+      "...........BHHB..........."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "power",
+      "power",
+      "power",
+      "power",
+      "armor",
+      "armor",
+      "armor",
+      "armor"
+    ]
+  },
+  {
+    "stage": 31,
+    "difficulty": "★★",
+    "terrain": [
+      "......WW........WW........",
+      "......WW........WW........",
+      "WWWW..WW..WWWWWWWW..WWWWWW",
+      "WWWW..WW..WWWWWWWW..WWWWWW",
+      "TTTTBB....BB....WW..WWTTWW",
+      "TTTTBB....BB....WW..WWTTWW",
+      "TTWWWWWWWW..SS....BBTTTTTT",
+      "TTWWWWWWWW..SS....BBTTTTTT",
+      "TTTT..WW....WW..WWWWWWWWTT",
+      "TTTT..WW....WW..WWWWWWWWTT",
+      "WWWW..WW..WWWW....WW......",
+      "WWWW..WW..WWWW....WW......",
+      "....BBTTBB..BBTT..WW....WW",
+      "....BBTTBB..BBTT..WW....WW",
+      "..WWWWTTWWWWWWWW..TTBB..WW",
+      "..WWWWTTWWWWWWWW..TTBB..WW",
+      "BB....BB....WW..TTTTWW..WW",
+      "BB....BB....WW..TTTTWW..WW",
+      "WWWW..WWWW..WWBBWWWWWW....",
+      "WWWW..WWWW..WWBBWWWWWW....",
+      "....BB..TTTT....TTWW....WW",
+      "....BB..TTTT....TTWW....WW",
+      "..WWWWWWTT........WW..WWWW",
+      "..WWWWWWTT.BBBB...WW..WWWW",
+      "..WW.......BHHB...........",
+      "..WW.......BHHB..........."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "power",
+      "power",
+      "power",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "power",
+      "power",
+      "power"
+    ]
+  },
+  {
+    "stage": 32,
+    "difficulty": "★★★",
+    "terrain": [
+      "IIIIIIIIIIII..IIIIIIIIIIII",
+      "IIIIIIIIIIII..IIIIIIIIIIII",
+      "IIIIIIIIIIIIIIIIIIIIIIIIII",
+      "IIIIIIIIIIIIIIIIIIIIIIIIII",
+      "IIIIIIBBIIIIIIIIIIBBIIIIII",
+      "IIIIIIBBIIIIIIIIIIBBIIIIII",
+      "IIBB..BB..BBIIBB..BB..BBII",
+      "IIBB..BB..BBIIBB..BB..BBII",
+      "IIBBBBBB..........BBBBBBII",
+      "II....BB..........BB....II",
+      "IIIIIIBB..BBSSBB..BBIIIIII",
+      "IIIIIIBBBBBBSSBBBBBBIIIIII",
+      "SSIIIIII..SS..SS..IIIIIISS",
+      "SSIIIIII..........IIIIIISS",
+      "IIIIIIII..........IIIIIIII",
+      "IIIIIIII..BB..BB..IIIIIIII",
+      "IIIIIIII..BB..BB..IIIIIIII",
+      "IIIIIIII..BB..BB..IIIIIIII",
+      "IIIIIIBB..........BBIIIIII",
+      "IIIIIIBB....BB....BBIIIIII",
+      "IIBBIIBB..SSSSSS..BBIIBBII",
+      "IIBBIIBB..........BBIIBBII",
+      "..BB..BB..........BB..BB..",
+      "..BBBBBB...BBBB...BBBBBB..",
+      "..BB.......BHHB.......BB..",
+      "...........BHHB..........."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "basic",
+      "power",
+      "power",
+      "fast",
+      "fast",
+      "fast",
+      "fast"
+    ]
+  },
+  {
+    "stage": 33,
+    "difficulty": "★★★",
+    "terrain": [
+      "........SS........SS......",
+      "........SS........SS......",
+      "..SS......SS....SSTTTT....",
+      "..SS......SS....SSTTTT....",
+      "....SS........SSTT..S.....",
+      "....SS........SSTTSSS.....",
+      "......SS..TTTTTTTTTT...S..",
+      "......SS..TTTTTTTTTT...S..",
+      "..S.....SSTTTTSSTT....SS..",
+      "..S.....SSTTTTSSTT....SS..",
+      "..SSS.TT..SSTTTTSS.....S..",
+      "....S.TT..SSTTTTSS.....S..",
+      "....TTTTTTTTTT....SS......",
+      "....TTTTTTTTTT....SS......",
+      "....S.TT..SSTT......SS....",
+      "..SSS.TT..SSTT......SS....",
+      "..TTTTTTSS..SS........SS..",
+      "..TTTTTTSS..SS..SS....SS..",
+      "TTTTTTSS.........S........",
+      "TTTTTTSS.........S........",
+      "....SS.................SSS",
+      "....SS.................SSS",
+      "....................S.....",
+      "...........BBBB...SSS.....",
+      "S..........BHHB...........",
+      "S...SS.....BHHB..........."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "power",
+      "power",
+      "power",
+      "power",
+      "fast",
+      "fast",
+      "fast",
+      "fast"
+    ]
+  },
+  {
+    "stage": 34,
+    "difficulty": "★★★★",
+    "terrain": [
+      "........B..B..............",
+      "........B..B..............",
+      "B.B.B..B..B.....B.B.......",
+      "B.B.B..B..B.....B.B.......",
+      "B.B.B.BBBB......B.BBB.....",
+      "B.B.B.BBBB......B.BBB.....",
+      ".B.B..BBB......BB.BBBB....",
+      ".B.B..BBB......BB.BBBB....",
+      "..B...BB.BB...B.BBBBBB....",
+      "..B...BB.BB...B.BBBBBB....",
+      "..B..B....BBB.BB.B.BBB....",
+      "..B..B....BBB.BB.B.BBB....",
+      "..B......BBBBBB...B.BB....",
+      "..B......BBBBBB...B.BB....",
+      "...B....B.BBBBB...B.BB....",
+      "...B....B.BBBBB...B.BB....",
+      "...BBBBB..BBBBBB..B.B.BBBB",
+      "...B......BBBBBB..B.B...BB",
+      "...B.....BB.BB.BB.B.B..B.B",
+      "...B.....BB.BB.BB.B.B..B.B",
+      "....B...BB.BB.BBBB.....B..",
+      "....B...BB.BB.BBBB.....B..",
+      "....B..BB.......BBB...B...",
+      "....B..BB..BBBB.BBB...B...",
+      "....B..B...BHHB...BBBB....",
+      "....B..B...BHHB...BBBB...."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "power",
+      "power",
+      "power",
+      "power",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor"
+    ]
+  },
+  {
+    "stage": 35,
+    "difficulty": "★★",
+    "terrain": [
+      "..........................",
+      "..........................",
+      "........BB..BB............",
+      "........BB..BB............",
+      "TT....TTBBTTBBTT....TT....",
+      "TT....TTBBTTBBTT....TT....",
+      "BBTTTTBBBBBBBBBBTTTTBBTT..",
+      "BBTTTTBBBBBBBBBBTTTTBBTT..",
+      "BBBBBBBBSSBBSSBBBBBBBBTT..",
+      "BBBBBBBBSSBBSSBBBBBBBBTT..",
+      "WWWWWWBBBBBBBBBBWWWWWWTT..",
+      "WWWWWWBBBBBBBBBBWWWWWWTT..",
+      "WWBBBBBBBBBBBBBBBBBBWWWWTT",
+      "WWBBBBBBBBBBBBBBBBBBWWWWTT",
+      "BBBBBBWWBBBBBBWWBBBBBBTTTT",
+      "BBBBBBWWBBBBBBWWBBBBBBTTTT",
+      "BBBBWWWWWWBBWWWWWWBBBBWWWW",
+      "BBBBWWWWWWBBWWWWWWBBBBWWWW",
+      "TTWWWWTTTTTTTTTTWWWWTTWWTT",
+      "TTWWWWTTTTTTTTTTWWWWTTWWTT",
+      "..TTTT..........TTTT..TT..",
+      "..TTTT..........TTTT..TT..",
+      "..........................",
+      "...........BBBB...........",
+      "...........BHHB...........",
+      "...........BHHB..........."
+    ],
+    "spawns": {
+      "player1": {
+        "row": 24,
+        "col": 8
+      },
+      "enemies": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 12
+        },
+        {
+          "row": 0,
+          "col": 24
+        }
+      ]
+    },
+    "enemyQueue": [
+      "power",
+      "power",
+      "power",
+      "power",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "fast",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor",
+      "armor"
+    ]
+  }
+]

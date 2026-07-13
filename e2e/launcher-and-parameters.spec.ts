@@ -37,6 +37,7 @@ const gameCardIds = [
   "pong",
   "simon",
   "asteroids",
+  "battle-city",
 ] as const;
 
 type GameId = (typeof gameCardIds)[number];
@@ -384,7 +385,7 @@ test("launcher renders game cards and configurable parameters", async ({ page })
     "aria-selected",
     "true",
   );
-  await expect(page.getByTestId("game-library-single-player-count")).toHaveText("9");
+  await expect(page.getByTestId("game-library-single-player-count")).toHaveText("10");
   await expect(page.getByTestId("game-library-multiplayer-count")).toHaveText("3");
   await expect(page.getByTestId("game-library-single-player-panel")).toBeVisible();
   await expect(page.getByTestId("game-library-multiplayer-panel")).toBeHidden();
@@ -393,7 +394,7 @@ test("launcher renders game cards and configurable parameters", async ({ page })
     await expect(page.getByTestId(`game-card-${gameId}`)).toBeVisible();
   }
 
-  await expect(page.getByText("9 single player games available")).toHaveCount(0);
+  await expect(page.getByText("10 single player games available")).toHaveCount(0);
   await expect(page.getByTestId("snake-board-size")).toHaveCount(0);
   await expect(page.getByTestId("tetris-board-size")).toHaveValue("10x20");
   await expect(page.getByTestId("tetris-start-level")).toHaveValue("1");
@@ -442,7 +443,7 @@ test("game library tabs support roving keyboard navigation", async ({ page }) =>
   const singlePlayerTab = page.getByTestId("game-library-single-player-tab");
   const multiplayerTab = page.getByTestId("game-library-multiplayer-tab");
 
-  await expect(singlePlayerTab).toHaveAccessibleName("Single player 9 games");
+  await expect(singlePlayerTab).toHaveAccessibleName("Single player 10 games");
   await expect(multiplayerTab).toHaveAccessibleName("Multiplayer 3 games");
   await expect(singlePlayerTab).toHaveAttribute("tabindex", "0");
   await expect(multiplayerTab).toHaveAttribute("tabindex", "-1");

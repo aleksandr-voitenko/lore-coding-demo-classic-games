@@ -2,14 +2,19 @@
 
 This demo is a Next.js App Router game collection used to demonstrate
 [agentic-lore-coding](https://github.com/aleksandr-voitenko/agentic-lore-coding).
-It opens to a card-based menu with Classic games like Snake, Tetris, Breakout, Minesweeper, Asteroids and many others.
+It opens to a card-based menu with Classic games like Snake, Tetris, Breakout,
+Minesweeper, Asteroids, Tank Patrol, and many others.
 
 All the code in this repository was created using AI agents and the Lore Coding Method. The code was reviewed, but never edited in an IDE. Instead, all edits were performed using an AI agent while working on a specific task.
 
 ## Features
 
-- Nine classic games with deterministic gameplay rules and polished browser
+- Ten classic games with deterministic gameplay rules and polished browser
   controls.
+- Tank Patrol provides a single-player campaign across 35 maps and the
+  original 70-stage difficulty cycle, including Stage 1-35 selection,
+  NES-pixel movement, partial wall destruction, NTSC-paced tank and shell
+  lifecycles, enemy waves, timed results, and a headquarters to defend.
 - Asteroids includes vector-style ship thrust, wraparound movement,
   asteroid splitting, UFO saucers, waves, lives, bonus lives, scoring, and
   persistent board power-ups, and difficulty-scoped records.

@@ -108,6 +108,16 @@ describe("game launcher", () => {
     );
   });
 
+  it("offers Tank Patrol as a parameter-free single-player campaign", () => {
+    expect(GAME_CARDS.find((game) => game.id === "battle-city")).toMatchObject({
+      description:
+        "A classic tank campaign across 35 maps with destructible defenses, enemy waves, and a base to protect.",
+      label: "Tank Patrol",
+      parameters: [],
+    });
+    expect(MULTIPLAYER_GAME_IDS).not.toContain("battle-city");
+  });
+
   it("splits the launcher into single-player and multiplayer tabs", () => {
     const markup = renderToStaticMarkup(<GameLauncher />);
     const singlePlayerTabMarkup = getButtonMarkup(
@@ -121,8 +131,8 @@ describe("game launcher", () => {
     expect(singlePlayerTabMarkup).toContain("lucide-user");
     expect(singlePlayerTabMarkup).not.toContain("lucide-gamepad-2");
     expect(singlePlayerTabMarkup).toContain(">Single player<");
-    expect(singlePlayerTabMarkup).toContain(">9<");
-    expect(singlePlayerTabMarkup).toContain(">9 games<");
+    expect(singlePlayerTabMarkup).toContain(">10<");
+    expect(singlePlayerTabMarkup).toContain(">10 games<");
     expect(multiplayerTabMarkup).toContain('aria-selected="false"');
     expect(multiplayerTabMarkup).toContain('tabindex="-1"');
     expect(multiplayerTabMarkup).toContain("lucide-users");

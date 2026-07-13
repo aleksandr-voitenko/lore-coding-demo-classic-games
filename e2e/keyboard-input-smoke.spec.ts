@@ -70,6 +70,13 @@ const keyboardPauseCases: KeyboardPauseCase[] = [
     prefix: "asteroids",
     startButtonTestId: "asteroids-start-button",
   },
+  {
+    activeStatus: "Running",
+    gameId: "battle-city",
+    name: "Tank Patrol",
+    prefix: "battle-city",
+    startButtonTestId: "battle-city-start-button",
+  },
 ];
 
 async function getTetrisMinimumOccupiedColumn(page: Page) {
@@ -218,6 +225,109 @@ test("Asteroids keyboard input starts, thrusts, rotates, fires, pauses, and resu
 
   await page.keyboard.press("P");
   await expect(page.getByTestId("asteroids-status")).toHaveText("Running");
+});
+
+test("Tank Patrol keyboard input moves the player and fires a shell", async ({ page }) => {
+  await openLauncher(page);
+  await openGame(page, "battle-city");
+
+  await expect(page.getByTestId("battle-city-status")).toHaveText("Ready");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("battle-city-status")).toHaveText("Running");
+
+  const player = page.getByTestId("battle-city-player");
+  await expect(player).toHaveAttribute("data-player-phase", "active");
+  const shieldAlignment = await player.evaluate((element) => {
+    const shield = element.querySelector(
+      '[data-testid="battle-city-player-shield"]',
+    );
+
+    if (!(shield instanceof HTMLElement)) {
+      throw new Error("Expected active spawn protection to render a shield.");
+    }
+
+    const playerBounds = element.getBoundingClientRect();
+    const shieldBounds = shield.getBoundingClientRect();
+
+    return {
+      offsetY:
+        shieldBounds.top + shieldBounds.height / 2 -
+        (playerBounds.top + playerBounds.height / 2),
+      playerHeight: playerBounds.height,
+    };
+  });
+
+  expect(shieldAlignment.offsetY / shieldAlignment.playerHeight).toBeCloseTo(0.097, 2);
+  const initialLeft = await player.evaluate((element) => getComputedStyle(element).left);
+  const movementSamples: Array<{ left: number; width: number }> = [];
+
+  await page.keyboard.down("ArrowRight");
+  for (let sample = 0; sample < 6; sample += 1) {
+    await page.waitForTimeout(32);
+    movementSamples.push(
+      await player.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+          left: Number.parseFloat(style.left),
+          width: Number.parseFloat(style.width),
+        };
+      }),
+    );
+  }
+  await page.keyboard.up("ArrowRight");
+
+  await expect.poll(() => player.evaluate((element) => getComputedStyle(element).left)).not.toBe(
+    initialLeft,
+  );
+  expect(new Set(movementSamples.map(({ left }) => left)).size).toBeGreaterThanOrEqual(4);
+  const terrainCellWidth = movementSamples[0]!.width / 2;
+  const largestFrameDelta = Math.max(
+    ...movementSamples.slice(1).map(({ left }, index) =>
+      Math.abs(left - movementSamples[index]!.left),
+    ),
+  );
+  expect(largestFrameDelta).toBeGreaterThan(0);
+  expect(largestFrameDelta).toBeLessThan(terrainCellWidth);
+
+  await page.keyboard.down("ArrowUp");
+  await page.waitForTimeout(32);
+  await page.keyboard.up("ArrowUp");
+  await expect(player).toHaveAttribute("data-direction", "up");
+  const playerCol = Number(await player.getAttribute("data-col"));
+
+  await page.keyboard.press("Space");
+  const bullet = page
+    .locator('[data-testid="battle-city-bullet"][data-owner="player"]')
+    .first();
+  await expect(bullet).toBeVisible();
+  expect(Number(await bullet.getAttribute("data-col"))).toBeCloseTo(playerCol + 1, 6);
+  await expect(page.getByTestId("battle-city-board")).toHaveAttribute(
+    "aria-label",
+    /Tank Patrol board\. Stage 1\. Score 0\. Reserve lives 2\. Power tier 0 of 3\. \d+ reinforcements waiting\. Headquarters intact\. Running\./,
+  );
+});
+
+test("Tank Patrol offers the original Stage 1-35 campaign selector", async ({ page }) => {
+  await openLauncher(page);
+  await openGame(page, "battle-city");
+
+  const selectedStage = page.getByTestId("battle-city-stage-select-value");
+  await expect(selectedStage).toHaveText("STAGE 1");
+
+  await page.keyboard.press("b");
+  await expect(selectedStage).toHaveText("STAGE 1");
+  for (let step = 1; step < 35; step += 1) {
+    await page.getByTestId("battle-city-next-stage-button").click();
+  }
+  await expect(selectedStage).toHaveText("STAGE 35");
+  await page.keyboard.press("Space");
+  await expect(selectedStage).toHaveText("STAGE 35");
+  await page.getByTestId("battle-city-previous-stage-button").click();
+  await expect(selectedStage).toHaveText("STAGE 34");
+
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("battle-city-status")).toHaveText("Running");
+  await expect(page.getByTestId("battle-city-stage")).toHaveText("34");
 });
 
 test("Pong ready serve only starts from Space or Enter", async ({ page }) => {

@@ -216,6 +216,28 @@
   --asteroids-ship: oklch(0.42 0.15 220);
   --asteroids-star: oklch(0.5 0.05 220 / 42%);
   --asteroids-thrust: oklch(0.55 0.2 42);
+  --battle-city-base: oklch(0.84 0.16 88);
+  --battle-city-base-destroyed: oklch(0.48 0.12 30);
+  --battle-city-board: oklch(0.16 0.025 145);
+  --battle-city-board-border: oklch(0.36 0.05 138);
+  --battle-city-board-text: oklch(0.97 0.012 105);
+  --battle-city-border: oklch(0.86 0.026 120);
+  --battle-city-brick: oklch(0.58 0.17 42);
+  --battle-city-bullet: oklch(0.96 0.13 98);
+  --battle-city-enemy: oklch(0.74 0.06 235);
+  --battle-city-explosion: oklch(0.72 0.2 46);
+  --battle-city-forest: oklch(0.5 0.16 132);
+  --battle-city-grid-line: oklch(0.5 0.055 138 / 22%);
+  --battle-city-ice: oklch(0.83 0.025 215);
+  --battle-city-ink: oklch(0.18 0.035 128);
+  --battle-city-muted: oklch(0.45 0.035 128);
+  --battle-city-page: oklch(0.985 0.012 120);
+  --battle-city-panel: oklch(1 0 0);
+  --battle-city-player: oklch(0.85 0.18 92);
+  --battle-city-results-accent: oklch(0.44 0.14 76);
+  --battle-city-spawn: oklch(0.83 0.13 210);
+  --battle-city-steel: oklch(0.68 0.025 235);
+  --battle-city-water: oklch(0.54 0.16 244);
   --pong-ball: oklch(0.2 0.035 255);
   --pong-blue: oklch(0.48 0.16 235);
   --pong-board: oklch(0.9 0.018 245);
@@ -414,6 +436,28 @@
   --asteroids-ship: oklch(0.78 0.15 205);
   --asteroids-star: oklch(0.92 0.04 105 / 62%);
   --asteroids-thrust: oklch(0.75 0.18 42);
+  --battle-city-base: oklch(0.88 0.16 90);
+  --battle-city-base-destroyed: oklch(0.62 0.17 28);
+  --battle-city-board: oklch(0.1 0.022 148);
+  --battle-city-board-border: oklch(0.3 0.055 142);
+  --battle-city-board-text: oklch(0.97 0.012 108);
+  --battle-city-border: oklch(1 0 0 / 14%);
+  --battle-city-brick: oklch(0.67 0.18 42);
+  --battle-city-bullet: oklch(0.96 0.15 98);
+  --battle-city-enemy: oklch(0.8 0.055 225);
+  --battle-city-explosion: oklch(0.78 0.2 48);
+  --battle-city-forest: oklch(0.61 0.17 132);
+  --battle-city-grid-line: oklch(0.62 0.06 138 / 22%);
+  --battle-city-ice: oklch(0.86 0.035 215);
+  --battle-city-ink: oklch(0.97 0.012 118);
+  --battle-city-muted: oklch(0.74 0.036 122);
+  --battle-city-page: oklch(0.12 0.022 145);
+  --battle-city-panel: oklch(0.18 0.028 142);
+  --battle-city-player: oklch(0.9 0.18 94);
+  --battle-city-results-accent: oklch(0.88 0.17 94);
+  --battle-city-spawn: oklch(0.82 0.14 210);
+  --battle-city-steel: oklch(0.76 0.026 230);
+  --battle-city-water: oklch(0.66 0.17 242);
   --pong-ball: oklch(0.98 0.01 245);
   --pong-blue: oklch(0.78 0.15 205);
   --pong-board: oklch(0.16 0.036 260);
@@ -555,11 +599,148 @@
   border-color: color-mix(in oklch, var(--simon-miss) 36%, transparent);
 }
 
+.battle-city-spawn-effect {
+  --battle-city-spawn-scale: 1;
+  position: absolute;
+  inset: -12.5%;
+  transform: scale(var(--battle-city-spawn-scale));
+  transform-origin: center;
+  filter: drop-shadow(0 0 0.2rem var(--battle-city-spawn));
+}
+
+.battle-city-spawn-effect[data-spawn-tile="a9"] {
+  --battle-city-spawn-scale: 0.78;
+}
+
+.battle-city-spawn-effect[data-spawn-tile="a5"] {
+  --battle-city-spawn-scale: 0.56;
+}
+
+.battle-city-spawn-effect[data-spawn-tile="a1"] {
+  --battle-city-spawn-scale: 0.34;
+}
+
+.battle-city-shield-effect {
+  --battle-city-shield-color: color-mix(
+    in oklch,
+    var(--battle-city-spawn) 76%,
+    white
+  );
+  /* Player sprite alpha centroids average 9.7% below the PNG canvas center. */
+  --battle-city-shield-offset-y: 9.7%;
+  position: absolute;
+  inset:
+    calc(-8% + var(--battle-city-shield-offset-y)) -8%
+    calc(-8% - var(--battle-city-shield-offset-y));
+  border-radius: 50%;
+  background: repeating-conic-gradient(
+    from 10deg,
+    var(--battle-city-shield-color) 0deg 34deg,
+    transparent 34deg 90deg
+  );
+  filter: drop-shadow(0 0 0.08rem var(--battle-city-spawn));
+  opacity: 0.62;
+  transform-origin: center;
+  animation: battle-city-shield-shift 250ms steps(1, end) infinite;
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 2.5px),
+    black calc(100% - 2px) calc(100% - 0.5px),
+    transparent 100%
+  );
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 2.5px),
+    black calc(100% - 2px) calc(100% - 0.5px),
+    transparent 100%
+  );
+}
+
+.battle-city-shield-effect[data-shield-expiring="true"] {
+  animation:
+    battle-city-shield-shift 250ms steps(1, end) infinite,
+    battle-city-shield-expire 250ms steps(1, end) infinite;
+}
+
+@keyframes battle-city-shield-shift {
+  50% {
+    transform: rotate(45deg);
+  }
+}
+
+@keyframes battle-city-shield-expire {
+  50% {
+    opacity: 0.18;
+  }
+}
+
+.battle-city-explosion {
+  --battle-city-explosion-scale: 1;
+  position: absolute;
+  inset: -25%;
+  filter: drop-shadow(0 0 0.25rem #fb923c);
+  transform: scale(var(--battle-city-explosion-scale));
+  transform-origin: center;
+}
+
+.battle-city-explosion[data-explosion-frame="f1"] {
+  --battle-city-explosion-scale: 0.38;
+}
+
+.battle-city-explosion[data-explosion-frame="f5"] {
+  --battle-city-explosion-scale: 0.62;
+}
+
+.battle-city-explosion[data-explosion-frame="f9"] {
+  --battle-city-explosion-scale: 0.84;
+}
+
+.battle-city-explosion[data-explosion-frame="d"] {
+  --battle-city-explosion-scale: 1;
+}
+
+.battle-city-explosion[data-explosion-frame="e"] {
+  --battle-city-explosion-scale: 1.08;
+  filter: drop-shadow(0 0 0.32rem white);
+}
+
+.battle-city-explosion[data-explosion-frame="hq"] {
+  --battle-city-explosion-scale: 1.12;
+}
+
+.battle-city-enemy-palette--0 {
+  filter: grayscale(1) sepia(1) saturate(7) hue-rotate(354deg)
+    brightness(1.08) contrast(1.05);
+}
+
+.battle-city-enemy-palette--1 {
+  filter: none;
+}
+
+.battle-city-enemy-palette--2 {
+  filter: grayscale(0.72) sepia(0.2) saturate(1.5) hue-rotate(165deg)
+    brightness(1.12) contrast(1.04);
+}
+
+.battle-city-enemy-palette--3,
+.battle-city-carrier-texture--flash {
+  filter: grayscale(1) sepia(1) saturate(7) hue-rotate(315deg)
+    brightness(1.12) contrast(1.1);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .snake-food-feedback {
     animation-duration: 1ms;
   }
   .simon-turn-feedback {
+    animation: none;
+  }
+  .battle-city-carrier-texture {
+    filter: grayscale(1) sepia(1) saturate(7) hue-rotate(315deg)
+      brightness(1.12) contrast(1.1);
+  }
+  .battle-city-shield-effect,
+  .battle-city-shield-effect[data-shield-expiring="true"] {
     animation: none;
   }
 }

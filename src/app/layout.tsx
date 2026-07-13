@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Game Library",
   description:
-    "A card-based launcher with classic arcade and puzzle games including Snake, Tetris, Breakout, Minesweeper, Space Invaders, and Asteroids.",
+    "A card-based launcher with classic arcade and puzzle games including Snake, Tetris, Breakout, Minesweeper, Space Invaders, Asteroids, and Tank Patrol.",
 };
 
 const themeInitScript = `

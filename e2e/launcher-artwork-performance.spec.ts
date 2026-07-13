@@ -13,6 +13,7 @@ const EXPECTED_CARD_LABELS = [
   "Play Pong",
   "Play Simon",
   "Play Asteroids",
+  "Play Tank Patrol",
 ];
 const GAME_CARD_SOURCE_PATTERN =
   /^\/images\/[a-z0-9-]+-game-card\.png\?v=ai-key-art-v2$/;
@@ -56,13 +57,13 @@ test("launcher loads responsive optimized key art without changing card behavior
   const cards = page.locator('[data-testid^="game-card-"]');
   const images = cards.locator("img");
 
-  await expect(cards).toHaveCount(9);
+  await expect(cards).toHaveCount(10);
   expect(
     await cards.evaluateAll((elements) =>
       elements.map((card) => card.getAttribute("aria-label")),
     ),
   ).toEqual(EXPECTED_CARD_LABELS);
-  await expect(images).toHaveCount(18);
+  await expect(images).toHaveCount(20);
 
   for (let index = 0; index < (await cards.count()); index += 1) {
     await cards.nth(index).scrollIntoViewIfNeeded();
@@ -99,8 +100,8 @@ test("launcher loads responsive optimized key art without changing card behavior
     }),
   );
 
-  expect(imageStates.filter((image) => image.objectFit === "cover")).toHaveLength(9);
-  expect(imageStates.filter((image) => image.objectFit === "contain")).toHaveLength(9);
+  expect(imageStates.filter((image) => image.objectFit === "cover")).toHaveLength(10);
+  expect(imageStates.filter((image) => image.objectFit === "contain")).toHaveLength(10);
 
   for (const image of imageStates) {
     expect(image.alt).toBe("");
@@ -123,8 +124,8 @@ test("launcher loads responsive optimized key art without changing card behavior
   const leaderboardImages = leaderboardCards.locator("img");
 
   await expect(page.getByTestId("global-leaderboard-screen")).toBeVisible();
-  await expect(leaderboardCards).toHaveCount(9);
-  await expect(leaderboardImages).toHaveCount(18);
+  await expect(leaderboardCards).toHaveCount(10);
+  await expect(leaderboardImages).toHaveCount(20);
 
   for (let index = 0; index < (await leaderboardCards.count()); index += 1) {
     await leaderboardCards.nth(index).scrollIntoViewIfNeeded();
@@ -145,7 +146,7 @@ test("launcher loads responsive optimized key art without changing card behavior
 
   await Promise.all(responseTasks);
 
-  expect(new Set([...responses.values()].map((response) => response.source)).size).toBe(9);
+  expect(new Set([...responses.values()].map((response) => response.source)).size).toBe(10);
   expect([...responses.values()].every((response) => response.status === 200)).toBe(true);
   expect(
     [...responses.values()].every((response) => response.contentType === "image/webp"),
@@ -158,7 +159,7 @@ test("launcher loads responsive optimized key art without changing card behavior
     await leaderboardCards.evaluateAll((elements) =>
       elements.map((card) => card.firstElementChild?.getBoundingClientRect().height),
     ),
-  ).toEqual(Array.from({ length: 9 }, () => 160));
+  ).toEqual(Array.from({ length: 10 }, () => 160));
 
   await page.getByTestId("global-leaderboard-back-button").click();
   await expect(page.getByTestId("game-menu")).toBeVisible();
@@ -232,7 +233,7 @@ test.describe("retina artwork selection", () => {
       ),
     ].sort((left, right) => left - right);
 
-    expect(new Set(responseValues.map((response) => response.source)).size).toBe(9);
+    expect(new Set(responseValues.map((response) => response.source)).size).toBe(10);
     expect(responseWidths).toEqual([640, 750, 1200]);
     expect(responseValues.every((response) => response.status === 200)).toBe(true);
     expect(responseValues.every((response) => response.contentType === "image/webp")).toBe(
@@ -254,7 +255,7 @@ async function expectSmallestSufficientBackgroundArtwork(
   images: Locator,
   devicePixelRatio: number,
 ) {
-  await expect(images).toHaveCount(9);
+  await expect(images).toHaveCount(10);
   await expect
     .poll(() =>
       images.evaluateAll((elements) =>

@@ -111,10 +111,20 @@ const layoutCases = [
     statsMode: "top-bar",
     statusTestId: "asteroids-status",
   },
+  {
+    boardTestId: "battle-city-board",
+    gameId: "battle-city",
+    name: "Tank Patrol",
+    palettePrefix: "battle-city",
+    startScreenTestId: "battle-city-start-screen",
+    statsMode: "top-bar",
+    statusTestId: "battle-city-status",
+  },
 ] as const;
 
 const darkPlayfieldPalettePrefixes = new Set([
   "asteroids",
+  "battle-city",
   "breakout",
   "invaders",
   "pong",

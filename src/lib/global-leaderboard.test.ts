@@ -33,6 +33,7 @@ describe("global leaderboard", () => {
       "pong|board=420x560|target=5",
       "simon|difficulty=medium",
       "asteroids|difficulty=medium",
+      "battle-city|mode=campaign",
     ]);
   });
 
@@ -47,6 +48,20 @@ describe("global leaderboard", () => {
     });
     expect(formatGlobalLeaderboardScore({ metric: "time" }, 73)).toBe("1:13");
     expect(formatGlobalLeaderboardScore({ metric: "score" }, 12345)).toBe("12,345");
+  });
+
+  it("keeps Tank Patrol on one descending campaign board", () => {
+    const battleCityTarget = GLOBAL_LEADERBOARD_TARGETS.find(
+      (target) => target.gameId === "battle-city",
+    );
+
+    expect(battleCityTarget).toEqual({
+      gameId: "battle-city",
+      leaderboardKey: "battle-city|mode=campaign",
+      metric: "score",
+      sortDirection: "desc",
+      variantLabel: "classic campaign",
+    });
   });
 
   it("creates fixed top-three slots", () => {

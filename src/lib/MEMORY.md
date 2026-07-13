@@ -31,6 +31,34 @@ This file covers deterministic game engines and shared source logic under
   `geometry.ts`, and `ship.ts`. Keep lifecycle/world tick orchestration in the
   facade so ship, bullet, asteroid, saucer, power-up, scoring, and respawn
   ordering stays easy to audit.
+- Tank Patrol retains the internal `battle-city` namespace and uses
+  `battle-city-game-engine.ts` as the deterministic facade for its single-player
+  campaign. The 35 maps form a displayed 70-stage cycle;
+  Stages 36-70 reuse the maps with the Stage 35 enemy mix before resetting.
+  Keep 26x26 terrain mutation, 4x4 wall fragments, tank and projectile
+  collision, enemy spawning and decisions, headquarters defense, scoring,
+  lives, and stage progression in pure library code.
+  Tank coordinates are fractional 26x26-grid positions resolved in 1/8-cell
+  (one original pixel) steps, while projectile coordinates are center points;
+  terrain reads and mutations must always derive integer cells explicitly.
+  A normal shell probes a 16-pixel face and removes up to four intact 4x4
+  fragments across the two touched 8x8 cells; a maximum shell clears both
+  touched cells. Resolve
+  terrain/headquarters impacts before shell-vs-shell and tank collisions, keep
+  non-shield impacts in their nine-frame slot-holding phase, and collision-test
+  newborn shells at the muzzle before moving them on the next frame.
+  Explosion counters represent 21 tank-handler updates: the player handler runs
+  on three of four frames, fast enemies run every frame, and other enemy slots
+  alternate parity. Do not replace these cadences with uniform wall-clock ticks.
+  Spawn counters similarly represent 28 handler updates, so player spawning is
+  37-38 video frames and enemy spawning is 55-56 depending on frame/slot phase.
+  Run enemy tank handlers before the player handler, then resolve player fire
+  before the separate enemy-fire pass; this ordering affects collisions,
+  activation frames, muzzle placement, and deterministic RNG trajectories.
+  Rebase the frame clock when an ending tail begins, then carry that phase
+  through results and the following stage setup as the hardware does.
+  Browser time is accumulated into fixed 60.0988 Hz simulation frames; do not
+  couple gameplay speed directly to callback frequency.
 - The Asteroids private-room co-op milestone is two independent ships in one
   shared asteroid field. Seats are `ship-a` and `ship-b`; each player controls
   one ship; score, wave, asteroid field, saucer state, and lives are shared.

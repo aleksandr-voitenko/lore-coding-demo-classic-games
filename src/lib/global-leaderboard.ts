@@ -158,6 +158,15 @@ export const GLOBAL_LEADERBOARD_TARGETS = [
     sortDirection: "desc",
     variantLabel: `${getDifficultyLabel(ASTEROIDS_DIFFICULTY_OPTIONS, ASTEROIDS_DEFAULT_DIFFICULTY)} difficulty`,
   },
+  {
+    gameId: "battle-city",
+    leaderboardKey: createGameLeaderboardKey("battle-city", [
+      { name: "mode", value: "campaign" },
+    ]),
+    metric: "score",
+    sortDirection: "desc",
+    variantLabel: "classic campaign",
+  },
 ] as const satisfies readonly GlobalLeaderboardTarget[];
 
 function formatElapsedTime(totalSeconds: number) {

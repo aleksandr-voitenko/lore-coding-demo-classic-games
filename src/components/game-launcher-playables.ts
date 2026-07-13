@@ -9,6 +9,9 @@ export const PLAYABLE_GAME_COMPONENTS = {
   asteroids: dynamic<PlayableGameProps>(() =>
     import("@/components/asteroids-game").then((module) => module.AsteroidsGame),
   ),
+  "battle-city": dynamic<PlayableGameProps>(() =>
+    import("@/components/battle-city-game").then((module) => module.BattleCityGame),
+  ),
   breakout: dynamic<PlayableGameProps>(() =>
     import("@/components/breakout-game").then((module) => module.BreakoutGame),
   ),

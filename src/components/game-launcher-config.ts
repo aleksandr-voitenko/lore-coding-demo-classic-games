@@ -246,6 +246,7 @@ const twentyFortyEightCatalogEntry = getGameCatalogEntry("twenty-forty-eight");
 const pongCatalogEntry = getGameCatalogEntry("pong");
 const simonCatalogEntry = getGameCatalogEntry("simon");
 const asteroidsCatalogEntry = getGameCatalogEntry("asteroids");
+const battleCityCatalogEntry = getGameCatalogEntry("battle-city");
 
 export const GAME_CARDS: readonly GameCard[] = [
   {
@@ -354,6 +355,18 @@ export const GAME_CARDS: readonly GameCard[] = [
     id: asteroidsCatalogEntry.id,
     label: asteroidsCatalogEntry.label,
     parameters: ["asteroids-difficulty"],
+  },
+  {
+    accentClassName:
+      "bg-[linear-gradient(90deg,var(--battle-city-player),var(--battle-city-brick),var(--battle-city-forest),var(--battle-city-water))]",
+    artwork: {
+      ...getGameCatalogArtwork("battle-city"),
+      loading: "eager",
+    },
+    description: "A classic tank campaign across 35 maps with destructible defenses, enemy waves, and a base to protect.",
+    id: battleCityCatalogEntry.id,
+    label: battleCityCatalogEntry.label,
+    parameters: [],
   },
 ];
 
