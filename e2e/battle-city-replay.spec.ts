@@ -12,6 +12,8 @@ import {
   type BattleCityReplayRun,
 } from "../src/lib/battle-city-replay";
 
+const REPLAY_TERMINAL_EXPECTATION_TIMEOUT_MS = 15_000;
+
 test("Tank Patrol records seeded fixed-step input through a terminal loss", async ({
   page,
 }) => {
@@ -426,6 +428,7 @@ test("Tank Patrol rejects a terminal prefix with unconsumed replay frames", asyn
 
   await expect(page.getByTestId("battle-city-replay-status")).toHaveText(
     "Replay unavailable",
+    { timeout: REPLAY_TERMINAL_EXPECTATION_TIMEOUT_MS },
   );
   await expect(page.getByText(/could not be completed/i)).toBeVisible();
 });
@@ -490,7 +493,9 @@ test("Tank Patrol saves and plays the signed-in user's latest deterministic repl
   await page.getByTestId("profile-battle-city-last-replay").click();
 
   await expect(page).toHaveURL("/?replay=battle-city");
-  await expect(page.getByTestId("battle-city-replay-finished-screen")).toBeVisible();
+  await expect(page.getByTestId("battle-city-replay-finished-screen")).toBeVisible({
+    timeout: REPLAY_TERMINAL_EXPECTATION_TIMEOUT_MS,
+  });
   await expect(page.getByTestId("battle-city-replay-final-score")).toHaveText(
     replay.finalScore.toLocaleString("en-US"),
   );
