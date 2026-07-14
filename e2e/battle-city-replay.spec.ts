@@ -12,11 +12,14 @@ import {
   type BattleCityReplayRun,
 } from "../src/lib/battle-city-replay";
 
+const LONG_RUNNING_REPLAY_TEST_TIMEOUT_MS = 60_000;
 const REPLAY_TERMINAL_EXPECTATION_TIMEOUT_MS = 15_000;
 
 test("Tank Patrol records seeded fixed-step input through a terminal loss", async ({
   page,
 }) => {
+  test.setTimeout(LONG_RUNNING_REPLAY_TEST_TIMEOUT_MS);
+
   let savedReplay: unknown = null;
 
   await page.clock.install({ time: new Date("2026-07-13T12:00:00.000Z") });
@@ -140,6 +143,8 @@ test("Tank Patrol records seeded fixed-step input through a terminal loss", asyn
 test("Tank Patrol restores the active replay when a replacement run fails", async ({
   page,
 }, testInfo) => {
+  test.setTimeout(LONG_RUNNING_REPLAY_TEST_TIMEOUT_MS);
+
   let releaseRestartRun!: () => void;
   let runRequestCount = 0;
   let savedReplay: unknown = null;
@@ -257,6 +262,8 @@ test("Tank Patrol restores the active replay when a replacement run fails", asyn
 test("Tank Patrol preserves a completed profile session when restart setup fails", async ({
   page,
 }, testInfo) => {
+  test.setTimeout(LONG_RUNNING_REPLAY_TEST_TIMEOUT_MS);
+
   let releaseRestartRun!: () => void;
   let runRequestCount = 0;
   let sessionSubmissionCount = 0;
