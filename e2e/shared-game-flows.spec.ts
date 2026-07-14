@@ -9,6 +9,7 @@ type RealtimeSharedFlowCase = {
   name: string;
   prefix: string;
   restartKey?: string;
+  restartRequestPath?: string;
   restartTransitionStatus?: string;
   serveKey?: string;
   serveReadyText?: string;
@@ -73,6 +74,7 @@ const realtimeSharedFlowCases: RealtimeSharedFlowCase[] = [
     gameId: "asteroids",
     name: "Asteroids",
     prefix: "asteroids",
+    restartRequestPath: "/api/replays/asteroids/run",
     startButtonTestId: "asteroids-start-button",
   },
   {
@@ -576,7 +578,18 @@ for (const flowCase of realtimeSharedFlowCases) {
     await expect(status).toHaveText(flowCase.activeStatus);
     await expect(pauseButton).toHaveAccessibleName("Pause");
 
+    const restartResponse = flowCase.restartRequestPath
+      ? page.waitForResponse(
+          (response) =>
+            response.request().method() === "POST" &&
+            new URL(response.url()).pathname === flowCase.restartRequestPath,
+        )
+      : null;
+
     await restartButton.click();
+    if (restartResponse) {
+      expect((await restartResponse).ok()).toBe(true);
+    }
     if (flowCase.restartTransitionStatus) {
       await expect(status).toHaveText(flowCase.restartTransitionStatus);
     }
