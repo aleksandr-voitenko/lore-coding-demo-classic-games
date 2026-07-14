@@ -1,7 +1,3 @@
-import type {
-  MultiplayerRealtimeGameSnapshot,
-  MultiplayerTerminalSummary,
-} from "./multiplayer/protocol";
 import {
   ASTEROIDS_DEFAULT_DIFFICULTY,
   ASTEROIDS_RESPAWN_INVULNERABILITY_TICKS,
@@ -46,23 +42,48 @@ import type {
   AdvanceAsteroidsGameOptions,
   Asteroid,
   AsteroidsBullet,
-  AsteroidsControlInput,
-  AsteroidsGameState,
-  AsteroidsPoint,
   AsteroidsPowerUp,
   AsteroidsRandom,
   AsteroidsSaucer,
   AsteroidsSaucerShot,
-  AsteroidsSharedWorldState,
   AsteroidsShip,
   AsteroidsShipExplosion,
-  AsteroidsShipOwnedState,
-  CreateAsteroidsGameOptions,
 } from "./asteroids/types";
 import {
   createInitialAsteroidsGame,
   getAsteroidsTickDelay,
 } from "./asteroids-game-engine";
+import {
+  cloneAsteroidsMultiplayerState,
+  createAsteroidsSoloProjection,
+  pickAsteroidsMultiplayerSharedState,
+  pickAsteroidsMultiplayerShipBullets,
+} from "./asteroids/multiplayer-state";
+import {
+  ASTEROIDS_MULTIPLAYER_SHIP_SEATS,
+  type AsteroidsMultiplayerGameState,
+  type AsteroidsMultiplayerHeldInputs,
+  type AsteroidsMultiplayerShips,
+  type AsteroidsMultiplayerShipState,
+  type AsteroidsShipSeat,
+  type CreateAsteroidsMultiplayerGameOptions,
+} from "./asteroids/multiplayer-types";
+
+export {
+  ASTEROIDS_MULTIPLAYER_ROOM_SEATS,
+  ASTEROIDS_MULTIPLAYER_SHIP_SEATS,
+  type AsteroidsMultiplayerClientInput,
+  type AsteroidsMultiplayerGameSnapshot,
+  type AsteroidsMultiplayerGameState,
+  type AsteroidsMultiplayerHeldInput,
+  type AsteroidsMultiplayerHeldInputs,
+  type AsteroidsMultiplayerRoomSeat,
+  type AsteroidsMultiplayerShips,
+  type AsteroidsMultiplayerShipState,
+  type AsteroidsMultiplayerTerminalSummary,
+  type AsteroidsShipSeat,
+  type CreateAsteroidsMultiplayerGameOptions,
+} from "./asteroids/multiplayer-types";
 
 type AsteroidsMultiplayerRespawnRatio = {
   x: number;
@@ -82,89 +103,10 @@ type AsteroidsMultiplayerPlayerBulletCollisionResult = {
   ships: AsteroidsMultiplayerShips;
 };
 
-export const ASTEROIDS_MULTIPLAYER_SHIP_SEATS = [
-  "ship-a",
-  "ship-b",
-] as const;
-
-export type AsteroidsShipSeat =
-  (typeof ASTEROIDS_MULTIPLAYER_SHIP_SEATS)[number];
-
-export type AsteroidsMultiplayerRoomSeat = {
-  id: AsteroidsShipSeat;
-  label: string;
-  required: true;
-};
-
-export const ASTEROIDS_MULTIPLAYER_ROOM_SEATS = [
-  {
-    id: "ship-a",
-    label: "Ship A",
-    required: true,
-  },
-  {
-    id: "ship-b",
-    label: "Ship B",
-    required: true,
-  },
-] as const satisfies readonly AsteroidsMultiplayerRoomSeat[];
-
 const ASTEROIDS_MULTIPLAYER_PROJECTION_MAX_TICKS = 3;
 
 export const ASTEROIDS_MULTIPLAYER_PROJECTION_MAX_MS =
   getAsteroidsTickDelay() * ASTEROIDS_MULTIPLAYER_PROJECTION_MAX_TICKS;
-
-export type AsteroidsMultiplayerShipState = AsteroidsShipOwnedState & {
-  isActive: boolean;
-  respawnOnExplosionEnd: boolean;
-  seat: AsteroidsShipSeat;
-};
-
-export type AsteroidsMultiplayerShips = Record<
-  AsteroidsShipSeat,
-  AsteroidsMultiplayerShipState
->;
-
-export type AsteroidsMultiplayerGameState = AsteroidsSharedWorldState & {
-  ships: AsteroidsMultiplayerShips;
-};
-
-export type CreateAsteroidsMultiplayerGameOptions = CreateAsteroidsGameOptions;
-
-export type AsteroidsMultiplayerClientInput =
-  | {
-      controls: AsteroidsControlInput;
-      type: "asteroids.setShipControls";
-    }
-  | {
-      type: "asteroids.fire";
-    };
-
-export type AsteroidsMultiplayerHeldInput = AsteroidsControlInput & {
-  fire?: boolean;
-};
-
-export type AsteroidsMultiplayerHeldInputs = Readonly<
-  Partial<Record<AsteroidsShipSeat, AsteroidsMultiplayerHeldInput>>
->;
-
-export type AsteroidsMultiplayerTerminalSummary = MultiplayerTerminalSummary<
-  Extract<AsteroidsMultiplayerGameState["status"], "lost">,
-  {
-    livesRemaining: number;
-    score: number;
-    wave: number;
-  }
->;
-
-export type AsteroidsMultiplayerGameSnapshot = MultiplayerRealtimeGameSnapshot<
-  "asteroids",
-  AsteroidsMultiplayerGameState,
-  {
-    heldInputs: AsteroidsMultiplayerHeldInputs;
-    summary?: AsteroidsMultiplayerTerminalSummary;
-  }
->;
 
 const ASTEROIDS_MULTIPLAYER_INITIAL_SHIP_POSITIONS = {
   "ship-a": { x: 0.42, y: 0.5 },
@@ -210,14 +152,7 @@ export function createInitialAsteroidsMultiplayerGame(
 export function cloneAsteroidsMultiplayerGame(
   game: AsteroidsMultiplayerGameState,
 ): AsteroidsMultiplayerGameState {
-  return {
-    ...game,
-    asteroids: game.asteroids.map(cloneAsteroid),
-    powerUp: cloneNullableObject(game.powerUp),
-    saucer: cloneNullableSaucer(game.saucer),
-    saucerBullets: game.saucerBullets.map(cloneBullet),
-    ships: cloneAsteroidsMultiplayerShips(game.ships),
-  };
+  return cloneAsteroidsMultiplayerState(game);
 }
 
 export function isAsteroidsShipSeat(value: unknown): value is AsteroidsShipSeat {
@@ -1328,123 +1263,6 @@ function getAsteroidsMultiplayerExplodingSeats(
       (seat) => game.ships[seat].shipExplosion !== null,
     ),
   );
-}
-
-function pickAsteroidsMultiplayerSharedState(
-  game: AsteroidsGameState,
-): AsteroidsSharedWorldState {
-  return {
-    asteroids: game.asteroids,
-    boardHeight: game.boardHeight,
-    boardWidth: game.boardWidth,
-    difficulty: game.difficulty,
-    lives: game.lives,
-    nextAsteroidId: game.nextAsteroidId,
-    nextBulletId: game.nextBulletId,
-    nextPowerUpId: game.nextPowerUpId,
-    nextSaucerBulletId: game.nextSaucerBulletId,
-    nextSaucerId: game.nextSaucerId,
-    powerUp: game.powerUp,
-    powerUpSpawnCooldownTicks: game.powerUpSpawnCooldownTicks,
-    saucer: game.saucer,
-    saucerBullets: game.saucerBullets,
-    saucerSpawnCooldownTicks: game.saucerSpawnCooldownTicks,
-    score: game.score,
-    startingAsteroidCount: game.startingAsteroidCount,
-    status: game.status,
-    wave: game.wave,
-  };
-}
-
-function createAsteroidsSoloProjection(
-  game: AsteroidsMultiplayerGameState,
-  seat: AsteroidsShipSeat,
-): AsteroidsGameState {
-  return {
-    ...game,
-    ...getAsteroidsShipOwnedState(game.ships[seat]),
-  };
-}
-
-function pickAsteroidsMultiplayerShipBullets(
-  ships: AsteroidsMultiplayerShips,
-) {
-  return {
-    "ship-a": ships["ship-a"].bullets,
-    "ship-b": ships["ship-b"].bullets,
-  };
-}
-
-function cloneAsteroidsMultiplayerShips(
-  ships: AsteroidsMultiplayerShips,
-): AsteroidsMultiplayerShips {
-  return {
-    "ship-a": cloneAsteroidsMultiplayerShip(ships["ship-a"]),
-    "ship-b": cloneAsteroidsMultiplayerShip(ships["ship-b"]),
-  };
-}
-
-function cloneAsteroidsMultiplayerShip(
-  ship: AsteroidsMultiplayerShipState,
-): AsteroidsMultiplayerShipState {
-  return {
-    ...ship,
-    bullets: ship.bullets.map(cloneBullet),
-    ship: cloneShip(ship.ship),
-    shipExplosion: cloneNullableExplosion(ship.shipExplosion),
-  };
-}
-
-function cloneAsteroid(asteroid: Asteroid): Asteroid {
-  return {
-    ...asteroid,
-    shape: [...asteroid.shape],
-    velocity: clonePoint(asteroid.velocity),
-  };
-}
-
-function cloneBullet(bullet: AsteroidsBullet): AsteroidsBullet {
-  return {
-    ...bullet,
-    velocity: clonePoint(bullet.velocity),
-  };
-}
-
-function cloneShip(ship: AsteroidsShip): AsteroidsShip {
-  return {
-    ...ship,
-    velocity: clonePoint(ship.velocity),
-  };
-}
-
-function cloneNullableSaucer(saucer: AsteroidsSaucer | null) {
-  if (saucer === null) {
-    return null;
-  }
-
-  return {
-    ...saucer,
-    velocity: clonePoint(saucer.velocity),
-  };
-}
-
-function cloneNullableExplosion(explosion: AsteroidsShipExplosion | null) {
-  return cloneNullableObject(explosion);
-}
-
-function cloneNullableObject<T extends object>(value: T | null): T | null {
-  if (value === null) {
-    return null;
-  }
-
-  return { ...value };
-}
-
-function clonePoint(point: AsteroidsPoint): AsteroidsPoint {
-  return {
-    x: point.x,
-    y: point.y,
-  };
 }
 
 function getAsteroidsMultiplayerRandomIndex(

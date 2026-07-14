@@ -1,15 +1,8 @@
-import type {
-  MultiplayerRealtimeGameSnapshot,
-  MultiplayerRealtimeRoomSnapshot,
-  MultiplayerTerminalSummary,
-} from "./multiplayer/protocol";
 import {
   createInitialSpaceInvadersGame,
   getSpaceInvadersTickDelay,
-  type CreateSpaceInvadersGameOptions,
   type SpaceInvader,
   type SpaceInvadersDirection,
-  type SpaceInvadersGameState,
   type SpaceInvadersInvaderShot,
   type SpaceInvadersPlayer,
   type SpaceInvadersPlayerShot,
@@ -61,7 +54,6 @@ import {
   hasSpaceInvadersPlayerShield,
   isSpaceInvadersPlayerRespawning,
   isSpaceInvadersPlayerVolleyFinished,
-  type SpaceInvadersPlayerOwnedState,
 } from "./space-invaders/player-state";
 import {
   advanceInvaderShot,
@@ -82,7 +74,42 @@ import {
   getCombinedSpaceInvadersScoreTarget,
   resetSpaceInvadersHitStreak,
 } from "./space-invaders/scoring";
+import {
+  applySpaceInvadersSoloProjection,
+  applySpaceInvadersSoloSharedState,
+  cloneSpaceInvadersMultiplayerState,
+  createSpaceInvadersSoloProjection,
+  pickSpaceInvadersMultiplayerSharedState,
+} from "./space-invaders/multiplayer-state";
+import {
+  SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS,
+  type CreateSpaceInvadersMultiplayerGameOptions,
+  type SpaceInvadersMultiplayerGameState,
+  type SpaceInvadersMultiplayerHeldInputs,
+  type SpaceInvadersMultiplayerShips,
+  type SpaceInvadersShipSeat,
+  type SpaceInvadersShipState,
+} from "./space-invaders/multiplayer-types";
 import type { SpaceInvadersScoreTarget } from "./space-invaders/types";
+
+export {
+  SPACE_INVADERS_MULTIPLAYER_ROOM_SEATS,
+  SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS,
+  type CreateSpaceInvadersMultiplayerGameOptions,
+  type SpaceInvadersMultiplayerClientInput,
+  type SpaceInvadersMultiplayerGameSnapshot,
+  type SpaceInvadersMultiplayerGameState,
+  type SpaceInvadersMultiplayerHeldInput,
+  type SpaceInvadersMultiplayerHeldInputs,
+  type SpaceInvadersMultiplayerRoomSeat,
+  type SpaceInvadersMultiplayerRoomSnapshot,
+  type SpaceInvadersMultiplayerSharedState,
+  type SpaceInvadersMultiplayerShipDirection,
+  type SpaceInvadersMultiplayerShips,
+  type SpaceInvadersMultiplayerTerminalSummary,
+  type SpaceInvadersShipSeat,
+  type SpaceInvadersShipState,
+} from "./space-invaders/multiplayer-types";
 
 type MultiplayerMineBlastInvaderDamage = {
   damagedArmoredInvaders: {
@@ -108,128 +135,10 @@ type MultiplayerMineBlastResolution = {
   game: SpaceInvadersMultiplayerGameState;
 };
 
-export const SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS = [
-  "ship-a",
-  "ship-b",
-] as const;
-
-export type SpaceInvadersShipSeat =
-  (typeof SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS)[number];
-
-export type SpaceInvadersMultiplayerRoomSeat = {
-  id: SpaceInvadersShipSeat;
-  label: string;
-  required: true;
-};
-
-export const SPACE_INVADERS_MULTIPLAYER_ROOM_SEATS = [
-  {
-    id: "ship-a",
-    label: "Ship A",
-    required: true,
-  },
-  {
-    id: "ship-b",
-    label: "Ship B",
-    required: true,
-  },
-] as const satisfies readonly SpaceInvadersMultiplayerRoomSeat[];
-
 const SPACE_INVADERS_MULTIPLAYER_PROJECTION_MAX_TICKS = 3;
 
 export const SPACE_INVADERS_MULTIPLAYER_PROJECTION_MAX_MS =
   getSpaceInvadersTickDelay() * SPACE_INVADERS_MULTIPLAYER_PROJECTION_MAX_TICKS;
-
-export type SpaceInvadersMultiplayerSharedState = Pick<
-  SpaceInvadersGameState,
-  | "alienCount"
-  | "alienFreezeTicks"
-  | "baseY"
-  | "boardHeight"
-  | "boardWidth"
-  | "explosions"
-  | "hitStreak"
-  | "invaderBurst"
-  | "invaderShotCooldownTicks"
-  | "invaderShots"
-  | "invaders"
-  | "lives"
-  | "marchDirection"
-  | "multiKillCombo"
-  | "nextExplosionId"
-  | "nextInvaderShotId"
-  | "nextPlayerShotId"
-  | "nextPowerUpId"
-  | "nextScorePopupId"
-  | "powerUps"
-  | "revengeVolleys"
-  | "score"
-  | "scorePopups"
-  | "status"
-  | "ufo"
-  | "ufoHitStreak"
->;
-
-export type SpaceInvadersShipState = SpaceInvadersPlayerOwnedState & {
-  isActive: boolean;
-  seat: SpaceInvadersShipSeat;
-};
-
-export type SpaceInvadersMultiplayerShips = Record<
-  SpaceInvadersShipSeat,
-  SpaceInvadersShipState
->;
-
-export type SpaceInvadersMultiplayerGameState =
-  SpaceInvadersMultiplayerSharedState & {
-    ships: SpaceInvadersMultiplayerShips;
-  };
-
-export type CreateSpaceInvadersMultiplayerGameOptions =
-  CreateSpaceInvadersGameOptions;
-
-export type SpaceInvadersMultiplayerTerminalSummary = MultiplayerTerminalSummary<
-  Extract<SpaceInvadersMultiplayerGameState["status"], "lost" | "won">,
-  {
-    livesRemaining: number;
-    remainingInvaders: number;
-    result: Extract<SpaceInvadersMultiplayerGameState["status"], "lost" | "won">;
-    score: number;
-  }
->;
-
-export type SpaceInvadersMultiplayerGameSnapshot =
-  MultiplayerRealtimeGameSnapshot<
-    "space-invaders",
-    SpaceInvadersMultiplayerGameState,
-    {
-      summary?: SpaceInvadersMultiplayerTerminalSummary;
-    }
-  >;
-
-export type SpaceInvadersMultiplayerRoomSnapshot =
-  MultiplayerRealtimeRoomSnapshot<SpaceInvadersMultiplayerGameSnapshot>;
-
-export type SpaceInvadersMultiplayerShipDirection = "left" | "right";
-
-export type SpaceInvadersMultiplayerClientInput =
-  | {
-      direction: SpaceInvadersMultiplayerShipDirection | null;
-      type: "space-invaders.setShipDirection";
-    }
-  | {
-      type: "space-invaders.fire";
-    };
-
-export type SpaceInvadersMultiplayerHeldInput = {
-  fire?: boolean;
-  left?: boolean;
-  right?: boolean;
-};
-
-export type SpaceInvadersMultiplayerHeldInputs = Readonly<
-  Partial<Record<SpaceInvadersShipSeat, SpaceInvadersMultiplayerHeldInput>>
->;
 
 export function createInitialSpaceInvadersMultiplayerGame(
   options: CreateSpaceInvadersMultiplayerGameOptions = {},
@@ -248,22 +157,7 @@ export function createInitialSpaceInvadersMultiplayerGame(
 export function cloneSpaceInvadersMultiplayerGame(
   game: SpaceInvadersMultiplayerGameState,
 ): SpaceInvadersMultiplayerGameState {
-  return {
-    ...game,
-    explosions: game.explosions.map(cloneObject),
-    invaderBurst: cloneNullableObject(game.invaderBurst),
-    invaderShots: game.invaderShots.map(cloneObject),
-    invaders: game.invaders.map(cloneObject),
-    multiKillCombo: cloneNullableObject(game.multiKillCombo),
-    powerUps: game.powerUps.map(cloneObject),
-    revengeVolleys: game.revengeVolleys.map((volley) => ({
-      ...volley,
-      invaderIds: [...volley.invaderIds],
-    })),
-    scorePopups: game.scorePopups.map(cloneObject),
-    ships: cloneSpaceInvadersMultiplayerShips(game.ships),
-    ufo: { ...game.ufo },
-  };
+  return cloneSpaceInvadersMultiplayerState(game);
 }
 
 export function isSpaceInvadersShipSeat(
@@ -1807,62 +1701,6 @@ function advanceSpaceInvadersMultiplayerShipRecovery(
       };
 }
 
-function createSpaceInvadersSoloProjection(
-  game: SpaceInvadersMultiplayerGameState,
-  seat: SpaceInvadersShipSeat,
-): SpaceInvadersGameState {
-  const { ships, ...sharedGame } = game;
-  const ship = ships[seat];
-
-  return {
-    ...sharedGame,
-    pendingShotPowerUp: ship.pendingShotPowerUp,
-    player: ship.player,
-    playerBurst: ship.playerBurst,
-    playerRespawnTicks: ship.playerRespawnTicks,
-    playerShieldTicks: ship.playerShieldTicks,
-    playerShots: ship.playerShots,
-    playerVolleyHasArmoredHit: ship.playerVolleyHasArmoredHit,
-    playerVolleyHasScored: ship.playerVolleyHasScored,
-    playerVolleyHasUnscoredExit: ship.playerVolleyHasUnscoredExit,
-  };
-}
-
-function applySpaceInvadersSoloProjection(
-  game: SpaceInvadersMultiplayerGameState,
-  seat: SpaceInvadersShipSeat,
-  projectedGame: SpaceInvadersGameState,
-): SpaceInvadersMultiplayerGameState {
-  return {
-    ...applySpaceInvadersSoloSharedState(game, projectedGame),
-    ships: {
-      ...game.ships,
-      [seat]: {
-        ...game.ships[seat],
-        pendingShotPowerUp: projectedGame.pendingShotPowerUp,
-        player: projectedGame.player,
-        playerBurst: projectedGame.playerBurst,
-        playerRespawnTicks: projectedGame.playerRespawnTicks,
-        playerShieldTicks: projectedGame.playerShieldTicks,
-        playerShots: projectedGame.playerShots,
-        playerVolleyHasArmoredHit: projectedGame.playerVolleyHasArmoredHit,
-        playerVolleyHasScored: projectedGame.playerVolleyHasScored,
-        playerVolleyHasUnscoredExit: projectedGame.playerVolleyHasUnscoredExit,
-      },
-    },
-  };
-}
-
-function applySpaceInvadersSoloSharedState(
-  game: SpaceInvadersMultiplayerGameState,
-  projectedGame: SpaceInvadersGameState,
-): SpaceInvadersMultiplayerGameState {
-  return {
-    ...game,
-    ...pickSpaceInvadersMultiplayerSharedState(projectedGame),
-  };
-}
-
 function createInitialSpaceInvadersMultiplayerShips(
   boardWidth: number,
   boardHeight: number,
@@ -2259,76 +2097,4 @@ function createSpaceInvadersMultiplayerScorePopup(
       },
     ],
   };
-}
-
-function pickSpaceInvadersMultiplayerSharedState(
-  game: SpaceInvadersGameState,
-): SpaceInvadersMultiplayerSharedState {
-  return {
-    alienCount: game.alienCount,
-    alienFreezeTicks: game.alienFreezeTicks,
-    baseY: game.baseY,
-    boardHeight: game.boardHeight,
-    boardWidth: game.boardWidth,
-    explosions: game.explosions,
-    hitStreak: game.hitStreak,
-    invaderBurst: game.invaderBurst,
-    invaderShotCooldownTicks: game.invaderShotCooldownTicks,
-    invaderShots: game.invaderShots,
-    invaders: game.invaders,
-    lives: game.lives,
-    marchDirection: game.marchDirection,
-    multiKillCombo: game.multiKillCombo,
-    nextExplosionId: game.nextExplosionId,
-    nextInvaderShotId: game.nextInvaderShotId,
-    nextPlayerShotId: game.nextPlayerShotId,
-    nextPowerUpId: game.nextPowerUpId,
-    nextScorePopupId: game.nextScorePopupId,
-    powerUps: game.powerUps,
-    revengeVolleys: game.revengeVolleys,
-    score: game.score,
-    scorePopups: game.scorePopups,
-    status: game.status,
-    ufo: game.ufo,
-    ufoHitStreak: game.ufoHitStreak,
-  };
-}
-
-function cloneSpaceInvadersMultiplayerShips(
-  ships: SpaceInvadersMultiplayerShips,
-): SpaceInvadersMultiplayerShips {
-  return {
-    "ship-a": cloneSpaceInvadersShipState(ships["ship-a"]),
-    "ship-b": cloneSpaceInvadersShipState(ships["ship-b"]),
-  };
-}
-
-function cloneSpaceInvadersShipState(
-  ship: SpaceInvadersShipState,
-): SpaceInvadersShipState {
-  return {
-    ...ship,
-    player: { ...ship.player },
-    playerBurst: cloneNullableObject(ship.playerBurst),
-    playerShots: ship.playerShots.map(cloneSpaceInvadersPlayerShot),
-  };
-}
-
-function cloneSpaceInvadersPlayerShot(
-  shot: SpaceInvadersPlayerShot,
-): SpaceInvadersPlayerShot {
-  return {
-    ...shot,
-    ...(shot.damagedInvaderIds === undefined
-      ? {}
-      : { damagedInvaderIds: [...shot.damagedInvaderIds] }),
-  };
-}
-
-function cloneNullableObject<T extends object>(value: T | null): T | null {
-  return value === null ? null : { ...value };
-}
-
-function cloneObject<T extends object>(value: T): T {
-  return { ...value };
 }

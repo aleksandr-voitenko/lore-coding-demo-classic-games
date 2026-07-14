@@ -14,10 +14,12 @@ This file covers deterministic game engines and shared source logic under
 - Space Invaders uses `src/lib/space-invaders/` internals behind
   `space-invaders-game-engine.ts`: `types.ts`, `constants.ts`, `formation.ts`,
   `hitboxes.ts`, `projectiles.ts`, `player-shots.ts`, `effects.ts`,
-  `scoring.ts`, plus shared geometry/random helpers. Player-shot resolution and
-  effect helpers are extracted; keep lifecycle ordering and mine-blast handling
-  in the facade unless a later refactor can move them without obscuring
-  cross-system behavior.
+  `scoring.ts`, plus shared geometry/random helpers. The multiplayer facade uses
+  `multiplayer-types.ts` for its public state/protocol contract and
+  `multiplayer-state.ts` for solo/shared-state projection and immutable snapshot
+  cloning. Player-shot resolution and effect helpers are extracted; keep
+  lifecycle ordering and mine-blast handling in the facade unless a later
+  refactor can move them without obscuring cross-system behavior.
 - The Space Invaders private-room co-op milestone is two independent ships, not
   a shared cannon. Seats are `ship-a` and `ship-b`; each player controls one
   ship; score, alien wave, and lives are shared. Player ships do not collide
@@ -28,9 +30,12 @@ This file covers deterministic game engines and shared source logic under
 - Asteroids uses `src/lib/asteroids/` internals behind
   `asteroids-game-engine.ts`: `types.ts`, `constants.ts`, `difficulty.ts`,
   `asteroids.ts`, `projectiles.ts`, `saucers.ts`, `power-ups.ts`, `scoring.ts`,
-  `geometry.ts`, and `ship.ts`. Keep lifecycle/world tick orchestration in the
-  facade so ship, bullet, asteroid, saucer, power-up, scoring, and respawn
-  ordering stays easy to audit.
+  `geometry.ts`, and `ship.ts`. The multiplayer facade uses
+  `multiplayer-types.ts` for its public state/protocol contract and
+  `multiplayer-state.ts` for solo/shared-world projection and immutable snapshot
+  cloning. Keep lifecycle/world tick orchestration in the facade so ship,
+  bullet, asteroid, saucer, power-up, scoring, and respawn ordering stays easy
+  to audit.
 - Tank Patrol retains the internal `battle-city` namespace and uses
   `battle-city-game-engine.ts` as the deterministic facade for its single-player
   campaign and private-room co-op rules. The 35 maps form a displayed 70-stage
