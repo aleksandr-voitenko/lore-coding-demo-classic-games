@@ -9,6 +9,7 @@ const MULTIPLAYER_GAME_REGISTRY = [
   { id: "space-invaders", isDefault: false },
   { id: "pong", isDefault: true },
   { id: "asteroids", isDefault: false },
+  { id: "battle-city", isDefault: false },
 ] as const satisfies readonly MultiplayerGameRegistryEntry[];
 
 export type MultiplayerGameId =

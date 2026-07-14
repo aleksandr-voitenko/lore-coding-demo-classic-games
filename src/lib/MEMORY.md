@@ -33,7 +33,8 @@ This file covers deterministic game engines and shared source logic under
   ordering stays easy to audit.
 - Tank Patrol retains the internal `battle-city` namespace and uses
   `battle-city-game-engine.ts` as the deterministic facade for its single-player
-  campaign. The 35 maps form a displayed 70-stage cycle;
+  campaign and private-room co-op rules. The 35 maps form a displayed 70-stage
+  cycle;
   Stages 36-70 reuse the maps with the Stage 35 enemy mix before resetting.
   Keep 26x26 terrain mutation, 4x4 wall fragments, tank and projectile
   collision, enemy spawning and decisions, headquarters defense, scoring,
@@ -59,6 +60,28 @@ This file covers deterministic game engines and shared source logic under
   through results and the following stage setup as the hardware does.
   Browser time is accumulated into fixed 60.0988 Hz simulation frames; do not
   couple gameplay speed directly to callback frequency.
+  Private-room play uses `battle-city-multiplayer.ts` and the same deterministic
+  engine, always starts Stage 1, and processes Player 2 before Player 1 where
+  the original ordering matters. P1 spawns at row 24/column 8 and P2 at row
+  24/column 16. Each player starts with three lives and owns their score,
+  one-time 20,000-point bonus-life flag, upgrade tier, shield, kill counts,
+  bullet slots, and elimination state. Continue while either player has lives;
+  losing the headquarters or eliminating both ends the team run. An eliminated
+  player stays inactive for the current stage, with a side game-over marker;
+  a late score-earned life retains them for the following stage. Multiplayer
+  permits six active enemies instead of four and advances the spawn interval by
+  20 ticks.
+  Friendly shells are consumed when they hit the teammate; an unshielded active
+  teammate receives the original `0xC8` player-handler movement stun without
+  losing a life and may still fire. Star, helmet, tank, pickup score, and the
+  score-earned extra life apply to the collector; grenade, clock, and shovel
+  alter shared world state. Stage results retain separate player counts and
+  scores, and a surviving strict total-kill leader receives 1,000 points; a tie
+  awards neither player. Keep the multiplayer snapshot/history path separate
+  from the solo `battle-city` replay V1 contract and campaign leaderboard. As
+  long as replay schema V1 uses the current engine, preserve its original solo
+  final-life and slot-sorted shell-collision paths; multiplayer's cross-player
+  object-slot ordering must remain behind the multiplayer-state guard.
 - The Asteroids private-room co-op milestone is two independent ships in one
   shared asteroid field. Seats are `ship-a` and `ship-b`; each player controls
   one ship; score, wave, asteroid field, saucer state, and lives are shared.
@@ -131,7 +154,7 @@ This file covers deterministic game engines and shared source logic under
   React hooks in `src/components/game-ui-hooks.ts` should delegate decisions here
   and only apply effects such as pause, resume, or back-to-menu callbacks.
 - `src/lib/multiplayer/` owns the pure private-room model and protocol types for
-  future multiplayer work. Keep it generic across games and free of WebSockets,
+  multiplayer work. Keep it generic across games and free of WebSockets,
   route handlers, persistence stores, singleton room state, and React concerns.
 - `snake-food-feedback.ts` keeps Snake pickup feedback metadata outside both the
   engine and React rendering code.

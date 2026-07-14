@@ -14,7 +14,9 @@ All the code in this repository was created using AI agents and the Lore Coding 
 - Tank Patrol provides a single-player campaign across 35 maps and the
   original 70-stage difficulty cycle, including Stage 1-35 selection,
   NES-pixel movement, partial wall destruction, NTSC-paced tank and shell
-  lifecycles, enemy waves, timed results, and a headquarters to defend.
+  lifecycles, enemy waves, timed results, and a headquarters to defend. Its
+  online private-room mode adds server-authoritative two-player co-op starting
+  from Stage 1 with original-style rules and spawn points.
 - Asteroids includes vector-style ship thrust, wraparound movement,
   asteroid splitting, UFO saucers, waves, lives, bonus lives, scoring, and
   persistent board power-ups, and difficulty-scoped records.
@@ -29,8 +31,9 @@ All the code in this repository was created using AI agents and the Lore Coding 
 - Name-and-password player accounts with private profile stats for signed-in
   play sessions, including total play time and per-game best metrics.
 - Snake, Tetris, Breakout, Minesweeper, Space Invaders, Pong, Simon, 2048,
-  Asteroids, and Tank Patrol replay recording with server-issued runs,
-  signed-in replay saves, and profile playback for the latest saved run.
+  Asteroids, and the Tank Patrol single-player campaign support replay
+  recording with server-issued runs, signed-in replay saves, and profile
+  playback for the latest saved run.
 - Closable in-game Help screens and Escape-to-menu abandon confirmations.
 - Local game-card artwork for every game in the launcher.
 
@@ -129,6 +132,23 @@ not write inputs, ticks, power-up awards, or other per-event room history into
 SQLite. Restarting the sidecar abandons waiting and active rooms owned by that
 process, so players should create a new room after a restart instead of
 expecting replay-log recovery.
+
+Tank Patrol private rooms require both Player 1 and Player 2 seats and always
+begin at Stage 1. Each player starts at the original P1/P2 spawn point with
+three lives and keeps an individual score, upgrade tier, and stage kill totals.
+A friendly shell is consumed on impact and briefly stuns an unprotected teammate
+instead of destroying them. The co-op enemy field allows six simultaneous
+tanks and advances enemy spawning faster than solo play; the team remains in
+the battle until both players are eliminated or the headquarters is destroyed.
+Star, helmet, tank, pickup score, and score-earned extra-life rewards belong to
+the collecting player, while grenade, clock, and shovel effects apply to the
+shared battlefield. Stage results show both players separately, and a surviving
+strict kill leader receives the original 1,000-point bonus; ties receive no
+bonus.
+
+These multiplayer sessions remain separate from Tank Patrol's single-player
+replay and leaderboard paths. Private-room inputs and outcomes are not saved as
+profile replays or submitted to the solo campaign leaderboard.
 
 Volatile rooms also have bounded idle retention. An unconnected lobby expires
 after 60 minutes without a successful participant or host command; an
@@ -261,9 +281,10 @@ compatibility with existing Snake deployments. On a VPS, set
 `GAME_LEADERBOARD_SQLITE_PATH` to durable storage.
 
 Snake, Tetris, Breakout, Minesweeper, Space Invaders, Pong, Simon, 2048,
-Asteroids, and Tank Patrol record replay events during play after the server
-issues a run id and seed. Replay events include active-play elapsed time so
-playback mirrors player hesitation while excluding Pause and Help time.
+Asteroids, and the Tank Patrol single-player campaign record replay events
+during play after the server issues a run id and seed. Replay events include
+active-play elapsed time so playback mirrors player hesitation while excluding
+Pause and Help time.
 Minesweeper and Simon replays also include board-local schematic cursor streams
 sampled from mouse movement every 50ms.
 Signed-in players can save the completed run from the final screen; the profile

@@ -203,6 +203,52 @@ The initial terminal summary should stay compact: shared score, wave, remaining
 lives, and occupied seats. Per-ship stats such as shots fired, deaths, pickups,
 or contribution can be added later without changing the co-op rules above.
 
+## Tank Patrol Two-Player Co-op Rules
+
+These rules follow the original NES behavior documented by the public
+[bit-exact Battle City disassembly](https://github.com/cyneprepou4uk/NES-Games-Disassembly/tree/main/Battle%20City)
+and the supplied 26x26 stage projection.
+
+Tank Patrol private rooms reproduce the original simultaneous two-player mode
+with two required seats, `player-1` and `player-2`. Player 1 starts at terrain
+coordinate `(24, 8)` and Player 2 at `(24, 16)`. Each begins with three lives
+and independently owns score, enemy-type kill counts, the 20,000-point extra
+life, tank upgrade tier, helmet protection, and respawn lifecycle.
+
+The players share the stage, terrain, enemy wave, clock freeze, headquarters,
+and fortress state. Player tanks block one another. Player 1 shells use object
+slots `0` and `8`; Player 2 shells use `1` and `9`. Two-player stages permit
+six simultaneous enemy tanks in slots `2` through `7`, and the stored enemy
+spawn interval is 20 video frames shorter than the corresponding solo stage.
+When enemies enter their player-pressure phase, even enemy slots pursue Player
+1 and odd enemy slots pursue Player 2, falling back to the surviving player.
+
+Friendly fire consumes the shell and, unless the teammate is protected by a
+spawn or helmet shield, prevents that teammate from moving or turning for 200
+eligible player-handler updates. The stunned tank may still fire, blinks while
+disabled, and a further friendly hit does not extend the timer. Shells from the
+two players can cancel one another, while one player's own primary and
+secondary shells do not.
+
+Power-up pickup score, stars, helmets, and tank lives belong to the collector.
+Grenade, clock, and shovel effects apply to the shared battlefield. Power-up
+placement avoids both active players, and Player 2 wins a same-frame pickup tie
+because the original handler visits that player first.
+
+A player who exhausts all lives becomes inactive for the rest of the current
+stage while an individual side-entering game-over message plays and the
+teammate continues. A score-earned extra life from a lingering shell can retain
+that player for the next stage, but does not respawn them during the current
+one. The team reaches central game over only after the headquarters is
+destroyed or both players remain out after same-frame shell scoring and power-up
+collection. Stage results keep separate player totals. On a cleared stage, a
+surviving player with strictly more kills than the teammate receives 1,000
+points; a tie receives no bonus. Multiplayer state and terminal summaries
+remain server-authored and mode-scoped. The adapter freezes seat attribution
+and the final outcome when the run first becomes terminal, so later room-seat
+changes cannot rewrite the result. These rooms do not reuse the solo replay
+upload, game-session, or leaderboard paths.
+
 ## Server Authority And Volatile Room State
 
 The authoritative multiplayer stream is the sidecar's in-process room state plus

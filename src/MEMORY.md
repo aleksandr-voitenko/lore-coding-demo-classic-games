@@ -53,10 +53,12 @@ rules live in child memory files for `src/app`, `src/components`, `src/lib`, and
   normalized display-name keys, so duplicate account checks and profile
   ownership must remain server-enforced.
 - Snake, Tetris, Breakout, Minesweeper, Space Invaders, Pong, Simon, 2048,
-  Asteroids, and Tank Patrol replay saves are profile-scoped. The live game
-  components record replay events unconditionally after a server-issued run, but
-  `/api/replays/<game>` requires a signed-in session before saving or
-  downloading the latest replay for supported replay games.
+  Asteroids, and Tank Patrol single-player replay saves are profile-scoped. The
+  live solo game components record replay events unconditionally after a
+  server-issued run, but `/api/replays/<game>` requires a signed-in session
+  before saving or downloading the latest replay for supported replay games.
+  Server-authoritative private-room sessions are volatile and must not feed
+  these solo replay or leaderboard paths.
 - Prefer meaningful whole-state or structured-output assertions in tests. Use
   field-by-field assertions only when they produce clearer failures.
 - Prefer Playwright for new rendered UI behavior such as launcher handoff,

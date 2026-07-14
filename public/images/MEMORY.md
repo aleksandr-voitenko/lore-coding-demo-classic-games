@@ -49,6 +49,11 @@ This file covers public image assets under `public/images/`.
   water variants, framed power-ups, generated effects, and intact/destroyed
   phoenix-headquarters states. `tank-patrol-game-card.png` is its title-bearing
   launcher artwork.
+  Multiplayer Player 2 currently uses temporary copies of the four Player 1
+  upgrade-tier sprites under the distinct
+  `tank-player-2-tier-0.png` through `tank-player-2-tier-3.png` names. Keep those
+  URLs separate so replacement P2 artwork can land without changing runtime
+  code or overwriting the approved P1 assets.
 - Alien player-shot collision in `src/lib/space-invaders-game-engine.ts` uses
   occupied-pixel hitbox ratios derived from the non-transparent bounds of these
   112x112 alien PNGs. When alien sprites change shape or padding, update those

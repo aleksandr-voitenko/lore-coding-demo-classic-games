@@ -38,7 +38,17 @@ export type BattleCityFrameInput = {
   fireRequested: boolean;
 };
 
-export type BattleCityPlayerPhase = "active" | "exploding" | "spawning";
+export type BattleCityPlayerId = "player1" | "player2";
+
+export type BattleCityMultiplayerFrameInput = Readonly<
+  Record<BattleCityPlayerId, BattleCityFrameInput>
+>;
+
+export type BattleCityPlayerPhase =
+  | "active"
+  | "exploding"
+  | "inactive"
+  | "spawning";
 
 export type BattleCityStageOutcome = "cleared" | "lost" | null;
 
@@ -54,6 +64,7 @@ export type BattleCityPlayer = BattleCityPosition & {
   iceSlideDirection: BattleCityDirection | null;
   iceSlideStepsRemaining: number;
   invulnerabilityTicks: number;
+  movementStunTicks?: number;
   phase: BattleCityPlayerPhase;
   phaseTicks: number;
   powerTier: 0 | 1 | 2 | 3;
@@ -79,7 +90,7 @@ export type BattleCityEnemy = BattleCityPosition & {
   type: BattleCityEnemyType;
 };
 
-export type BattleCityBulletOwner = "player" | "enemy";
+export type BattleCityBulletOwner = "player" | "player2" | "enemy";
 
 export type BattleCityBullet = BattleCityPosition & {
   canDestroySteel: boolean;
@@ -102,6 +113,12 @@ export type BattleCityPowerUpScorePopup = BattleCityPosition & {
   ticks: number;
 };
 
+export type BattleCityPlayerGameOverMessage = {
+  movementPixels: number;
+  playerId: BattleCityPlayerId;
+  ticksRemaining: number;
+};
+
 export type BattleCityGameState = {
   activePowerUp: BattleCityPowerUp | null;
   baseAlive: boolean;
@@ -120,12 +137,19 @@ export type BattleCityGameState = {
   nextEnemyId: number;
   nextPowerUpId: number;
   player: BattleCityPlayer;
+  player2?: BattleCityPlayer;
+  player2BonusLifeAwarded?: boolean;
+  player2Lives?: number;
+  player2Score?: number;
+  player2StageKillCounts?: BattleCityKillCounts;
+  playerGameOverMessage?: BattleCityPlayerGameOverMessage | null;
   powerUpScorePopup: BattleCityPowerUpScorePopup | null;
   score: number;
   spawnedEnemyCount: number;
   stage: number;
   stageBattleTicks: number;
   stageKillCounts: BattleCityKillCounts;
+  stageKillLeaderBonusAwarded?: boolean;
   stageOutcome: BattleCityStageOutcome;
   stageResultTicks: number;
   stageTransitionTicks: number;
@@ -134,6 +158,18 @@ export type BattleCityGameState = {
   terrainFragments: number[][];
   tick: number;
   totalEnemyCount: number;
+  frameCounterResetPending?: boolean;
+};
+
+export type BattleCityMultiplayerGameState = BattleCityGameState & {
+  player2: BattleCityPlayer;
+  player2BonusLifeAwarded: boolean;
+  player2Lives: number;
+  player2Score: number;
+  player2StageKillCounts: BattleCityKillCounts;
+  playerGameOverMessage: BattleCityPlayerGameOverMessage | null;
+  stageKillLeaderBonusAwarded: boolean;
+  frameCounterResetPending: boolean;
 };
 
 export type BattleCityStageDefinition = {
@@ -142,6 +178,7 @@ export type BattleCityStageDefinition = {
   spawns: {
     enemies: BattleCityPosition[];
     player1: BattleCityPosition;
+    player2: BattleCityPosition;
   };
   stage: number;
   terrain: string[];

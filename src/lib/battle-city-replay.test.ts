@@ -174,6 +174,63 @@ function createTerminalLossReplay(seed: number) {
   });
 }
 
+function playLegacyV1Golden({
+  initialTick,
+  mode,
+  seed,
+}: {
+  initialTick: number;
+  mode: "passive" | "scripted" | "shooter";
+  seed: number;
+}) {
+  const directionOrder = ["up", "right", "down", "left"] as const;
+  let state = createInitialBattleCityReplayGame({
+    initialTick,
+    seed,
+    startingStage: 1,
+  });
+  state = applyBattleCityReplayEvent(state, {
+    elapsedMs: 0,
+    seq: 0,
+    tick: 0,
+    type: "start",
+  });
+  const advanceEvent = createAdvanceEvent(1, {
+    direction: null,
+    fireRequested: false,
+  });
+  let frame = 0;
+
+  while (state.game.status !== "lost" && frame < 200_000) {
+    advanceEvent.input =
+      mode === "passive"
+        ? { direction: null, fireRequested: false }
+        : mode === "shooter"
+          ? { direction: "up", fireRequested: frame % 8 === 0 }
+          : {
+              direction: directionOrder[Math.floor(frame / 180) % 4]!,
+              fireRequested: frame % 11 === 0,
+            };
+    state = applyBattleCityReplayAdvanceFrame(state, advanceEvent);
+    frame += 1;
+  }
+
+  return {
+    baseAlive: state.game.baseAlive,
+    cycle: state.game.cycle,
+    destroyedEnemyCount: state.game.destroyedEnemyCount,
+    frame,
+    initialTick,
+    lives: state.game.lives,
+    mode,
+    score: state.game.score,
+    seed,
+    stage: state.game.stage,
+    status: state.game.status,
+    tick: state.game.tick,
+  };
+}
+
 describe("Tank Patrol replay", () => {
   it("parses the campaign contract and rejects unsupported parameters, losses, and input", () => {
     expect(parseBattleCityReplayPayload(createReplayPayload())).toMatchObject({
@@ -477,5 +534,62 @@ describe("Tank Patrol replay", () => {
       stage: replay.finalStage,
       status: replay.finalStatus,
     });
+  });
+
+  it("preserves deterministic schema V1 outcomes from before multiplayer", () => {
+    expect(
+      [
+        { initialTick: 0, mode: "passive", seed: 4_321 },
+        { initialTick: 0, mode: "shooter", seed: 2_468 },
+        { initialTick: 37, mode: "scripted", seed: 9_876 },
+      ].map((scenario) =>
+        playLegacyV1Golden(
+          scenario as Parameters<typeof playLegacyV1Golden>[0],
+        ),
+      ),
+    ).toEqual([
+      {
+        baseAlive: false,
+        cycle: 1,
+        destroyedEnemyCount: 0,
+        frame: 3_573,
+        initialTick: 0,
+        lives: 0,
+        mode: "passive",
+        score: 0,
+        seed: 4_321,
+        stage: 1,
+        status: "lost",
+        tick: 556,
+      },
+      {
+        baseAlive: true,
+        cycle: 1,
+        destroyedEnemyCount: 1,
+        frame: 2_413,
+        initialTick: 0,
+        lives: 0,
+        mode: "shooter",
+        score: 100,
+        seed: 2_468,
+        stage: 1,
+        status: "lost",
+        tick: 565,
+      },
+      {
+        baseAlive: false,
+        cycle: 1,
+        destroyedEnemyCount: 0,
+        frame: 1_168,
+        initialTick: 37,
+        lives: 3,
+        mode: "scripted",
+        score: 0,
+        seed: 9_876,
+        stage: 1,
+        status: "lost",
+        tick: 556,
+      },
+    ]);
   });
 });

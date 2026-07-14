@@ -35,6 +35,10 @@
         "row": 24,
         "col": 8
       },
+      "player2": {
+        "row": 24,
+        "col": 16
+      },
       "enemies": [
         {
           "row": 0,
@@ -108,6 +112,10 @@
       "player1": {
         "row": 24,
         "col": 8
+      },
+      "player2": {
+        "row": 24,
+        "col": 16
       },
       "enemies": [
         {
@@ -183,6 +191,10 @@
         "row": 24,
         "col": 8
       },
+      "player2": {
+        "row": 24,
+        "col": 16
+      },
       "enemies": [
         {
           "row": 0,
@@ -256,6 +268,10 @@
       "player1": {
         "row": 24,
         "col": 8
+      },
+      "player2": {
+        "row": 24,
+        "col": 16
       },
       "enemies": [
         {
@@ -331,6 +347,10 @@
         "row": 24,
         "col": 8
       },
+      "player2": {
+        "row": 24,
+        "col": 16
+      },
       "enemies": [
         {
           "row": 0,
@@ -404,6 +424,10 @@
       "player1": {
         "row": 24,
         "col": 8
+      },
+      "player2": {
+        "row": 24,
+        "col": 16
       },
       "enemies": [
         {
@@ -479,6 +503,10 @@
         "row": 24,
         "col": 8
       },
+      "player2": {
+        "row": 24,
+        "col": 16
+      },
       "enemies": [
         {
           "row": 0,
@@ -552,6 +580,10 @@
       "player1": {
         "row": 24,
         "col": 8
+      },
+      "player2": {
+        "row": 24,
+        "col": 16
       },
       "enemies": [
         {
@@ -627,6 +659,10 @@
         "row": 24,
         "col": 8
       },
+      "player2": {
+        "row": 24,
+        "col": 16
+      },
       "enemies": [
         {
           "row": 0,
@@ -700,6 +736,10 @@
       "player1": {
         "row": 24,
         "col": 8
+      },
+      "player2": {
+        "row": 24,
+        "col": 16
       },
       "enemies": [
         {
@@ -775,6 +815,10 @@
         "row": 24,
         "col": 8
       },
+      "player2": {
+        "row": 24,
+        "col": 16
+      },
       "enemies": [
         {
           "row": 0,
@@ -848,6 +892,10 @@
       "player1": {
         "row": 24,
         "col": 8
+      },
+      "player2": {
+        "row": 24,
+        "col": 16
       },
       "enemies": [
         {
@@ -923,6 +971,10 @@
         "row": 24,
         "col": 8
       },
+      "player2": {
+        "row": 24,
+        "col": 16
+      },
       "enemies": [
         {
           "row": 0,
@@ -996,6 +1048,10 @@
       "player1": {
         "row": 24,
         "col": 8
+      },
+      "player2": {
+        "row": 24,
+        "col": 16
       },
       "enemies": [
         {
@@ -1071,6 +1127,10 @@
         "row": 24,
         "col": 8
       },
+      "player2": {
+        "row": 24,
+        "col": 16
+      },
       "enemies": [
         {
           "row": 0,
@@ -1144,6 +1204,10 @@
       "player1": {
         "row": 24,
         "col": 8
+      },
+      "player2": {
+        "row": 24,
+        "col": 16
       },
       "enemies": [
         {
@@ -1219,6 +1283,10 @@
         "row": 24,
         "col": 8
       },
+      "player2": {
+        "row": 24,
+        "col": 16
+      },
       "enemies": [
         {
           "row": 0,
@@ -1292,6 +1360,10 @@
       "player1": {
         "row": 24,
         "col": 8
+      },
+      "player2": {
+        "row": 24,
+        "col": 16
       },
       "enemies": [
         {
@@ -1367,6 +1439,10 @@
         "row": 24,
         "col": 8
       },
+      "player2": {
+        "row": 24,
+        "col": 16
+      },
       "enemies": [
         {
           "row": 0,
@@ -1440,6 +1516,10 @@
       "player1": {
         "row": 24,
         "col": 8
+      },
+      "player2": {
+        "row": 24,
+        "col": 16
       },
       "enemies": [
         {
@@ -1515,6 +1595,10 @@
         "row": 24,
         "col": 8
       },
+      "player2": {
+        "row": 24,
+        "col": 16
+      },
       "enemies": [
         {
           "row": 0,
@@ -1588,6 +1672,10 @@
       "player1": {
         "row": 24,
         "col": 8
+      },
+      "player2": {
+        "row": 24,
+        "col": 16
       },
       "enemies": [
         {
@@ -1663,6 +1751,10 @@
         "row": 24,
         "col": 8
       },
+      "player2": {
+        "row": 24,
+        "col": 16
+      },
       "enemies": [
         {
           "row": 0,
@@ -1736,6 +1828,10 @@
       "player1": {
         "row": 24,
         "col": 8
+      },
+      "player2": {
+        "row": 24,
+        "col": 16
       },
       "enemies": [
         {
@@ -1811,6 +1907,10 @@
         "row": 24,
         "col": 8
       },
+      "player2": {
+        "row": 24,
+        "col": 16
+      },
       "enemies": [
         {
           "row": 0,
@@ -1884,6 +1984,10 @@
       "player1": {
         "row": 24,
         "col": 8
+      },
+      "player2": {
+        "row": 24,
+        "col": 16
       },
       "enemies": [
         {
@@ -1959,6 +2063,10 @@
         "row": 24,
         "col": 8
       },
+      "player2": {
+        "row": 24,
+        "col": 16
+      },
       "enemies": [
         {
           "row": 0,
@@ -2032,6 +2140,10 @@
       "player1": {
         "row": 24,
         "col": 8
+      },
+      "player2": {
+        "row": 24,
+        "col": 16
       },
       "enemies": [
         {
@@ -2107,6 +2219,10 @@
         "row": 24,
         "col": 8
       },
+      "player2": {
+        "row": 24,
+        "col": 16
+      },
       "enemies": [
         {
           "row": 0,
@@ -2180,6 +2296,10 @@
       "player1": {
         "row": 24,
         "col": 8
+      },
+      "player2": {
+        "row": 24,
+        "col": 16
       },
       "enemies": [
         {
@@ -2255,6 +2375,10 @@
         "row": 24,
         "col": 8
       },
+      "player2": {
+        "row": 24,
+        "col": 16
+      },
       "enemies": [
         {
           "row": 0,
@@ -2328,6 +2452,10 @@
       "player1": {
         "row": 24,
         "col": 8
+      },
+      "player2": {
+        "row": 24,
+        "col": 16
       },
       "enemies": [
         {
@@ -2403,6 +2531,10 @@
         "row": 24,
         "col": 8
       },
+      "player2": {
+        "row": 24,
+        "col": 16
+      },
       "enemies": [
         {
           "row": 0,
@@ -2477,6 +2609,10 @@
         "row": 24,
         "col": 8
       },
+      "player2": {
+        "row": 24,
+        "col": 16
+      },
       "enemies": [
         {
           "row": 0,
@@ -2550,6 +2686,10 @@
       "player1": {
         "row": 24,
         "col": 8
+      },
+      "player2": {
+        "row": 24,
+        "col": 16
       },
       "enemies": [
         {

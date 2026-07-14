@@ -33,12 +33,20 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
 - Games split browser orchestration from reusable rules: `src/components/*-game.tsx`
   owns React state and browser events, `src/components/*-board.tsx` renders the
   board, and `src/lib/*-game-engine.ts` owns deterministic game state transitions.
-- Tank Patrol is a single-player-only campaign over 35 supplied maps. It
+- Tank Patrol has a 35-map single-player campaign and a server-authoritative
+  two-player co-op mode in the existing online private-room pipeline. Solo play
   displays the original Stages 1-70 difficulty cycle, then resets to Stage 1;
-  it belongs in the shared playable catalog and replay system but intentionally
-  stays out of multiplayer entry points. Its persisted game id, replay query,
-  and implementation namespace remain `battle-city` so existing profile and
-  leaderboard records keep resolving after the public-title rename.
+  private rooms require `player-1` and `player-2` seats and always start at
+  Stage 1. The room rules preserve the original P1/P2 spawn points, three
+  independent lives, individual scores/upgrades/stage kill totals,
+  friendly-fire stun, a six-enemy cap with faster spawning, individual and global
+  power-up effects, play until both players are eliminated, separate results,
+  and the surviving strict kill leader's 1,000-point bonus.
+  Tank Patrol's persisted game id, replay query, implementation namespace, and
+  asset directory remain `battle-city` so existing profile and leaderboard
+  records keep resolving after the public-title rename. Replay V1 and the
+  campaign leaderboard remain solo-only; private-room state and outcomes are
+  volatile and do not enter either persistence path.
 - Shared game UI is exported through `src/components/game-layout.tsx`; focused
   implementation modules live beside it in `src/components/`.
 - Leaderboards cross source folders: shared key/ranking/client helpers live in

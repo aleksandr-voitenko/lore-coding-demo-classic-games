@@ -13,11 +13,13 @@ describe("multiplayer game registry", () => {
       "space-invaders",
       "pong",
       "asteroids",
+      "battle-city",
     ]);
     expect(MULTIPLAYER_GAME_IDS.map(getGameCatalogEntry)).toEqual([
       { id: "space-invaders", label: "Space Invaders" },
       { id: "pong", label: "Pong" },
       { id: "asteroids", label: "Asteroids" },
+      { id: "battle-city", label: "Tank Patrol" },
     ]);
     expect(DEFAULT_MULTIPLAYER_GAME_ID).toBe("pong");
   });

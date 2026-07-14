@@ -23,6 +23,17 @@ export const BATTLE_CITY_POWER_UP_COLLISION_DISTANCE = 12 / 8;
 export const BATTLE_CITY_ICE_SLIDE_STEPS = 28;
 export const BATTLE_CITY_STARTING_LIVES = 3;
 export const BATTLE_CITY_MAX_ACTIVE_ENEMIES = 4;
+export const BATTLE_CITY_MULTIPLAYER_MAX_ACTIVE_ENEMIES = 6;
+export const BATTLE_CITY_MULTIPLAYER_SPAWN_ADVANCE_TICKS = 20;
+// The original stores $C8 player-handler updates. Player handlers run on
+// three of every four video frames, producing roughly 4.44 seconds of stun.
+export const BATTLE_CITY_FRIENDLY_FIRE_STUN_TICKS = 0xc8;
+// The handler loads $0D, then the same frame's message pass immediately
+// decrements it to $0C and moves the sprite once at low-counter phase zero.
+export const BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_TICKS = 0x0c * 16;
+export const BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_INITIAL_MOVEMENT_PIXELS = 1;
+export const BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_SLIDE_TIMER_COUNT = 0x0a;
+export const BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_TIMER_STEP_TICKS = 0x10;
 export const BATTLE_CITY_BONUS_LIFE_SCORE = 20_000;
 export const BATTLE_CITY_PLAYER_INVULNERABILITY_TICKS = 192;
 export const BATTLE_CITY_ENEMY_SPAWN_INTERVAL_TICKS = 187;

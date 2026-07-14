@@ -386,7 +386,7 @@ test("launcher renders game cards and configurable parameters", async ({ page })
     "true",
   );
   await expect(page.getByTestId("game-library-single-player-count")).toHaveText("10");
-  await expect(page.getByTestId("game-library-multiplayer-count")).toHaveText("3");
+  await expect(page.getByTestId("game-library-multiplayer-count")).toHaveText("4");
   await expect(page.getByTestId("game-library-single-player-panel")).toBeVisible();
   await expect(page.getByTestId("game-library-multiplayer-panel")).toBeHidden();
 
@@ -426,15 +426,17 @@ test("launcher renders game cards and configurable parameters", async ({ page })
   await expect(page.getByTestId("multiplayer-room-host-status")).toHaveText(
     "Sign in before creating multiplayer rooms.",
   );
-  await expect(page.getByText("3 multiplayer games available")).toHaveCount(0);
+  await expect(page.getByText("4 multiplayer games available")).toHaveCount(0);
   await expect(page.getByTestId("game-card-asteroids")).toBeVisible();
   await expect(page.getByTestId("game-card-pong")).toBeVisible();
   await expect(page.getByTestId("game-card-space-invaders")).toBeVisible();
+  await expect(page.getByTestId("game-card-battle-city")).toBeVisible();
   await expect(page.getByTestId("game-card-snake")).toHaveCount(0);
   await expect(page.getByTestId("game-card-tetris")).toHaveCount(0);
   await expect(page.getByTestId("private-room-host-pong-button")).toHaveCount(0);
   await expect(page.getByTestId("private-room-host-space-invaders-button")).toHaveCount(0);
   await expect(page.getByTestId("private-room-host-asteroids-button")).toHaveCount(0);
+  await expect(page.getByTestId("private-room-host-battle-city-button")).toHaveCount(0);
 });
 
 test("game library tabs support roving keyboard navigation", async ({ page }) => {
@@ -444,7 +446,7 @@ test("game library tabs support roving keyboard navigation", async ({ page }) =>
   const multiplayerTab = page.getByTestId("game-library-multiplayer-tab");
 
   await expect(singlePlayerTab).toHaveAccessibleName("Single player 10 games");
-  await expect(multiplayerTab).toHaveAccessibleName("Multiplayer 3 games");
+  await expect(multiplayerTab).toHaveAccessibleName("Multiplayer 4 games");
   await expect(singlePlayerTab).toHaveAttribute("tabindex", "0");
   await expect(multiplayerTab).toHaveAttribute("tabindex", "-1");
 

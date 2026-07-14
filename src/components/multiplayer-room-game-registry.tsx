@@ -3,6 +3,7 @@
 import type { ComponentType, ReactNode } from "react";
 
 import { AsteroidsMultiplayerRoom } from "@/components/asteroids-multiplayer-room";
+import { BattleCityMultiplayerRoom } from "@/components/battle-city-multiplayer-room";
 import { PongMultiplayerRoom } from "@/components/pong-multiplayer-room";
 import { SpaceInvadersMultiplayerRoom } from "@/components/space-invaders-multiplayer-room";
 import type { GameId } from "@/lib/game-catalog";
@@ -10,6 +11,10 @@ import type {
   AsteroidsMultiplayerClientInput,
   AsteroidsMultiplayerGameSnapshot,
 } from "@/lib/asteroids-multiplayer";
+import type {
+  BattleCityMultiplayerClientInput,
+  BattleCityMultiplayerGameSnapshot,
+} from "@/lib/battle-city-multiplayer";
 import {
   isMultiplayerGameId,
   type MultiplayerGameId,
@@ -75,6 +80,12 @@ function isAsteroidsMultiplayerGameSnapshot(
   game: MultiplayerRoomGameSnapshot | null | undefined,
 ): game is AsteroidsMultiplayerGameSnapshot {
   return game?.gameId === "asteroids";
+}
+
+function isBattleCityMultiplayerGameSnapshot(
+  game: MultiplayerRoomGameSnapshot | null | undefined,
+): game is BattleCityMultiplayerGameSnapshot {
+  return game?.gameId === "battle-city";
 }
 
 function PongMultiplayerRoomRendererView({
@@ -161,12 +172,44 @@ function AsteroidsMultiplayerRoomRendererView({
   );
 }
 
+function BattleCityMultiplayerRoomRendererView({
+  activeParticipant,
+  game,
+  lifecycleControls,
+  onProjectionReconcile,
+  room,
+  sendGameInput,
+}: MultiplayerRoomGameRendererProps) {
+  if (!isBattleCityMultiplayerGameSnapshot(game)) {
+    return null;
+  }
+
+  function handleBattleCityInput(input: BattleCityMultiplayerClientInput) {
+    return sendGameInput("battle-city", input);
+  }
+
+  return (
+    <BattleCityMultiplayerRoom
+      activeParticipant={activeParticipant}
+      game={game}
+      lifecycleControls={lifecycleControls}
+      onProjectionReconcile={onProjectionReconcile}
+      onGameInput={handleBattleCityInput}
+      room={room}
+    />
+  );
+}
+
 const MULTIPLAYER_ROOM_GAME_RENDERERS: Readonly<
   Record<MultiplayerGameId, MultiplayerRoomGameRenderer>
 > = {
   asteroids: {
     gameId: "asteroids",
     View: AsteroidsMultiplayerRoomRendererView,
+  },
+  "battle-city": {
+    gameId: "battle-city",
+    View: BattleCityMultiplayerRoomRendererView,
   },
   pong: {
     gameId: "pong",

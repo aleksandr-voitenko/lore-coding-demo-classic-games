@@ -8,12 +8,14 @@ import type {
 } from "../multiplayer/room";
 import type { PongMultiplayerGameSnapshot } from "../pong-multiplayer";
 import type { AsteroidsMultiplayerGameSnapshot } from "../asteroids-multiplayer";
+import type { BattleCityMultiplayerGameSnapshot } from "../battle-city-multiplayer";
 import type {
   SpaceInvadersMultiplayerGameSnapshot,
   SpaceInvadersMultiplayerHeldInputs,
 } from "../space-invaders-multiplayer";
 
 export type { AsteroidsMultiplayerGameSnapshot } from "../asteroids-multiplayer";
+export type { BattleCityMultiplayerGameSnapshot } from "../battle-city-multiplayer";
 
 export type MultiplayerServerGameInputCommand<Input = unknown> = {
   gameId?: unknown;
@@ -48,6 +50,7 @@ type DefineMultiplayerServerGameSnapshots<
 type MultiplayerServerGameSnapshotsById =
   DefineMultiplayerServerGameSnapshots<{
     asteroids: AsteroidsMultiplayerGameSnapshot;
+    "battle-city": BattleCityMultiplayerGameSnapshot;
     pong: PongMultiplayerGameSnapshot;
     "space-invaders": SpaceInvadersMultiplayerServerGameSnapshot;
   }>;

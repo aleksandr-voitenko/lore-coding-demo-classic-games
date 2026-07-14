@@ -126,6 +126,18 @@ This file covers Node-only server helpers and storage adapters under
   pickup. The adapter should project compact terminal summaries with shared
   score, wave, lives, and occupied seats; per-ship contribution stats are out of
   scope for the first Asteroids co-op slice.
+- `battle-city-multiplayer-game-adapter.ts` owns Tank Patrol's private-room
+  runtime under the stable `battle-city` id. It requires occupied `player-1`
+  and `player-2` seats, starts/restarts the deterministic co-op engine at Stage
+  1, maps participants to their claimed seats, latches one-shot fire alongside
+  held direction, advances NTSC ticks with bounded catch-up, and exposes cloned
+  authoritative snapshots. Internal stage introductions, results, and ending
+  tails continue while the room is running; room pause freezes the runtime
+  without replacing the engine's own status. Terminal summaries use the
+  mode-scoped `battle-city|mode=private-room|start-stage=1` key and remain
+  volatile rather than entering the solo replay or leaderboard stores. Freeze
+  the outcome and occupied-seat attribution when the runtime first reaches
+  `lost`; later room-seat changes must not rewrite the terminal summary.
 - The current authoritative source is the room's canonical state plus room/game
   sequence counters while the room exists. Do not retain an unbounded internal
   history of high-frequency inputs, ticks, snapshots, or power-up awards. A

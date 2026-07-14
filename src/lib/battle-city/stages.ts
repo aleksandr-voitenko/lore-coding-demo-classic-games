@@ -52,6 +52,7 @@ function assertStageFixture(
       typeof stage.spawns !== "object" ||
       stage.spawns === null ||
       !("player1" in stage.spawns) ||
+      !("player2" in stage.spawns) ||
       !("enemies" in stage.spawns) ||
       !Array.isArray(stage.spawns.enemies) ||
       stage.spawns.enemies.length !== 3
@@ -73,7 +74,7 @@ function assertStageFixture(
 assertStageFixture(fixture);
 
 // This runtime fixture is the mechanical gameplay projection of the supplied
-// battle_city_maps_26x26.json; V1 intentionally omits metadata and Player 2.
+// battle_city_maps_26x26.json. Metadata remains outside the runtime shape.
 export const BATTLE_CITY_STAGES: readonly BattleCityStageDefinition[] = fixture;
 
 export function getBattleCityStage(stage: number): BattleCityStageDefinition {

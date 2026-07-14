@@ -10,10 +10,13 @@ import {
   BATTLE_CITY_ENEMY_SCORE_POPUP_TICKS,
   BATTLE_CITY_PLAYER_SPAWN_TICKS,
   formatBattleCityStageLabel,
+  getBattleCityReserveLives,
   type BattleCityBullet,
   type BattleCityDirection,
   type BattleCityEnemy,
   type BattleCityGameState,
+  type BattleCityPlayer,
+  type BattleCityPlayerId,
   type BattleCityPowerUpType,
   type BattleCityTerrain,
 } from "@/lib/battle-city-game-engine";
@@ -22,6 +25,7 @@ import {
   type BattleCityTerrainFragment,
 } from "@/lib/battle-city/terrain-fragments";
 import {
+  BATTLE_CITY_PLAYER_2_ASSET_BY_POWER_TIER,
   BATTLE_CITY_PLAYER_ASSET_BY_POWER_TIER,
   getBattleCityAssetUrl,
 } from "@/lib/battle-city/assets";
@@ -52,7 +56,9 @@ type TankSpriteProps = {
   dataEnemyType?: BattleCityEnemy["type"];
   dataHitPoints?: number;
   dataMaxHitPoints?: number;
+  dataMovementStunTicks?: number;
   dataPaletteId?: EnemyPaletteId;
+  dataPlayerId?: BattleCityPlayerId;
   dataPowerTier?: BattleCityGameState["player"]["powerTier"];
   dataPlayerPhase?: BattleCityGameState["player"]["phase"];
   dataSpawning?: boolean;
@@ -342,22 +348,30 @@ export function BattleCityBoard({ children, game }: BattleCityBoardProps) {
     0,
     game.totalEnemyCount - game.spawnedEnemyCount,
   );
-  const reserveLives = Math.max(0, game.lives - 1);
+  const reserveLives = getBattleCityReserveLives(
+    game.lives,
+    game.player.phase,
+  );
+  const player2ReserveLives = game.player2
+    ? getBattleCityReserveLives(
+        game.player2Lives ?? 0,
+        game.player2.phase,
+      )
+    : 0;
   const stageLabel = formatBattleCityStageLabel(game.stage, game.cycle);
   const statusLabel = STATUS_LABELS[game.status];
-  const playerProtectionTicks = Math.max(
-    game.player.invulnerabilityTicks,
-    game.player.shieldTicks,
-  );
-  const isPlayerShieldExpiring =
-    playerProtectionTicks > 0 &&
-    playerProtectionTicks <= BATTLE_CITY_SHIELD_EXPIRING_TICKS;
+  const player2Summary = game.player2
+    ? ` Player 2 score ${game.player2Score ?? 0}. Reserve lives ${player2ReserveLives}. Power tier ${game.player2.powerTier} of 3.`
+    : "";
+  const boardAriaLabel = game.player2
+    ? `${BATTLE_CITY_DISPLAY_NAME} board. Stage ${stageLabel}. Player 1 score ${game.score}. Reserve lives ${reserveLives}. Power tier ${game.player.powerTier} of 3.${player2Summary} ${enemiesRemaining} reinforcements waiting. Headquarters ${game.baseAlive ? "intact" : "destroyed"}. ${statusLabel}.`
+    : `${BATTLE_CITY_DISPLAY_NAME} board. Stage ${stageLabel}. Score ${game.score}. Reserve lives ${reserveLives}. Power tier ${game.player.powerTier} of 3. ${enemiesRemaining} reinforcements waiting. Headquarters ${game.baseAlive ? "intact" : "destroyed"}. ${statusLabel}.`;
 
   return (
     <div className="relative w-full overflow-hidden rounded-md border border-[var(--battle-city-board-border)] bg-[var(--battle-city-board)] p-2 shadow-[0_24px_70px_color-mix(in_oklch,var(--battle-city-board)_45%,transparent)]">
       <div className="relative aspect-square w-full overflow-hidden rounded-[0.375rem] bg-[var(--battle-city-board)]">
         <div
-          aria-label={`${BATTLE_CITY_DISPLAY_NAME} board. Stage ${stageLabel}. Score ${game.score}. Reserve lives ${reserveLives}. Power tier ${game.player.powerTier} of 3. ${enemiesRemaining} reinforcements waiting. Headquarters ${game.baseAlive ? "intact" : "destroyed"}. ${statusLabel}.`}
+          aria-label={boardAriaLabel}
           className="absolute inset-0"
           data-testid="battle-city-board"
           role="img"
@@ -390,45 +404,27 @@ export function BattleCityBoard({ children, game }: BattleCityBoardProps) {
             className="pointer-events-none absolute inset-0 z-20"
             data-testid="battle-city-entity-layer"
           >
-            <TankSprite
-              asset={BATTLE_CITY_PLAYER_ASSET_BY_POWER_TIER[game.player.powerTier]}
-              col={game.player.col}
-              dataExplosionTicks={
-                game.player.phase === "exploding"
-                  ? game.player.phaseTicks
-                  : undefined
+            <BattleCityPlayerTank
+              asset={
+                BATTLE_CITY_PLAYER_ASSET_BY_POWER_TIER[game.player.powerTier]
               }
-              dataPlayerPhase={game.player.phase}
-              dataPowerTier={game.player.powerTier}
-              dataTestId="battle-city-player"
-              direction={game.player.direction}
-              row={game.player.row}
-              spriteHidden={
-                game.player.phase === "exploding" ||
-                game.player.phase === "spawning"
-              }
-            >
-              {game.player.phase === "exploding" ? (
-                <TankExplosion ticks={game.player.phaseTicks} />
-              ) : null}
-              {game.player.phase === "spawning" ? (
-                <TankSpawnEffect
-                  remainingTicks={game.player.phaseTicks}
-                  testId="battle-city-player-spawn"
-                  totalTicks={BATTLE_CITY_PLAYER_SPAWN_TICKS}
-                />
-              ) : null}
-              {game.player.phase === "active" && playerProtectionTicks > 0 ? (
-                <span
-                  className="battle-city-shield-effect"
-                  data-shield-expiring={isPlayerShieldExpiring}
-                  data-shield-source={
-                    game.player.shieldTicks > 0 ? "helmet" : "spawn"
-                  }
-                  data-testid="battle-city-player-shield"
-                />
-              ) : null}
-            </TankSprite>
+              gameTick={game.tick}
+              player={game.player}
+              playerId="player1"
+            />
+
+            {game.player2 ? (
+              <BattleCityPlayerTank
+                asset={
+                  BATTLE_CITY_PLAYER_2_ASSET_BY_POWER_TIER[
+                    game.player2.powerTier
+                  ]
+                }
+                gameTick={game.tick}
+                player={game.player2}
+                playerId="player2"
+              />
+            ) : null}
 
             {game.enemies.map((enemy) => (
               <EnemyTank enemy={enemy} gameTick={game.tick} key={enemy.id} />
@@ -441,6 +437,12 @@ export function BattleCityBoard({ children, game }: BattleCityBoardProps) {
 
           <ForestOverlay gameTick={game.tick} terrain={game.terrain} />
           <PowerUpOverlay game={game} />
+
+          {game.playerGameOverMessage ? (
+            <BattleCityPlayerGameOverMessage
+              message={game.playerGameOverMessage}
+            />
+          ) : null}
 
           {game.freezeTicks > 0 ? (
             <div
@@ -462,6 +464,99 @@ export function BattleCityBoard({ children, game }: BattleCityBoardProps) {
         ) : null}
       </div>
     </div>
+  );
+}
+
+function BattleCityPlayerGameOverMessage({
+  message,
+}: {
+  message: NonNullable<BattleCityGameState["playerGameOverMessage"]>;
+}) {
+  const col =
+    message.playerId === "player1"
+      ? 1 + message.movementPixels / 8
+      : 21 - message.movementPixels / 8;
+
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute z-40 whitespace-nowrap font-mono text-[clamp(0.5rem,2.2vw,1rem)] font-bold leading-none tracking-tighter text-[var(--battle-city-board-text)] [text-shadow:0_1px_0_black]"
+      data-col={col}
+      data-player-id={message.playerId}
+      data-testid="battle-city-player-game-over-message"
+      data-ticks-remaining={message.ticksRemaining}
+      style={{
+        left: `${(col / BATTLE_CITY_BOARD_SIZE) * 100}%`,
+        top: `${(24 / BATTLE_CITY_BOARD_SIZE) * 100}%`,
+      }}
+    >
+      GAME OVER
+    </span>
+  );
+}
+
+function BattleCityPlayerTank({
+  asset,
+  gameTick,
+  player,
+  playerId,
+}: {
+  asset: string;
+  gameTick: number;
+  player: BattleCityPlayer;
+  playerId: BattleCityPlayerId;
+}) {
+  const protectionTicks = Math.max(
+    player.invulnerabilityTicks,
+    player.shieldTicks,
+  );
+  const isShieldExpiring =
+    protectionTicks > 0 &&
+    protectionTicks <= BATTLE_CITY_SHIELD_EXPIRING_TICKS;
+  const movementStunTicks = player.movementStunTicks ?? 0;
+  const isStunBlinkHidden =
+    movementStunTicks > 0 && Math.floor(gameTick / 8) % 2 === 1;
+  const testId =
+    playerId === "player1" ? "battle-city-player" : "battle-city-player-2";
+
+  return (
+    <TankSprite
+      asset={asset}
+      col={player.col}
+      dataExplosionTicks={
+        player.phase === "exploding" ? player.phaseTicks : undefined
+      }
+      dataMovementStunTicks={movementStunTicks}
+      dataPlayerId={playerId}
+      dataPlayerPhase={player.phase}
+      dataPowerTier={player.powerTier}
+      dataTestId={testId}
+      direction={player.direction}
+      row={player.row}
+      spriteHidden={
+        player.phase !== "active" ||
+        isStunBlinkHidden
+      }
+    >
+      {player.phase === "exploding" ? (
+        <TankExplosion ticks={player.phaseTicks} />
+      ) : null}
+      {player.phase === "spawning" ? (
+        <TankSpawnEffect
+          remainingTicks={player.phaseTicks}
+          testId={`${testId}-spawn`}
+          totalTicks={BATTLE_CITY_PLAYER_SPAWN_TICKS}
+        />
+      ) : null}
+      {player.phase === "active" && protectionTicks > 0 ? (
+        <span
+          className="battle-city-shield-effect"
+          data-shield-expiring={isShieldExpiring}
+          data-shield-source={player.shieldTicks > 0 ? "helmet" : "spawn"}
+          data-testid={`${testId}-shield`}
+        />
+      ) : null}
+    </TankSprite>
   );
 }
 
@@ -630,7 +725,9 @@ function TankSprite({
   dataEnemyType,
   dataHitPoints,
   dataMaxHitPoints,
+  dataMovementStunTicks,
   dataPaletteId,
+  dataPlayerId,
   dataPowerTier,
   dataPlayerPhase,
   dataSpawning,
@@ -652,7 +749,9 @@ function TankSprite({
       data-explosion-ticks={dataExplosionTicks}
       data-hit-points={dataHitPoints}
       data-max-hit-points={dataMaxHitPoints}
+      data-movement-stun-ticks={dataMovementStunTicks}
       data-palette-id={dataPaletteId}
+      data-player-id={dataPlayerId}
       data-power-tier={dataPowerTier}
       data-player-phase={dataPlayerPhase}
       data-row={row}

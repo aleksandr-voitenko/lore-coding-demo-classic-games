@@ -66,6 +66,19 @@ describe("multiplayer server game adapter registry", () => {
         nonterminalStatuses: ["ready", "running", "paused"],
         terminalStatuses: ["lost"],
       },
+      {
+        gameId: "battle-city" as const,
+        nonterminalStatuses: [
+          "ready",
+          "stage-intro",
+          "running",
+          "paused",
+          "stage-clear",
+          "game-over",
+          "stage-results",
+        ],
+        terminalStatuses: ["lost"],
+      },
     ];
 
     for (const { gameId, nonterminalStatuses, terminalStatuses } of cases) {

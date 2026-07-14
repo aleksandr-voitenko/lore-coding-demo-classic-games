@@ -10,10 +10,12 @@ This file covers React component ownership and shared game UI conventions under
 - `*-board.tsx` files render board cells, game pieces, code-native board art, and
   board accessibility labels for the active state.
 - Tank Patrol retains the internal `battle-city` namespace and follows the same
-  split with `battle-city-game.tsx` owning the
-  single-player campaign flow and `battle-city-board.tsx` layering fragment-
+  split with `battle-city-game.tsx` owning the single-player campaign flow,
+  `battle-city-multiplayer-room.tsx` owning the server-authoritative room view
+  and seat-specific input, and `battle-city-board.tsx` layering fragment-
   rendered terrain, tanks, projectiles, explosions, and foreground forest
-  cover. Its held-direction state is sampled by one fixed-step NTSC loop; do
+  cover for either one or two players. Its held-direction state is sampled by
+  one fixed-step NTSC loop; do
   not add a second movement interval because frame ordering is part of
   collision behavior. Latch each fire press for that same loop so the engine
   can apply movement before creating the shell on its first eligible frame.
@@ -81,6 +83,17 @@ This file covers React component ownership and shared game UI conventions under
   solo replay saving, or solo leaderboard submission.
   Keep that renderer map exhaustive over the shared `MultiplayerGameId` so a
   registry addition cannot omit its client implementation silently.
+- `battle-city-multiplayer-room.tsx` renders authoritative Tank Patrol room
+  snapshots, sends direction/fire intents only for the active participant's
+  claimed `player-1` or `player-2` seat, and leaves observers read-only. It may
+  visually project player movement between snapshots, but must reconcile to the
+  server state and must not resolve collisions, scoring, pickups, stage flow, or
+  outcomes locally. Before the first local direction transition, projection
+  must use the active seat's server-held direction; `undefined` means no local
+  override, while `null` is an explicit local stop. Keep the fixed Stage 1 room
+  setup, separate P1/P2 stats and stage-result columns, room-owned pause state,
+  and terminal summary outside the solo campaign's replay/session/leaderboard
+  orchestration.
 - The future Space Invaders multiplayer renderer should present two independent
   ship seats, `ship-a` and `ship-b`, on one shared alien wave with shared score
   and lives. It should display server-owned outcomes for simultaneous hits and

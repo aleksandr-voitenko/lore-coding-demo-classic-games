@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { BattleCityBoard } from "./battle-city-board";
 import { expectMarkup } from "./game-board-test-utils";
 import { BATTLE_CITY_BOARD_SIZE } from "@/lib/battle-city/constants";
+import { BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_TICKS } from "@/lib/battle-city-game-engine";
 import {
   BATTLE_CITY_TERRAIN_FRAGMENT_BITS,
   createBattleCityTerrainFragmentGrid,
@@ -873,5 +874,132 @@ describe("BattleCityBoard", () => {
       "/images/battle-city/effect-tank-explosion.png?v=modern-v1",
     ]);
     expect(markup).not.toContain("headquarters-intact.png");
+  });
+
+  it("keeps an eliminated multiplayer tank absent without a permanent explosion", () => {
+    const game = createGame();
+    const markup = renderToStaticMarkup(
+      <BattleCityBoard
+        game={{
+          ...game,
+          player2: {
+            ...game.player,
+            col: 16,
+            phase: "inactive",
+            phaseTicks: 0,
+          },
+          player2BonusLifeAwarded: false,
+          player2Lives: 1,
+          player2Score: 800,
+          player2StageKillCounts: {
+            armor: 0,
+            basic: 1,
+            fast: 0,
+            power: 0,
+          },
+          stageKillLeaderBonusAwarded: false,
+        }}
+      />,
+    );
+    const player2 = getTestIdElementMarkup(markup, "battle-city-player-2");
+
+    expect(player2).toContain('data-player-phase="inactive"');
+    expect(player2).toContain("opacity-0");
+    expect(player2).not.toContain('data-testid="battle-city-tank-explosion"');
+    expect(markup).toContain(
+      "Player 2 score 800. Reserve lives 1. Power tier 0 of 3.",
+    );
+  });
+
+  it("blinks a friendly-fire-stunned tank on the original eight-frame phase", () => {
+    const game = createGame();
+    const renderPlayer2 = (tick: number) => {
+      const markup = renderToStaticMarkup(
+        <BattleCityBoard
+          game={{
+            ...game,
+            player2: {
+              ...game.player,
+              col: 16,
+              movementStunTicks: 200,
+            },
+            player2BonusLifeAwarded: false,
+            player2Lives: 3,
+            player2Score: 0,
+            player2StageKillCounts: {
+              armor: 0,
+              basic: 0,
+              fast: 0,
+              power: 0,
+            },
+            stageKillLeaderBonusAwarded: false,
+            tick,
+          }}
+        />,
+      );
+
+      return getTestIdElementMarkup(markup, "battle-city-player-2");
+    };
+
+    expect(renderPlayer2(0)).not.toContain("opacity-0");
+    expect(renderPlayer2(7)).not.toContain("opacity-0");
+    expect(renderPlayer2(8)).toContain("opacity-0");
+    expect(renderPlayer2(15)).toContain("opacity-0");
+    expect(renderPlayer2(16)).not.toContain("opacity-0");
+  });
+
+  it("slides the timed individual game-over message in from the eliminated side", () => {
+    const renderMessage = (
+      playerId: "player1" | "player2",
+      movementPixels: number,
+      ticksRemaining: number,
+    ) => {
+      const markup = renderToStaticMarkup(
+        <BattleCityBoard
+          game={createGame({
+            playerGameOverMessage: {
+              movementPixels,
+              playerId,
+              ticksRemaining,
+            },
+          })}
+        />,
+      );
+
+      return getTestIdElementMarkup(
+        markup,
+        "battle-city-player-game-over-message",
+      );
+    };
+
+    const player1Start = renderMessage(
+      "player1",
+      1,
+      BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_TICKS,
+    );
+    const player1End = renderMessage(
+      "player1",
+      48,
+      145,
+    );
+    const player2Start = renderMessage(
+      "player2",
+      1,
+      BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_TICKS,
+    );
+    const player2End = renderMessage(
+      "player2",
+      48,
+      145,
+    );
+
+    expect(player1Start).toContain('data-col="1.125"');
+    expect(player1End).toContain('data-col="7"');
+    expect(player2Start).toContain('data-col="20.875"');
+    expect(player2End).toContain('data-col="15"');
+    expect(player1Start).toContain("top:92.3076923076923%");
+    expect(player1Start).not.toContain("transform:");
+    expect(player2Start).not.toContain("transform:");
+    expect(player1Start).toContain(">GAME OVER</span>");
   });
 });

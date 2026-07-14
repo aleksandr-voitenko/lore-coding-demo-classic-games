@@ -37,25 +37,36 @@ export function selectBattleCityPowerUpType(
 }
 
 export function selectBattleCityPowerUpPosition(
-  player: BattleCityPosition,
+  player: BattleCityPosition | readonly BattleCityPosition[],
   random: BattleCityRandom,
 ): BattleCityPosition {
+  const players = Array.isArray(player) ? player : [player];
   // The hardware RNG cannot get stuck on one value, but injected random
   // sources can. Keep rerolls bounded, then scan the canonical table so this
-  // selector stays deterministic and total for a single 2x2 player.
+  // selector stays deterministic and total for the active 2x2 player tanks.
   for (
     let attempt = 0;
     attempt < BATTLE_CITY_POWER_UP_POSITIONS.length;
     attempt += 1
   ) {
     const candidate = selectRandomPowerUpPosition(random);
-    if (!battleCityPowerUpWithinTankRange(candidate, player)) {
+    if (
+      players.every(
+        (currentPlayer) =>
+          !battleCityPowerUpWithinTankRange(candidate, currentPlayer),
+      )
+    ) {
       return candidate;
     }
   }
 
   for (const candidate of BATTLE_CITY_POWER_UP_POSITIONS) {
-    if (!battleCityPowerUpWithinTankRange(candidate, player)) {
+    if (
+      players.every(
+        (currentPlayer) =>
+          !battleCityPowerUpWithinTankRange(candidate, currentPlayer),
+      )
+    ) {
       return { ...candidate };
     }
   }
@@ -66,7 +77,7 @@ export function selectBattleCityPowerUpPosition(
 }
 
 export function selectBattleCityPowerUp(
-  player: BattleCityPosition,
+  player: BattleCityPosition | readonly BattleCityPosition[],
   random: BattleCityRandom,
 ): BattleCityPowerUpSelection {
   return {

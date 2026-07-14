@@ -10,13 +10,20 @@ import {
   BATTLE_CITY_ENEMY_STATS,
   BATTLE_CITY_ENEMY_TURN_CHANCE,
   BATTLE_CITY_FORTRESS_WARNING_TICKS,
+  BATTLE_CITY_FRIENDLY_FIRE_STUN_TICKS,
   BATTLE_CITY_GAME_OVER_TRANSITION_TICKS,
   BATTLE_CITY_HEADQUARTERS_EXPLOSION_TICKS,
   BATTLE_CITY_ICE_SLIDE_STEPS,
   BATTLE_CITY_MAX_ACTIVE_ENEMIES,
+  BATTLE_CITY_MULTIPLAYER_MAX_ACTIVE_ENEMIES,
+  BATTLE_CITY_MULTIPLAYER_SPAWN_ADVANCE_TICKS,
   BATTLE_CITY_NEXT_STAGE_INTRO_TICKS,
   BATTLE_CITY_PIXEL_STEP,
   BATTLE_CITY_PLAYER_EXPLOSION_TICKS,
+  BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_INITIAL_MOVEMENT_PIXELS,
+  BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_SLIDE_TIMER_COUNT,
+  BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_TIMER_STEP_TICKS,
+  BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_TICKS,
   BATTLE_CITY_PLAYER_SPAWN_TICKS,
   BATTLE_CITY_POWER_UP_SCORE_POPUP_TICKS,
   BATTLE_CITY_STAGE_INTRO_TICKS,
@@ -56,7 +63,12 @@ import type {
   BattleCityFrameInput,
   BattleCityGameState,
   BattleCityKillCounts,
+  BattleCityMultiplayerFrameInput,
+  BattleCityMultiplayerGameState,
   BattleCityPlayer,
+  BattleCityPlayerGameOverMessage,
+  BattleCityPlayerId,
+  BattleCityPlayerPhase,
   BattleCityPosition,
   BattleCityPowerUp,
   BattleCityPowerUpScorePopup,
@@ -83,15 +95,19 @@ export {
   BATTLE_CITY_FINAL_STAGE_SPAWN_INTERVAL_TICKS,
   BATTLE_CITY_FORTRESS_TICKS,
   BATTLE_CITY_FORTRESS_WARNING_TICKS,
+  BATTLE_CITY_FRIENDLY_FIRE_STUN_TICKS,
   BATTLE_CITY_FREEZE_TICKS,
   BATTLE_CITY_GAME_OVER_TRANSITION_TICKS,
   BATTLE_CITY_HELMET_TICKS,
   BATTLE_CITY_HEADQUARTERS_EXPLOSION_TICKS,
   BATTLE_CITY_ICE_SLIDE_STEPS,
   BATTLE_CITY_MAX_ACTIVE_ENEMIES,
+  BATTLE_CITY_MULTIPLAYER_MAX_ACTIVE_ENEMIES,
+  BATTLE_CITY_MULTIPLAYER_SPAWN_ADVANCE_TICKS,
   BATTLE_CITY_NEXT_STAGE_INTRO_TICKS,
   BATTLE_CITY_PIXEL_STEP,
   BATTLE_CITY_PLAYER_EXPLOSION_TICKS,
+  BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_TICKS,
   BATTLE_CITY_PLAYER_INVULNERABILITY_TICKS,
   BATTLE_CITY_PLAYER_SPAWN_TICKS,
   BATTLE_CITY_POWER_UP_SCORE_POPUP_TICKS,
@@ -128,7 +144,11 @@ export type {
   BattleCityFrameInput,
   BattleCityGameState,
   BattleCityKillCounts,
+  BattleCityMultiplayerFrameInput,
+  BattleCityMultiplayerGameState,
   BattleCityPlayer,
+  BattleCityPlayerGameOverMessage,
+  BattleCityPlayerId,
   BattleCityPlayerPhase,
   BattleCityPosition,
   BattleCityPowerUp,
@@ -158,9 +178,15 @@ const BATTLE_CITY_DIRECTIONS: readonly BattleCityDirection[] = [
   "right",
 ];
 const BATTLE_CITY_ENEMY_SLOTS = [5, 4, 3, 2] as const;
+const BATTLE_CITY_MULTIPLAYER_ENEMY_SLOTS = [7, 6, 5, 4, 3, 2] as const;
+const BATTLE_CITY_MULTIPLAYER_KILL_LEADER_BONUS_DELAY_TICKS = 0x0f;
 const EMPTY_BATTLE_CITY_FRAME_INPUT: BattleCityFrameInput = {
   direction: null,
   fireRequested: false,
+};
+const EMPTY_BATTLE_CITY_MULTIPLAYER_FRAME_INPUT: BattleCityMultiplayerFrameInput = {
+  player1: EMPTY_BATTLE_CITY_FRAME_INPUT,
+  player2: EMPTY_BATTLE_CITY_FRAME_INPUT,
 };
 
 const BATTLE_CITY_TANK_SIZE = 2;
@@ -172,10 +198,65 @@ const EMPTY_KILL_COUNTS: BattleCityKillCounts = {
   power: 0,
 };
 
-function canControlBattleCityPlayer(game: BattleCityGameState): boolean {
+export function isBattleCityMultiplayerGame(
+  game: BattleCityGameState,
+): game is BattleCityMultiplayerGameState {
+  return game.player2 !== undefined;
+}
+
+export function getBattleCityReserveLives(
+  lives: number,
+  phase: BattleCityPlayerPhase,
+) {
+  return Math.max(0, lives - (phase === "inactive" ? 0 : 1));
+}
+
+function getBattleCityPlayer(
+  game: BattleCityGameState,
+  playerId: BattleCityPlayerId,
+): BattleCityPlayer | null {
+  return playerId === "player1" ? game.player : game.player2 ?? null;
+}
+
+function setBattleCityPlayer(
+  game: BattleCityGameState,
+  playerId: BattleCityPlayerId,
+  player: BattleCityPlayer,
+): BattleCityGameState {
+  return playerId === "player1"
+    ? { ...game, player }
+    : { ...game, player2: player };
+}
+
+function getBattleCityPlayerLives(
+  game: BattleCityGameState,
+  playerId: BattleCityPlayerId,
+) {
+  return playerId === "player1" ? game.lives : game.player2Lives ?? 0;
+}
+
+function canControlBattleCityPlayer(
+  game: BattleCityGameState,
+  playerId: BattleCityPlayerId = "player1",
+): boolean {
+  const player = getBattleCityPlayer(game, playerId);
   return (
+    player !== null &&
     (game.status === "running" || game.status === "stage-clear") &&
-    game.player.phase === "active"
+    player.phase === "active" &&
+    (player.movementStunTicks ?? 0) === 0
+  );
+}
+
+function canFireBattleCityPlayer(
+  game: BattleCityGameState,
+  playerId: BattleCityPlayerId,
+): boolean {
+  const player = getBattleCityPlayer(game, playerId);
+  return (
+    player !== null &&
+    (game.status === "running" || game.status === "stage-clear") &&
+    player.phase === "active"
   );
 }
 
@@ -189,6 +270,12 @@ type StageRunContext = {
   lives: number;
   powerTier: BattleCityPlayer["powerTier"];
   score: number;
+  player2?: {
+    bonusLifeAwarded: boolean;
+    lives: number;
+    powerTier: BattleCityPlayer["powerTier"];
+    score: number;
+  };
   stageIntroTicks?: number;
   status: BattleCityGameState["status"];
   tick: number;
@@ -206,6 +293,26 @@ export function createInitialBattleCityGame(
     status: "ready",
     tick: 0,
   });
+}
+
+export function createInitialBattleCityMultiplayerGame(
+  { stage = 1 }: CreateBattleCityGameOptions = {},
+): BattleCityMultiplayerGameState {
+  return createStageGame(normalizeStage(stage), {
+    bonusLifeAwarded: false,
+    cycle: 1,
+    lives: BATTLE_CITY_STARTING_LIVES,
+    player2: {
+      bonusLifeAwarded: false,
+      lives: BATTLE_CITY_STARTING_LIVES,
+      powerTier: 0,
+      score: 0,
+    },
+    powerTier: 0,
+    score: 0,
+    status: "ready",
+    tick: 0,
+  }) as BattleCityMultiplayerGameState;
 }
 
 export function startBattleCityGame(
@@ -255,35 +362,81 @@ export function moveBattleCityPlayer(
   game: BattleCityGameState,
   direction: BattleCityDirection,
 ): BattleCityGameState {
-  if (!canControlBattleCityPlayer(game)) {
+  return moveBattleCityPlayerById(game, "player1", direction);
+}
+
+export function moveBattleCityMultiplayerPlayer(
+  game: BattleCityMultiplayerGameState,
+  playerId: BattleCityPlayerId,
+  direction: BattleCityDirection,
+): BattleCityMultiplayerGameState {
+  return moveBattleCityPlayerById(
+    game,
+    playerId,
+    direction,
+  ) as BattleCityMultiplayerGameState;
+}
+
+function moveBattleCityPlayerById(
+  game: BattleCityGameState,
+  playerId: BattleCityPlayerId,
+  direction: BattleCityDirection,
+): BattleCityGameState {
+  if (!canControlBattleCityPlayer(game, playerId)) {
     return game;
   }
 
-  const player = tryMovePlayer(game, direction);
-  if (player === game.player) {
-    if (game.player.direction === direction) {
+  const currentPlayer = getBattleCityPlayer(game, playerId)!;
+  const player = tryMovePlayer(game, playerId, direction);
+  if (player === currentPlayer) {
+    if (currentPlayer.direction === direction) {
       return game;
     }
-    return { ...game, player: { ...game.player, direction } };
+    return setBattleCityPlayer(game, playerId, {
+      ...currentPlayer,
+      direction,
+    });
   }
-  return { ...game, player };
+  return setBattleCityPlayer(game, playerId, player);
 }
 
 export function fireBattleCityPlayer(
   game: BattleCityGameState,
 ): BattleCityGameState {
-  if (!canControlBattleCityPlayer(game)) {
+  return fireBattleCityPlayerById(game, "player1");
+}
+
+export function fireBattleCityMultiplayerPlayer(
+  game: BattleCityMultiplayerGameState,
+  playerId: BattleCityPlayerId,
+): BattleCityMultiplayerGameState {
+  return fireBattleCityPlayerById(
+    game,
+    playerId,
+  ) as BattleCityMultiplayerGameState;
+}
+
+function fireBattleCityPlayerById(
+  game: BattleCityGameState,
+  playerId: BattleCityPlayerId,
+): BattleCityGameState {
+  if (!canFireBattleCityPlayer(game, playerId)) {
     return game;
   }
 
+  const player = getBattleCityPlayer(game, playerId)!;
+  const owner = playerId === "player1" ? "player" : "player2";
+  const primarySlot = playerId === "player1" ? 0 : 1;
+  const secondarySlot = playerId === "player1" ? 8 : 9;
+
   const primaryBullet = game.bullets.find(
-    (bullet) => bullet.owner === "player" && bullet.slot === 0,
+    (bullet) => bullet.owner === owner && bullet.slot === primarySlot,
   );
   const secondaryBullet = game.bullets.find(
-    (bullet) => bullet.owner === "player" && bullet.slot === 8,
+    (bullet) => bullet.owner === owner && bullet.slot === secondarySlot,
   );
-  const canUseSecondarySlot = game.player.powerTier >= 2;
-  const muzzle = getMuzzlePosition(game.player);
+  const canUseSecondarySlot = player.powerTier >= 2;
+  const muzzle = getMuzzlePosition(player);
   if (
     (primaryBullet !== undefined &&
       (!canUseSecondarySlot || secondaryBullet !== undefined)) ||
@@ -296,21 +449,23 @@ export function fireBattleCityPlayer(
     primaryBullet === undefined
       ? game.bullets
       : game.bullets.map((bullet) =>
-          bullet.id === primaryBullet.id ? { ...bullet, slot: 8 } : bullet,
+          bullet.id === primaryBullet.id
+            ? { ...bullet, slot: secondarySlot }
+            : bullet,
         );
 
-  const isMaximumPower = game.player.powerTier === 3;
+  const isMaximumPower = player.powerTier === 3;
   const bullet: BattleCityBullet = {
     ...muzzle,
     canDestroySteel: isMaximumPower,
-    direction: game.player.direction,
+    direction: player.direction,
     id: `bullet-${game.nextBulletId}`,
     impactTicks: 0,
     isNewborn: true,
-    owner: "player",
-    slot: 0,
+    owner,
+    slot: primarySlot,
     speed:
-      game.player.powerTier >= 1
+      player.powerTier >= 1
         ? BATTLE_CITY_PIXEL_STEP * 4
         : BATTLE_CITY_PIXEL_STEP * 2,
     strength: isMaximumPower ? 2 : 1,
@@ -345,6 +500,36 @@ export function advanceBattleCityGame(
 ): BattleCityGameState {
   const random =
     typeof elapsedMsOrRandom === "function" ? elapsedMsOrRandom : providedRandom;
+  return advanceBattleCityFrame(
+    game,
+    random,
+    playerInput,
+    EMPTY_BATTLE_CITY_FRAME_INPUT,
+  );
+}
+
+export function advanceBattleCityMultiplayerGame(
+  game: BattleCityMultiplayerGameState,
+  elapsedMs: number = BATTLE_CITY_TICK_MS,
+  random: BattleCityRandom = Math.random,
+  playerInput: BattleCityMultiplayerFrameInput =
+    EMPTY_BATTLE_CITY_MULTIPLAYER_FRAME_INPUT,
+): BattleCityMultiplayerGameState {
+  void elapsedMs;
+  return advanceBattleCityFrame(
+    game,
+    random,
+    playerInput.player1,
+    playerInput.player2,
+  ) as BattleCityMultiplayerGameState;
+}
+
+function advanceBattleCityFrame(
+  game: BattleCityGameState,
+  random: BattleCityRandom,
+  player1Input: BattleCityFrameInput,
+  player2Input: BattleCityFrameInput,
+): BattleCityGameState {
   let frameGame = game;
   switch (game.status) {
     case "stage-intro": {
@@ -372,23 +557,53 @@ export function advanceBattleCityGame(
   // advances the low counter before the first (and every later) live-tail
   // handler pass, while the stored state still represents that boundary.
   const gameForFrame =
-    frameGame.status === "stage-clear" || frameGame.status === "game-over"
-      ? { ...frameGame, tick: frameGame.tick + 1 }
+    frameGame.status === "stage-clear" ||
+    frameGame.status === "game-over" ||
+    frameGame.frameCounterResetPending === true
+      ? {
+          ...frameGame,
+          ...(isBattleCityMultiplayerGame(frameGame)
+            ? { frameCounterResetPending: false }
+            : {}),
+          tick: frameGame.tick + 1,
+        }
       : frameGame;
   const gameAfterTimers = advanceTimers(gameForFrame);
   const gameAfterEnemyTanks = advanceEnemyTankHandlers(
     gameAfterTimers,
     random,
   );
+  const gameAfterPlayer2Tank = isBattleCityMultiplayerGame(gameAfterEnemyTanks)
+    ? advancePlayerTankHandler(
+        gameAfterEnemyTanks,
+        "player2",
+        player2Input.direction,
+      )
+    : gameAfterEnemyTanks;
   const gameAfterPlayerTank = advancePlayerTankHandler(
-    gameAfterEnemyTanks,
-    playerInput.direction,
+    gameAfterPlayer2Tank,
+    "player1",
+    player1Input.direction,
   );
+  const frameCounterResetThisFrame =
+    gameAfterEnemyTanks.frameCounterResetPending !== true &&
+    gameAfterPlayerTank.frameCounterResetPending === true;
+  const gameAfterCounterReset = frameCounterResetThisFrame
+    ? rephaseBattleCityTimersAfterFrameCounterReset(
+        gameAfterPlayerTank,
+        gameForFrame.tick,
+      )
+    : gameAfterPlayerTank;
   // The hardware handles tank movement and expiring shell slots before the
   // A/B press creates a new player shell later in the same video frame.
-  const gameAfterPlayerFire = playerInput.fireRequested
-    ? fireBattleCityPlayer(gameAfterPlayerTank)
-    : gameAfterPlayerTank;
+  const gameAfterPlayer2Fire =
+    isBattleCityMultiplayerGame(gameAfterCounterReset) &&
+    player2Input.fireRequested
+      ? fireBattleCityPlayerById(gameAfterCounterReset, "player2")
+      : gameAfterCounterReset;
+  const gameAfterPlayerFire = player1Input.fireRequested
+    ? fireBattleCityPlayerById(gameAfterPlayer2Fire, "player1")
+    : gameAfterPlayer2Fire;
   const gameAfterEnemyFire = advanceEnemyFire(
     gameAfterPlayerFire,
     random,
@@ -405,10 +620,35 @@ export function advanceBattleCityGame(
   const enteredEnding =
     transitioned.status !== frameGame.status &&
     (transitioned.status === "stage-clear" || transitioned.status === "game-over");
+  const counterResetTransitioned =
+    enteredEnding && isBattleCityMultiplayerGame(transitioned)
+      ? rephaseBattleCityTimersForEndingCounterReset(transitioned)
+      : transitioned;
+  const advancedPlayerGameOverMessage = isBattleCityMultiplayerGame(
+    counterResetTransitioned,
+  )
+    ? counterResetTransitioned.playerGameOverMessage ===
+      gameForFrame.playerGameOverMessage
+      ? advanceBattleCityPlayerGameOverMessage(
+          counterResetTransitioned.playerGameOverMessage,
+        )
+      : counterResetTransitioned.playerGameOverMessage
+    : undefined;
+  const playerGameOverMessage =
+    enteredEnding && advancedPlayerGameOverMessage
+      ? rephaseBattleCityPlayerGameOverMessageForCounterReset(
+          advancedPlayerGameOverMessage,
+        )
+      : advancedPlayerGameOverMessage;
   return {
-    ...transitioned,
+    ...counterResetTransitioned,
+    ...(playerGameOverMessage === undefined
+      ? {}
+      : { playerGameOverMessage }),
     stageBattleTicks: enteredEnding
       ? 0
+      : frameCounterResetThisFrame
+        ? Math.floor(frameGame.stageBattleTicks / 64) * 64
       : transitioned.status === "running" ||
           transitioned.status === "stage-clear" ||
           transitioned.status === "game-over"
@@ -416,8 +656,61 @@ export function advanceBattleCityGame(
         : transitioned.stageBattleTicks,
     // The ending setup clears both hardware frame counters. The low counter
     // then continues through the tail, score tally, and following stage setup.
-    tick: enteredEnding ? 0 : frameGame.tick + 1,
+    tick: enteredEnding
+      ? 0
+      : frameCounterResetThisFrame
+        ? transitioned.tick
+        : frameGame.tick + 1,
   };
+}
+
+export function projectBattleCityMultiplayerPlayerMotion(
+  game: BattleCityMultiplayerGameState,
+  directions: Readonly<Record<BattleCityPlayerId, BattleCityDirection | null>>,
+  frameCount: number,
+): BattleCityMultiplayerGameState {
+  if (!Number.isSafeInteger(frameCount) || frameCount <= 0) {
+    return game;
+  }
+
+  let projected: BattleCityGameState = game;
+  for (let frame = 0; frame < frameCount; frame += 1) {
+    // Ending tails and the first frame after an individual elimination advance
+    // the low hardware counter before tank handlers inspect its movement phase.
+    const advancesCounterBeforeHandlers =
+      projected.status === "stage-clear" ||
+      projected.status === "game-over" ||
+      projected.frameCounterResetPending === true;
+    let projectedFrame = advancesCounterBeforeHandlers
+      ? {
+          ...projected,
+          frameCounterResetPending: false,
+          tick: projected.tick + 1,
+        }
+      : projected;
+    if (
+      projectedFrame.status === "running" ||
+      projectedFrame.status === "stage-clear"
+    ) {
+      for (const playerId of ["player2", "player1"] as const) {
+        const player = getBattleCityPlayer(projectedFrame, playerId);
+        if (
+          player?.phase === "active" &&
+          (player.movementStunTicks ?? 0) === 0
+        ) {
+          projectedFrame = advancePlayerMotion(
+            projectedFrame,
+            playerId,
+            directions[playerId],
+          );
+        }
+      }
+    }
+    projected = advancesCounterBeforeHandlers
+      ? projectedFrame
+      : { ...projectedFrame, tick: projectedFrame.tick + 1 };
+  }
+  return projected as BattleCityMultiplayerGameState;
 }
 
 export function getBattleCityTickDelay(): number {
@@ -426,6 +719,43 @@ export function getBattleCityTickDelay(): number {
 
 export function getBattleCityStageResultDisplay(
   game: BattleCityGameState,
+): { killCounts: BattleCityKillCounts; showTotal: boolean } {
+  return getBattleCityStageResultDisplayForCounts(
+    game,
+    game.stageKillCounts,
+    game.stageKillCounts,
+  );
+}
+
+export function getBattleCityMultiplayerStageResultDisplay(
+  game: BattleCityMultiplayerGameState,
+): {
+  player1: BattleCityKillCounts;
+  player2: BattleCityKillCounts;
+  showTotal: boolean;
+} {
+  const timingCounts = getBattleCityMultiplayerResultTimingCounts(game);
+  const player1 = getBattleCityStageResultDisplayForCounts(
+    game,
+    game.stageKillCounts,
+    timingCounts,
+  );
+  const player2 = getBattleCityStageResultDisplayForCounts(
+    game,
+    game.player2StageKillCounts,
+    timingCounts,
+  );
+  return {
+    player1: player1.killCounts,
+    player2: player2.killCounts,
+    showTotal: player1.showTotal,
+  };
+}
+
+function getBattleCityStageResultDisplayForCounts(
+  game: BattleCityGameState,
+  targetCounts: BattleCityKillCounts,
+  timingCounts: BattleCityKillCounts,
 ): { killCounts: BattleCityKillCounts; showTotal: boolean } {
   if (game.status !== "stage-results") {
     return { killCounts: { ...EMPTY_KILL_COUNTS }, showTotal: false };
@@ -443,7 +773,7 @@ export function getBattleCityStageResultDisplay(
   // beyond each row's empty nine-frame pass.
   let cursor = 39;
   for (const [index, type] of order.entries()) {
-    const targetCount = game.stageKillCounts[type];
+    const targetCount = targetCounts[type];
     const elapsedInRow = game.stageResultTicks - cursor;
     killCounts[type] =
       elapsedInRow < 0
@@ -455,14 +785,59 @@ export function getBattleCityStageResultDisplay(
             ) + 1,
           );
     cursor +=
-      (targetCount + 1) * BATTLE_CITY_STAGE_RESULTS_PER_KILL_TICKS;
+      (timingCounts[type] + 1) * BATTLE_CITY_STAGE_RESULTS_PER_KILL_TICKS;
     if (index < order.length - 1) {
       cursor += 21;
     }
   }
   return {
     killCounts,
-    showTotal: game.stageResultTicks >= cursor + 29,
+    showTotal:
+      game.stageResultTicks >=
+      getBattleCityStageResultTotalRevealTick(timingCounts),
+  };
+}
+
+function getBattleCityStageResultTotalRevealTick(
+  timingCounts: BattleCityKillCounts,
+) {
+  const order: readonly BattleCityEnemyType[] = [
+    "basic",
+    "fast",
+    "power",
+    "armor",
+  ];
+  let cursor = 39;
+  for (const [index, type] of order.entries()) {
+    cursor +=
+      (timingCounts[type] + 1) * BATTLE_CITY_STAGE_RESULTS_PER_KILL_TICKS;
+    if (index < order.length - 1) {
+      cursor += 21;
+    }
+  }
+  return cursor + 29;
+}
+
+function getBattleCityMultiplayerResultTimingCounts(
+  game: BattleCityMultiplayerGameState,
+): BattleCityKillCounts {
+  return {
+    armor: Math.max(
+      game.stageKillCounts.armor,
+      game.player2StageKillCounts.armor,
+    ),
+    basic: Math.max(
+      game.stageKillCounts.basic,
+      game.player2StageKillCounts.basic,
+    ),
+    fast: Math.max(
+      game.stageKillCounts.fast,
+      game.player2StageKillCounts.fast,
+    ),
+    power: Math.max(
+      game.stageKillCounts.power,
+      game.player2StageKillCounts.power,
+    ),
   };
 }
 
@@ -479,6 +854,42 @@ function createStageGame(
 ): BattleCityGameState {
   const stage = getBattleCityStage(stageNumber);
   const terrain = createBattleCityTerrain(stageNumber);
+  const createPlayer = (
+    playerId: BattleCityPlayerId,
+    lives: number,
+    powerTier: BattleCityPlayer["powerTier"],
+  ): BattleCityPlayer => {
+    const isMultiplayer = context.player2 !== undefined;
+    return {
+      ...stage.spawns[playerId],
+      direction: "up",
+      iceSlideDirection: null,
+      iceSlideStepsRemaining: 0,
+      invulnerabilityTicks: 0,
+      ...(isMultiplayer ? { movementStunTicks: 0 } : {}),
+      phase: isMultiplayer && lives <= 0 ? "inactive" : "spawning",
+      phaseTicks:
+        isMultiplayer && lives <= 0 ? 0 : BATTLE_CITY_PLAYER_SPAWN_TICKS,
+      powerTier,
+      shieldTicks: 0,
+    };
+  };
+  const multiplayerFields = context.player2
+    ? {
+        player2: createPlayer(
+          "player2",
+          context.player2.lives,
+          context.player2.powerTier,
+        ),
+        player2BonusLifeAwarded: context.player2.bonusLifeAwarded,
+        player2Lives: context.player2.lives,
+        player2Score: context.player2.score,
+        player2StageKillCounts: { ...EMPTY_KILL_COUNTS },
+        playerGameOverMessage: null,
+        stageKillLeaderBonusAwarded: false,
+        frameCounterResetPending: false,
+      }
+    : {};
   return {
     activePowerUp: null,
     baseAlive: true,
@@ -496,17 +907,7 @@ function createStageGame(
     nextBulletId: 0,
     nextEnemyId: 0,
     nextPowerUpId: 0,
-    player: {
-      ...stage.spawns.player1,
-      direction: "up",
-      iceSlideDirection: null,
-      iceSlideStepsRemaining: 0,
-      invulnerabilityTicks: 0,
-      phase: "spawning",
-      phaseTicks: BATTLE_CITY_PLAYER_SPAWN_TICKS,
-      powerTier: context.powerTier,
-      shieldTicks: 0,
-    },
+    player: createPlayer("player1", context.lives, context.powerTier),
     powerUpScorePopup: null,
     score: context.score,
     spawnedEnemyCount: 0,
@@ -524,18 +925,28 @@ function createStageGame(
     terrainFragments: createBattleCityTerrainFragmentGrid(terrain),
     tick: context.tick,
     totalEnemyCount: BATTLE_CITY_TOTAL_ENEMIES,
+    ...multiplayerFields,
   };
 }
 
 function tryMovePlayer(
   game: BattleCityGameState,
+  playerId: BattleCityPlayerId,
   direction: BattleCityDirection,
   isIceCoast = false,
 ): BattleCityPlayer {
+  const currentPlayer = getBattleCityPlayer(game, playerId)!;
+  const otherPlayer = getBattleCityPlayer(
+    game,
+    playerId === "player1" ? "player2" : "player1",
+  );
   const occupied = game.enemies
     .filter(isActiveEnemy)
     .map(({ row, col }) => ({ col, row }));
-  let origin: BattleCityPosition = game.player;
+  if (otherPlayer?.phase === "active") {
+    occupied.push({ col: otherPlayer.col, row: otherPlayer.row });
+  }
+  let origin: BattleCityPosition = currentPlayer;
   let movementDistance = BATTLE_CITY_PIXEL_STEP;
 
   if (!tankIsAlignedToDirectionLane(origin, direction)) {
@@ -571,10 +982,10 @@ function tryMovePlayer(
   );
 
   if (
-    positionsEqual(moved, game.player) &&
-    game.player.direction === direction
+    positionsEqual(moved, currentPlayer) &&
+    currentPlayer.direction === direction
   ) {
-    return game.player;
+    return currentPlayer;
   }
 
   const touchesIce = tankTouchesTerrain(
@@ -584,13 +995,13 @@ function tryMovePlayer(
     "ice",
   );
   const iceSlideStepsRemaining = isIceCoast
-    ? Math.max(0, game.player.iceSlideStepsRemaining - 1)
+    ? Math.max(0, currentPlayer.iceSlideStepsRemaining - 1)
     : touchesIce
       ? BATTLE_CITY_ICE_SLIDE_STEPS
       : 0;
 
   return {
-    ...game.player,
+    ...currentPlayer,
     col: moved.col,
     direction,
     iceSlideDirection:
@@ -602,6 +1013,7 @@ function tryMovePlayer(
 
 function advancePlayerMotion(
   game: BattleCityGameState,
+  playerId: BattleCityPlayerId,
   direction: BattleCityDirection | null,
 ): BattleCityGameState {
   // The original player tank advances on three out of every four video frames.
@@ -610,71 +1022,77 @@ function advancePlayerMotion(
   }
 
   return direction === null
-    ? advancePlayerIceSlide(game)
-    : moveBattleCityPlayer(game, direction);
+    ? advancePlayerIceSlide(game, playerId)
+    : moveBattleCityPlayerById(game, playerId, direction);
 }
 
 function advancePlayerIceSlide(
   game: BattleCityGameState,
+  playerId: BattleCityPlayerId,
 ): BattleCityGameState {
-  const direction = game.player.iceSlideDirection;
-  if (direction === null || game.player.iceSlideStepsRemaining <= 0) {
+  const currentPlayer = getBattleCityPlayer(game, playerId)!;
+  const direction = currentPlayer.iceSlideDirection;
+  if (direction === null || currentPlayer.iceSlideStepsRemaining <= 0) {
     return game;
   }
-  const player = tryMovePlayer(game, direction, true);
-  if (player === game.player) {
-    return {
-      ...game,
-      player: {
-        ...game.player,
-        iceSlideDirection: null,
-        iceSlideStepsRemaining: 0,
-      },
-    };
+  const player = tryMovePlayer(game, playerId, direction, true);
+  if (player === currentPlayer) {
+    return setBattleCityPlayer(game, playerId, {
+      ...currentPlayer,
+      iceSlideDirection: null,
+      iceSlideStepsRemaining: 0,
+    });
   }
-  return { ...game, player };
+  return setBattleCityPlayer(game, playerId, player);
 }
 
 function advancePlayerTankHandler(
   game: BattleCityGameState,
+  playerId: BattleCityPlayerId,
   direction: BattleCityDirection | null,
 ): BattleCityGameState {
-  if (game.player.phase === "active") {
-    if (canControlBattleCityPlayer(game)) {
-      return advancePlayerMotion(game, direction);
+  const player = getBattleCityPlayer(game, playerId);
+  if (player === null) {
+    return game;
+  }
+  if (player.phase === "active") {
+    if ((player.movementStunTicks ?? 0) > 0) {
+      return shouldAdvancePlayerTankHandler(game.tick)
+        ? setBattleCityPlayer(game, playerId, {
+            ...player,
+            movementStunTicks: (player.movementStunTicks ?? 0) - 1,
+          })
+        : game;
+    }
+    if (canControlBattleCityPlayer(game, playerId)) {
+      return advancePlayerMotion(game, playerId, direction);
     }
     // The game-over tail clears controller input but still runs the ice and
     // tank movement handlers, so an existing coast continues with no input.
     return game.status === "game-over"
-      ? advancePlayerMotion(game, null)
+      ? advancePlayerMotion(game, playerId, null)
       : game;
   }
-  return advancePlayerLifecycle(game);
+  return advancePlayerLifecycle(game, playerId);
 }
 
 function advanceTimers(game: BattleCityGameState): BattleCityGameState {
   const fortressTicks = decrement(game.fortressTicks);
-  let terrainState = {
-    terrain: game.terrain,
-    terrainFragments: game.terrainFragments,
-  };
-  if (game.fortressTicks > 0 && fortressTicks === 0) {
-    terrainState = setFortressTerrain(
-      game.terrain,
-      game.terrainFragments,
-      "brick",
-    );
-  } else if (
-    fortressTicks > 0 &&
-    fortressTicks <= BATTLE_CITY_FORTRESS_WARNING_TICKS &&
-    fortressTicks % 16 === 0
-  ) {
-    terrainState = setFortressTerrain(
-      game.terrain,
-      game.terrainFragments,
-      Math.floor(fortressTicks / 16) % 2 === 0 ? "brick" : "steel",
-    );
-  }
+  const terrainState = getFortressTerrainAfterTimerChange(
+    game,
+    fortressTicks,
+  );
+
+  const player2 = game.player2;
+  const multiplayerFields = player2
+    ? {
+        player2: {
+          ...player2,
+          invulnerabilityTicks: decrement(player2.invulnerabilityTicks),
+          shieldTicks: decrement(player2.shieldTicks),
+        },
+      }
+    : {};
 
   return {
     ...game,
@@ -690,6 +1108,86 @@ function advanceTimers(game: BattleCityGameState): BattleCityGameState {
     },
     powerUpScorePopup: advancePowerUpScorePopup(game.powerUpScorePopup),
     ...terrainState,
+    ...multiplayerFields,
+  };
+}
+
+function getFortressTerrainAfterTimerChange(
+  game: BattleCityGameState,
+  fortressTicks: number,
+) {
+  if (game.fortressTicks > 0 && fortressTicks === 0) {
+    return setFortressTerrain(
+      game.terrain,
+      game.terrainFragments,
+      "brick",
+    );
+  }
+  if (
+    fortressTicks > 0 &&
+    fortressTicks <= BATTLE_CITY_FORTRESS_WARNING_TICKS &&
+    fortressTicks % 16 === 0
+  ) {
+    return setFortressTerrain(
+      game.terrain,
+      game.terrainFragments,
+      Math.floor(fortressTicks / 16) % 2 === 0 ? "brick" : "steel",
+    );
+  }
+  return {
+    terrain: game.terrain,
+    terrainFragments: game.terrainFragments,
+  };
+}
+
+function rephaseBattleCityTimersAfterFrameCounterReset(
+  game: BattleCityGameState,
+  previousTick: number,
+): BattleCityGameState {
+  // Individual elimination clears the low hardware counter between timer
+  // handlers: clock/freeze already ran, while fortress and shield handlers see
+  // phase zero immediately. Preserve that asymmetric ordering in frame counts.
+  const rephasePostResetPlayer = (player: BattleCityPlayer) => ({
+    ...player,
+    invulnerabilityTicks:
+      Math.floor(player.invulnerabilityTicks / 64) * 64,
+    shieldTicks: Math.floor(player.shieldTicks / 64) * 64,
+  });
+  const fortressTicks = Math.floor(game.fortressTicks / 64) * 64;
+  const freezeCounter =
+    Math.max(0, previousTick) % 64 === 0
+      ? Math.floor(game.freezeTicks / 64)
+      : Math.ceil(game.freezeTicks / 64);
+
+  return {
+    ...game,
+    ...getFortressTerrainAfterTimerChange(game, fortressTicks),
+    fortressTicks,
+    freezeTicks: freezeCounter * 64,
+    player: rephasePostResetPlayer(game.player),
+    ...(game.player2
+      ? { player2: rephasePostResetPlayer(game.player2) }
+      : {}),
+  };
+}
+
+function rephaseBattleCityTimersForEndingCounterReset(
+  game: BattleCityMultiplayerGameState,
+): BattleCityMultiplayerGameState {
+  const rephase = (ticks: number) =>
+    ticks <= 0 ? 0 : Math.ceil(ticks / 64) * 64;
+  const rephasePlayer = (player: BattleCityPlayer): BattleCityPlayer => ({
+    ...player,
+    invulnerabilityTicks: rephase(player.invulnerabilityTicks),
+    shieldTicks: rephase(player.shieldTicks),
+  });
+
+  return {
+    ...game,
+    fortressTicks: rephase(game.fortressTicks),
+    freezeTicks: rephase(game.freezeTicks),
+    player: rephasePlayer(game.player),
+    player2: rephasePlayer(game.player2),
   };
 }
 
@@ -729,6 +1227,40 @@ function advancePowerUpScorePopup(
   return { ...popup, ticks: popup.ticks - 1 };
 }
 
+function advanceBattleCityPlayerGameOverMessage(
+  message: BattleCityPlayerGameOverMessage | null,
+): BattleCityPlayerGameOverMessage | null {
+  if (message === null || message.ticksRemaining <= 1) {
+    return null;
+  }
+  const ticksRemaining = message.ticksRemaining - 1;
+  return {
+    ...message,
+    movementPixels:
+      message.movementPixels +
+      (Math.ceil(
+        ticksRemaining /
+          BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_TIMER_STEP_TICKS,
+      ) >= BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_SLIDE_TIMER_COUNT
+        ? 1
+        : 0),
+    ticksRemaining,
+  };
+}
+
+function rephaseBattleCityPlayerGameOverMessageForCounterReset(
+  message: BattleCityPlayerGameOverMessage,
+): BattleCityPlayerGameOverMessage {
+  return {
+    ...message,
+    ticksRemaining:
+      Math.ceil(
+        message.ticksRemaining /
+          BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_TIMER_STEP_TICKS,
+      ) * BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_TIMER_STEP_TICKS,
+  };
+}
+
 function advanceBulletImpactTimers(
   bullets: BattleCityBullet[],
 ): BattleCityBullet[] {
@@ -743,65 +1275,100 @@ function advanceBulletImpactTimers(
   });
 }
 
-function advancePlayerLifecycle(game: BattleCityGameState): BattleCityGameState {
-  if (game.player.phase === "active") {
+function advancePlayerLifecycle(
+  game: BattleCityGameState,
+  playerId: BattleCityPlayerId,
+): BattleCityGameState {
+  const player = getBattleCityPlayer(game, playerId)!;
+  if (player.phase === "active" || player.phase === "inactive") {
     return game;
   }
   if (
-    (game.player.phase === "exploding" ||
-      game.player.phase === "spawning") &&
+    (player.phase === "exploding" || player.phase === "spawning") &&
     !shouldAdvancePlayerTankHandler(game.tick)
   ) {
     return game;
   }
-  if (game.player.phaseTicks > 1) {
-    return {
-      ...game,
-      player: { ...game.player, phaseTicks: game.player.phaseTicks - 1 },
-    };
+  if (player.phaseTicks > 1) {
+    return setBattleCityPlayer(game, playerId, {
+      ...player,
+      phaseTicks: player.phaseTicks - 1,
+    });
   }
-  if (game.player.phase === "spawning") {
-    return {
-      ...game,
-      player: {
-        ...game.player,
-        invulnerabilityTicks: getBattleCitySpawnShieldTicks(game.tick),
-        phase: "active",
-        phaseTicks: 0,
-      },
-    };
+  if (player.phase === "spawning") {
+    return setBattleCityPlayer(game, playerId, {
+      ...player,
+      invulnerabilityTicks: getBattleCitySpawnShieldTicks(game.tick),
+      phase: "active",
+      phaseTicks: 0,
+    });
   }
 
-  const lives = game.lives - 1;
+  const lives = getBattleCityPlayerLives(game, playerId) - 1;
   if (lives <= 0) {
-    const endingAlreadyStarted =
-      game.status === "stage-clear" || game.status === "game-over";
+    if (!isBattleCityMultiplayerGame(game)) {
+      const endingAlreadyStarted =
+        game.status === "stage-clear" || game.status === "game-over";
+      return {
+        ...game,
+        lives: 0,
+        player: { ...game.player, phaseTicks: 0 },
+        stageOutcome: "lost",
+        stageTransitionTicks: endingAlreadyStarted
+          ? game.stageTransitionTicks
+          : BATTLE_CITY_GAME_OVER_TRANSITION_TICKS,
+        status: endingAlreadyStarted ? game.status : "game-over",
+      };
+    }
+    const otherPlayerLives = getBattleCityPlayerLives(
+      game,
+      playerId === "player1" ? "player2" : "player1",
+    );
+    const startsIndividualGameOverMessage =
+      isBattleCityMultiplayerGame(game) &&
+      game.baseAlive &&
+      game.status !== "game-over" &&
+      otherPlayerLives > 0;
+    const next = setBattleCityPlayer(game, playerId, {
+      ...player,
+      phase: "inactive",
+      phaseTicks: 0,
+    });
     return {
-      ...game,
-      lives: 0,
-      player: { ...game.player, phaseTicks: 0 },
-      stageOutcome: "lost",
-      stageTransitionTicks: endingAlreadyStarted
-        ? game.stageTransitionTicks
-        : BATTLE_CITY_GAME_OVER_TRANSITION_TICKS,
-      status: endingAlreadyStarted ? game.status : "game-over",
+      ...next,
+      ...(playerId === "player1" ? { lives: 0 } : { player2Lives: 0 }),
+      ...(startsIndividualGameOverMessage
+        ? {
+            frameCounterResetPending: true,
+            playerGameOverMessage: {
+              movementPixels:
+                BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_INITIAL_MOVEMENT_PIXELS,
+              playerId,
+              ticksRemaining: BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_TICKS,
+            },
+            // The following frame consumes phase one; the explicit pending
+            // flag prevents phase zero from running twice after this boundary.
+            tick: 0,
+          }
+        : {}),
     };
   }
 
+  const respawnedPlayer: BattleCityPlayer = {
+    ...player,
+    ...getBattleCityStage(game.stage).spawns[playerId],
+    direction: "up",
+    iceSlideDirection: null,
+    iceSlideStepsRemaining: 0,
+    invulnerabilityTicks: 0,
+    ...(isBattleCityMultiplayerGame(game) ? { movementStunTicks: 0 } : {}),
+    phase: "spawning",
+    phaseTicks: BATTLE_CITY_PLAYER_SPAWN_TICKS,
+    shieldTicks: 0,
+  };
   return {
-    ...game,
-    lives,
-    player: {
-      ...game.player,
-      ...getBattleCityStage(game.stage).spawns.player1,
-      direction: "up",
-      iceSlideDirection: null,
-      iceSlideStepsRemaining: 0,
-      invulnerabilityTicks: 0,
-      phase: "spawning",
-      phaseTicks: BATTLE_CITY_PLAYER_SPAWN_TICKS,
-      shieldTicks: 0,
-    },
+    ...setBattleCityPlayer(game, playerId, respawnedPlayer),
+    ...(playerId === "player1" ? { lives } : { player2Lives: lives }),
   };
 }
 
@@ -827,6 +1394,7 @@ function advanceBullets(
   let terrainFragments = game.terrainFragments;
   const enemies = game.enemies.map((enemy) => ({ ...enemy }));
   let player = { ...game.player };
+  let player2 = game.player2 ? { ...game.player2 } : null;
   let activePowerUp = game.activePowerUp;
   let powerUpScorePopup = game.powerUpScorePopup;
   let nextPowerUpId = game.nextPowerUpId;
@@ -834,10 +1402,16 @@ function advanceBullets(
   let score = game.score;
   let lives = game.lives;
   let bonusLifeAwarded = game.bonusLifeAwarded;
+  let player2Score = game.player2Score ?? 0;
+  let player2Lives = game.player2Lives ?? 0;
+  let player2BonusLifeAwarded = game.player2BonusLifeAwarded ?? false;
   let baseAlive = game.baseAlive;
   let baseExplosionTicks = game.baseExplosionTicks;
   const status = game.status;
   let stageKillCounts = { ...game.stageKillCounts };
+  let player2StageKillCounts = {
+    ...(game.player2StageKillCounts ?? EMPTY_KILL_COUNTS),
+  };
   let stageOutcome = game.stageOutcome;
   const stageTransitionTicks = game.stageTransitionTicks;
   // The ROM moves every pre-existing shell through its complete frame distance
@@ -930,35 +1504,206 @@ function advanceBullets(
   const afterBulletCollisions = afterTerrain.filter(
     (bullet) => !cancelledIds.has(bullet.id),
   );
-  const survivingBullets: BattleCityBullet[] = [];
-  for (const bullet of afterBulletCollisions) {
-    if (bullet.impactTicks > 0 || !collisionTestIds.has(bullet.id)) {
+  // Replay schema V1 was recorded with the original solo slot-sorted pass.
+  // Keep it byte-for-byte in behavior while multiplayer uses the ROM's full
+  // cross-player object-slot ordering below.
+  if (!isBattleCityMultiplayerGame(game)) {
+    const survivingBullets: BattleCityBullet[] = [];
+    for (const bullet of afterBulletCollisions) {
+      if (bullet.impactTicks > 0 || !collisionTestIds.has(bullet.id)) {
+        survivingBullets.push(bullet);
+        continue;
+      }
+
+      if (bullet.owner === "player") {
+        const enemyIndex = enemies.findIndex(
+          (enemy) => isActiveEnemy(enemy) && bulletHitsTank(bullet, enemy),
+        );
+        if (enemyIndex >= 0) {
+          const enemy = enemies[enemyIndex]!;
+          if (enemy.isCarrier && !enemy.hasDroppedPowerUp) {
+            activePowerUp = createRandomPowerUp(
+              player,
+              null,
+              nextPowerUpId,
+              random,
+            );
+            nextPowerUpId += 1;
+            powerUpScorePopup = null;
+          }
+          const hitPoints = enemy.hitPoints - 1;
+          if (hitPoints <= 0) {
+            enemies[enemyIndex] = {
+              ...enemy,
+              destructionPoints: enemy.score,
+              explosionTicks: BATTLE_CITY_ENEMY_EXPLOSION_TICKS,
+              hasDroppedPowerUp: enemy.hasDroppedPowerUp || enemy.isCarrier,
+              hitPoints: 0,
+            };
+            stageKillCounts = {
+              ...stageKillCounts,
+              [enemy.type]: stageKillCounts[enemy.type] + 1,
+            };
+            const scored = addScore(
+              score,
+              lives,
+              bonusLifeAwarded,
+              enemy.score,
+              { canAwardBonusLife: baseAlive && status !== "game-over" },
+            );
+            score = scored.score;
+            lives = scored.lives;
+            bonusLifeAwarded = scored.bonusLifeAwarded;
+          } else {
+            enemies[enemyIndex] = {
+              ...enemy,
+              hasDroppedPowerUp: enemy.hasDroppedPowerUp || enemy.isCarrier,
+              hitPoints,
+            };
+          }
+          survivingBullets.push(createBulletImpact(bullet));
+          continue;
+        }
+      } else if (
+        player.phase === "active" &&
+        bulletHitsTank(bullet, player)
+      ) {
+        if (player.invulnerabilityTicks === 0 && player.shieldTicks === 0) {
+          player = {
+            ...player,
+            iceSlideDirection: null,
+            iceSlideStepsRemaining: 0,
+            phase: "exploding",
+            phaseTicks: BATTLE_CITY_PLAYER_EXPLOSION_TICKS,
+            powerTier: 0,
+            shieldTicks: 0,
+          };
+          survivingBullets.push(createBulletImpact(bullet));
+        }
+        continue;
+      }
+
       survivingBullets.push(bullet);
-      continue;
     }
 
-    if (bullet.owner === "player") {
-      const enemyIndex = enemies.findIndex(
-        (enemy) =>
-          isActiveEnemy(enemy) && bulletHitsTank(bullet, enemy),
-      );
-      if (enemyIndex >= 0) {
-        const enemy = enemies[enemyIndex]!;
-        if (enemy.isCarrier && !enemy.hasDroppedPowerUp) {
-          activePowerUp = createRandomPowerUp(player, nextPowerUpId, random);
-          nextPowerUpId += 1;
-          powerUpScorePopup = null;
-        }
-        const hitPoints = enemy.hitPoints - 1;
-        if (hitPoints <= 0) {
-          enemies[enemyIndex] = {
-            ...enemy,
-            destructionPoints: enemy.score,
-            explosionTicks: BATTLE_CITY_ENEMY_EXPLOSION_TICKS,
-            hasDroppedPowerUp:
-              enemy.hasDroppedPowerUp || enemy.isCarrier,
-            hitPoints: 0,
-          };
+    return {
+      ...game,
+      activePowerUp,
+      baseAlive,
+      baseExplosionTicks,
+      bonusLifeAwarded,
+      bullets: sortBulletsBySlot(survivingBullets),
+      destroyedEnemyCount,
+      enemies,
+      lives,
+      nextPowerUpId,
+      player,
+      powerUpScorePopup,
+      score,
+      stageKillCounts,
+      stageOutcome,
+      stageTransitionTicks,
+      status,
+      terrain,
+      terrainFragments,
+    };
+  }
+  const bulletState = new Map(
+    afterBulletCollisions.map((bullet) => [bullet.id, bullet]),
+  );
+  const getBulletInSlot = (slot: number) =>
+    [...bulletState.values()].find((bullet) => bullet.slot === slot);
+  const canResolveTankCollision = (bullet: BattleCityBullet) =>
+    bullet.impactTicks === 0 && collisionTestIds.has(bullet.id);
+
+  // The ROM resolves enemy shells against Player 2 and then Player 1 before
+  // any player shell can hit an enemy or teammate.
+  const enemyBulletIds = afterBulletCollisions
+    .filter((bullet) => bullet.owner === "enemy")
+    .map((bullet) => bullet.id);
+  const enemyShellTargets: readonly BattleCityPlayerId[] = player2
+    ? ["player2", "player1"]
+    : ["player1"];
+  for (const targetId of enemyShellTargets) {
+    for (const bulletId of enemyBulletIds) {
+      const bullet = bulletState.get(bulletId);
+      const target = targetId === "player1" ? player : player2;
+      if (
+        bullet === undefined ||
+        target === null ||
+        target.phase !== "active" ||
+        !canResolveTankCollision(bullet) ||
+        !bulletHitsTank(bullet, target)
+      ) {
+        continue;
+      }
+      if (target.invulnerabilityTicks > 0 || target.shieldTicks > 0) {
+        bulletState.delete(bulletId);
+        continue;
+      }
+
+      const explodingPlayer: BattleCityPlayer = {
+        ...target,
+        iceSlideDirection: null,
+        iceSlideStepsRemaining: 0,
+        movementStunTicks: 0,
+        phase: "exploding",
+        phaseTicks: BATTLE_CITY_PLAYER_EXPLOSION_TICKS,
+        powerTier: 0,
+        shieldTicks: 0,
+      };
+      if (targetId === "player1") {
+        player = explodingPlayer;
+      } else {
+        player2 = explodingPlayer;
+      }
+      bulletState.set(bulletId, createBulletImpact(bullet));
+    }
+  }
+
+  // Next, each enemy slot scans player shell slots in the hardware order.
+  const playerBulletSlots = [9, 8, 1, 0] as const;
+  const enemyIndexes = enemies
+    .map((_, index) => index)
+    .sort((first, second) => enemies[second]!.slot - enemies[first]!.slot);
+  for (const enemyIndex of enemyIndexes) {
+    for (const bulletSlot of playerBulletSlots) {
+      const enemy = enemies[enemyIndex]!;
+      const bullet = getBulletInSlot(bulletSlot);
+      if (!isActiveEnemy(enemy)) {
+        break;
+      }
+      if (
+        bullet === undefined ||
+        (bullet.owner !== "player" && bullet.owner !== "player2") ||
+        !canResolveTankCollision(bullet) ||
+        !bulletHitsTank(bullet, enemy)
+      ) {
+        continue;
+      }
+
+      const shooterId: BattleCityPlayerId =
+        bullet.owner === "player" ? "player1" : "player2";
+      if (enemy.isCarrier && !enemy.hasDroppedPowerUp) {
+        activePowerUp = createRandomPowerUp(
+          player,
+          player2,
+          nextPowerUpId,
+          random,
+        );
+        nextPowerUpId += 1;
+        powerUpScorePopup = null;
+      }
+      const hitPoints = enemy.hitPoints - 1;
+      if (hitPoints <= 0) {
+        enemies[enemyIndex] = {
+          ...enemy,
+          destructionPoints: enemy.score,
+          explosionTicks: BATTLE_CITY_ENEMY_EXPLOSION_TICKS,
+          hasDroppedPowerUp: enemy.hasDroppedPowerUp || enemy.isCarrier,
+          hitPoints: 0,
+        };
+        if (shooterId === "player1") {
           stageKillCounts = {
             ...stageKillCounts,
             [enemy.type]: stageKillCounts[enemy.type] + 1,
@@ -968,46 +1713,91 @@ function advanceBullets(
             lives,
             bonusLifeAwarded,
             enemy.score,
-            {
-              canAwardBonusLife: baseAlive && status !== "game-over",
-            },
+            { canAwardBonusLife: baseAlive && status !== "game-over" },
           );
           score = scored.score;
           lives = scored.lives;
           bonusLifeAwarded = scored.bonusLifeAwarded;
         } else {
-          enemies[enemyIndex] = {
-            ...enemy,
-            hasDroppedPowerUp:
-              enemy.hasDroppedPowerUp || enemy.isCarrier,
-            hitPoints,
+          player2StageKillCounts = {
+            ...player2StageKillCounts,
+            [enemy.type]: player2StageKillCounts[enemy.type] + 1,
           };
+          const scored = addScore(
+            player2Score,
+            player2Lives,
+            player2BonusLifeAwarded,
+            enemy.score,
+            { canAwardBonusLife: baseAlive && status !== "game-over" },
+          );
+          player2Score = scored.score;
+          player2Lives = scored.lives;
+          player2BonusLifeAwarded = scored.bonusLifeAwarded;
         }
-        survivingBullets.push(createBulletImpact(bullet));
-        continue;
-      }
-    } else if (
-      player.phase === "active" &&
-      bulletHitsTank(bullet, player)
-    ) {
-      if (player.invulnerabilityTicks === 0 && player.shieldTicks === 0) {
-        player = {
-          ...player,
-          iceSlideDirection: null,
-          iceSlideStepsRemaining: 0,
-          phase: "exploding",
-          phaseTicks: BATTLE_CITY_PLAYER_EXPLOSION_TICKS,
-          powerTier: 0,
-          shieldTicks: 0,
+      } else {
+        enemies[enemyIndex] = {
+          ...enemy,
+          hasDroppedPowerUp: enemy.hasDroppedPowerUp || enemy.isCarrier,
+          hitPoints,
         };
-        survivingBullets.push(createBulletImpact(bullet));
       }
-      continue;
+      bulletState.set(bullet.id, createBulletImpact(bullet));
     }
-
-    survivingBullets.push(bullet);
   }
-  bullets = sortBulletsBySlot(survivingBullets);
+
+  // Friendly fire is the final tank-collision pass, again visiting Player 2
+  // before Player 1. Protection clears the shell without an impact sprite.
+  if (player2 !== null) {
+    for (const targetId of ["player2", "player1"] as const) {
+      for (const bulletSlot of playerBulletSlots) {
+        const target = targetId === "player1" ? player : player2;
+        const friendlyOwner = targetId === "player1" ? "player2" : "player";
+        const bullet = getBulletInSlot(bulletSlot);
+        if (
+          target.phase !== "active" ||
+          bullet === undefined ||
+          bullet.owner !== friendlyOwner ||
+          !canResolveTankCollision(bullet) ||
+          !bulletHitsTank(bullet, target)
+        ) {
+          continue;
+        }
+        if (target.invulnerabilityTicks > 0 || target.shieldTicks > 0) {
+          bulletState.delete(bullet.id);
+          continue;
+        }
+        const newlyStunned = (target.movementStunTicks ?? 0) === 0;
+        if (newlyStunned) {
+          const stunnedPlayer: BattleCityPlayer = {
+            ...target,
+            movementStunTicks: BATTLE_CITY_FRIENDLY_FIRE_STUN_TICKS,
+          };
+          if (targetId === "player1") {
+            player = stunnedPlayer;
+          } else {
+            player2 = stunnedPlayer;
+          }
+        }
+        bulletState.set(bullet.id, createBulletImpact(bullet));
+        if (newlyStunned) {
+          break;
+        }
+      }
+    }
+  }
+
+  bullets = sortBulletsBySlot([...bulletState.values()]);
+
+  const multiplayerFields =
+    player2 === null
+      ? {}
+      : {
+          player2,
+          player2BonusLifeAwarded,
+          player2Lives,
+          player2Score,
+          player2StageKillCounts,
+        };
 
   return {
     ...game,
@@ -1029,6 +1819,7 @@ function advanceBullets(
     status,
     terrain,
     terrainFragments,
+    ...multiplayerFields,
   };
 }
 
@@ -1040,7 +1831,7 @@ function findCancelledBulletIds(bullets: BattleCityBullet[]): Set<string> {
   // shells during the remainder of its current inner loop.
   for (const first of bullets) {
     if (
-      first.owner !== "player" ||
+      first.owner === "enemy" ||
       first.impactTicks > 0 ||
       cancelled.has(first.id)
     ) {
@@ -1050,7 +1841,7 @@ function findCancelledBulletIds(bullets: BattleCityBullet[]): Set<string> {
       if (
         second.id === first.id ||
         second.impactTicks > 0 ||
-        second.owner === "player" ||
+        second.owner === first.owner ||
         cancelled.has(second.id)
       ) {
         continue;
@@ -1132,6 +1923,9 @@ function advanceEnemyTankHandlers(
               .map(({ row, col }) => ({ row, col })),
             ...(game.player.phase === "active"
               ? [{ row: game.player.row, col: game.player.col }]
+              : []),
+            ...(game.player2?.phase === "active"
+              ? [{ row: game.player2.row, col: game.player2.col }]
               : []),
           ];
           enemy = tryMoveEnemy(
@@ -1285,19 +2079,21 @@ function chooseEnemyStrategicDirection(
   enemy: BattleCityEnemy,
   random: BattleCityRandom,
 ): BattleCityDirection {
-  if (game.status === "game-over") {
+  const usesResetEndingCounter =
+    game.status === "game-over" ||
+    (game.status === "stage-clear" &&
+      game.stageTransitionTicks > BATTLE_CITY_STAGE_TRANSITION_TICKS);
+  if (usesResetEndingCounter) {
     // The hardware ending loop starts its 64-frame counter at FE, wraps after
-    // two boundaries, then finishes at 02. That makes enemies pressure the HQ
-    // for the first half of the live tail and use random steering afterward.
+    // two boundaries, then finishes at 02. Central game over and a clear with
+    // an individual side message therefore pressure the HQ for the first half
+    // of their long live tail and use random steering afterward.
     return game.stageTransitionTicks > BATTLE_CITY_GAME_OVER_TRANSITION_TICKS / 2
       ? chooseDirectionToward(enemy, { col: 12, row: 24 }, random)
       : chooseEnemyDirection(random);
   }
 
-  const storedSpawnInterval = getBattleCityEnemySpawnIntervalTicks(
-    game.stage,
-    game.cycle,
-  ) - 1;
+  const storedSpawnInterval = getBattleCitySpawnIntervalTicks(game) - 1;
   const playerPressureTick =
     (Math.floor(storedSpawnInterval / 8) + 1) * 64;
   const headquartersPressureTick =
@@ -1307,9 +2103,32 @@ function chooseEnemyStrategicDirection(
     return chooseEnemyDirection(random);
   }
   if (game.stageBattleTicks < headquartersPressureTick) {
-    return chooseDirectionToward(enemy, game.player, random);
+    return chooseDirectionToward(
+      enemy,
+      getBattleCityEnemyPlayerTarget(game, enemy.slot),
+      random,
+    );
   }
   return chooseDirectionToward(enemy, { col: 12, row: 24 }, random);
+}
+
+function getBattleCityEnemyPlayerTarget(
+  game: BattleCityGameState,
+  enemySlot: number,
+): BattleCityPosition {
+  if (!isBattleCityMultiplayerGame(game)) {
+    return game.player;
+  }
+
+  const preferredPlayerId: BattleCityPlayerId =
+    enemySlot % 2 === 0 ? "player1" : "player2";
+  const fallbackPlayerId: BattleCityPlayerId =
+    preferredPlayerId === "player1" ? "player2" : "player1";
+  const preferredPlayer = getBattleCityPlayer(game, preferredPlayerId)!;
+  if (preferredPlayer.phase !== "inactive") {
+    return preferredPlayer;
+  }
+  return getBattleCityPlayer(game, fallbackPlayerId) ?? game.player;
 }
 
 function chooseDirectionToward(
@@ -1330,9 +2149,15 @@ function chooseDirectionToward(
 }
 
 function spawnNextEnemy(game: BattleCityGameState): BattleCityGameState {
+  const enemySlots = isBattleCityMultiplayerGame(game)
+    ? BATTLE_CITY_MULTIPLAYER_ENEMY_SLOTS
+    : BATTLE_CITY_ENEMY_SLOTS;
+  const maximumActiveEnemies = isBattleCityMultiplayerGame(game)
+    ? BATTLE_CITY_MULTIPLAYER_MAX_ACTIVE_ENEMIES
+    : BATTLE_CITY_MAX_ACTIVE_ENEMIES;
   if (
     game.enemySpawnCooldownTicks > 0 ||
-    game.enemies.length >= BATTLE_CITY_MAX_ACTIVE_ENEMIES ||
+    game.enemies.length >= maximumActiveEnemies ||
     game.spawnedEnemyCount >= game.totalEnemyCount
   ) {
     return game;
@@ -1348,7 +2173,7 @@ function spawnNextEnemy(game: BattleCityGameState): BattleCityGameState {
   ).enemyQueue;
   const type = enemyQueue[game.spawnedEnemyCount]!;
   const occupiedSlots = new Set(game.enemies.map(({ slot }) => slot));
-  const slot = BATTLE_CITY_ENEMY_SLOTS.find(
+  const slot = enemySlots.find(
     (candidate) => !occupiedSlots.has(candidate),
   );
   if (slot === undefined) {
@@ -1367,13 +2192,20 @@ function spawnNextEnemy(game: BattleCityGameState): BattleCityGameState {
     enemies: [...game.enemies, enemy].sort(
       (first, second) => second.slot - first.slot,
     ),
-    enemySpawnCooldownTicks: getBattleCityEnemySpawnIntervalTicks(
-      game.stage,
-      game.cycle,
-    ),
+    enemySpawnCooldownTicks: getBattleCitySpawnIntervalTicks(game),
     nextEnemyId: game.nextEnemyId + 1,
     spawnedEnemyCount: spawnOrder,
   };
+}
+
+function getBattleCitySpawnIntervalTicks(game: BattleCityGameState) {
+  const baseInterval = getBattleCityEnemySpawnIntervalTicks(
+    game.stage,
+    game.cycle,
+  );
+  return isBattleCityMultiplayerGame(game)
+    ? Math.max(1, baseInterval - BATTLE_CITY_MULTIPLAYER_SPAWN_ADVANCE_TICKS)
+    : baseInterval;
 }
 
 function createEnemy(
@@ -1409,10 +2241,20 @@ function createEnemy(
 
 function createRandomPowerUp(
   player: BattleCityPlayer,
+  player2: BattleCityPlayer | null,
   nextPowerUpId: number,
   random: BattleCityRandom,
 ): BattleCityPowerUp {
-  const { type, ...position } = selectBattleCityPowerUp(player, random);
+  const activePlayers = [player, player2]
+    .filter((candidate): candidate is BattleCityPlayer => candidate !== null)
+    .filter((candidate) => candidate.phase === "active");
+  // The multiplayer ROM ignores both inactive tank slots, so an empty list
+  // deliberately permits every canonical position. Solo retains its V1
+  // fallback to the stored player position for replay compatibility.
+  const { type, ...position } = selectBattleCityPowerUp(
+    player2 !== null ? activePlayers : [player],
+    random,
+  );
   return {
     ...position,
     id: `power-up-${nextPowerUpId}`,
@@ -1426,17 +2268,42 @@ function collectPowerUp(game: BattleCityGameState): BattleCityGameState {
     powerUp === null ||
     (game.status !== "running" &&
       game.status !== "stage-clear" &&
-      game.status !== "game-over") ||
-    game.player.phase !== "active" ||
-    !battleCityPowerUpWithinTankRange(game.player, powerUp)
+      game.status !== "game-over")
   ) {
     return game;
   }
 
+  // The original checks Player 2 before Player 1, so simultaneous overlap has
+  // a stable collector instead of depending on client or network ordering.
+  const collector = (
+    [
+      ...(game.player2
+        ? [["player2", game.player2] as const]
+        : []),
+      ["player1", game.player] as const,
+    ] satisfies readonly (readonly [BattleCityPlayerId, BattleCityPlayer])[]
+  ).find(
+    ([, player]) =>
+      player.phase === "active" &&
+      battleCityPowerUpWithinTankRange(player, powerUp),
+  );
+  if (collector === undefined) {
+    return game;
+  }
+
+  const [collectorId] = collector;
+  const collectorScore =
+    collectorId === "player1" ? game.score : game.player2Score ?? 0;
+  const collectorLives = getBattleCityPlayerLives(game, collectorId);
+  const collectorBonusLifeAwarded =
+    collectorId === "player1"
+      ? game.bonusLifeAwarded
+      : game.player2BonusLifeAwarded ?? false;
+
   const scored = addScore(
-    game.score,
-    game.lives,
-    game.bonusLifeAwarded,
+    collectorScore,
+    collectorLives,
+    collectorBonusLifeAwarded,
     500,
     {
       canAwardBonusLife: game.baseAlive && game.status !== "game-over",
@@ -1445,25 +2312,32 @@ function collectPowerUp(game: BattleCityGameState): BattleCityGameState {
   const next: BattleCityGameState = {
     ...game,
     activePowerUp: null,
-    bonusLifeAwarded: scored.bonusLifeAwarded,
-    lives: scored.lives,
     powerUpScorePopup: {
       col: powerUp.col,
       row: powerUp.row,
       ticks: BATTLE_CITY_POWER_UP_SCORE_POPUP_TICKS,
     },
-    score: scored.score,
+    ...(collectorId === "player1"
+      ? {
+          bonusLifeAwarded: scored.bonusLifeAwarded,
+          lives: scored.lives,
+          score: scored.score,
+        }
+      : {
+          player2BonusLifeAwarded: scored.bonusLifeAwarded,
+          player2Lives: scored.lives,
+          player2Score: scored.score,
+        }),
   };
 
   switch (powerUp.type) {
-    case "star":
-      return {
-        ...next,
-        player: {
-          ...next.player,
-          powerTier: Math.min(3, next.player.powerTier + 1) as 0 | 1 | 2 | 3,
-        },
-      };
+    case "star": {
+      const player = getBattleCityPlayer(next, collectorId)!;
+      return setBattleCityPlayer(next, collectorId, {
+        ...player,
+        powerTier: Math.min(3, player.powerTier + 1) as 0 | 1 | 2 | 3,
+      });
+    }
     case "grenade": {
       return {
         ...next,
@@ -1483,14 +2357,13 @@ function collectPowerUp(game: BattleCityGameState): BattleCityGameState {
         ),
       };
     }
-    case "helmet":
-      return {
-        ...next,
-        player: {
-          ...next.player,
-          shieldTicks: getQuantizedBattleCityTimerTicks(10, next.tick),
-        },
-      };
+    case "helmet": {
+      const player = getBattleCityPlayer(next, collectorId)!;
+      return setBattleCityPlayer(next, collectorId, {
+        ...player,
+        shieldTicks: getQuantizedBattleCityTimerTicks(10, next.tick),
+      });
+    }
     case "shovel": {
       // Pickup scoring happens before the ROM handler sees the destroyed-HQ
       // game-over flag and declines to rebuild the enclosure.
@@ -1509,7 +2382,9 @@ function collectPowerUp(game: BattleCityGameState): BattleCityGameState {
       };
     }
     case "tank":
-      return { ...next, lives: next.lives + 1 };
+      return collectorId === "player1"
+        ? { ...next, lives: next.lives + 1 }
+        : { ...next, player2Lives: (next.player2Lives ?? 0) + 1 };
     case "clock":
       return {
         ...next,
@@ -1519,6 +2394,18 @@ function collectPowerUp(game: BattleCityGameState): BattleCityGameState {
 }
 
 function maybeCompleteStage(game: BattleCityGameState): BattleCityGameState {
+  const isMultiplayer = isBattleCityMultiplayerGame(game);
+  const allPlayersEliminated =
+    isMultiplayer && game.lives <= 0 && game.player2Lives <= 0;
+  if (isMultiplayer && game.status === "stage-clear") {
+    if (!game.baseAlive) {
+      return game;
+    }
+    const stageOutcome = allPlayersEliminated ? "lost" : "cleared";
+    return game.stageOutcome === stageOutcome
+      ? game
+      : { ...game, stageOutcome };
+  }
   if (game.status !== "running") {
     return game;
   }
@@ -1529,7 +2416,9 @@ function maybeCompleteStage(game: BattleCityGameState): BattleCityGameState {
     return {
       ...game,
       stageOutcome: game.baseAlive ? "cleared" : "lost",
-      stageTransitionTicks: BATTLE_CITY_STAGE_TRANSITION_TICKS,
+      stageTransitionTicks: game.playerGameOverMessage
+        ? BATTLE_CITY_GAME_OVER_TRANSITION_TICKS
+        : BATTLE_CITY_STAGE_TRANSITION_TICKS,
       status: "stage-clear",
     };
   }
@@ -1538,10 +2427,20 @@ function maybeCompleteStage(game: BattleCityGameState): BattleCityGameState {
       ? game
       : {
           ...game,
+          ...(isMultiplayer ? { playerGameOverMessage: null } : {}),
           stageOutcome: "lost",
           stageTransitionTicks: BATTLE_CITY_GAME_OVER_TRANSITION_TICKS,
           status: "game-over",
         };
+  }
+  if (isMultiplayer && allPlayersEliminated) {
+    return {
+      ...game,
+      playerGameOverMessage: null,
+      stageOutcome: "lost",
+      stageTransitionTicks: BATTLE_CITY_GAME_OVER_TRANSITION_TICKS,
+      status: "game-over",
+    };
   }
   return game;
 }
@@ -1556,7 +2455,11 @@ function advanceBattleEnding(game: BattleCityGameState): BattleCityGameState {
   return {
     ...game,
     stageResultTicks: 0,
-    stageTransitionTicks: getBattleCityStageResultDuration(game.stageKillCounts),
+    stageTransitionTicks: getBattleCityStageResultDuration(
+      isBattleCityMultiplayerGame(game)
+        ? getBattleCityMultiplayerResultTimingCounts(game)
+        : game.stageKillCounts,
+    ),
     status: "stage-results",
   };
 }
@@ -1577,44 +2480,113 @@ function advanceStageIntro(game: BattleCityGameState): BattleCityGameState {
 }
 
 function advanceStageResults(game: BattleCityGameState): BattleCityGameState {
-  if (game.stageTransitionTicks > 1) {
+  const currentGame = maybeAwardBattleCityMultiplayerKillLeaderBonus(game);
+  if (currentGame.stageTransitionTicks > 1) {
     return {
-      ...game,
-      stageResultTicks: game.stageResultTicks + 1,
-      stageTransitionTicks: game.stageTransitionTicks - 1,
-      tick: game.tick + 1,
+      ...currentGame,
+      stageResultTicks: currentGame.stageResultTicks + 1,
+      stageTransitionTicks: currentGame.stageTransitionTicks - 1,
+      tick: currentGame.tick + 1,
     };
   }
-  if (game.stageOutcome === "lost") {
+  if (currentGame.stageOutcome === "lost") {
     return {
-      ...game,
-      stageResultTicks: game.stageResultTicks + 1,
+      ...currentGame,
+      stageResultTicks: currentGame.stageResultTicks + 1,
       stageTransitionTicks: 0,
       status: "lost",
-      tick: game.tick + 1,
+      tick: currentGame.tick + 1,
     };
   }
 
-  const nextStage = getNextBattleCityStage(game.stage, game.cycle);
+  const nextStage = getNextBattleCityStage(
+    currentGame.stage,
+    currentGame.cycle,
+  );
   return createStageGame(nextStage.stage, {
-    bonusLifeAwarded: game.bonusLifeAwarded,
+    bonusLifeAwarded: currentGame.bonusLifeAwarded,
     cycle: nextStage.cycle,
-    lives: game.lives,
-    powerTier: game.player.powerTier,
-    score: game.score,
+    lives: currentGame.lives,
+    ...(isBattleCityMultiplayerGame(currentGame)
+      ? {
+          player2: {
+            bonusLifeAwarded: currentGame.player2BonusLifeAwarded,
+            lives: currentGame.player2Lives,
+            powerTier: currentGame.player2.powerTier,
+            score: currentGame.player2Score,
+          },
+        }
+      : {}),
+    powerTier: currentGame.player.powerTier,
+    score: currentGame.score,
     stageIntroTicks: BATTLE_CITY_NEXT_STAGE_INTRO_TICKS,
     status: "stage-intro",
-    tick: game.tick + 1,
+    tick: currentGame.tick + 1,
   });
+}
+
+function maybeAwardBattleCityMultiplayerKillLeaderBonus(
+  game: BattleCityGameState,
+): BattleCityGameState {
+  const bonusRevealTick = isBattleCityMultiplayerGame(game)
+    ? getBattleCityStageResultTotalRevealTick(
+        getBattleCityMultiplayerResultTimingCounts(game),
+      ) +
+      BATTLE_CITY_MULTIPLAYER_KILL_LEADER_BONUS_DELAY_TICKS -
+      1
+    : Number.POSITIVE_INFINITY;
+  if (
+    !isBattleCityMultiplayerGame(game) ||
+    game.stageOutcome !== "cleared" ||
+    game.stageKillLeaderBonusAwarded ||
+    game.stageResultTicks < bonusRevealTick
+  ) {
+    return game;
+  }
+
+  const player1Kills = getBattleCityTotalKills(game.stageKillCounts);
+  const player2Kills = getBattleCityTotalKills(game.player2StageKillCounts);
+  if (player1Kills > player2Kills && game.lives > 0) {
+    const scored = addScore(
+      game.score,
+      game.lives,
+      game.bonusLifeAwarded,
+      1_000,
+      { canAwardBonusLife: true },
+    );
+    return {
+      ...game,
+      ...scored,
+      stageKillLeaderBonusAwarded: true,
+    };
+  }
+  if (player2Kills > player1Kills && game.player2Lives > 0) {
+    const scored = addScore(
+      game.player2Score,
+      game.player2Lives,
+      game.player2BonusLifeAwarded,
+      1_000,
+      { canAwardBonusLife: true },
+    );
+    return {
+      ...game,
+      player2BonusLifeAwarded: scored.bonusLifeAwarded,
+      player2Lives: scored.lives,
+      player2Score: scored.score,
+      stageKillLeaderBonusAwarded: true,
+    };
+  }
+  return { ...game, stageKillLeaderBonusAwarded: true };
+}
+
+function getBattleCityTotalKills(killCounts: BattleCityKillCounts) {
+  return Object.values(killCounts).reduce((total, count) => total + count, 0);
 }
 
 function getBattleCityStageResultDuration(
   stageKillCounts: BattleCityKillCounts,
 ): number {
-  const creditedKills = Object.values(stageKillCounts).reduce(
-    (total, count) => total + count,
-    0,
-  );
+  const creditedKills = getBattleCityTotalKills(stageKillCounts);
   return (
     BATTLE_CITY_STAGE_RESULTS_BASE_TICKS +
     BATTLE_CITY_STAGE_RESULTS_PER_KILL_TICKS * creditedKills

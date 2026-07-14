@@ -12,7 +12,9 @@ folder.
   catalog owns rendered card order and filters that order through the registry.
   Client renderer and server adapter maps must be exhaustive over
   `MultiplayerGameId`; keep their actual imports local to their UI and server
-  layers.
+  layers. Tank Patrol participates under its stable `battle-city` id with
+  required `player-1` and `player-2` seats and no launcher parameters because
+  private-room runs always begin at Stage 1.
 - `room.ts` owns the reusable private-room model: signed-in hosts, guest
   observers, player seats, generic game settings, invite paths, host-only
   lifecycle/settings commands, and immutable room transitions.
@@ -46,6 +48,10 @@ folder.
   Replays or match summaries, if added later, should be compact terminal
   summaries derived from server-owned final state, not client-uploaded
   multiplayer histories or a SQLite-backed per-event log.
+- Tank Patrol private rooms keep authoritative game state only for the room's
+  lifetime. Their Stage 1 starts, player inputs, stage results, and terminal
+  summaries do not become `battle-city` replay V1 events or solo leaderboard
+  submissions.
 - Current Pong aliases in `protocol.ts` exist to keep the existing Pong
   multiplayer UI/runtime typed while the sidecar protocol is introduced. Future
   game integrations should narrow by `gameId` at the edge that understands that
