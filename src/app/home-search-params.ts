@@ -11,6 +11,7 @@ export function getInitialReplayGameId(value: string | string[] | undefined) {
     replayGameId === "simon" ||
     replayGameId === "space-invaders" ||
     replayGameId === "asteroids" ||
+    replayGameId === "battle-city" ||
     replayGameId === "twenty-forty-eight"
     ? replayGameId
     : null;

@@ -11,6 +11,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { BattleCityBoard } from "@/components/battle-city-board";
+import { BattleCityReplayPlayer } from "@/components/battle-city-replay-player";
 import { BattleCityStageResults } from "@/components/battle-city-stage-results";
 import {
   createBattleCityPlayerMovementState,
@@ -37,6 +38,7 @@ import {
   GameEndScreen,
   GameHeader,
   GameHelpScreen,
+  GameReplaySaveAction,
   GameShell,
   GameSidebar,
   GameStartScreen,
@@ -47,6 +49,13 @@ import {
   useGameHelpScreen,
   type GameHelpSection,
 } from "@/components/game-layout";
+import {
+  appendLiveGameReplayEvent,
+  createLiveGameReplayRecording,
+  useLiveGameReplayRecording,
+  type LiveGameReplayRecording,
+} from "@/components/game-replay-recording";
+import { getGameReplayRecordingElapsedMs } from "@/components/game-replay-timing";
 import { Button } from "@/components/ui/button";
 import { useGameSession } from "@/hooks/use-game-session";
 import {
@@ -57,9 +66,9 @@ import {
   formatBattleCityStageLabel,
   getBattleCityStageResultDisplay,
   pauseBattleCityGame,
-  restartBattleCityGame,
   resumeBattleCityGame,
   startBattleCityGame,
+  type BattleCityFrameInput,
   type BattleCityGameState,
   type BattleCityStatus,
 } from "@/lib/battle-city-game-engine";
@@ -68,11 +77,37 @@ import {
   BATTLE_CITY_PLAYER_ASSET_BY_POWER_TIER,
   getBattleCityAssetUrl,
 } from "@/lib/battle-city/assets";
+import {
+  createBattleCityReplayRandom,
+  createBattleCityReplayRun,
+  saveBattleCityReplay,
+  BATTLE_CITY_REPLAY_GAME_ID,
+  BATTLE_CITY_REPLAY_SCHEMA_VERSION,
+  MAX_BATTLE_CITY_REPLAY_EVENTS,
+  MAX_BATTLE_CITY_REPLAY_FRAMES,
+  type BattleCityReplayAdvanceEvent,
+  type BattleCityReplayEvent,
+  type BattleCityReplayEventInput,
+  type BattleCityReplayPayload,
+  type BattleCityReplayRun,
+} from "@/lib/battle-city-replay";
 import { getGameCatalogEntry } from "@/lib/game-catalog";
 import { createGameLeaderboardKey } from "@/lib/leaderboard";
 
 type BattleCityGameProps = {
   onBackToMenu?: () => void;
+  onReplayBackToProfile?: () => void;
+  replayMode?: "latest";
+};
+
+type BattleCityReplayRecording = LiveGameReplayRecording<
+  BattleCityReplayEvent,
+  BattleCityReplayRun
+> & {
+  initialTick: number;
+  isComplete: boolean;
+  random: () => number;
+  startingStage: number;
 };
 
 const BATTLE_CITY_DISPLAY_NAME = getGameCatalogEntry("battle-city").label;
@@ -91,6 +126,16 @@ const BATTLE_CITY_STATUS_LABELS: Record<BattleCityStatus, string> = {
   "stage-intro": "Stage intro",
   "stage-results": "Stage results",
 };
+
+function isBattleCitySimulationActive(status: BattleCityStatus) {
+  return (
+    status === "running" ||
+    status === "stage-clear" ||
+    status === "game-over" ||
+    status === "stage-results" ||
+    status === "stage-intro"
+  );
+}
 
 const BATTLE_CITY_HELP_SECTIONS: GameHelpSection[] = [
   {
@@ -149,14 +194,149 @@ function getBattleCityStageSelectionDelta(key: string): -1 | 0 | 1 {
   return 0;
 }
 
-export function BattleCityGame({ onBackToMenu }: BattleCityGameProps = {}) {
+function appendBattleCityReplayEvent(
+  recording: BattleCityReplayRecording,
+  event: BattleCityReplayEventInput,
+) {
+  if (
+    !recording.isComplete ||
+    recording.events.length >= MAX_BATTLE_CITY_REPLAY_EVENTS
+  ) {
+    recording.isComplete = false;
+    return null;
+  }
+
+  return appendLiveGameReplayEvent(recording, event);
+}
+
+function hasSameBattleCityReplayInput(
+  left: BattleCityFrameInput,
+  right: BattleCityFrameInput,
+) {
+  return (
+    left.direction === right.direction &&
+    left.fireRequested === right.fireRequested
+  );
+}
+
+function appendBattleCityReplayAdvance(
+  recording: BattleCityReplayRecording,
+  input: BattleCityFrameInput,
+) {
+  if (
+    !recording.isComplete ||
+    recording.tick >= MAX_BATTLE_CITY_REPLAY_FRAMES
+  ) {
+    recording.isComplete = false;
+    return;
+  }
+
+  if (recording.events.length >= MAX_BATTLE_CITY_REPLAY_EVENTS) {
+    recording.isComplete = false;
+    return;
+  }
+
+  const previousEvent = recording.events.at(-1);
+
+  if (
+    previousEvent?.type === "advance" &&
+    hasSameBattleCityReplayInput(previousEvent.input, input)
+  ) {
+    previousEvent.endElapsedMs = getGameReplayRecordingElapsedMs(recording);
+    previousEvent.frameCount += 1;
+    recording.tick += 1;
+    return;
+  }
+
+  const event = appendLiveGameReplayEvent<
+    BattleCityReplayEvent,
+    BattleCityReplayRecording,
+    Extract<BattleCityReplayEventInput, { type: "advance" }>
+  >(
+    recording,
+    {
+      endElapsedMs: 0,
+      frameCount: 1,
+      input,
+      type: "advance",
+    },
+    { advancesTick: true },
+  ) as BattleCityReplayAdvanceEvent;
+
+  event.endElapsedMs = event.elapsedMs;
+}
+
+function appendBattleCityPausedReplayFrame(
+  recording: BattleCityReplayRecording,
+) {
+  if (
+    !recording.isComplete ||
+    recording.tick >= MAX_BATTLE_CITY_REPLAY_FRAMES
+  ) {
+    recording.isComplete = false;
+    return;
+  }
+
+  const pauseEvent = recording.events.at(-1);
+
+  if (pauseEvent?.type !== "pause") {
+    recording.isComplete = false;
+    return;
+  }
+
+  pauseEvent.frameCount += 1;
+  recording.tick += 1;
+}
+
+export function BattleCityGame({
+  onBackToMenu,
+  onReplayBackToProfile,
+  replayMode,
+}: BattleCityGameProps = {}) {
+  if (replayMode === "latest") {
+    return (
+      <BattleCityReplayPlayer
+        onBackToProfile={
+          onReplayBackToProfile ?? onBackToMenu ?? (() => undefined)
+        }
+      />
+    );
+  }
+
+  return <BattleCityLiveGame onBackToMenu={onBackToMenu} />;
+}
+
+function BattleCityLiveGame({
+  onBackToMenu,
+}: Pick<BattleCityGameProps, "onBackToMenu"> = {}) {
   const [game, setGame] = useState<BattleCityGameState>(() =>
     createInitialBattleCityGame(),
   );
   const [hasEnteredGame, setHasEnteredGame] = useState(false);
+  const [isReplayTooLong, setIsReplayTooLong] = useState(false);
   const gameRef = useRef(game);
   const fireRequestedRef = useRef(false);
   const movementStateRef = useRef(createBattleCityPlayerMovementState());
+  const {
+    captureFinishedReplay,
+    finishedReplay,
+    isReplayRunPending,
+    isReplayRunPendingRef,
+    pauseRecordingClock,
+    replayRecordingRef,
+    replaySaveStatus,
+    replaceReplayRecording,
+    resetReplayRecording,
+    resumeRecordingClock,
+    saveFinishedReplay,
+    setReplaySaveStatus,
+    startReplayRecording,
+  } = useLiveGameReplayRecording<
+    BattleCityReplayRecording,
+    BattleCityReplayPayload
+  >({
+    saveReplay: saveBattleCityReplay,
+  });
   const statusLabel = BATTLE_CITY_STATUS_LABELS[game.status];
   const stageLabel = formatBattleCityStageLabel(game.stage, game.cycle);
   const stageResultDisplay = getBattleCityStageResultDisplay(game);
@@ -170,19 +350,15 @@ export function BattleCityGame({ onBackToMenu }: BattleCityGameProps = {}) {
   const canPauseGame = game.status === "running" || game.status === "paused";
   const isRunInProgress = hasEnteredGame && game.status !== "lost";
   const pauseActionLabel = game.status === "paused" ? "Resume" : "Pause";
-  const isSimulationActive =
-    game.status === "running" ||
-    game.status === "stage-clear" ||
-    game.status === "game-over" ||
-    game.status === "stage-results" ||
-    game.status === "stage-intro";
+  const isSimulationActive = isBattleCitySimulationActive(game.status);
   const isFrameClockActive =
-    isSimulationActive ||
-    game.status === "paused" ||
-    game.status === "ready";
+    !isReplayRunPending &&
+    (isSimulationActive ||
+      game.status === "paused" ||
+      game.status === "ready");
 
   const { completedSessionId } = useGameSession({
-    active: isSimulationActive,
+    active: isSimulationActive && !isReplayRunPending,
     finalResult: game.status === "lost" ? "lost" : null,
     finalScore: game.score,
     gameId: "battle-city",
@@ -221,14 +397,12 @@ export function BattleCityGame({ onBackToMenu }: BattleCityGameProps = {}) {
     [commitGame],
   );
 
-  const enterGame = useCallback(() => {
-    resetLeaderboardForm();
-    setHasEnteredGame(true);
-    updateCommittedGame(startBattleCityGame);
-  }, [resetLeaderboardForm, updateCommittedGame]);
-
   const selectReadyStage = useCallback(
     (delta: -1 | 1) => {
+      if (isReplayRunPendingRef.current) {
+        return;
+      }
+
       updateCommittedGame((current) => {
         if (current.status !== "ready") {
           return current;
@@ -243,76 +417,176 @@ export function BattleCityGame({ onBackToMenu }: BattleCityGameProps = {}) {
         return createInitialBattleCityGame({ stage });
       });
     },
-    [updateCommittedGame],
+    [isReplayRunPendingRef, updateCommittedGame],
   );
 
   const toggleRunState = useCallback(() => {
+    if (isReplayRunPendingRef.current) {
+      return;
+    }
+
     resetLeaderboardForm();
     updateCommittedGame((current) => {
       if (current.status === "running") {
+        const recording = replayRecordingRef.current;
+
+        if (recording !== null) {
+          appendBattleCityReplayEvent(recording, {
+            frameCount: 0,
+            type: "pause",
+          });
+        }
+        pauseRecordingClock();
         return pauseBattleCityGame(current);
       }
 
       if (current.status === "paused") {
+        const recording = replayRecordingRef.current;
+
+        if (recording !== null) {
+          appendBattleCityReplayEvent(recording, { type: "resume" });
+        }
+        resumeRecordingClock();
         return resumeBattleCityGame(current);
       }
 
       return current;
     });
-  }, [resetLeaderboardForm, updateCommittedGame]);
+  }, [
+    isReplayRunPendingRef,
+    pauseRecordingClock,
+    replayRecordingRef,
+    resetLeaderboardForm,
+    resumeRecordingClock,
+    updateCommittedGame,
+  ]);
 
   const requestPlayerFire = useCallback(() => {
-    fireRequestedRef.current = true;
-  }, []);
+    if (isReplayRunPendingRef.current) {
+      return;
+    }
 
-  const advanceGameFrames = useCallback((frameCount: number) => {
-    updateCommittedGame((current) => {
-      let next = current;
-      for (let frame = 0; frame < frameCount; frame += 1) {
-        const fireRequested = fireRequestedRef.current;
-        fireRequestedRef.current = false;
-        next = advanceBattleCityGame(
-          next,
-          BATTLE_CITY_TICK_MS,
-          Math.random,
-          {
+    fireRequestedRef.current = true;
+  }, [isReplayRunPendingRef]);
+
+  const advanceGameFrames = useCallback(
+    (frameCount: number) => {
+      updateCommittedGame((current) => {
+        let next = current;
+        for (let frame = 0; frame < frameCount; frame += 1) {
+          const input = {
             direction: movementStateRef.current.direction,
-            fireRequested,
-          },
-        );
-      }
-      return next;
-    });
-  }, [updateCommittedGame]);
+            fireRequested: fireRequestedRef.current,
+          };
+          const recording = replayRecordingRef.current;
+
+          fireRequestedRef.current = false;
+
+          if (recording !== null && next.status === "paused") {
+            appendBattleCityPausedReplayFrame(recording);
+            next = advanceBattleCityGame(
+              next,
+              BATTLE_CITY_TICK_MS,
+              recording.random,
+              input,
+            );
+            continue;
+          }
+
+          if (
+            recording !== null &&
+            next.status !== "ready" &&
+            next.status !== "lost"
+          ) {
+            appendBattleCityReplayAdvance(recording, input);
+            next = advanceBattleCityGame(
+              next,
+              BATTLE_CITY_TICK_MS,
+              recording.random,
+              input,
+            );
+          } else {
+            next = advanceBattleCityGame(
+              next,
+              BATTLE_CITY_TICK_MS,
+              Math.random,
+              input,
+            );
+          }
+        }
+        return next;
+      });
+    },
+    [replayRecordingRef, updateCommittedGame],
+  );
 
   const pauseGameForOverlay = useCallback(() => {
-    updateCommittedGame(pauseBattleCityGame);
-  }, [updateCommittedGame]);
+    updateCommittedGame((current) => {
+      if (!isBattleCitySimulationActive(current.status)) {
+        return current;
+      }
+
+      pauseRecordingClock();
+
+      if (current.status !== "running") {
+        return current;
+      }
+
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null) {
+        appendBattleCityReplayEvent(recording, {
+          frameCount: 0,
+          type: "pause",
+        });
+      }
+      return pauseBattleCityGame(current);
+    });
+  }, [pauseRecordingClock, replayRecordingRef, updateCommittedGame]);
 
   const resumeGameAfterOverlay = useCallback(() => {
-    updateCommittedGame(resumeBattleCityGame);
-  }, [updateCommittedGame]);
+    updateCommittedGame((current) => {
+      if (current.status !== "paused") {
+        if (isBattleCitySimulationActive(current.status)) {
+          resumeRecordingClock();
+        }
+        return current;
+      }
+
+      const recording = replayRecordingRef.current;
+
+      if (recording !== null) {
+        appendBattleCityReplayEvent(recording, { type: "resume" });
+      }
+      resumeRecordingClock();
+      return resumeBattleCityGame(current);
+    });
+  }, [replayRecordingRef, resumeRecordingClock, updateCommittedGame]);
 
   const { closeHelp, isHelpVisible, openHelp } = useGameHelpScreen({
-    isGameActive: game.status === "running",
+    isGameActive: isSimulationActive,
     onPauseGame: pauseGameForOverlay,
     onResumeGame: resumeGameAfterOverlay,
   });
   const { abandonDialogProps, requestBackToMenu } = useGameEscapeToMenu({
-    isDisabled: isHelpVisible,
+    isDisabled: isHelpVisible || isReplayRunPending,
     isGameStarted: isRunInProgress,
     onBackToMenu,
     onPauseGame: pauseGameForOverlay,
     onResumeGame: resumeGameAfterOverlay,
-    shouldPauseBeforeConfirm: game.status === "running",
+    shouldPauseBeforeConfirm: isSimulationActive,
   });
   const isAbandonDialogVisible = abandonDialogProps !== null;
 
   const beginMovement = useCallback(
     (movementKey: BattleCityPlayerMovementKey) => {
+      if (isReplayRunPendingRef.current) {
+        return;
+      }
+
       pressBattleCityPlayerMovementKey(movementStateRef.current, movementKey);
     },
-    [],
+    [isReplayRunPendingRef],
   );
 
   const endMovement = useCallback(
@@ -329,9 +603,74 @@ export function BattleCityGame({ onBackToMenu }: BattleCityGameProps = {}) {
     resetBattleCityPlayerMovementState(movementStateRef.current);
   }, []);
 
+  const startReplayRun = useCallback(
+    async (
+      readyGame: BattleCityGameState,
+      { replaceExisting = false }: { replaceExisting?: boolean } = {},
+    ) => {
+      if (isReplayRunPendingRef.current || readyGame.status !== "ready") {
+        return false;
+      }
+
+      resetMovement();
+      if (!replaceExisting) {
+        resetLeaderboardForm();
+      }
+      const beginRecording = replaceExisting
+        ? replaceReplayRecording
+        : startReplayRecording;
+      const recording = await beginRecording(async () => {
+        const run = await createBattleCityReplayRun();
+
+        return createLiveGameReplayRecording<
+          BattleCityReplayEvent,
+          BattleCityReplayRun,
+          {
+            initialTick: number;
+            isComplete: boolean;
+            random: () => number;
+            startingStage: number;
+          }
+        >({
+          initialTick: readyGame.tick,
+          isComplete: true,
+          random: createBattleCityReplayRandom(run.seed),
+          run,
+          startingStage: readyGame.stage,
+        });
+      });
+
+      if (recording === null) {
+        return false;
+      }
+
+      resetMovement();
+      appendBattleCityReplayEvent(recording, { type: "start" });
+      resetLeaderboardForm();
+      setIsReplayTooLong(false);
+      setHasEnteredGame(true);
+      commitGame(startBattleCityGame(readyGame));
+
+      return true;
+    },
+    [
+      commitGame,
+      isReplayRunPendingRef,
+      replaceReplayRecording,
+      resetLeaderboardForm,
+      resetMovement,
+      startReplayRecording,
+    ],
+  );
+
+  const enterGame = useCallback(() => {
+    void startReplayRun(gameRef.current);
+  }, [startReplayRun]);
+
   const isMovementDisabled =
     isHelpVisible ||
     isAbandonDialogVisible ||
+    isReplayRunPending ||
     pendingLeaderboardEntry !== null ||
     (game.status !== "running" && game.status !== "stage-clear");
 
@@ -351,18 +690,89 @@ export function BattleCityGame({ onBackToMenu }: BattleCityGameProps = {}) {
   }, [resetMovement]);
 
   const restartGame = useCallback(() => {
+    if (
+      isReplayRunPendingRef.current ||
+      replaySaveStatus === "saving"
+    ) {
+      return;
+    }
+
+    const previousGame = gameRef.current;
+    const readyGame = createInitialBattleCityGame();
+    const shouldResumePreviousRecording = previousGame.status !== "paused";
+
     resetMovement();
-    resetLeaderboardForm();
-    setHasEnteredGame(true);
-    commitGame(startBattleCityGame(restartBattleCityGame(gameRef.current)));
-  }, [commitGame, resetLeaderboardForm, resetMovement]);
+    pauseRecordingClock();
+    void startReplayRun(readyGame, { replaceExisting: true }).then(
+      (didStart) => {
+        if (!didStart && shouldResumePreviousRecording) {
+          resumeRecordingClock();
+        }
+      },
+    );
+  }, [
+    isReplayRunPendingRef,
+    pauseRecordingClock,
+    resetMovement,
+    replaySaveStatus,
+    resumeRecordingClock,
+    startReplayRun,
+  ]);
 
   const showNewCampaignSelector = useCallback(() => {
     resetMovement();
     resetLeaderboardForm();
+    resetReplayRecording();
+    setIsReplayTooLong(false);
     setHasEnteredGame(false);
     commitGame(createInitialBattleCityGame());
-  }, [commitGame, resetLeaderboardForm, resetMovement]);
+  }, [commitGame, resetLeaderboardForm, resetMovement, resetReplayRecording]);
+
+  useEffect(() => {
+    if (game.status !== "lost") {
+      return;
+    }
+
+    const recording = replayRecordingRef.current;
+
+    if (recording !== null && !recording.isComplete) {
+      replayRecordingRef.current = null;
+      setIsReplayTooLong(true);
+      setReplaySaveStatus("failed");
+      return;
+    }
+
+    const finalStatus = game.status;
+
+    captureFinishedReplay((recording) => ({
+      events: [...recording.events],
+      finalBaseAlive: game.baseAlive,
+      finalCycle: game.cycle === 2 ? 2 : 1,
+      finalLives: game.lives,
+      finalScore: game.score,
+      finalStage: game.stage,
+      finalStatus,
+      finalTick: recording.tick,
+      gameId: BATTLE_CITY_REPLAY_GAME_ID,
+      initialTick: recording.initialTick,
+      leaderboardKey: BATTLE_CITY_LEADERBOARD_KEY,
+      runId: recording.run.id,
+      schemaVersion: BATTLE_CITY_REPLAY_SCHEMA_VERSION,
+      seed: recording.run.seed,
+      startedAt: recording.startedAt,
+      startingStage: recording.startingStage,
+    }));
+  }, [
+    captureFinishedReplay,
+    game.baseAlive,
+    game.cycle,
+    game.lives,
+    game.score,
+    game.stage,
+    game.status,
+    replayRecordingRef,
+    setReplaySaveStatus,
+  ]);
 
   useEffect(() => {
     if (
@@ -404,7 +814,7 @@ export function BattleCityGame({ onBackToMenu }: BattleCityGameProps = {}) {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isAbandonDialogVisible) {
+      if (isAbandonDialogVisible || isReplayRunPendingRef.current) {
         return;
       }
 
@@ -420,7 +830,7 @@ export function BattleCityGame({ onBackToMenu }: BattleCityGameProps = {}) {
       if (showStartScreen) {
         if (isBattleCityStartKey(event.key)) {
           event.preventDefault();
-          if (!event.repeat) {
+          if (!event.repeat && !isReplayRunPendingRef.current) {
             enterGame();
           }
           return;
@@ -429,7 +839,9 @@ export function BattleCityGame({ onBackToMenu }: BattleCityGameProps = {}) {
         const stageDelta = getBattleCityStageSelectionDelta(event.key);
         if (stageDelta !== 0) {
           event.preventDefault();
-          selectReadyStage(stageDelta);
+          if (!isReplayRunPendingRef.current) {
+            selectReadyStage(stageDelta);
+          }
           return;
         }
       }
@@ -490,6 +902,7 @@ export function BattleCityGame({ onBackToMenu }: BattleCityGameProps = {}) {
     game.status,
     isAbandonDialogVisible,
     isHelpVisible,
+    isReplayRunPendingRef,
     pendingLeaderboardEntry,
     requestPlayerFire,
     selectReadyStage,
@@ -542,18 +955,23 @@ export function BattleCityGame({ onBackToMenu }: BattleCityGameProps = {}) {
         <GameBoardStage
           actions={
             <GameBoardActions
-              backDisabled={isHelpVisible}
-              helpDisabled={isHelpVisible}
+              backDisabled={isHelpVisible || isReplayRunPending}
+              helpDisabled={isHelpVisible || isReplayRunPending}
               onBackToMenu={requestBackToMenu}
               onHelp={openHelp}
               onRestart={restartGame}
               pauseAction={{
-                disabled: isHelpVisible || !canPauseGame,
+                disabled: isHelpVisible || isReplayRunPending || !canPauseGame,
                 isResume: game.status === "paused",
                 label: pauseActionLabel,
                 onClick: toggleRunState,
               }}
-              restartDisabled={showStartScreen || pendingLeaderboardEntry !== null}
+              restartDisabled={
+                showStartScreen ||
+                isReplayRunPending ||
+                replaySaveStatus === "saving" ||
+                pendingLeaderboardEntry !== null
+              }
               testIdPrefix="battle-city"
             />
           }
@@ -574,6 +992,7 @@ export function BattleCityGame({ onBackToMenu }: BattleCityGameProps = {}) {
                   <Button
                     aria-label="Previous stage"
                     data-testid="battle-city-previous-stage-button"
+                    disabled={isReplayRunPending}
                     onClick={() => selectReadyStage(-1)}
                     size="icon"
                     type="button"
@@ -590,6 +1009,7 @@ export function BattleCityGame({ onBackToMenu }: BattleCityGameProps = {}) {
                   <Button
                     aria-label="Next stage"
                     data-testid="battle-city-next-stage-button"
+                    disabled={isReplayRunPending}
                     onClick={() => selectReadyStage(1)}
                     size="icon"
                     type="button"
@@ -601,13 +1021,14 @@ export function BattleCityGame({ onBackToMenu }: BattleCityGameProps = {}) {
                 <Button
                   className="min-w-32"
                   data-testid="battle-city-start-button"
+                  disabled={isReplayRunPending}
                   onClick={enterGame}
                   size="lg"
                   type="button"
                   variant="secondary"
                 >
                   <PlayIcon data-icon="inline-start" />
-                  Start
+                  {isReplayRunPending ? "Starting" : "Start"}
                 </Button>
                 <GameLeaderboardPanel {...leaderboardPanelProps} />
               </GameStartScreen>
@@ -618,6 +1039,9 @@ export function BattleCityGame({ onBackToMenu }: BattleCityGameProps = {}) {
                     <Button
                       className="w-full max-w-xs"
                       data-testid="battle-city-new-game-button"
+                      disabled={
+                        isReplayRunPending || replaySaveStatus === "saving"
+                      }
                       onClick={showNewCampaignSelector}
                       size="lg"
                       type="button"
@@ -636,6 +1060,19 @@ export function BattleCityGame({ onBackToMenu }: BattleCityGameProps = {}) {
                     metricValueTestId: "battle-city-final-score",
                     title: game.baseAlive ? "Out of tanks" : "Headquarters destroyed",
                   }}
+                />
+                <GameReplaySaveAction
+                  errorMessage={
+                    isReplayTooLong
+                      ? "This replay is too long to save. Start a new game and try again."
+                      : undefined
+                  }
+                  onSave={saveFinishedReplay}
+                  replayReady={
+                    !isReplayRunPending && finishedReplay !== null
+                  }
+                  status={replaySaveStatus}
+                  testIdPrefix="battle-city"
                 />
               </GameEndScreen>
             ) : game.status === "paused" ? (

@@ -103,16 +103,20 @@ This file covers deterministic game engines and shared source logic under
   validation/sampling helpers for all future game-specific replay modules.
 - `snake-replay.ts`, `tetris-replay.ts`, `breakout-replay.ts`,
   `minesweeper-replay.ts`, `space-invaders-replay.ts`, `pong-replay.ts`,
-  `simon-replay.ts`, `twenty-forty-eight-replay.ts`, and
-  `asteroids-replay.ts` own game-specific replay payload contracts, event
-  parsing, and deterministic replay event application. Replay payloads record
+  `simon-replay.ts`, `twenty-forty-eight-replay.ts`, `asteroids-replay.ts`, and
+  `battle-city-replay.ts` own game-specific replay
+  payload contracts, event parsing, and deterministic replay event application.
+  Replay payloads record
   engine events such as direction changes, advances, timed-food lifecycle events,
   Tetris moves, rotations, soft drops, hard drops, Breakout
   starts/advances/paddle movement, Minesweeper reveals and flag toggles, Space
   Invaders start/move/fire/advance events, Pong
   starts/advances/paddle movement/score ticks, Simon phase/input events, 2048
-  move directions, and Asteroids starts/advances/control-state changes/fire
-  events rather than video or full board snapshots. Each replay event requires
+  move directions, Asteroids starts/advances/control-state changes/fire events,
+  and Tank Patrol starts/run-length-encoded frame-input advances/compact paused
+  frame spans rather than video or full board snapshots. Playback verifies that
+  the reconstructed terminal score, stage, cycle, lives, and headquarters state
+  match the saved metadata. Each replay event requires
   active elapsed milliseconds; parsers reject payloads without event timing.
   Minesweeper and Simon additionally carry separate visual-only cursor event
   streams with board-local normalized coordinates; cursor events do not apply to

@@ -9,6 +9,7 @@ export type ReplaySaveStatus = "failed" | "idle" | "saved" | "saving";
 
 type GameReplaySaveActionProps = {
   errorClassName?: string;
+  errorMessage?: string;
   onSave: () => void;
   replayReady: boolean;
   status: ReplaySaveStatus;
@@ -17,6 +18,7 @@ type GameReplaySaveActionProps = {
 
 export function GameReplaySaveAction({
   errorClassName,
+  errorMessage = "Could not save replay. Sign in and try again.",
   onSave,
   replayReady,
   status,
@@ -41,7 +43,7 @@ export function GameReplaySaveAction({
           className={cn("text-xs font-medium text-[#cbd5e1]", errorClassName)}
           data-testid={`${testIdPrefix}-save-replay-error`}
         >
-          Could not save replay. Sign in and try again.
+          {errorMessage}
         </p>
       ) : null}
     </div>

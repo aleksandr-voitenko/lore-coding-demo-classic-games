@@ -19,6 +19,7 @@ describe("home replay query parsing", () => {
     expect(getInitialReplayGameId("simon")).toBe("simon");
     expect(getInitialReplayGameId("space-invaders")).toBe("space-invaders");
     expect(getInitialReplayGameId("asteroids")).toBe("asteroids");
+    expect(getInitialReplayGameId("battle-city")).toBe("battle-city");
     expect(getInitialReplayGameId("twenty-forty-eight")).toBe("twenty-forty-eight");
     expect(getInitialReplayGameId(["tetris", "snake"])).toBe("tetris");
     expect(getInitialReplayGameId("pac-man")).toBeNull();

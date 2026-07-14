@@ -224,6 +224,7 @@ type TestGame = {
 type TestPlayback = GameReplayTimedPlayback & {
   eventIndex: number;
   events: TestReplayEvent[];
+  syntheticFrameIndex: number;
 };
 
 type TestPlaybackContext = {
@@ -237,6 +238,9 @@ type TestPlaybackOptions = {
     isFinished: boolean;
   };
   canAdvance?: (context: TestPlaybackContext) => boolean;
+  getNextFrameEvent?: (
+    playback: TestPlayback,
+  ) => TestReplayEvent | undefined;
   initializeReplay: (replay: TestReplay) => {
     game: TestGame;
     playback: TestPlayback;
@@ -265,6 +269,7 @@ function initializeTestReplay(replay: TestReplay) {
       eventIndex: 0,
       events: replay.events,
       lastElapsedMs: 0,
+      syntheticFrameIndex: 0,
     },
   };
 }
@@ -417,6 +422,67 @@ describe("useGameReplayPlayback", () => {
     vi.advanceTimersByTime(100);
 
     expect(advanceFrame).toHaveBeenCalledOnce();
+
+    harness.unmount();
+  });
+
+  it("schedules multiple synthetic frames from one stored replay event", async () => {
+    useFakeWindowTimers();
+    const harness = new HookLifecycleHarness();
+    const syntheticElapsedMs = [100, 140, 180];
+    const advanceFrame = vi.fn(
+      ({ game, playback }: TestPlaybackContext) => {
+        const elapsedMs = syntheticElapsedMs[playback.syntheticFrameIndex]!;
+
+        playback.syntheticFrameIndex += 1;
+        playback.lastElapsedMs = elapsedMs;
+        if (playback.syntheticFrameIndex >= syntheticElapsedMs.length) {
+          playback.eventIndex += 1;
+        }
+
+        return {
+          game: {
+            ...game,
+            frames: game.frames + 1,
+          },
+          isFinished: playback.eventIndex >= playback.events.length,
+        };
+      },
+    );
+    const options: TestPlaybackOptions = {
+      advanceFrame,
+      getNextFrameEvent: (playback) => {
+        const elapsedMs = syntheticElapsedMs[playback.syntheticFrameIndex];
+
+        return elapsedMs === undefined
+          ? undefined
+          : { elapsedMs, type: "advance" };
+      },
+      initializeReplay: initializeTestReplay,
+      loadReplay: async () => createTestReplay("compressed", [100]),
+    };
+
+    renderPlayback(harness, options);
+    await flushPromiseSettlements();
+    renderPlayback(harness, options);
+
+    vi.advanceTimersByTime(100);
+    renderPlayback(harness, options);
+    vi.advanceTimersByTime(39);
+    expect(advanceFrame).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(1);
+    renderPlayback(harness, options);
+    vi.advanceTimersByTime(40);
+    const finished = renderPlayback(harness, options);
+
+    expect(advanceFrame).toHaveBeenCalledTimes(3);
+    expect(finished.game?.frames).toBe(3);
+    expect(finished.isFinished).toBe(true);
+    expect(finished.playbackRef.current).toMatchObject({
+      eventIndex: 1,
+      syntheticFrameIndex: 3,
+    });
 
     harness.unmount();
   });

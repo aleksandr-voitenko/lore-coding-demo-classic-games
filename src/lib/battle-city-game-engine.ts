@@ -365,7 +365,7 @@ export function advanceBattleCityGame(
     case "ready":
       return { ...game, tick: game.tick + 1 };
     case "paused":
-      return advancePausedFrame(game);
+      return advanceBattleCityPausedFrames(game, 1);
   }
 
   // Ending setup resets the counters between frames. The following NMI
@@ -693,12 +693,30 @@ function advanceTimers(game: BattleCityGameState): BattleCityGameState {
   };
 }
 
-function advancePausedFrame(game: BattleCityGameState): BattleCityGameState {
+export function advanceBattleCityPausedFrames(
+  game: BattleCityGameState,
+  frameCount: number,
+): BattleCityGameState {
+  if (
+    game.status !== "paused" ||
+    !Number.isSafeInteger(frameCount) ||
+    frameCount <= 0
+  ) {
+    return game;
+  }
+
+  const popup = game.powerUpScorePopup;
+
   return {
     ...game,
-    powerUpScorePopup: advancePowerUpScorePopup(game.powerUpScorePopup),
-    stageBattleTicks: game.stageBattleTicks + 1,
-    tick: game.tick + 1,
+    // Paused replay spans are compacted, so preserve the frame-by-frame popup
+    // outcome without allocating one intermediate game state per paused frame.
+    powerUpScorePopup:
+      popup === null || popup.ticks <= frameCount
+        ? null
+        : { ...popup, ticks: popup.ticks - frameCount },
+    stageBattleTicks: game.stageBattleTicks + frameCount,
+    tick: game.tick + frameCount,
   };
 }
 

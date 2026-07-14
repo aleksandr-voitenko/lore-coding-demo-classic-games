@@ -154,6 +154,42 @@ export async function startLiveGameReplayRecording<
   });
 }
 
+export async function replaceLiveGameReplayRecording<
+  Recording extends LiveGameReplayRecording<LiveGameReplayRecordedEvent>,
+  Payload,
+>(
+  {
+    isReplayRunPendingRef,
+    replayRecordingRef,
+    setFinishedReplay,
+    setIsReplayRunPending,
+    setReplaySaveStatus,
+  }: LiveGameReplayRecordingLifecycleControls<Recording, Payload>,
+  createRecording: () => Promise<Recording>,
+) {
+  if (isReplayRunPendingRef.current) {
+    return null;
+  }
+
+  isReplayRunPendingRef.current = true;
+  setIsReplayRunPending(true);
+
+  try {
+    const recording = await createRecording();
+
+    replayRecordingRef.current = recording;
+    setFinishedReplay(null);
+    setReplaySaveStatus("idle");
+
+    return recording;
+  } catch {
+    return null;
+  } finally {
+    isReplayRunPendingRef.current = false;
+    setIsReplayRunPending(false);
+  }
+}
+
 export function useLiveGameReplayRecording<
   Recording extends LiveGameReplayRecording<LiveGameReplayRecordedEvent>,
   Payload,
@@ -190,6 +226,21 @@ export function useLiveGameReplayRecording<
   const startReplayRecording = useCallback(
     (createRecording: () => Promise<Recording>) =>
       startLiveGameReplayRecording(
+        {
+          isReplayRunPendingRef,
+          replayRecordingRef,
+          setFinishedReplay,
+          setIsReplayRunPending,
+          setReplaySaveStatus,
+        },
+        createRecording,
+      ),
+    [],
+  );
+
+  const replaceReplayRecording = useCallback(
+    (createRecording: () => Promise<Recording>) =>
+      replaceLiveGameReplayRecording(
         {
           isReplayRunPendingRef,
           replayRecordingRef,
@@ -252,6 +303,7 @@ export function useLiveGameReplayRecording<
     pauseRecordingClock,
     replayRecordingRef,
     replaySaveStatus,
+    replaceReplayRecording,
     resetReplayRecording,
     resumeRecordingClock,
     saveFinishedReplay,

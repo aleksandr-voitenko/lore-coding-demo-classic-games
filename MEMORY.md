@@ -35,10 +35,10 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   board, and `src/lib/*-game-engine.ts` owns deterministic game state transitions.
 - Tank Patrol is a single-player-only campaign over 35 supplied maps. It
   displays the original Stages 1-70 difficulty cycle, then resets to Stage 1;
-  it belongs in the shared playable catalog but intentionally stays out of the
-  multiplayer and replay entry points. Its persisted game id and implementation
-  namespace remain `battle-city` so existing profile and leaderboard records
-  keep resolving after the public-title rename.
+  it belongs in the shared playable catalog and replay system but intentionally
+  stays out of multiplayer entry points. Its persisted game id, replay query,
+  and implementation namespace remain `battle-city` so existing profile and
+  leaderboard records keep resolving after the public-title rename.
 - Shared game UI is exported through `src/components/game-layout.tsx`; focused
   implementation modules live beside it in `src/components/`.
 - Leaderboards cross source folders: shared key/ranking/client helpers live in
@@ -56,8 +56,8 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   `src/lib/tetris-replay.ts`, `src/lib/breakout-replay.ts`,
   `src/lib/minesweeper-replay.ts`, `src/lib/space-invaders-replay.ts`,
   `src/lib/pong-replay.ts`, `src/lib/simon-replay.ts`,
-  `src/lib/twenty-forty-eight-replay.ts`, and `src/lib/asteroids-replay.ts` own
-  game-specific events and replay
+  `src/lib/twenty-forty-eight-replay.ts`, `src/lib/asteroids-replay.ts`, and
+  `src/lib/battle-city-replay.ts` own game-specific events and replay
   application helpers.
   `/api/replays/<game>/run` issues replay run ids and seeds for supported replay
   games;
@@ -65,7 +65,8 @@ patterns and constraints in scoped `MEMORY.md` files near the code they describe
   replay; `/profile` links saved replays back to `/?replay=snake`,
   `/?replay=tetris`, `/?replay=breakout`, `/?replay=minesweeper`,
   `/?replay=space-invaders`, `/?replay=pong`, `/?replay=simon`,
-  `/?replay=twenty-forty-eight`, or `/?replay=asteroids`.
+  `/?replay=twenty-forty-eight`, `/?replay=asteroids`, or
+  `/?replay=battle-city`.
 
 ## Cross-Cutting Constraints
 

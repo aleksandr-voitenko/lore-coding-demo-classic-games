@@ -28,9 +28,9 @@ All the code in this repository was created using AI agents and the Lore Coding 
   Minesweeper ranks fastest clears; the other games rank higher scores.
 - Name-and-password player accounts with private profile stats for signed-in
   play sessions, including total play time and per-game best metrics.
-- Snake, Tetris, Breakout, Minesweeper, Space Invaders, Pong, Simon, 2048, and
-  Asteroids replay recording with server-issued runs, signed-in replay saves,
-  and profile playback for the latest saved run.
+- Snake, Tetris, Breakout, Minesweeper, Space Invaders, Pong, Simon, 2048,
+  Asteroids, and Tank Patrol replay recording with server-issued runs,
+  signed-in replay saves, and profile playback for the latest saved run.
 - Closable in-game Help screens and Escape-to-menu abandon confirmations.
 - Local game-card artwork for every game in the launcher.
 
@@ -260,18 +260,18 @@ The default database path is `.data/snake-leaderboard.sqlite`, kept for
 compatibility with existing Snake deployments. On a VPS, set
 `GAME_LEADERBOARD_SQLITE_PATH` to durable storage.
 
-Snake, Tetris, Breakout, Minesweeper, Space Invaders, Pong, Simon, 2048, and
-Asteroids record replay events during play after the server issues a run id and
-seed. Replay events include active-play elapsed time so playback mirrors player
-hesitation while excluding Pause and Help time. Minesweeper and Simon replays
-also include board-local schematic cursor streams sampled from mouse movement
-every 50ms.
+Snake, Tetris, Breakout, Minesweeper, Space Invaders, Pong, Simon, 2048,
+Asteroids, and Tank Patrol record replay events during play after the server
+issues a run id and seed. Replay events include active-play elapsed time so
+playback mirrors player hesitation while excluding Pause and Help time.
+Minesweeper and Simon replays also include board-local schematic cursor streams
+sampled from mouse movement every 50ms.
 Signed-in players can save the completed run from the final screen; the profile
 page stores one latest replay per user and game and links back into the
 launcher at `/?replay=snake`, `/?replay=tetris`, `/?replay=breakout`,
 `/?replay=minesweeper`, `/?replay=space-invaders`, `/?replay=pong`,
-`/?replay=simon`, `/?replay=twenty-forty-eight`, or `/?replay=asteroids` for
-client playback.
+`/?replay=simon`, `/?replay=twenty-forty-eight`, `/?replay=asteroids`, or
+`/?replay=battle-city` for client playback.
 
 ## Docker
 

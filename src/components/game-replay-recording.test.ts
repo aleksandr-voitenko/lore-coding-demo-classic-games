@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   appendLiveGameReplayEvent,
   createLiveGameReplayRecording,
+  replaceLiveGameReplayRecording,
   startLiveGameReplayRecording,
   type LiveGameReplayRecordedEvent,
   type LiveGameReplayRecording,
@@ -194,6 +195,38 @@ describe("game replay recording", () => {
     expect(finishedReplays).toEqual([null]);
     expect(pendingStates).toEqual([true, false]);
     expect(saveStatuses).toEqual(["idle", "failed"]);
+  });
+
+  it("replaces recordings atomically and preserves the previous run on failure", async () => {
+    const previousRecording = createTestReplayRecording("run-previous");
+    const replacementRecording = createTestReplayRecording("run-replacement");
+    const { controls, finishedReplays, pendingStates, saveStatuses } =
+      createTestReplayLifecycleControls({
+        recording: previousRecording,
+      });
+
+    await expect(
+      replaceLiveGameReplayRecording(controls, async () => {
+        throw new Error("run creation failed");
+      }),
+    ).resolves.toBeNull();
+
+    expect(controls.replayRecordingRef.current).toBe(previousRecording);
+    expect(finishedReplays).toEqual([]);
+    expect(saveStatuses).toEqual([]);
+
+    await expect(
+      replaceLiveGameReplayRecording(
+        controls,
+        async () => replacementRecording,
+      ),
+    ).resolves.toBe(replacementRecording);
+
+    expect(controls.replayRecordingRef.current).toBe(replacementRecording);
+    expect(controls.isReplayRunPendingRef.current).toBe(false);
+    expect(finishedReplays).toEqual([null]);
+    expect(pendingStates).toEqual([true, false, true, false]);
+    expect(saveStatuses).toEqual(["idle"]);
   });
 
   it("does not create or replace recordings while a replay run is pending", async () => {

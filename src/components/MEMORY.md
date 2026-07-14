@@ -164,12 +164,12 @@ This file covers React component ownership and shared game UI conventions under
   intentionally ignored.
 - Snake replay playback is launched through the root launcher query
   `/?replay=snake`, passed into `SnakeGame` as replay mode, and rendered by the
-  focused `snake-replay-player.tsx` component. Tetris, Breakout, Minesweeper,
-  Space Invaders, Pong, Simon, and 2048 follow the same launcher query pattern at
+  focused `snake-replay-player.tsx` component. The other replay-enabled games
+  follow the same launcher query pattern at
   `/?replay=tetris`, `/?replay=breakout`, `/?replay=minesweeper`,
   `/?replay=space-invaders`, `/?replay=pong`, `/?replay=simon`,
-  `/?replay=twenty-forty-eight`, and `/?replay=asteroids` through their
-  focused replay-player components,
+  `/?replay=twenty-forty-eight`, `/?replay=asteroids`, and
+  `/?replay=battle-city` through their focused replay-player components,
   with replayed parameters coming from the saved payload instead of current
   launcher selections. Replay mode should not record profile sessions or expose
   live-game controls; use a Back-only board action rail wired through the shared
@@ -178,13 +178,21 @@ This file covers React component ownership and shared game UI conventions under
   replayed game-state transitions.
 - Live replay recordings are one-shot per run. Terminal replay payload capture
   should consume the active recording, and starting a new run should abandon any
-  unsaved replay state so stale events cannot be saved later. Replay recordings
+  unsaved replay state so stale events cannot be saved later. When replacement
+  run setup is asynchronous, freeze the current game, replay clock, and profile
+  session clock and ignore live input until setup succeeds; a failed replacement
+  must not reset the completed profile-session guard or discard the current
+  replay. Replay recordings
   stamp active elapsed milliseconds on each event and pause that replay clock
   while Pause, Help, or abandon-confirm overlays stop the player's active view;
   replay players schedule playback from those elapsed timestamps instead of
   fixed per-turn delays. `game-replay-playback.ts` ignores stale saved-replay
   load settlements and owns the main elapsed-frame timeout, shared
-  ready/finished state, and ref cleanup on player unmount. Focused replay
+  ready/finished state, and ref cleanup on player unmount. Its optional
+  next-frame adapter lets fixed-step games schedule synthetic frames from a
+  compressed stored event without expanding the payload in memory. Tank Patrol
+  uses that boundary for run-length-encoded identical inputs and applies paused
+  frame spans as one engine operation. Focused replay
   players keep their game-specific frame reducers and visual side effects;
   Minesweeper and Simon also keep their cursor timers local so
   cursor-before-action ordering remains explicit. Replacing a loader or

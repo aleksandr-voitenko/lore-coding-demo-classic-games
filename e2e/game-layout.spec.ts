@@ -302,6 +302,11 @@ const replayMessageCases = [
     message: "No Simon replay is available",
     panelBackgroundVariable: "--simon-panel",
   },
+  {
+    gameId: "battle-city",
+    message: "No Tank Patrol replay is available",
+    panelBackgroundVariable: "--battle-city-panel",
+  },
 ] as const;
 
 test.use({ viewport: desktopViewport });

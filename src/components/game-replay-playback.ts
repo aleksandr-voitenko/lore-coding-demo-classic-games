@@ -123,6 +123,7 @@ export function useGameReplayPlayback<
 >({
   advanceFrame,
   canAdvance,
+  getNextFrameEvent,
   initializeReplay,
   loadReplay,
   scheduleVersion = 0,
@@ -131,6 +132,7 @@ export function useGameReplayPlayback<
     context: GameReplayPlaybackContext<Game, Playback>,
   ) => GameReplayPlaybackFrame<Game>;
   canAdvance?: (context: GameReplayPlaybackContext<Game, Playback>) => boolean;
+  getNextFrameEvent?: (playback: Playback) => ReplayTimedEvent | undefined;
   initializeReplay: (
     replay: Replay,
   ) => GameReplayPlaybackInitialization<Game, Playback>;
@@ -192,7 +194,8 @@ export function useGameReplayPlayback<
       return;
     }
 
-    const nextEvent = playback.events[playback.eventIndex];
+    const nextEvent =
+      getNextFrameEvent?.(playback) ?? playback.events[playback.eventIndex];
 
     if (nextEvent === undefined) {
       return;
@@ -240,6 +243,7 @@ export function useGameReplayPlayback<
     advanceFrame,
     canAdvance,
     game,
+    getNextFrameEvent,
     isFinished,
     loadStatus,
     playbackStep,

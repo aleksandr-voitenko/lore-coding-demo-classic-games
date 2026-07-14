@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import * as asteroidsReplayRoute from "./asteroids/route";
 import * as asteroidsReplayRunRoute from "./asteroids/run/route";
+import * as battleCityReplayRoute from "./battle-city/route";
+import * as battleCityReplayRunRoute from "./battle-city/run/route";
 import * as breakoutReplayRoute from "./breakout/route";
 import * as breakoutReplayRunRoute from "./breakout/run/route";
 import * as minesweeperReplayRoute from "./minesweeper/route";
@@ -24,6 +26,8 @@ const replayRouteEntries: Array<
 > = [
   ["Asteroids replay", asteroidsReplayRoute, ["GET", "POST", "dynamic", "runtime"]],
   ["Asteroids replay run", asteroidsReplayRunRoute, ["POST", "dynamic", "runtime"]],
+  ["Tank Patrol replay", battleCityReplayRoute, ["GET", "POST", "dynamic", "runtime"]],
+  ["Tank Patrol replay run", battleCityReplayRunRoute, ["POST", "dynamic", "runtime"]],
   ["Breakout replay", breakoutReplayRoute, ["GET", "POST", "dynamic", "runtime"]],
   ["Breakout replay run", breakoutReplayRunRoute, ["POST", "dynamic", "runtime"]],
   ["Minesweeper replay", minesweeperReplayRoute, ["GET", "POST", "dynamic", "runtime"]],

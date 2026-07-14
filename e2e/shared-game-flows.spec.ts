@@ -9,6 +9,7 @@ type RealtimeSharedFlowCase = {
   name: string;
   prefix: string;
   restartKey?: string;
+  restartTransitionStatus?: string;
   serveKey?: string;
   serveReadyText?: string;
   serveButtonTestId?: string;
@@ -79,6 +80,7 @@ const realtimeSharedFlowCases: RealtimeSharedFlowCase[] = [
     gameId: "battle-city",
     name: "Tank Patrol",
     prefix: "battle-city",
+    restartTransitionStatus: "Stage intro",
     startButtonTestId: "battle-city-start-button",
   },
 ];
@@ -575,6 +577,9 @@ for (const flowCase of realtimeSharedFlowCases) {
     await expect(pauseButton).toHaveAccessibleName("Pause");
 
     await restartButton.click();
+    if (flowCase.restartTransitionStatus) {
+      await expect(status).toHaveText(flowCase.restartTransitionStatus);
+    }
     if (flowCase.serveButtonTestId) {
       await expect(status).toHaveText("Ready");
 
