@@ -13,6 +13,8 @@ import {
 } from "../src/lib/battle-city-replay";
 
 const LONG_RUNNING_REPLAY_TEST_TIMEOUT_MS = 60_000;
+const REPLAY_HELP_CLOSE_FRAME_MS = 20;
+const REPLAY_TEST_CLOCK_PAUSE_AT = new Date("2026-07-13T12:01:00.000Z");
 const REPLAY_TERMINAL_EXPECTATION_TIMEOUT_MS = 15_000;
 
 test("Tank Patrol records seeded fixed-step input through a terminal loss", async ({
@@ -41,15 +43,19 @@ test("Tank Patrol records seeded fixed-step input through a terminal loss", asyn
 
   await openLauncher(page);
   await openGame(page, "battle-city");
+  await page.clock.pauseAt(REPLAY_TEST_CLOCK_PAUSE_AT);
   await page.getByTestId("battle-city-start-button").click();
   await expect(page.getByTestId("battle-city-status")).toHaveText("Stage intro");
   await page.getByTestId("battle-city-board-help").click();
   await expect(page.getByTestId("battle-city-help-screen")).toBeVisible();
   await page.clock.runFor(5_000);
   await page.getByTestId("battle-city-help-screen-close").click();
+  // Base UI completes the dialog close on the next animation frame.
+  await page.clock.runFor(REPLAY_HELP_CLOSE_FRAME_MS);
   await expect(page.getByTestId("battle-city-help-screen")).toBeHidden();
+  await expect(page.getByTestId("battle-city-status")).toHaveText("Stage intro");
   await page.clock.runFor(2_000);
-  let simulatedActiveMs = 2_000;
+  let simulatedActiveMs = 2_000 + REPLAY_HELP_CLOSE_FRAME_MS;
   await expect(page.getByTestId("battle-city-status")).toHaveText("Running");
   await page.keyboard.press("p");
   await expect(page.getByTestId("battle-city-status")).toHaveText("Paused");
@@ -198,7 +204,9 @@ test("Tank Patrol restores the active replay when a replacement run fails", asyn
     `Tank AR ${testInfo.workerIndex}${testInfo.retry}${Date.now() % 100_000}`,
   );
   await openGame(page, "battle-city");
+  await page.clock.pauseAt(REPLAY_TEST_CLOCK_PAUSE_AT);
   await page.getByTestId("battle-city-start-button").click();
+  await expect(page.getByTestId("battle-city-status")).toHaveText("Stage intro");
   await page.clock.runFor(2_000);
   await expect(page.getByTestId("battle-city-status")).toHaveText("Running");
 
@@ -306,7 +314,9 @@ test("Tank Patrol preserves a completed profile session when restart setup fails
     `Tank Restart ${testInfo.workerIndex}${testInfo.retry}${Date.now() % 100_000}`,
   );
   await openGame(page, "battle-city");
+  await page.clock.pauseAt(REPLAY_TEST_CLOCK_PAUSE_AT);
   await page.getByTestId("battle-city-start-button").click();
+  await expect(page.getByTestId("battle-city-status")).toHaveText("Stage intro");
   await page.clock.runFor(2_000);
 
   const endScreen = page.getByTestId("battle-city-end-screen");
