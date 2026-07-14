@@ -36,6 +36,7 @@ import {
   createDefaultBattleCityReplayLeaderboardKey,
   createInitialBattleCityReplayGame,
   fetchBattleCityReplay,
+  getBattleCityReplayAdvanceFrameBatchSize,
   getBattleCityReplayAdvanceFrameElapsedMs,
   type BattleCityReplayEvent,
   type BattleCityReplayPayload,
@@ -134,15 +135,26 @@ export function BattleCityReplayPlayer({
       let nextReplayState = playback.replayState;
 
       if (event.type === "advance") {
-        nextReplayState = applyBattleCityReplayAdvanceFrame(
-          nextReplayState,
+        const batchSize = getBattleCityReplayAdvanceFrameBatchSize(
           event,
+          playback.advanceFrameIndex,
         );
-        playback.advanceFrameIndex += 1;
 
-        if (playback.advanceFrameIndex >= event.frameCount) {
-          playback.advanceFrameIndex = 0;
-          playback.eventIndex += 1;
+        for (let frame = 0; frame < batchSize; frame += 1) {
+          nextReplayState = applyBattleCityReplayAdvanceFrame(
+            nextReplayState,
+            event,
+          );
+          playback.advanceFrameIndex += 1;
+
+          if (playback.advanceFrameIndex >= event.frameCount) {
+            playback.advanceFrameIndex = 0;
+            playback.eventIndex += 1;
+            break;
+          }
+          if (nextReplayState.game.status === "lost") {
+            break;
+          }
         }
       } else {
         playback.eventIndex += 1;

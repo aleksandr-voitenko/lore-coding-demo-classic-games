@@ -432,6 +432,35 @@ export function getBattleCityReplayAdvanceFrameElapsedMs(
   );
 }
 
+const BATTLE_CITY_REPLAY_MAX_SAME_TIME_FRAMES_PER_STEP = 128;
+
+export function getBattleCityReplayAdvanceFrameBatchSize(
+  event: BattleCityReplayAdvanceEvent,
+  frameIndex: number,
+) {
+  if (frameIndex < 0 || frameIndex >= event.frameCount) {
+    return 0;
+  }
+
+  const elapsedMs = getBattleCityReplayAdvanceFrameElapsedMs(event, frameIndex);
+  const batchEnd = Math.min(
+    event.frameCount,
+    frameIndex + BATTLE_CITY_REPLAY_MAX_SAME_TIME_FRAMES_PER_STEP,
+  );
+  let nextFrameIndex = frameIndex + 1;
+
+  // Compact replays may contain many frames at one timestamp. Preserve every
+  // engine step without paying for a separate React render for each zero-delay frame.
+  while (
+    nextFrameIndex < batchEnd &&
+    getBattleCityReplayAdvanceFrameElapsedMs(event, nextFrameIndex) === elapsedMs
+  ) {
+    nextFrameIndex += 1;
+  }
+
+  return nextFrameIndex - frameIndex;
+}
+
 export async function createBattleCityReplayRun() {
   return createGenericGameReplayRun(BATTLE_CITY_REPLAY_GAME_ID, {
     replayLabel: "Tank Patrol replay",

@@ -9,6 +9,7 @@ import {
   applyBattleCityReplayEvent,
   createBattleCityReplayLeaderboardKey,
   createInitialBattleCityReplayGame,
+  getBattleCityReplayAdvanceFrameBatchSize,
   getBattleCityReplayAdvanceFrameElapsedMs,
   MAX_BATTLE_CITY_REPLAY_FRAMES,
   parseBattleCityReplayPayload,
@@ -405,6 +406,60 @@ describe("Tank Patrol replay", () => {
     const advanced = applyBattleCityReplayEvent(running, event);
 
     expect(advanced.game.tick).toBe(running.game.tick + 3);
+  });
+
+  it("batches only bounded advance frames that share one playback timestamp", () => {
+    const sameTimeEvent = createAdvanceEvent(
+      0,
+      {
+        direction: null,
+        fireRequested: false,
+      },
+      { frameCount: 20_000, tick: 0 },
+    );
+    const timedEvent = createAdvanceEvent(
+      1,
+      {
+        direction: null,
+        fireRequested: false,
+      },
+      { frameCount: 3, tick: 0 },
+    );
+    const roundedTimedEvent = createAdvanceEvent(
+      2,
+      {
+        direction: null,
+        fireRequested: false,
+      },
+      { frameCount: 4, tick: 0 },
+    );
+
+    sameTimeEvent.elapsedMs = 100;
+    sameTimeEvent.endElapsedMs = 100;
+    timedEvent.elapsedMs = 100;
+    timedEvent.endElapsedMs = 140;
+    roundedTimedEvent.elapsedMs = 100;
+    roundedTimedEvent.endElapsedMs = 101;
+
+    const batchSize = getBattleCityReplayAdvanceFrameBatchSize(
+      sameTimeEvent,
+      0,
+    );
+
+    expect(batchSize).toBe(128);
+    expect(
+      getBattleCityReplayAdvanceFrameBatchSize(
+        sameTimeEvent,
+        sameTimeEvent.frameCount - 1,
+      ),
+    ).toBe(1);
+    expect(getBattleCityReplayAdvanceFrameBatchSize(timedEvent, 0)).toBe(1);
+    expect(
+      getBattleCityReplayAdvanceFrameBatchSize(roundedTimedEvent, 0),
+    ).toBe(2);
+    expect(
+      getBattleCityReplayAdvanceFrameBatchSize(roundedTimedEvent, 2),
+    ).toBe(2);
   });
 
   it("replays a seeded terminal loss to the same complete Tank Patrol state", () => {

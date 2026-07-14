@@ -192,7 +192,11 @@ This file covers React component ownership and shared game UI conventions under
   next-frame adapter lets fixed-step games schedule synthetic frames from a
   compressed stored event without expanding the payload in memory. Tank Patrol
   uses that boundary for run-length-encoded identical inputs and applies paused
-  frame spans as one engine operation. Focused replay
+  frame spans as one engine operation. Its adapter may reduce at most 128
+  consecutive advance frames that resolve to the same interpolated timestamp in
+  one scheduled step; it still applies every engine frame in order, yields
+  between batches, and stops immediately on terminal loss so trailing-event
+  integrity failures stay observable. Focused replay
   players keep their game-specific frame reducers and visual side effects;
   Minesweeper and Simon also keep their cursor timers local so
   cursor-before-action ordering remains explicit. Replacing a loader or
