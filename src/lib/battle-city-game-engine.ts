@@ -1,8 +1,4 @@
 import {
-  BATTLE_CITY_BOARD_SIZE,
-  BATTLE_CITY_BONUS_LIFE_SCORE,
-  BATTLE_CITY_BULLET_COLLISION_DISTANCE,
-  BATTLE_CITY_BULLET_IMPACT_TICKS,
   BATTLE_CITY_CARRIER_ORDERS,
   BATTLE_CITY_ENEMY_EXPLOSION_TICKS,
   BATTLE_CITY_ENEMY_FIRE_CHANCE,
@@ -10,16 +6,13 @@ import {
   BATTLE_CITY_ENEMY_STATS,
   BATTLE_CITY_ENEMY_TURN_CHANCE,
   BATTLE_CITY_FORTRESS_WARNING_TICKS,
-  BATTLE_CITY_FRIENDLY_FIRE_STUN_TICKS,
   BATTLE_CITY_GAME_OVER_TRANSITION_TICKS,
-  BATTLE_CITY_HEADQUARTERS_EXPLOSION_TICKS,
   BATTLE_CITY_ICE_SLIDE_STEPS,
   BATTLE_CITY_MAX_ACTIVE_ENEMIES,
   BATTLE_CITY_MULTIPLAYER_MAX_ACTIVE_ENEMIES,
   BATTLE_CITY_MULTIPLAYER_SPAWN_ADVANCE_TICKS,
   BATTLE_CITY_NEXT_STAGE_INTRO_TICKS,
   BATTLE_CITY_PIXEL_STEP,
-  BATTLE_CITY_PLAYER_EXPLOSION_TICKS,
   BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_INITIAL_MOVEMENT_PIXELS,
   BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_SLIDE_TIMER_COUNT,
   BATTLE_CITY_PLAYER_GAME_OVER_MESSAGE_TIMER_STEP_TICKS,
@@ -32,29 +25,45 @@ import {
   BATTLE_CITY_STAGE_COUNT,
   BATTLE_CITY_STAGE_TRANSITION_TICKS,
   BATTLE_CITY_STARTING_LIVES,
-  BATTLE_CITY_TANK_BULLET_COLLISION_DISTANCE,
   BATTLE_CITY_TICK_MS,
   BATTLE_CITY_TOTAL_ENEMIES,
 } from "./battle-city/constants";
 import {
+  getMuzzlePosition,
+  getTankDirectionLaneSnapCandidates,
+  isInsideBoard,
+  isMuzzlePositionValid,
+  isTankPositionOpen,
+  moveTankByDistance,
+  POSITION_EPSILON,
+  positionsEqual,
+  tankIsAlignedToDirectionLane,
+  tankIsAlignedToTerrainGrid,
+  tankTouchesTerrain,
+} from "./battle-city/geometry";
+import {
+  advanceBullets,
+  sortBulletsBySlot,
+} from "./battle-city/projectiles";
+import {
   createBattleCityTerrain,
   getBattleCityStage,
 } from "./battle-city/stages";
-import {
-  battleCityPowerUpWithinTankRange,
-  selectBattleCityPowerUp,
-} from "./battle-city/power-ups";
+import { battleCityPowerUpWithinTankRange } from "./battle-city/power-ups";
+import { addScore, EMPTY_KILL_COUNTS } from "./battle-city/scoring";
 import {
   getBattleCityEnemyQueueStage,
   getBattleCityEnemySpawnIntervalTicks,
   getNextBattleCityStage,
 } from "./battle-city/stage-progression";
 import {
-  applyBattleCityTerrainBulletImpact,
-  battleCityTerrainFragmentsIntersectAabb,
   BATTLE_CITY_FULL_TERRAIN_FRAGMENT_MASK,
   createBattleCityTerrainFragmentGrid,
 } from "./battle-city/terrain-fragments";
+import {
+  isActiveEnemy,
+  isBattleCityMultiplayerGame,
+} from "./battle-city/state";
 import type {
   BattleCityBullet,
   BattleCityDirection,
@@ -70,12 +79,13 @@ import type {
   BattleCityPlayerId,
   BattleCityPlayerPhase,
   BattleCityPosition,
-  BattleCityPowerUp,
   BattleCityPowerUpScorePopup,
   BattleCityRandom,
   BattleCityTerrain,
   CreateBattleCityGameOptions,
 } from "./battle-city/types";
+
+export { isBattleCityMultiplayerGame } from "./battle-city/state";
 
 export {
   BATTLE_CITY_BOARD_SIZE,
@@ -162,15 +172,6 @@ export type {
   CreateBattleCityGameOptions,
 } from "./battle-city/types";
 
-const DIRECTION_DELTAS: Readonly<
-  Record<BattleCityDirection, BattleCityPosition>
-> = {
-  down: { col: 0, row: 1 },
-  left: { col: -1, row: 0 },
-  right: { col: 1, row: 0 },
-  up: { col: 0, row: -1 },
-};
-
 const BATTLE_CITY_DIRECTIONS: readonly BattleCityDirection[] = [
   "up",
   "left",
@@ -188,21 +189,6 @@ const EMPTY_BATTLE_CITY_MULTIPLAYER_FRAME_INPUT: BattleCityMultiplayerFrameInput
   player1: EMPTY_BATTLE_CITY_FRAME_INPUT,
   player2: EMPTY_BATTLE_CITY_FRAME_INPUT,
 };
-
-const BATTLE_CITY_TANK_SIZE = 2;
-const POSITION_EPSILON = 1e-9;
-const EMPTY_KILL_COUNTS: BattleCityKillCounts = {
-  armor: 0,
-  basic: 0,
-  fast: 0,
-  power: 0,
-};
-
-export function isBattleCityMultiplayerGame(
-  game: BattleCityGameState,
-): game is BattleCityMultiplayerGameState {
-  return game.player2 !== undefined;
-}
 
 export function getBattleCityReserveLives(
   lives: number,
@@ -258,10 +244,6 @@ function canFireBattleCityPlayer(
     (game.status === "running" || game.status === "stage-clear") &&
     player.phase === "active"
   );
-}
-
-function isActiveEnemy(enemy: BattleCityEnemy): boolean {
-  return enemy.spawnTicks === 0 && enemy.explosionTicks === 0;
 }
 
 type StageRunContext = {
@@ -1385,495 +1367,6 @@ function getBattleCitySpawnShieldTicks(tick: number): number {
     : getQuantizedBattleCityTimerTicks(3, tick);
 }
 
-function advanceBullets(
-  game: BattleCityGameState,
-  random: BattleCityRandom,
-): BattleCityGameState {
-  let bullets = game.bullets.map((bullet) => ({ ...bullet }));
-  let terrain = game.terrain;
-  let terrainFragments = game.terrainFragments;
-  const enemies = game.enemies.map((enemy) => ({ ...enemy }));
-  let player = { ...game.player };
-  let player2 = game.player2 ? { ...game.player2 } : null;
-  let activePowerUp = game.activePowerUp;
-  let powerUpScorePopup = game.powerUpScorePopup;
-  let nextPowerUpId = game.nextPowerUpId;
-  const destroyedEnemyCount = game.destroyedEnemyCount;
-  let score = game.score;
-  let lives = game.lives;
-  let bonusLifeAwarded = game.bonusLifeAwarded;
-  let player2Score = game.player2Score ?? 0;
-  let player2Lives = game.player2Lives ?? 0;
-  let player2BonusLifeAwarded = game.player2BonusLifeAwarded ?? false;
-  let baseAlive = game.baseAlive;
-  let baseExplosionTicks = game.baseExplosionTicks;
-  const status = game.status;
-  let stageKillCounts = { ...game.stageKillCounts };
-  let player2StageKillCounts = {
-    ...(game.player2StageKillCounts ?? EMPTY_KILL_COUNTS),
-  };
-  let stageOutcome = game.stageOutcome;
-  const stageTransitionTicks = game.stageTransitionTicks;
-  // The ROM moves every pre-existing shell through its complete frame distance
-  // before its separate terrain, shell, and tank collision passes. Resolving
-  // between one-pixel substeps changes which simultaneous impact wins.
-  const collisionTestIds = new Set<string>();
-  bullets = sortBulletsBySlot(
-    bullets.map((bullet) => {
-      if (bullet.impactTicks > 0) {
-        return bullet;
-      }
-      collisionTestIds.add(bullet.id);
-      if (bullet.isNewborn) {
-        return { ...bullet, isNewborn: false };
-      }
-      const delta = DIRECTION_DELTAS[bullet.direction];
-      const moved = {
-        ...bullet,
-        col: normalizeCoordinate(bullet.col + delta.col * bullet.speed),
-        row: normalizeCoordinate(bullet.row + delta.row * bullet.speed),
-      };
-      if (!isPointInsideBoard(moved.row, moved.col)) {
-        return createBulletImpact({
-          ...moved,
-          col: Math.min(BATTLE_CITY_BOARD_SIZE, Math.max(0, moved.col)),
-          row: Math.min(BATTLE_CITY_BOARD_SIZE, Math.max(0, moved.row)),
-        });
-      }
-      return moved;
-    }),
-  );
-
-  const afterTerrain: BattleCityBullet[] = [];
-  for (const bullet of bullets) {
-    if (
-      bullet.impactTicks > 0 ||
-      !collisionTestIds.has(bullet.id) ||
-      !shouldResolveBulletTerrain(bullet, game.tick)
-    ) {
-      afterTerrain.push(bullet);
-      continue;
-    }
-
-    const terrainImpact = applyBattleCityTerrainBulletImpact(
-      terrainFragments,
-      terrain,
-      {
-        col: bullet.col,
-        direction: bullet.direction,
-        isMaximumPower: bullet.strength === 2,
-        row: bullet.row,
-      },
-    );
-    let didImpactTerrain = terrainImpact.didCollide;
-    if (terrainImpact.didCollide) {
-      terrainFragments = terrainImpact.fragments;
-      for (const cell of terrainImpact.cells) {
-        if (cell.previousMask !== 0 && cell.nextMask === 0) {
-          terrain = replaceTerrainCell(
-            terrain,
-            cell.cellRow,
-            cell.cellCol,
-            "empty",
-          );
-        }
-      }
-    }
-
-    const hitsHeadquarters = terrainImpact.impacts.some(
-      ({ cellCol, cellRow }) =>
-        terrain[cellRow]?.[cellCol] === "headquarters",
-    );
-    if (hitsHeadquarters) {
-      didImpactTerrain = true;
-      if (baseAlive) {
-        baseAlive = false;
-        baseExplosionTicks = BATTLE_CITY_HEADQUARTERS_EXPLOSION_TICKS;
-        stageOutcome = "lost";
-      }
-    }
-    if (didImpactTerrain) {
-      afterTerrain.push(createBulletImpact(bullet));
-      continue;
-    }
-
-    afterTerrain.push(bullet);
-  }
-
-  const cancelledIds = findCancelledBulletIds(afterTerrain);
-  const afterBulletCollisions = afterTerrain.filter(
-    (bullet) => !cancelledIds.has(bullet.id),
-  );
-  // Replay schema V1 was recorded with the original solo slot-sorted pass.
-  // Keep it byte-for-byte in behavior while multiplayer uses the ROM's full
-  // cross-player object-slot ordering below.
-  if (!isBattleCityMultiplayerGame(game)) {
-    const survivingBullets: BattleCityBullet[] = [];
-    for (const bullet of afterBulletCollisions) {
-      if (bullet.impactTicks > 0 || !collisionTestIds.has(bullet.id)) {
-        survivingBullets.push(bullet);
-        continue;
-      }
-
-      if (bullet.owner === "player") {
-        const enemyIndex = enemies.findIndex(
-          (enemy) => isActiveEnemy(enemy) && bulletHitsTank(bullet, enemy),
-        );
-        if (enemyIndex >= 0) {
-          const enemy = enemies[enemyIndex]!;
-          if (enemy.isCarrier && !enemy.hasDroppedPowerUp) {
-            activePowerUp = createRandomPowerUp(
-              player,
-              null,
-              nextPowerUpId,
-              random,
-            );
-            nextPowerUpId += 1;
-            powerUpScorePopup = null;
-          }
-          const hitPoints = enemy.hitPoints - 1;
-          if (hitPoints <= 0) {
-            enemies[enemyIndex] = {
-              ...enemy,
-              destructionPoints: enemy.score,
-              explosionTicks: BATTLE_CITY_ENEMY_EXPLOSION_TICKS,
-              hasDroppedPowerUp: enemy.hasDroppedPowerUp || enemy.isCarrier,
-              hitPoints: 0,
-            };
-            stageKillCounts = {
-              ...stageKillCounts,
-              [enemy.type]: stageKillCounts[enemy.type] + 1,
-            };
-            const scored = addScore(
-              score,
-              lives,
-              bonusLifeAwarded,
-              enemy.score,
-              { canAwardBonusLife: baseAlive && status !== "game-over" },
-            );
-            score = scored.score;
-            lives = scored.lives;
-            bonusLifeAwarded = scored.bonusLifeAwarded;
-          } else {
-            enemies[enemyIndex] = {
-              ...enemy,
-              hasDroppedPowerUp: enemy.hasDroppedPowerUp || enemy.isCarrier,
-              hitPoints,
-            };
-          }
-          survivingBullets.push(createBulletImpact(bullet));
-          continue;
-        }
-      } else if (
-        player.phase === "active" &&
-        bulletHitsTank(bullet, player)
-      ) {
-        if (player.invulnerabilityTicks === 0 && player.shieldTicks === 0) {
-          player = {
-            ...player,
-            iceSlideDirection: null,
-            iceSlideStepsRemaining: 0,
-            phase: "exploding",
-            phaseTicks: BATTLE_CITY_PLAYER_EXPLOSION_TICKS,
-            powerTier: 0,
-            shieldTicks: 0,
-          };
-          survivingBullets.push(createBulletImpact(bullet));
-        }
-        continue;
-      }
-
-      survivingBullets.push(bullet);
-    }
-
-    return {
-      ...game,
-      activePowerUp,
-      baseAlive,
-      baseExplosionTicks,
-      bonusLifeAwarded,
-      bullets: sortBulletsBySlot(survivingBullets),
-      destroyedEnemyCount,
-      enemies,
-      lives,
-      nextPowerUpId,
-      player,
-      powerUpScorePopup,
-      score,
-      stageKillCounts,
-      stageOutcome,
-      stageTransitionTicks,
-      status,
-      terrain,
-      terrainFragments,
-    };
-  }
-  const bulletState = new Map(
-    afterBulletCollisions.map((bullet) => [bullet.id, bullet]),
-  );
-  const getBulletInSlot = (slot: number) =>
-    [...bulletState.values()].find((bullet) => bullet.slot === slot);
-  const canResolveTankCollision = (bullet: BattleCityBullet) =>
-    bullet.impactTicks === 0 && collisionTestIds.has(bullet.id);
-
-  // The ROM resolves enemy shells against Player 2 and then Player 1 before
-  // any player shell can hit an enemy or teammate.
-  const enemyBulletIds = afterBulletCollisions
-    .filter((bullet) => bullet.owner === "enemy")
-    .map((bullet) => bullet.id);
-  const enemyShellTargets: readonly BattleCityPlayerId[] = player2
-    ? ["player2", "player1"]
-    : ["player1"];
-  for (const targetId of enemyShellTargets) {
-    for (const bulletId of enemyBulletIds) {
-      const bullet = bulletState.get(bulletId);
-      const target = targetId === "player1" ? player : player2;
-      if (
-        bullet === undefined ||
-        target === null ||
-        target.phase !== "active" ||
-        !canResolveTankCollision(bullet) ||
-        !bulletHitsTank(bullet, target)
-      ) {
-        continue;
-      }
-      if (target.invulnerabilityTicks > 0 || target.shieldTicks > 0) {
-        bulletState.delete(bulletId);
-        continue;
-      }
-
-      const explodingPlayer: BattleCityPlayer = {
-        ...target,
-        iceSlideDirection: null,
-        iceSlideStepsRemaining: 0,
-        movementStunTicks: 0,
-        phase: "exploding",
-        phaseTicks: BATTLE_CITY_PLAYER_EXPLOSION_TICKS,
-        powerTier: 0,
-        shieldTicks: 0,
-      };
-      if (targetId === "player1") {
-        player = explodingPlayer;
-      } else {
-        player2 = explodingPlayer;
-      }
-      bulletState.set(bulletId, createBulletImpact(bullet));
-    }
-  }
-
-  // Next, each enemy slot scans player shell slots in the hardware order.
-  const playerBulletSlots = [9, 8, 1, 0] as const;
-  const enemyIndexes = enemies
-    .map((_, index) => index)
-    .sort((first, second) => enemies[second]!.slot - enemies[first]!.slot);
-  for (const enemyIndex of enemyIndexes) {
-    for (const bulletSlot of playerBulletSlots) {
-      const enemy = enemies[enemyIndex]!;
-      const bullet = getBulletInSlot(bulletSlot);
-      if (!isActiveEnemy(enemy)) {
-        break;
-      }
-      if (
-        bullet === undefined ||
-        (bullet.owner !== "player" && bullet.owner !== "player2") ||
-        !canResolveTankCollision(bullet) ||
-        !bulletHitsTank(bullet, enemy)
-      ) {
-        continue;
-      }
-
-      const shooterId: BattleCityPlayerId =
-        bullet.owner === "player" ? "player1" : "player2";
-      if (enemy.isCarrier && !enemy.hasDroppedPowerUp) {
-        activePowerUp = createRandomPowerUp(
-          player,
-          player2,
-          nextPowerUpId,
-          random,
-        );
-        nextPowerUpId += 1;
-        powerUpScorePopup = null;
-      }
-      const hitPoints = enemy.hitPoints - 1;
-      if (hitPoints <= 0) {
-        enemies[enemyIndex] = {
-          ...enemy,
-          destructionPoints: enemy.score,
-          explosionTicks: BATTLE_CITY_ENEMY_EXPLOSION_TICKS,
-          hasDroppedPowerUp: enemy.hasDroppedPowerUp || enemy.isCarrier,
-          hitPoints: 0,
-        };
-        if (shooterId === "player1") {
-          stageKillCounts = {
-            ...stageKillCounts,
-            [enemy.type]: stageKillCounts[enemy.type] + 1,
-          };
-          const scored = addScore(
-            score,
-            lives,
-            bonusLifeAwarded,
-            enemy.score,
-            { canAwardBonusLife: baseAlive && status !== "game-over" },
-          );
-          score = scored.score;
-          lives = scored.lives;
-          bonusLifeAwarded = scored.bonusLifeAwarded;
-        } else {
-          player2StageKillCounts = {
-            ...player2StageKillCounts,
-            [enemy.type]: player2StageKillCounts[enemy.type] + 1,
-          };
-          const scored = addScore(
-            player2Score,
-            player2Lives,
-            player2BonusLifeAwarded,
-            enemy.score,
-            { canAwardBonusLife: baseAlive && status !== "game-over" },
-          );
-          player2Score = scored.score;
-          player2Lives = scored.lives;
-          player2BonusLifeAwarded = scored.bonusLifeAwarded;
-        }
-      } else {
-        enemies[enemyIndex] = {
-          ...enemy,
-          hasDroppedPowerUp: enemy.hasDroppedPowerUp || enemy.isCarrier,
-          hitPoints,
-        };
-      }
-      bulletState.set(bullet.id, createBulletImpact(bullet));
-    }
-  }
-
-  // Friendly fire is the final tank-collision pass, again visiting Player 2
-  // before Player 1. Protection clears the shell without an impact sprite.
-  if (player2 !== null) {
-    for (const targetId of ["player2", "player1"] as const) {
-      for (const bulletSlot of playerBulletSlots) {
-        const target = targetId === "player1" ? player : player2;
-        const friendlyOwner = targetId === "player1" ? "player2" : "player";
-        const bullet = getBulletInSlot(bulletSlot);
-        if (
-          target.phase !== "active" ||
-          bullet === undefined ||
-          bullet.owner !== friendlyOwner ||
-          !canResolveTankCollision(bullet) ||
-          !bulletHitsTank(bullet, target)
-        ) {
-          continue;
-        }
-        if (target.invulnerabilityTicks > 0 || target.shieldTicks > 0) {
-          bulletState.delete(bullet.id);
-          continue;
-        }
-        const newlyStunned = (target.movementStunTicks ?? 0) === 0;
-        if (newlyStunned) {
-          const stunnedPlayer: BattleCityPlayer = {
-            ...target,
-            movementStunTicks: BATTLE_CITY_FRIENDLY_FIRE_STUN_TICKS,
-          };
-          if (targetId === "player1") {
-            player = stunnedPlayer;
-          } else {
-            player2 = stunnedPlayer;
-          }
-        }
-        bulletState.set(bullet.id, createBulletImpact(bullet));
-        if (newlyStunned) {
-          break;
-        }
-      }
-    }
-  }
-
-  bullets = sortBulletsBySlot([...bulletState.values()]);
-
-  const multiplayerFields =
-    player2 === null
-      ? {}
-      : {
-          player2,
-          player2BonusLifeAwarded,
-          player2Lives,
-          player2Score,
-          player2StageKillCounts,
-        };
-
-  return {
-    ...game,
-    activePowerUp,
-    baseAlive,
-    baseExplosionTicks,
-    bonusLifeAwarded,
-    bullets,
-    destroyedEnemyCount,
-    enemies,
-    lives,
-    nextPowerUpId,
-    player,
-    powerUpScorePopup,
-    score,
-    stageKillCounts,
-    stageOutcome,
-    stageTransitionTicks,
-    status,
-    terrain,
-    terrainFragments,
-    ...multiplayerFields,
-  };
-}
-
-function findCancelledBulletIds(bullets: BattleCityBullet[]): Set<string> {
-  const cancelled = new Set<string>();
-  // The hardware's outer loop visits only player slots (9, 8, 1, 0). A
-  // player shell cleared as the inner member of an earlier pass is skipped,
-  // but a player shell that clears itself may still clear additional enemy
-  // shells during the remainder of its current inner loop.
-  for (const first of bullets) {
-    if (
-      first.owner === "enemy" ||
-      first.impactTicks > 0 ||
-      cancelled.has(first.id)
-    ) {
-      continue;
-    }
-    for (const second of bullets) {
-      if (
-        second.id === first.id ||
-        second.impactTicks > 0 ||
-        second.owner === first.owner ||
-        cancelled.has(second.id)
-      ) {
-        continue;
-      }
-      if (
-        Math.abs(first.col - second.col) < BATTLE_CITY_BULLET_COLLISION_DISTANCE &&
-        Math.abs(first.row - second.row) < BATTLE_CITY_BULLET_COLLISION_DISTANCE
-      ) {
-        cancelled.add(first.id);
-        cancelled.add(second.id);
-      }
-    }
-  }
-  return cancelled;
-}
-
-function shouldResolveBulletTerrain(
-  bullet: BattleCityBullet,
-  tick: number,
-): boolean {
-  const isFast =
-    bullet.speed > BATTLE_CITY_PIXEL_STEP * 2 + POSITION_EPSILON ||
-    bullet.strength === 2;
-  return isFast || ((bullet.slot ^ Math.max(0, tick)) & 1) === 1;
-}
-
-function sortBulletsBySlot(
-  bullets: BattleCityBullet[],
-): BattleCityBullet[] {
-  return [...bullets].sort((first, second) => second.slot - first.slot);
-}
-
 function advanceEnemyTankHandlers(
   game: BattleCityGameState,
   random: BattleCityRandom,
@@ -2239,29 +1732,6 @@ function createEnemy(
   };
 }
 
-function createRandomPowerUp(
-  player: BattleCityPlayer,
-  player2: BattleCityPlayer | null,
-  nextPowerUpId: number,
-  random: BattleCityRandom,
-): BattleCityPowerUp {
-  const activePlayers = [player, player2]
-    .filter((candidate): candidate is BattleCityPlayer => candidate !== null)
-    .filter((candidate) => candidate.phase === "active");
-  // The multiplayer ROM ignores both inactive tank slots, so an empty list
-  // deliberately permits every canonical position. Solo retains its V1
-  // fallback to the stored player position for replay compatibility.
-  const { type, ...position } = selectBattleCityPowerUp(
-    player2 !== null ? activePlayers : [player],
-    random,
-  );
-  return {
-    ...position,
-    id: `power-up-${nextPowerUpId}`,
-    type,
-  };
-}
-
 function collectPowerUp(game: BattleCityGameState): BattleCityGameState {
   const powerUp = game.activePowerUp;
   if (
@@ -2593,37 +2063,6 @@ function getBattleCityStageResultDuration(
   );
 }
 
-function addScore(
-  score: number,
-  lives: number,
-  bonusLifeAwarded: boolean,
-  points: number,
-  { canAwardBonusLife }: { canAwardBonusLife: boolean },
-): Pick<BattleCityGameState, "bonusLifeAwarded" | "lives" | "score"> {
-  const nextScore = score + points;
-  const earnedBonus =
-    canAwardBonusLife &&
-    !bonusLifeAwarded &&
-    score < BATTLE_CITY_BONUS_LIFE_SCORE &&
-    nextScore >= BATTLE_CITY_BONUS_LIFE_SCORE;
-  return {
-    bonusLifeAwarded: bonusLifeAwarded || earnedBonus,
-    lives: lives + (earnedBonus ? 1 : 0),
-    score: nextScore,
-  };
-}
-
-function replaceTerrainCell(
-  terrain: BattleCityTerrain[][],
-  row: number,
-  col: number,
-  value: BattleCityTerrain,
-): BattleCityTerrain[][] {
-  const next = terrain.map((terrainRow) => [...terrainRow]);
-  next[row]![col] = value;
-  return next;
-}
-
 function setFortressTerrain(
   terrain: BattleCityTerrain[][],
   terrainFragments: number[][],
@@ -2654,297 +2093,6 @@ function setFortressTerrain(
     }
   }
   return { terrain: next, terrainFragments: nextFragments };
-}
-
-function getMuzzlePosition(
-  tank: BattleCityPosition & { direction: BattleCityDirection },
-): BattleCityPosition {
-  switch (tank.direction) {
-    case "up":
-      return { row: tank.row, col: tank.col + 1 };
-    case "right":
-      return { row: tank.row + 1, col: tank.col + BATTLE_CITY_TANK_SIZE };
-    case "down":
-      return { row: tank.row + BATTLE_CITY_TANK_SIZE, col: tank.col + 1 };
-    case "left":
-      return { row: tank.row + 1, col: tank.col };
-  }
-}
-
-function isTankPositionOpen(
-  terrain: BattleCityTerrain[][],
-  terrainFragments: number[][],
-  row: number,
-  col: number,
-  occupied: BattleCityPosition[],
-): boolean {
-  if (
-    row < -POSITION_EPSILON ||
-    col < -POSITION_EPSILON ||
-    row + BATTLE_CITY_TANK_SIZE > BATTLE_CITY_BOARD_SIZE + POSITION_EPSILON ||
-    col + BATTLE_CITY_TANK_SIZE > BATTLE_CITY_BOARD_SIZE + POSITION_EPSILON
-  ) {
-    return false;
-  }
-  const rows = getOverlappedTerrainRange(row, BATTLE_CITY_TANK_SIZE);
-  const cols = getOverlappedTerrainRange(col, BATTLE_CITY_TANK_SIZE);
-  const tankBounds = {
-    bottom: row + BATTLE_CITY_TANK_SIZE,
-    left: col,
-    right: col + BATTLE_CITY_TANK_SIZE,
-    top: row,
-  };
-  for (let terrainRow = rows.minimum; terrainRow <= rows.maximum; terrainRow += 1) {
-    for (let terrainCol = cols.minimum; terrainCol <= cols.maximum; terrainCol += 1) {
-      const terrainType = terrain[terrainRow]![terrainCol]!;
-      if (terrainType === "brick" || terrainType === "steel") {
-        if (
-          battleCityTerrainFragmentsIntersectAabb(
-            terrainFragments[terrainRow]![terrainCol]!,
-            terrainRow,
-            terrainCol,
-            tankBounds,
-          )
-        ) {
-          return false;
-        }
-      } else if (!isTankPassableTerrain(terrainType)) {
-        return false;
-      }
-    }
-  }
-  return !occupied.some((position) => tanksIntersect({ row, col }, position));
-}
-
-function isTankPassableTerrain(terrain: BattleCityTerrain): boolean {
-  return terrain === "empty" || terrain === "forest" || terrain === "ice";
-}
-
-function tankTouchesTerrain(
-  terrain: BattleCityTerrain[][],
-  row: number,
-  col: number,
-  target: BattleCityTerrain,
-): boolean {
-  const rows = getOverlappedTerrainRange(row, BATTLE_CITY_TANK_SIZE);
-  const cols = getOverlappedTerrainRange(col, BATTLE_CITY_TANK_SIZE);
-  for (let terrainRow = rows.minimum; terrainRow <= rows.maximum; terrainRow += 1) {
-    for (let terrainCol = cols.minimum; terrainCol <= cols.maximum; terrainCol += 1) {
-      if (terrain[terrainRow]![terrainCol] === target) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-function tanksIntersect(
-  first: BattleCityPosition,
-  second: BattleCityPosition,
-): boolean {
-  return (
-    first.row < second.row + BATTLE_CITY_TANK_SIZE &&
-    first.row + BATTLE_CITY_TANK_SIZE > second.row &&
-    first.col < second.col + BATTLE_CITY_TANK_SIZE &&
-    first.col + BATTLE_CITY_TANK_SIZE > second.col
-  );
-}
-
-function bulletHitsTank(
-  bullet: BattleCityBullet,
-  tank: BattleCityPosition,
-): boolean {
-  const tankCenterRow = tank.row + BATTLE_CITY_TANK_SIZE / 2;
-  const tankCenterCol = tank.col + BATTLE_CITY_TANK_SIZE / 2;
-  return (
-    Math.abs(bullet.row - tankCenterRow) <
-      BATTLE_CITY_TANK_BULLET_COLLISION_DISTANCE &&
-    Math.abs(bullet.col - tankCenterCol) <
-      BATTLE_CITY_TANK_BULLET_COLLISION_DISTANCE
-  );
-}
-
-function moveTankByDistance(
-  terrain: BattleCityTerrain[][],
-  terrainFragments: number[][],
-  start: BattleCityPosition,
-  direction: BattleCityDirection,
-  distance: number,
-  occupied: BattleCityPosition[],
-): BattleCityPosition {
-  const delta = DIRECTION_DELTAS[direction];
-  let position = { ...start };
-  let remaining = distance;
-
-  while (remaining > POSITION_EPSILON) {
-    const step = Math.min(BATTLE_CITY_PIXEL_STEP, remaining);
-    const candidate = {
-      col: normalizeCoordinate(position.col + delta.col * step),
-      row: normalizeCoordinate(position.row + delta.row * step),
-    };
-    if (
-      !isTankPositionOpen(
-        terrain,
-        terrainFragments,
-        candidate.row,
-        candidate.col,
-        [],
-      ) ||
-      !doesTankMoveAvoidOccupied(position, candidate, occupied)
-    ) {
-      break;
-    }
-    position = candidate;
-    remaining -= step;
-  }
-
-  return position;
-}
-
-function doesTankMoveAvoidOccupied(
-  current: BattleCityPosition,
-  candidate: BattleCityPosition,
-  occupied: BattleCityPosition[],
-): boolean {
-  return occupied.every((other) => {
-    const currentOverlap = getTankOverlapArea(current, other);
-    const candidateOverlap = getTankOverlapArea(candidate, other);
-    return currentOverlap > POSITION_EPSILON
-      ? candidateOverlap < currentOverlap - POSITION_EPSILON
-      : candidateOverlap <= POSITION_EPSILON;
-  });
-}
-
-function getTankOverlapArea(
-  first: BattleCityPosition,
-  second: BattleCityPosition,
-): number {
-  const overlapWidth = Math.max(
-    0,
-    Math.min(
-      first.col + BATTLE_CITY_TANK_SIZE,
-      second.col + BATTLE_CITY_TANK_SIZE,
-    ) - Math.max(first.col, second.col),
-  );
-  const overlapHeight = Math.max(
-    0,
-    Math.min(
-      first.row + BATTLE_CITY_TANK_SIZE,
-      second.row + BATTLE_CITY_TANK_SIZE,
-    ) - Math.max(first.row, second.row),
-  );
-  return overlapWidth * overlapHeight;
-}
-
-function getTankDirectionLaneSnapCandidates(
-  position: BattleCityPosition,
-  direction: BattleCityDirection,
-): BattleCityPosition[] {
-  const preferred = snapTankToDirectionLane(position, direction);
-  const laneCoordinate =
-    direction === "up" || direction === "down"
-      ? position.col
-      : position.row;
-  if (!isHalfCoordinate(laneCoordinate)) {
-    return [preferred];
-  }
-  const lowerLane = Math.floor(laneCoordinate);
-  const fallback =
-    direction === "up" || direction === "down"
-      ? { ...position, col: lowerLane }
-      : { ...position, row: lowerLane };
-  return positionsEqual(preferred, fallback)
-    ? [preferred]
-    : [preferred, fallback];
-}
-
-function snapTankToDirectionLane(
-  position: BattleCityPosition,
-  direction: BattleCityDirection,
-): BattleCityPosition {
-  return direction === "up" || direction === "down"
-    ? { ...position, col: Math.floor(position.col + 0.5) }
-    : { ...position, row: Math.floor(position.row + 0.5) };
-}
-
-function tankIsAlignedToDirectionLane(
-  position: BattleCityPosition,
-  direction: BattleCityDirection,
-): boolean {
-  return direction === "up" || direction === "down"
-    ? isWholeCoordinate(position.col)
-    : isWholeCoordinate(position.row);
-}
-
-function tankIsAlignedToTerrainGrid(position: BattleCityPosition): boolean {
-  return isWholeCoordinate(position.row) && isWholeCoordinate(position.col);
-}
-
-function isWholeCoordinate(value: number): boolean {
-  return Math.abs(value - Math.round(value)) <= POSITION_EPSILON;
-}
-
-function isHalfCoordinate(value: number): boolean {
-  return Math.abs(value - (Math.floor(value) + 0.5)) <= POSITION_EPSILON;
-}
-
-function getOverlappedTerrainRange(start: number, size: number) {
-  return {
-    maximum: Math.ceil(start + size - POSITION_EPSILON) - 1,
-    minimum: Math.floor(start + POSITION_EPSILON),
-  };
-}
-
-function positionsEqual(
-  first: BattleCityPosition,
-  second: BattleCityPosition,
-): boolean {
-  return (
-    Math.abs(first.row - second.row) <= POSITION_EPSILON &&
-    Math.abs(first.col - second.col) <= POSITION_EPSILON
-  );
-}
-
-function normalizeCoordinate(value: number): number {
-  return Math.round(value * 1_000_000_000) / 1_000_000_000;
-}
-
-function createBulletImpact(bullet: BattleCityBullet): BattleCityBullet {
-  return {
-    ...bullet,
-    impactTicks: BATTLE_CITY_BULLET_IMPACT_TICKS,
-    isNewborn: false,
-  };
-}
-
-function isPointInsideBoard(row: number, col: number): boolean {
-  return (
-    row >= 0 &&
-    row < BATTLE_CITY_BOARD_SIZE &&
-    col >= 0 &&
-    col < BATTLE_CITY_BOARD_SIZE
-  );
-}
-
-function isMuzzlePositionValid(row: number, col: number): boolean {
-  // The NES creates an outward shell on the leading edge even when that
-  // coordinate is the bottom or right playfield boundary. Its first movement
-  // step then removes it, matching the equivalent top and left edge shots.
-  return (
-    row >= 0 &&
-    row <= BATTLE_CITY_BOARD_SIZE &&
-    col >= 0 &&
-    col <= BATTLE_CITY_BOARD_SIZE
-  );
-}
-
-function isInsideBoard(row: number, col: number): boolean {
-  return (
-    row >= 0 &&
-    row < BATTLE_CITY_BOARD_SIZE &&
-    col >= 0 &&
-    col < BATTLE_CITY_BOARD_SIZE
-  );
 }
 
 function decrement(value: number): number {

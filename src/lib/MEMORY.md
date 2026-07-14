@@ -38,8 +38,13 @@ This file covers deterministic game engines and shared source logic under
   to audit.
 - Tank Patrol retains the internal `battle-city` namespace and uses
   `battle-city-game-engine.ts` as the deterministic facade for its single-player
-  campaign and private-room co-op rules. The 35 maps form a displayed 70-stage
-  cycle;
+  campaign and private-room co-op rules. Movement/collision geometry lives in
+  `battle-city/geometry.ts`, the ordered terrain/shell/tank projectile pass in
+  `battle-city/projectiles.ts`, and shared score and active-state helpers in
+  `battle-city/scoring.ts` and `battle-city/state.ts`. Keep frame lifecycle and
+  enemy/player/fire/spawn/pickup/ending sequencing in the facade so the
+  hardware-sensitive order remains auditable. The 35 maps form a displayed
+  70-stage cycle;
   Stages 36-70 reuse the maps with the Stage 35 enemy mix before resetting.
   Keep 26x26 terrain mutation, 4x4 wall fragments, tank and projectile
   collision, enemy spawning and decisions, headquarters defense, scoring,
