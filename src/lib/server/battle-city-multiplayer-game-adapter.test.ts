@@ -21,6 +21,7 @@ function createBattleCityRoom(
   return {
     code: "ROOM1",
     hostParticipantId: "host-1",
+    matchId: 1,
     participants: [
       {
         displayName: "Ada Host",
@@ -253,6 +254,7 @@ describe("Tank Patrol multiplayer server adapter", () => {
             type: "battle-city.setDirection",
           },
           participantId: " guest-1 ",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 3_200,
@@ -269,6 +271,7 @@ describe("Tank Patrol multiplayer server adapter", () => {
         command: {
           input: { type: "battle-city.fire" },
           participantId: "guest-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 3_210,
@@ -287,6 +290,7 @@ describe("Tank Patrol multiplayer server adapter", () => {
         command: {
           input: { type: "battle-city.fire" },
           participantId: "guest-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 3_215,
@@ -318,6 +322,7 @@ describe("Tank Patrol multiplayer server adapter", () => {
       command: {
         participantId: "guest-1",
         seatId: "player-2",
+        matchId: 1,
         type: "room.releaseSeat",
       },
       runtime,
@@ -331,7 +336,12 @@ describe("Tank Patrol multiplayer server adapter", () => {
 
     expect(
       battleCityMultiplayerRuntimeAdapter.applyInputCommand({
-        command: { input: null, participantId: "host-1", type: "game.input" },
+        command: {
+          input: null,
+          matchId: 1,
+          participantId: "host-1",
+          type: "game.input",
+        },
         nowMs: 1_000,
         room,
         runtime,
@@ -346,6 +356,7 @@ describe("Tank Patrol multiplayer server adapter", () => {
         command: {
           input: { direction: "up", type: "battle-city.setDirection" },
           participantId: "host-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_000,
@@ -358,6 +369,7 @@ describe("Tank Patrol multiplayer server adapter", () => {
         command: {
           input: { direction: "forward", type: "battle-city.setDirection" },
           participantId: "host-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_000,
@@ -374,6 +386,7 @@ describe("Tank Patrol multiplayer server adapter", () => {
         command: {
           input: { type: "battle-city.teleport" },
           participantId: "host-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_000,
@@ -386,6 +399,7 @@ describe("Tank Patrol multiplayer server adapter", () => {
         command: {
           input: { direction: "up", type: "battle-city.setDirection" },
           participantId: "missing-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_000,
@@ -402,6 +416,7 @@ describe("Tank Patrol multiplayer server adapter", () => {
         command: {
           input: { direction: "up", type: "battle-city.setDirection" },
           participantId: "observer-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_000,
@@ -418,6 +433,7 @@ describe("Tank Patrol multiplayer server adapter", () => {
         command: {
           input: { type: "battle-city.fire" },
           participantId: "host-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_000,
@@ -434,6 +450,7 @@ describe("Tank Patrol multiplayer server adapter", () => {
         command: {
           input: { direction: null, type: "battle-city.setDirection" },
           participantId: "host-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_000,
@@ -461,6 +478,7 @@ describe("Tank Patrol multiplayer server adapter", () => {
         command: {
           command: "pause",
           participantId: "host-1",
+          matchId: 1,
           type: "room.lifecycle",
         },
         nowMs: 2_000,
@@ -484,6 +502,7 @@ describe("Tank Patrol multiplayer server adapter", () => {
         command: {
           command: "resume",
           participantId: "host-1",
+          matchId: 1,
           type: "room.lifecycle",
         },
         nowMs: 10_000,
@@ -524,6 +543,7 @@ describe("Tank Patrol multiplayer server adapter", () => {
       command: {
         input: { direction: "left", type: "battle-city.setDirection" },
         participantId: "host-1",
+        matchId: 1,
         type: "game.input",
       },
       nowMs: 1_010,
@@ -553,6 +573,7 @@ describe("Tank Patrol multiplayer server adapter", () => {
         command: {
           command: "restart",
           participantId: "host-1",
+          matchId: 1,
           type: "room.lifecycle",
         },
         nowMs: 2_000,

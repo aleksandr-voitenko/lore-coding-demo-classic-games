@@ -392,9 +392,9 @@ describe("multiplayer room sidecar", () => {
 
     expect(handshakeResponse.status).toBe(200);
     await expect(handshakeResponse.json()).resolves.toEqual({
-      mutationPathSegment: "v2",
+      mutationPathSegment: MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT,
       participantCapabilities: true,
-      protocolVersion: 2,
+      protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
     });
     expect(mutationResponse.status).toBe(426);
     await expect(mutationResponse.json()).resolves.toEqual({
@@ -572,6 +572,7 @@ describe("multiplayer room sidecar", () => {
         body: JSON.stringify({
           participantId: guestParticipantId,
           seatId: "left",
+          matchId: 1,
           type: "room.claimSeat",
         }),
         headers: ROOM_SERVICE_MUTATION_HEADERS,
@@ -610,6 +611,7 @@ describe("multiplayer room sidecar", () => {
         body: JSON.stringify({
           participantId: guestParticipantId,
           seatId: "left",
+          matchId: 1,
           type: "room.claimSeat",
         }),
         headers: ROOM_SERVICE_MUTATION_HEADERS,

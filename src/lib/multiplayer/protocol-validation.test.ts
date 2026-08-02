@@ -14,6 +14,7 @@ import type { PrivateRoom } from "./room";
 const ROOM = {
   code: "ROOM1",
   hostParticipantId: "host-1",
+  matchId: 1,
   participants: [
     {
       displayName: "Ada",
@@ -53,6 +54,7 @@ const ROOM = {
 
 const GAME_SNAPSHOT = {
   gameId: "pong",
+  matchId: 1,
   seq: 3,
   serverTimeMs: 1_000,
   snapshot: {
@@ -97,6 +99,7 @@ describe("multiplayer protocol validation", () => {
         event: {
           gameId: "pong",
           gameSeq: 4,
+          matchId: 1,
           payload: {
             state: "advanced",
           },
@@ -108,6 +111,7 @@ describe("multiplayer protocol validation", () => {
       },
       {
         gameSeq: 4,
+        matchId: 1,
         participantCapability: "guest-capability",
         participantId: "guest-1",
         requestId: "command-1",
@@ -140,6 +144,13 @@ describe("multiplayer protocol validation", () => {
         code: "protocol-version-mismatch",
         error: "Refresh the page.",
         requestId: "connection-4",
+        roomCode: "ROOM1",
+        type: "room.commandRejected",
+      },
+      {
+        code: "stale-match",
+        error: "Refresh the party.",
+        requestId: "connection-5",
         roomCode: "ROOM1",
         type: "room.commandRejected",
       },
@@ -178,6 +189,10 @@ describe("multiplayer protocol validation", () => {
     [
       "fractional acknowledgement sequence",
       { roomCode: "ROOM1", seq: 1.5, type: "room.commandAck" },
+    ],
+    [
+      "acknowledgement without a match id",
+      { roomCode: "ROOM1", seq: 2, type: "room.commandAck" },
     ],
     [
       "participant capability without a participant id",
@@ -238,6 +253,10 @@ describe("multiplayer protocol validation", () => {
     ["a non-object snapshot", null],
     ["a negative room sequence", { ...SNAPSHOT, seq: -1 }],
     [
+      "an invalid room match id",
+      { ...SNAPSHOT, room: { ...ROOM, matchId: 0 } },
+    ],
+    [
       "a malformed participant",
       {
         ...SNAPSHOT,
@@ -283,11 +302,22 @@ describe("multiplayer protocol validation", () => {
       },
     ],
     [
-      "a game envelope without state",
+      "a mismatched game match id",
       {
         ...SNAPSHOT,
         game: {
-          gameId: "pong",
+          ...SNAPSHOT.game,
+          matchId: 2,
+        },
+      },
+    ],
+    [
+      "a game envelope without state",
+      {
+        ...SNAPSHOT,
+      game: {
+        gameId: "pong",
+        matchId: 1,
           seq: 3,
           serverTimeMs: 1_000,
         },
@@ -323,6 +353,7 @@ describe("multiplayer protocol validation", () => {
       room: {
         ...ROOM,
         hostParticipantId: "missing-host",
+      matchId: 1,
       },
     },
     {
@@ -440,6 +471,7 @@ describe("multiplayer protocol validation", () => {
     const snapshot = {
       game: {
         gameId: "snake",
+        matchId: 1,
         seq: 1,
         serverTimeMs: 1_000,
         snapshot: {},

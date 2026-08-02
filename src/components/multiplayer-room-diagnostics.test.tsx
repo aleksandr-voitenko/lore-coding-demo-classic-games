@@ -16,6 +16,7 @@ import {
 const ROOM = {
   code: "ROOM1",
   hostParticipantId: "host-1",
+  matchId: 1,
   participants: [],
   seats: [],
   settings: {
@@ -83,6 +84,7 @@ describe("multiplayer room diagnostics", () => {
       {
         game: {
           gameId: "pong",
+          matchId: 1,
           seq: 1,
           serverTimeMs: 1_000,
           snapshot: {},
@@ -97,6 +99,7 @@ describe("multiplayer room diagnostics", () => {
       {
         game: {
           gameId: "pong",
+          matchId: 1,
           seq: 2,
           serverTimeMs: 2_000,
           snapshot: {},
@@ -111,6 +114,7 @@ describe("multiplayer room diagnostics", () => {
       {
         game: {
           gameId: "pong",
+          matchId: 1,
           seq: 5,
           serverTimeMs: 3_000,
           snapshot: {},
@@ -138,6 +142,7 @@ describe("multiplayer room diagnostics", () => {
       {
         game: {
           gameId: "pong",
+          matchId: 1,
           seq: 6,
           serverTimeMs: 4_000,
           snapshot: {},
@@ -190,12 +195,56 @@ describe("multiplayer room diagnostics", () => {
     });
   });
 
+  it("starts a fresh game-sequence baseline when the match changes", () => {
+    const first = recordMultiplayerRoomDiagnosticsSnapshot(
+      createInitialMultiplayerRoomDiagnosticsState("active"),
+      {
+        game: {
+          gameId: "pong",
+          matchId: 1,
+          seq: 20,
+          serverTimeMs: 1_000,
+          snapshot: {},
+        },
+        room: ROOM,
+        seq: 4,
+      },
+      1_000,
+    );
+    const nextMatch = recordMultiplayerRoomDiagnosticsSnapshot(
+      first,
+      {
+        game: {
+          gameId: "pong",
+          matchId: 2,
+          seq: 1,
+          serverTimeMs: 2_000,
+          snapshot: {},
+        },
+        room: {
+          ...ROOM,
+          matchId: 2,
+        },
+        seq: 5,
+      },
+      2_000,
+    );
+
+    expect(nextMatch.metrics).toMatchObject({
+      gameSeqGaps: 0,
+      gameSeqGapsInWindow: 0,
+      lastGameSeq: 1,
+      lastMatchId: 2,
+    });
+  });
+
   it("classifies diagnostics health bands for live room tuning", () => {
     const healthy = getMultiplayerRoomDiagnosticsHealth({
       gameSeqGaps: 10,
       gameSeqGapRatePerSecond: 2,
       gameSeqGapsInWindow: 10,
       lastGameSeq: 10,
+      lastMatchId: 1,
       lastPingMs: 42,
       lastRoomSeq: 20,
       pingSamples: 3,
@@ -213,6 +262,7 @@ describe("multiplayer room diagnostics", () => {
       gameSeqGapRatePerSecond: 2,
       gameSeqGapsInWindow: 10,
       lastGameSeq: 10,
+      lastMatchId: 1,
       lastPingMs: 83,
       lastRoomSeq: 20,
       pingSamples: 3,
@@ -230,6 +280,7 @@ describe("multiplayer room diagnostics", () => {
       gameSeqGapRatePerSecond: 2,
       gameSeqGapsInWindow: 10,
       lastGameSeq: 10,
+      lastMatchId: 1,
       lastPingMs: 170,
       lastRoomSeq: 20,
       pingSamples: 3,
@@ -271,6 +322,7 @@ describe("multiplayer room diagnostics", () => {
           gameSeqGapRatePerSecond: 0.2,
           gameSeqGapsInWindow: 1,
           lastGameSeq: 8,
+          lastMatchId: 1,
           lastPingMs: 37,
           lastRoomSeq: 12,
           pingSamples: 3,

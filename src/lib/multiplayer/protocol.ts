@@ -6,7 +6,7 @@ import type {
   PrivateRoomSettings,
 } from "./room";
 
-export const MULTIPLAYER_ROOM_PROTOCOL_VERSION = 2 as const;
+export const MULTIPLAYER_ROOM_PROTOCOL_VERSION = 3 as const;
 export const MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT =
   `v${MULTIPLAYER_ROOM_PROTOCOL_VERSION}`;
 export const MULTIPLAYER_ROOM_PROTOCOL_VERSION_HEADER =
@@ -33,6 +33,7 @@ export type MultiplayerRealtimeGameInputMessage<
 > = {
   gameId: Game;
   input: Input;
+  matchId: number;
   participantId: string;
   requestId?: string;
   roomCode: string;
@@ -50,6 +51,7 @@ export type MultiplayerRealtimeGameSnapshot<
   Extras extends object = object,
 > = {
   gameId: Game;
+  matchId: number;
   seq: number;
   serverTimeMs: number;
   snapshot: Snapshot;
@@ -103,12 +105,14 @@ export type PrivateRoomCommandMessage =
       type: "room.joinObserver";
     }
   | {
+      matchId: number;
       participantId: string;
       requestId?: string;
       seatId: string;
       type: "room.claimSeat";
     }
   | {
+      matchId: number;
       participantId: string;
       requestId?: string;
       seatId: string;
@@ -116,11 +120,13 @@ export type PrivateRoomCommandMessage =
     }
   | {
       command: PrivateRoomLifecycleCommand;
+      matchId: number;
       participantId: string;
       requestId?: string;
       type: "room.lifecycle";
     }
   | {
+      matchId: number;
       participantId: string;
       requestId?: string;
       settings: PrivateRoomSettings;
@@ -128,7 +134,10 @@ export type PrivateRoomCommandMessage =
     };
 
 export type MultiplayerRealtimeConnectionCursor = {
-  game?: number;
+  game?: {
+    matchId: number;
+    seq: number;
+  };
   room?: number;
 };
 
@@ -194,6 +203,7 @@ export type MultiplayerRealtimeRejectionCode =
   | "protocol-version-mismatch"
   | "room-expired"
   | "room-not-found"
+  | "stale-match"
   | "unsupported-game";
 
 export type MultiplayerRealtimeRoomEvent<
@@ -201,6 +211,7 @@ export type MultiplayerRealtimeRoomEvent<
   Payload = unknown,
 > = {
   gameId?: string;
+  matchId?: number;
   gameSeq?: number;
   payload: Payload;
   seq: number;
@@ -232,6 +243,7 @@ export type MultiplayerRealtimeServerMessage<
     }
   | {
       gameSeq?: number;
+      matchId: number;
       participantCapability?: string;
       participantId?: string;
       requestId?: string;

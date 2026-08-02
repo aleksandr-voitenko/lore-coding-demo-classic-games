@@ -39,8 +39,8 @@ This file covers Node-only server helpers and storage adapters under
   in-process store; setting `MULTIPLAYER_ROOM_SERVICE_URL` switches Next API
   routes to the HTTP room service client.
 - `multiplayer-room-service-client.ts` is the guarded Next-to-sidecar HTTP
-  adapter. It implements the room store contract over `POST <base>`,
-  `GET <base>/<code>`, and `POST <base>/<code>`, sends
+  adapter. It implements the room store contract over the advertised versioned
+  collection/room mutation paths plus `GET <base>/<code>`, sends
   `MULTIPLAYER_ROOM_SERVICE_CLIENT_BEARER_TOKEN` when configured, and maps
   sidecar or upstream failures back into store-style results for route handlers.
 - `multiplayer-room-runtime.ts` wraps the pure room model with process-local room
@@ -52,6 +52,14 @@ This file covers Node-only server helpers and storage adapters under
   is intentionally volatile: the in-process store or sidecar owns server
   authority while the room exists, and in-progress games may be abandoned if
   that process restarts.
+  Party identity and membership remain stable at `code`, `hostParticipantId`,
+  and `participants`; the flat `matchId`, `seats`, `settings`, and `status`
+  fields are the current-match projection. Match-scoped commands must carry the
+  expected positive match id, which the store checks before runtime advancement
+  or mutation. Restart increments the generation and creates a new adapter
+  runtime with its game sequence reset; pause, resume, and finish preserve the
+  generation. Cross-game settings changes are rejected until the explicit
+  atomic match-replacement operation supplies new adapter-owned seats.
   The store bounds that volatile authority to 256 rooms by default. Successful
   room/game commands refresh meaningful activity; passive reads, snapshot
   advancement, handshakes, and diagnostics do not. Unconnected lobbies expire
@@ -84,7 +92,11 @@ This file covers Node-only server helpers and storage adapters under
   cannot assert an account user id, and anonymous invite viewers remain
   read-only and do not protect retention. Its public
   factory defaults inbound client messages to 64 KiB through `ws` `maxPayload`
-  while preserving explicit caller overrides.
+  while preserving explicit caller overrides. Protocol v3 carries match ids in
+  game snapshots, reconnect cursors, command acknowledgements, and every
+  match-scoped command. The gateway includes the generation in broadcast
+  deduplication and relays stale-match failures without acknowledging or
+  broadcasting the rejected command.
 - `multiplayer-room-sidecar.ts` owns the standalone Node HTTP/WebSocket process
   wrapper around the gateway. It parses `MULTIPLAYER_SIDECAR_HOST`,
   `MULTIPLAYER_SIDECAR_PORT`, `MULTIPLAYER_SIDECAR_WEBSOCKET_PATH`,

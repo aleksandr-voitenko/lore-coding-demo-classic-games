@@ -242,6 +242,10 @@ export function selectFreshMultiplayerRoomSnapshot<
     return current;
   }
 
+  if (next.room.matchId !== current.room.matchId) {
+    return current;
+  }
+
   const currentGameSeq = current.game?.seq ?? -1;
   const nextGameSeq = next.game?.seq ?? -1;
 
@@ -382,7 +386,12 @@ export function MultiplayerRoomLobby({
     () => ({
       ...(roomSnapshot?.game?.seq === undefined
         ? {}
-        : { game: roomSnapshot.game.seq }),
+        : {
+            game: {
+              matchId: roomSnapshot.game.matchId,
+              seq: roomSnapshot.game.seq,
+            },
+          }),
       ...(roomSnapshot?.seq === undefined ? {} : { room: roomSnapshot.seq }),
     }),
     [roomSnapshot],
@@ -495,7 +504,11 @@ export function MultiplayerRoomLobby({
     type: "room.claimSeat" | "room.releaseSeat",
     seatId: string,
   ) {
-    if (normalizedRoomCode === null || activeParticipantId === null) {
+    if (
+      normalizedRoomCode === null ||
+      activeParticipantId === null ||
+      room === null
+    ) {
       setFormError("Join room first.");
       return;
     }
@@ -507,6 +520,7 @@ export function MultiplayerRoomLobby({
 
     try {
       await sendRoomClientMessage({
+        matchId: room.matchId,
         participantId: activeParticipantId,
         seatId,
         type,
@@ -527,7 +541,12 @@ export function MultiplayerRoomLobby({
   }
 
   async function handleLifecycleCommand(command: PrivateRoomLifecycleCommand) {
-    if (normalizedRoomCode === null || activeParticipantId === null || !isHost) {
+    if (
+      normalizedRoomCode === null ||
+      activeParticipantId === null ||
+      !isHost ||
+      room === null
+    ) {
       return;
     }
 
@@ -539,6 +558,7 @@ export function MultiplayerRoomLobby({
     try {
       await sendRoomClientMessage({
         command,
+        matchId: room.matchId,
         participantId: activeParticipantId,
         type: "room.lifecycle",
       });
@@ -553,7 +573,11 @@ export function MultiplayerRoomLobby({
     Game extends GameId = GameId,
     Input = MultiplayerGameInputPayload<Game>,
   >(gameId: Game, input: Input) {
-    if (normalizedRoomCode === null || activeParticipantId === null) {
+    if (
+      normalizedRoomCode === null ||
+      activeParticipantId === null ||
+      room === null
+    ) {
       return;
     }
 
@@ -561,10 +585,18 @@ export function MultiplayerRoomLobby({
       await sendRoomClientMessage({
         gameId,
         input,
+        matchId: room.matchId,
         participantId: activeParticipantId,
         type: "game.input",
       });
     } catch (error) {
+      if (
+        error instanceof MultiplayerRoomTransportError &&
+        error.code === "stale-match"
+      ) {
+        return;
+      }
+
       setFormError(getMultiplayerRoomRequestErrorMessage(error));
     }
   }
@@ -578,6 +610,7 @@ export function MultiplayerRoomLobby({
     game !== undefined &&
     activeRoomGameRenderer !== null ? (
       <MultiplayerRoomGameRendererView
+        key={`${game.gameId}:${game.matchId}`}
         activeParticipant={activeParticipant}
         game={game}
         lifecycleControls={

@@ -35,6 +35,7 @@ import {
 const ACTIVE_ASTEROIDS_ROOM: PrivateRoom = {
   code: "AST-1",
   hostParticipantId: "host-participant",
+  matchId: 1,
   participants: [
     {
       displayName: "Ada",
@@ -81,6 +82,7 @@ const ACTIVE_ASTEROIDS_ROOM: PrivateRoom = {
 const RUNNING_ASTEROIDS_GAME = {
   gameId: "asteroids",
   heldInputs: {},
+  matchId: 1,
   seq: 1,
   serverTimeMs: 1_000,
   snapshot: {

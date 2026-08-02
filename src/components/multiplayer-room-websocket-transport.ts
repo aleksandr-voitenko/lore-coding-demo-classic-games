@@ -46,6 +46,7 @@ export type MultiplayerRoomTransportSnapshot = {
 
 export type MultiplayerRoomTransportAck = {
   gameSeq?: number;
+  matchId: number;
   participantCapability?: string;
   participantId?: string;
   seq: number;
@@ -241,12 +242,14 @@ export function createMultiplayerRoomGameInputMessage<
 >({
   gameId,
   input,
+  matchId,
   participantId,
   requestId,
   roomCode,
 }: {
   gameId: Game;
   input: Input;
+  matchId: number;
   participantId: string;
   requestId?: string;
   roomCode: string;
@@ -254,6 +257,7 @@ export function createMultiplayerRoomGameInputMessage<
   return {
     gameId,
     input,
+    matchId,
     participantId,
     ...(requestId === undefined ? {} : { requestId }),
     roomCode,
@@ -486,6 +490,7 @@ export function createMultiplayerRoomWebSocketTransport({
       notifyParticipantId(message.participantId);
       resolvePendingRequest(message.requestId, {
         ...(message.gameSeq === undefined ? {} : { gameSeq: message.gameSeq }),
+        matchId: message.matchId,
         ...(message.participantCapability === undefined
           ? {}
           : { participantCapability: message.participantCapability }),
@@ -630,7 +635,7 @@ export function createMultiplayerRoomWebSocketTransport({
   function sendGameInput<
     Game extends GameId,
     Input = MultiplayerGameInputPayload<Game>,
-  >(gameId: Game, input: Input, nextParticipantId: string) {
+  >(gameId: Game, input: Input, matchId: number, nextParticipantId: string) {
     const requestId = createMultiplayerRoomRequestId("game");
 
     return sendPendingRequest(requestId, () => {
@@ -638,6 +643,7 @@ export function createMultiplayerRoomWebSocketTransport({
         createMultiplayerRoomGameInputMessage({
           gameId,
           input,
+          matchId,
           participantId: nextParticipantId,
           requestId,
           roomCode,
@@ -767,7 +773,15 @@ function normalizeConnectionCursor(
   }
 
   const room = typeof cursor.room === "number" ? cursor.room : undefined;
-  const game = typeof cursor.game === "number" ? cursor.game : undefined;
+  const game =
+    typeof cursor.game === "object" &&
+    cursor.game !== null &&
+    Number.isSafeInteger(cursor.game.matchId) &&
+    cursor.game.matchId > 0 &&
+    Number.isSafeInteger(cursor.game.seq) &&
+    cursor.game.seq >= 0
+      ? cursor.game
+      : undefined;
 
   if (room === undefined && game === undefined) {
     return undefined;

@@ -22,6 +22,7 @@ import {
 const ROOM: PrivateRoom = {
   code: "ROOM1",
   hostParticipantId: "host-1",
+  matchId: 1,
   participants: [
     {
       displayName: "Ada",
@@ -187,7 +188,7 @@ describe("multiplayer room WebSocket message shapes", () => {
     expect(
       createMultiplayerRoomConnectionMessage({
         lastSeq: {
-          game: 4,
+          game: { matchId: 1, seq: 4 },
           room: 3,
         },
         participantCapability: "guest-capability",
@@ -197,7 +198,7 @@ describe("multiplayer room WebSocket message shapes", () => {
       }),
     ).toEqual({
       lastSeq: {
-        game: 4,
+        game: { matchId: 1, seq: 4 },
         room: 3,
       },
       participantCapability: "guest-capability",
@@ -232,6 +233,7 @@ describe("multiplayer room WebSocket message shapes", () => {
           direction: "up",
           type: "pong.setPaddleDirection",
         },
+        matchId: 1,
         participantId: "host-1",
         requestId: "input-1",
         roomCode: "ROOM1",
@@ -245,6 +247,7 @@ describe("multiplayer room WebSocket message shapes", () => {
       participantId: "host-1",
       requestId: "input-1",
       roomCode: "ROOM1",
+      matchId: 1,
       type: "game.input",
     });
     expect(
@@ -320,10 +323,12 @@ describe("multiplayer room WebSocket message shapes", () => {
       requestId: joinMessage.requestId,
       roomCode: "ROOM1",
       seq: 2,
+      matchId: 1,
       type: "room.commandAck",
     });
 
     await expect(joinAck).resolves.toEqual({
+      matchId: 1,
       participantCapability: "guest-capability",
       participantId: "guest-1",
       seq: 2,
@@ -332,6 +337,7 @@ describe("multiplayer room WebSocket message shapes", () => {
     const claimAck = transport.sendRoomCommand({
       participantId: "guest-1",
       seatId: "right",
+      matchId: 1,
       type: "room.claimSeat",
     });
     const claimMessage = JSON.parse(socket.sentMessages[2]!);
@@ -340,6 +346,7 @@ describe("multiplayer room WebSocket message shapes", () => {
       command: {
         participantId: "guest-1",
         seatId: "right",
+        matchId: 1,
         type: "room.claimSeat",
       },
       roomCode: "ROOM1",
@@ -350,16 +357,19 @@ describe("multiplayer room WebSocket message shapes", () => {
       requestId: claimMessage.requestId,
       roomCode: "ROOM1",
       seq: 3,
+      matchId: 1,
       type: "room.commandAck",
     });
 
     await expect(claimAck).resolves.toEqual({
+      matchId: 1,
       seq: 3,
     });
 
     const releaseAck = transport.sendRoomCommand({
       participantId: "guest-1",
       seatId: "right",
+      matchId: 1,
       type: "room.releaseSeat",
     });
     const releaseMessage = JSON.parse(socket.sentMessages[3]!);
@@ -368,6 +378,7 @@ describe("multiplayer room WebSocket message shapes", () => {
       command: {
         participantId: "guest-1",
         seatId: "right",
+        matchId: 1,
         type: "room.releaseSeat",
       },
       roomCode: "ROOM1",
@@ -378,10 +389,12 @@ describe("multiplayer room WebSocket message shapes", () => {
       requestId: releaseMessage.requestId,
       roomCode: "ROOM1",
       seq: 4,
+      matchId: 1,
       type: "room.commandAck",
     });
 
     await expect(releaseAck).resolves.toEqual({
+      matchId: 1,
       seq: 4,
     });
 
@@ -391,6 +404,7 @@ describe("multiplayer room WebSocket message shapes", () => {
         direction: "up",
         type: "pong.setPaddleDirection",
       },
+      1,
       "guest-1",
     );
     const inputMessage = JSON.parse(socket.sentMessages[4]!);
@@ -403,6 +417,7 @@ describe("multiplayer room WebSocket message shapes", () => {
       },
       participantId: "guest-1",
       roomCode: "ROOM1",
+      matchId: 1,
       type: "game.input",
     });
 
@@ -412,11 +427,13 @@ describe("multiplayer room WebSocket message shapes", () => {
       requestId: inputMessage.requestId,
       roomCode: "ROOM1",
       seq: 4,
+      matchId: 1,
       type: "room.commandAck",
     });
 
     await expect(inputAck).resolves.toEqual({
       gameSeq: 7,
+      matchId: 1,
       participantId: "guest-1",
       seq: 4,
     });
@@ -436,7 +453,7 @@ describe("multiplayer room WebSocket message shapes", () => {
     const bootstrapErrors: MultiplayerRoomTransportError[] = [];
     const transport = createMultiplayerRoomWebSocketTransport({
       lastSeq: {
-        game: 4,
+        game: { matchId: 1, seq: 4 },
         room: 3,
       },
       onBootstrap: () => {
@@ -459,7 +476,7 @@ describe("multiplayer room WebSocket message shapes", () => {
 
     expect(resumeMessage).toMatchObject({
       lastSeq: {
-        game: 4,
+        game: { matchId: 1, seq: 4 },
         room: 3,
       },
       participantId: "guest-1",
@@ -643,6 +660,7 @@ describe("multiplayer room WebSocket message shapes", () => {
       message: {
         roomCode: "ROOM1",
         seq: -1,
+        matchId: 1,
         type: "room.commandAck",
       },
       name: "acknowledgement with an invalid sequence",
@@ -795,6 +813,7 @@ describe("multiplayer room WebSocket message shapes", () => {
       const commandAck = transport.sendRoomCommand({
         participantId: "guest-1",
         seatId: "right",
+        matchId: 1,
         type: "room.claimSeat",
       });
 
@@ -812,6 +831,7 @@ describe("multiplayer room WebSocket message shapes", () => {
       const nextCommandAck = transport.sendRoomCommand({
         participantId: "guest-1",
         seatId: "right",
+        matchId: 1,
         type: "room.releaseSeat",
       });
       const nextCommandMessage = JSON.parse(socket.sentMessages[2]!);
@@ -820,10 +840,11 @@ describe("multiplayer room WebSocket message shapes", () => {
         requestId: nextCommandMessage.requestId,
         roomCode: "ROOM1",
         seq: 2,
+        matchId: 1,
         type: "room.commandAck",
       });
 
-      await expect(nextCommandAck).resolves.toEqual({ seq: 2 });
+      await expect(nextCommandAck).resolves.toEqual({ matchId: 1, seq: 2 });
       expect(vi.getTimerCount()).toBe(0);
 
       transport.close();
@@ -855,6 +876,7 @@ describe("multiplayer room WebSocket message shapes", () => {
       const rejectedCommand = transport.sendRoomCommand({
         participantId: "guest-1",
         seatId: "left",
+        matchId: 1,
         type: "room.claimSeat",
       });
       const rejectedCommandMessage = JSON.parse(socket.sentMessages[1]!);
@@ -878,6 +900,7 @@ describe("multiplayer room WebSocket message shapes", () => {
       const interruptedCommand = transport.sendRoomCommand({
         participantId: "guest-1",
         seatId: "right",
+        matchId: 1,
         type: "room.claimSeat",
       });
 

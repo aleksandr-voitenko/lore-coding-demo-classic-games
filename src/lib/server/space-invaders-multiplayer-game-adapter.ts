@@ -550,7 +550,7 @@ function createSpaceInvadersRuntimeSnapshot(
   runtime: StoredSpaceInvadersMultiplayerRuntime,
   room: PrivateRoom,
   serverTimeMs: number,
-): SpaceInvadersMultiplayerServerGameSnapshot {
+): Omit<SpaceInvadersMultiplayerServerGameSnapshot, "matchId"> {
   const summary = createSpaceInvadersTerminalSummary(room, runtime.game);
 
   return {

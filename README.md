@@ -256,18 +256,23 @@ room creation and host authorization should still flow through the Next API
 routes. If the internal hop needs a bearer token, set the same secret in
 `MULTIPLAYER_ROOM_SERVICE_CLIENT_BEARER_TOKEN` for the Next process and
 `MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN` for the sidecar process.
-Capability-aware room mutations require protocol version 2. The Next process
+Generation-scoped room mutations require protocol version 3. The Next process
 preflights the authenticated internal collection endpoint, then sends create and
-command POSTs through its advertised `/v2` mutation path with
-`x-multiplayer-room-protocol-version: 2`; the sidecar rejects legacy paths or a
+command POSTs through its advertised `/v3` mutation path with
+`x-multiplayer-room-protocol-version: 3`; the sidecar rejects legacy paths or a
 missing/mismatched header before reading a mutation body. Browser create and
-host-command POSTs likewise use `/api/multiplayer/rooms/v2` and
-`/api/multiplayer/rooms/<code>/v2`; the legacy POST routes return 426. Browser
+host-command POSTs likewise use `/api/multiplayer/rooms/v3` and
+`/api/multiplayer/rooms/<code>/v3`; the v2 and unversioned POST routes return
+426. Browser
 `connection.hello` and `connection.resume` messages and the corresponding
 bootstrap carry the same version, and a mismatched bootstrap closes without
 reconnecting. During a rolling mixed-version deployment, room mutations and
 stream activation therefore fail closed until the selected processes and the
-browser bundle are compatible.
+browser bundle are compatible. Room snapshots expose a positive `matchId`;
+game snapshots, reconnect cursors, acknowledgements, input, seat, settings, and
+lifecycle commands carry the same generation. Restart creates a fresh runtime
+and advances the match id, while stale-generation commands are rejected before
+the current runtime advances.
 
 ## Stack
 

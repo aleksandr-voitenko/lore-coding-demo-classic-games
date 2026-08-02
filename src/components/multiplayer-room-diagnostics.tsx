@@ -39,6 +39,7 @@ export type MultiplayerRoomDiagnosticsMetrics = {
   gameSeqGapRatePerSecond: number;
   gameSeqGapsInWindow: number;
   lastGameSeq: number | null;
+  lastMatchId: number | null;
   lastPingMs: number | null;
   lastRoomSeq: number | null;
   pingSamples: number;
@@ -167,6 +168,7 @@ export function createInitialMultiplayerRoomDiagnosticsState(
       gameSeqGapRatePerSecond: 0,
       gameSeqGapsInWindow: 0,
       lastGameSeq: null,
+      lastMatchId: null,
       lastPingMs: null,
       lastRoomSeq: null,
       pingSamples: 0,
@@ -200,8 +202,13 @@ export function recordMultiplayerRoomDiagnosticsSnapshot(
     receivedAtMs,
   );
   const lastRoomSeq = snapshot.seq;
+  const nextMatchId = snapshot.room.matchId;
   const nextGameSeq = snapshot.game?.seq ?? null;
+  const isNewMatch =
+    state.metrics.lastMatchId !== null &&
+    state.metrics.lastMatchId !== nextMatchId;
   const gameSeqGapCount =
+    isNewMatch ||
     state.metrics.lastGameSeq === null ||
     nextGameSeq === null ||
     nextGameSeq <= state.metrics.lastGameSeq + 1
@@ -209,7 +216,9 @@ export function recordMultiplayerRoomDiagnosticsSnapshot(
       : nextGameSeq - state.metrics.lastGameSeq - 1;
   const gameSeqGapEvents = getDiagnosticsWindowTimedValues(
     gameSeqGapCount === 0
-      ? state.gameSeqGapEvents
+      ? isNewMatch
+        ? []
+        : state.gameSeqGapEvents
       : [
           ...state.gameSeqGapEvents,
           {
@@ -235,7 +244,9 @@ export function recordMultiplayerRoomDiagnosticsSnapshot(
       gameSeqGapRatePerSecond:
         getDiagnosticsWindowRatePerSecond(gameSeqGapsInWindow),
       gameSeqGapsInWindow,
-      lastGameSeq: nextGameSeq ?? state.metrics.lastGameSeq,
+      lastGameSeq:
+        nextGameSeq ?? (isNewMatch ? null : state.metrics.lastGameSeq),
+      lastMatchId: nextMatchId,
       lastRoomSeq,
       projectedReconciliationRatePerSecond:
         getDiagnosticsWindowRatePerSecond(

@@ -514,7 +514,7 @@ function createPongRuntimeSnapshot(
   runtime: StoredPongMultiplayerRuntime,
   room: PrivateRoom,
   serverTimeMs: number,
-): PongMultiplayerGameSnapshot {
+): Omit<PongMultiplayerGameSnapshot, "matchId"> {
   const summary = createPongTerminalSummary(room, runtime.game);
 
   return {

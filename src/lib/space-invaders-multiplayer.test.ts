@@ -2732,6 +2732,7 @@ describe("space invaders multiplayer state model", () => {
     const game = createInitialSpaceInvadersMultiplayerGame();
     const gameSnapshot: SpaceInvadersMultiplayerGameSnapshot = {
       gameId: "space-invaders",
+      matchId: 1,
       seq: 12,
       serverTimeMs: 1_000,
       snapshot: game,
@@ -2741,6 +2742,7 @@ describe("space invaders multiplayer state model", () => {
       room: {
         code: "SPACE-ROOM",
         hostParticipantId: "host",
+        matchId: 1,
         participants: [],
         seats: [],
         settings: {

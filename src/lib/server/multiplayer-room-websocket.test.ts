@@ -154,6 +154,7 @@ function createStartedPongRoom(store: InProcessMultiplayerRoomStore) {
     store.applyCommand("ROOM1", {
       participantId: "host-1",
       seatId: "left",
+      matchId: 1,
       type: "room.claimSeat",
     }),
   );
@@ -161,6 +162,7 @@ function createStartedPongRoom(store: InProcessMultiplayerRoomStore) {
     store.applyCommand("ROOM1", {
       participantId: "guest-1",
       seatId: "right",
+      matchId: 1,
       type: "room.claimSeat",
     }),
   );
@@ -169,6 +171,7 @@ function createStartedPongRoom(store: InProcessMultiplayerRoomStore) {
     store.applyCommand("ROOM1", {
       command: "start",
       participantId: "host-1",
+      matchId: 1,
       type: "room.lifecycle",
     }),
   );
@@ -191,6 +194,7 @@ function createStartedSpaceInvadersRoom(store: InProcessMultiplayerRoomStore) {
     store.applyCommand("ROOM1", {
       participantId: "host-1",
       seatId: "ship-a",
+      matchId: 1,
       type: "room.claimSeat",
     }),
   );
@@ -198,6 +202,7 @@ function createStartedSpaceInvadersRoom(store: InProcessMultiplayerRoomStore) {
     store.applyCommand("ROOM1", {
       participantId: "guest-1",
       seatId: "ship-b",
+      matchId: 1,
       type: "room.claimSeat",
     }),
   );
@@ -206,6 +211,7 @@ function createStartedSpaceInvadersRoom(store: InProcessMultiplayerRoomStore) {
     store.applyCommand("ROOM1", {
       command: "start",
       participantId: "host-1",
+      matchId: 1,
       type: "room.lifecycle",
     }),
   );
@@ -228,6 +234,7 @@ function createStartedAsteroidsRoom(store: InProcessMultiplayerRoomStore) {
     store.applyCommand("ROOM1", {
       participantId: "host-1",
       seatId: "ship-a",
+      matchId: 1,
       type: "room.claimSeat",
     }),
   );
@@ -235,6 +242,7 @@ function createStartedAsteroidsRoom(store: InProcessMultiplayerRoomStore) {
     store.applyCommand("ROOM1", {
       participantId: "guest-1",
       seatId: "ship-b",
+      matchId: 1,
       type: "room.claimSeat",
     }),
   );
@@ -243,6 +251,7 @@ function createStartedAsteroidsRoom(store: InProcessMultiplayerRoomStore) {
     store.applyCommand("ROOM1", {
       command: "start",
       participantId: "host-1",
+      matchId: 1,
       type: "room.lifecycle",
     }),
   );
@@ -258,6 +267,7 @@ function serveStartedPongRoom(store: InProcessMultiplayerRoomStore) {
         type: "pong.serve",
       },
       participantId: serveSide === "left" ? "host-1" : "guest-1",
+      matchId: 1,
       type: "game.input",
     }),
   );
@@ -1073,6 +1083,7 @@ describe("multiplayer room WebSocket gateway", () => {
       command: {
         participantId: "host-1",
         seatId: "left",
+        matchId: 1,
         type: "room.claimSeat",
       },
       requestId: "spoof-host-seat",
@@ -1114,6 +1125,7 @@ describe("multiplayer room WebSocket gateway", () => {
       participantId: "host-1",
       requestId: "spoof-host-input",
       roomCode: "ROOM1",
+      matchId: 1,
       type: "game.input",
     });
 
@@ -1162,6 +1174,7 @@ describe("multiplayer room WebSocket gateway", () => {
       participantId: "guest-1",
       requestId: "spoof-guest-input",
       roomCode: "ROOM1",
+      matchId: 1,
       type: "game.input",
     });
 
@@ -1310,6 +1323,7 @@ describe("multiplayer room WebSocket gateway", () => {
       command: {
         command: "start",
         participantId: "guest-1",
+        matchId: 1,
         type: "room.lifecycle",
       },
       requestId: "guest-start",
@@ -1420,6 +1434,7 @@ describe("multiplayer room WebSocket gateway", () => {
       command: {
         command: "pause",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       },
       requestId: "host-pause",
@@ -1461,6 +1476,7 @@ describe("multiplayer room WebSocket gateway", () => {
             targetScore: 7,
           },
         },
+        matchId: 1,
         type: "room.updateSettings",
       },
       requestId: "host-settings",
@@ -1516,6 +1532,7 @@ describe("multiplayer room WebSocket gateway", () => {
       participantId: "host-1",
       requestId: "input-1",
       roomCode: "ROOM1",
+      matchId: 1,
       type: "game.input",
     });
 
@@ -1563,6 +1580,82 @@ describe("multiplayer room WebSocket gateway", () => {
     }
   });
 
+  it("rejects stale Pong input without acknowledging or broadcasting it", async () => {
+    const store = createTestRoomStore();
+
+    createStartedPongRoom(store);
+    const restarted = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        command: "restart",
+        matchId: 1,
+        participantId: "host-1",
+        type: "room.lifecycle",
+      }),
+    );
+    const { url } = await createGatewayFixture(store, {
+      snapshotIntervalMs: 0,
+    });
+    const sender = await connectClient(url);
+
+    await bootstrapClient(sender, "ROOM1", "host-1");
+
+    const receivedMessages: MultiplayerRealtimeServerMessage[] = [];
+    const recordMessage = (data: RawData) => {
+      const message = JSON.parse(rawDataToText(data)) as unknown;
+
+      if (isServerMessage(message)) {
+        receivedMessages.push(message);
+      }
+    };
+    const rejectionPromise = waitForServerMessage(
+      sender,
+      (message) =>
+        message.type === "room.commandRejected" &&
+        message.requestId === "stale-input",
+    );
+
+    sender.on("message", recordMessage);
+    sendClientMessage(sender, {
+      gameId: "pong",
+      input: {
+        direction: "up",
+        type: "pong.setPaddleDirection",
+      },
+      matchId: 1,
+      participantId: "host-1",
+      requestId: "stale-input",
+      roomCode: "ROOM1",
+      type: "game.input",
+    });
+
+    await expect(rejectionPromise).resolves.toMatchObject({
+      code: "stale-match",
+      requestId: "stale-input",
+      roomCode: "ROOM1",
+      type: "room.commandRejected",
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    sender.off("message", recordMessage);
+
+    expect(receivedMessages).toEqual([
+      expect.objectContaining({
+        code: "stale-match",
+        requestId: "stale-input",
+        type: "room.commandRejected",
+      }),
+    ]);
+
+    const unchanged = expectStoreSuccess(store.getRoom("ROOM1"));
+
+    expect(unchanged.seq).toBe(restarted.seq);
+    expect(unchanged.room.matchId).toBe(2);
+    expect(expectPongGame(unchanged)).toMatchObject({
+      heldInputs: {},
+      matchId: 2,
+      seq: 1,
+    });
+  });
+
   it("acks game input and broadcasts updated Space Invaders snapshots", async () => {
     const store = createTestRoomStore();
     const started = createStartedSpaceInvadersRoom(store);
@@ -1604,6 +1697,7 @@ describe("multiplayer room WebSocket gateway", () => {
       participantId: "guest-1",
       requestId: "space-input-1",
       roomCode: "ROOM1",
+      matchId: 1,
       type: "game.input",
     });
 
@@ -1699,6 +1793,7 @@ describe("multiplayer room WebSocket gateway", () => {
       participantId: "guest-1",
       requestId: "asteroids-input-1",
       roomCode: "ROOM1",
+      matchId: 1,
       type: "game.input",
     });
 
@@ -1985,6 +2080,7 @@ describe("multiplayer room WebSocket gateway", () => {
       participantId: "host-1",
       requestId: "hold-left-up",
       roomCode: "ROOM1",
+      matchId: 1,
       type: "game.input",
     });
 
@@ -2110,6 +2206,7 @@ describe("multiplayer room WebSocket gateway", () => {
       participantId: "host-1",
       requestId: "snake-1",
       roomCode: "ROOM1",
+      matchId: 1,
       type: "game.input",
     });
 

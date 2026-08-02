@@ -19,6 +19,7 @@ type RoomFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Respo
 const ROOM: PrivateRoom = {
   code: "ROOM1",
   hostParticipantId: "host-1",
+  matchId: 1,
   participants: [
     {
       displayName: "Ada",
@@ -57,8 +58,12 @@ function createTransport(
   status: MultiplayerRoomClientCommandTransport["status"] = "active",
 ): MultiplayerRoomClientCommandTransport {
   return {
-    sendGameInput: vi.fn(async () => ({ gameSeq: 4, seq: 3 })),
-    sendRoomCommand: vi.fn(async () => ({ participantId: "guest-1", seq: 3 })),
+    sendGameInput: vi.fn(async () => ({ gameSeq: 4, matchId: 1, seq: 3 })),
+    sendRoomCommand: vi.fn(async () => ({
+      matchId: 1,
+      participantId: "guest-1",
+      seq: 3,
+    })),
     status,
   };
 }
@@ -69,6 +74,7 @@ describe("multiplayer room client command dispatch", () => {
       shouldPostMultiplayerRoomCommandOverHttp({
         command: "start",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     ).toBe(true);
@@ -76,6 +82,7 @@ describe("multiplayer room client command dispatch", () => {
       shouldPostMultiplayerRoomCommandOverHttp({
         participantId: "host-1",
         settings: ROOM.settings,
+        matchId: 1,
         type: "room.updateSettings",
       }),
     ).toBe(true);
@@ -89,6 +96,7 @@ describe("multiplayer room client command dispatch", () => {
       shouldPostMultiplayerRoomCommandOverHttp({
         participantId: "guest-1",
         seatId: "left",
+        matchId: 1,
         type: "room.claimSeat",
       }),
     ).toBe(false);
@@ -96,6 +104,7 @@ describe("multiplayer room client command dispatch", () => {
       shouldPostMultiplayerRoomCommandOverHttp({
         participantId: "guest-1",
         seatId: "left",
+        matchId: 1,
         type: "room.releaseSeat",
       }),
     ).toBe(false);
@@ -107,6 +116,7 @@ describe("multiplayer room client command dispatch", () => {
           type: "pong.setPaddleDirection",
         },
         participantId: "guest-1",
+        matchId: 1,
         type: "game.input",
       }),
     ).toBe(false);
@@ -135,6 +145,7 @@ describe("multiplayer room client command dispatch", () => {
       const message = {
         command: "start",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       } as const;
 
@@ -167,6 +178,7 @@ describe("multiplayer room client command dispatch", () => {
       message: {
         participantId: "guest-1",
         seatId: "left",
+        matchId: 1,
         type: "room.claimSeat",
       },
     },
@@ -175,6 +187,7 @@ describe("multiplayer room client command dispatch", () => {
       message: {
         participantId: "guest-1",
         seatId: "left",
+        matchId: 1,
         type: "room.releaseSeat",
       },
     },
@@ -189,7 +202,7 @@ describe("multiplayer room client command dispatch", () => {
         roomCode: "ROOM1",
         transport,
       }),
-    ).resolves.toEqual({ participantId: "guest-1", seq: 3 });
+    ).resolves.toEqual({ matchId: 1, participantId: "guest-1", seq: 3 });
 
     expect(transport.sendRoomCommand).toHaveBeenCalledWith(message);
     expect(transport.sendGameInput).not.toHaveBeenCalled();
@@ -206,6 +219,7 @@ describe("multiplayer room client command dispatch", () => {
         type: "pong.setPaddleDirection",
       },
       participantId: "guest-1",
+      matchId: 1,
       type: "game.input",
     } as const;
 
@@ -216,11 +230,12 @@ describe("multiplayer room client command dispatch", () => {
         roomCode: "ROOM1",
         transport,
       }),
-    ).resolves.toEqual({ gameSeq: 4, seq: 3 });
+    ).resolves.toEqual({ gameSeq: 4, matchId: 1, seq: 3 });
 
     expect(transport.sendGameInput).toHaveBeenCalledWith(
       "pong",
       gameInput.input,
+      1,
       "guest-1",
     );
     expect(transport.sendRoomCommand).not.toHaveBeenCalled();
@@ -242,6 +257,7 @@ describe("multiplayer room client command dispatch", () => {
           message: {
             participantId: "guest-1",
             seatId: "left",
+            matchId: 1,
             type: "room.claimSeat",
           },
           roomCode: "ROOM1",
@@ -262,6 +278,7 @@ describe("multiplayer room client command dispatch", () => {
         message: {
           participantId: "guest-1",
           seatId: "left",
+          matchId: 1,
           type: "room.claimSeat",
         },
         roomCode: "bad room",
@@ -300,7 +317,7 @@ describe("multiplayer room HTTP client", () => {
     });
 
     expect(fetcher).toHaveBeenCalledWith(
-      `${MULTIPLAYER_ROOMS_API_PATH}/v2`,
+      `${MULTIPLAYER_ROOMS_API_PATH}/v3`,
       expect.objectContaining({ method: "POST" }),
     );
     expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({
@@ -358,6 +375,7 @@ describe("multiplayer room HTTP client", () => {
       {
         command: "start",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       },
       fetcher,
@@ -367,6 +385,7 @@ describe("multiplayer room HTTP client", () => {
       {
         participantId: "host-1",
         settings: ROOM.settings,
+        matchId: 1,
         type: "room.updateSettings",
       },
       fetcher,
@@ -375,17 +394,19 @@ describe("multiplayer room HTTP client", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(fetcher).toHaveBeenNthCalledWith(
       1,
-      `${MULTIPLAYER_ROOMS_API_PATH}/ROOM1/v2`,
+      `${MULTIPLAYER_ROOMS_API_PATH}/ROOM1/v3`,
       expect.objectContaining({ method: "POST" }),
     );
     expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({
       command: "start",
       participantId: "host-1",
+      matchId: 1,
       type: "room.lifecycle",
     });
     expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body))).toEqual({
       participantId: "host-1",
       settings: ROOM.settings,
+      matchId: 1,
       type: "room.updateSettings",
     });
   });
@@ -401,6 +422,7 @@ describe("multiplayer room HTTP client", () => {
         {
           command: "start",
           participantId: "host-1",
+          matchId: 1,
           type: "room.lifecycle",
         },
         fetcher,

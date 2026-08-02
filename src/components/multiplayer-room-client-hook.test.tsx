@@ -23,6 +23,7 @@ type RoomClientResult = ReturnType<typeof useMultiplayerRoomClient>;
 const ROOM: PrivateRoom = {
   code: "ROOM1",
   hostParticipantId: "host-1",
+  matchId: 1,
   participants: [
     {
       displayName: "Ada",
@@ -59,10 +60,11 @@ const SNAPSHOT = {
 
 function createRoomTransport() {
   return {
-    sendGameInput: vi.fn(async () => ({ gameSeq: 4, seq: 3 })),
+    sendGameInput: vi.fn(async () => ({ gameSeq: 4, matchId: 1, seq: 3 })),
     sendRoomCommand: vi.fn(async () => ({
       participantCapability: "guest-capability",
       participantId: "guest-1",
+      matchId: 1,
       seq: 3,
     })),
     status: "active" as const,
@@ -76,7 +78,7 @@ function createRoomClientOptions(
     diagnosticsEnabled: true,
     displayName: "Grace",
     enabled: true,
-    lastSeq: { game: 4, room: 3 },
+    lastSeq: { game: { matchId: 1, seq: 4 }, room: 3 },
     onConnectionError: vi.fn(),
     onDiagnosticsPingSample: vi.fn(),
     onParticipantCapability: vi.fn(),
@@ -163,6 +165,7 @@ describe("useMultiplayerRoomClient", () => {
     await client.sendMessage({
       command: "start",
       participantId: "host-1",
+      matchId: 1,
       type: "room.lifecycle",
     });
 
@@ -182,12 +185,14 @@ describe("useMultiplayerRoomClient", () => {
     await client.sendMessage({
       participantId: "guest-1",
       seatId: "left",
+      matchId: 1,
       type: "room.claimSeat",
     });
 
     expect(transport.sendRoomCommand).toHaveBeenCalledWith({
       participantId: "guest-1",
       seatId: "left",
+      matchId: 1,
       type: "room.claimSeat",
     });
     expect(options.onParticipantId).toHaveBeenCalledWith("guest-1");

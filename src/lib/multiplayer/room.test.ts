@@ -135,6 +135,7 @@ describe("private multiplayer rooms", () => {
       room: {
         code: "ALPHA-7",
         hostParticipantId: HOST_ID,
+        matchId: 1,
         participants: [
           {
             displayName: "Ada Host",
@@ -393,6 +394,21 @@ describe("private multiplayer rooms", () => {
     });
   });
 
+  it("requires an explicit match replacement before changing games", () => {
+    const room = createLobbyRoom({ gameId: "pong" });
+
+    expect(
+      updatePrivateRoomSettings(room, {
+        participantId: HOST_ID,
+        settings: { gameId: "asteroids" },
+      }),
+    ).toEqual({
+      code: "invalid-room-settings",
+      error: "Changing games requires replacing the current match.",
+      success: false,
+    });
+  });
+
   it("rejects settings updates after the room starts", () => {
     const runningRoom = startRoom(createReadyRoom());
 
@@ -429,6 +445,7 @@ describe("private multiplayer rooms", () => {
     expect(runningRoom.status).toBe("running");
     expect(pausedRoomResult).toMatchObject({
       room: {
+        matchId: 1,
         status: "paused",
       },
       success: true,
@@ -462,6 +479,7 @@ describe("private multiplayer rooms", () => {
 
     expect(resumedRoomResult).toMatchObject({
       room: {
+        matchId: 1,
         status: "running",
       },
       success: true,
@@ -477,6 +495,7 @@ describe("private multiplayer rooms", () => {
 
     expect(finishedRoomResult).toMatchObject({
       room: {
+        matchId: 1,
         status: "finished",
       },
       success: true,
@@ -490,6 +509,7 @@ describe("private multiplayer rooms", () => {
       restartPrivateRoom(finishedRoomResult.room, { participantId: HOST_ID }),
     ).toMatchObject({
       room: {
+        matchId: 2,
         status: "running",
       },
       success: true,
@@ -515,6 +535,7 @@ describe("private multiplayer rooms", () => {
       participantId: "guest-1",
       requestId: "request-1",
       seatId: "left",
+      matchId: 1,
       type: "room.claimSeat",
     } satisfies PrivateRoomClientMessage;
     const serverMessage = {

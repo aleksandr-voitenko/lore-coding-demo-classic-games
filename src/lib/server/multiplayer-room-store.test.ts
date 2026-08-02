@@ -109,6 +109,7 @@ function createStartedPongRoom(
     store.applyCommand("ROOM1", {
       participantId: "host-1",
       seatId: "left",
+      matchId: 1,
       type: "room.claimSeat",
     }),
   );
@@ -116,6 +117,7 @@ function createStartedPongRoom(
     store.applyCommand("ROOM1", {
       participantId: "guest-1",
       seatId: "right",
+      matchId: 1,
       type: "room.claimSeat",
     }),
   );
@@ -124,6 +126,7 @@ function createStartedPongRoom(
     store.applyCommand("ROOM1", {
       command: "start",
       participantId: "host-1",
+      matchId: 1,
       type: "room.lifecycle",
     }),
   );
@@ -149,6 +152,7 @@ function createStartedSpaceInvadersRoom(
     store.applyCommand("ROOM1", {
       participantId: "host-1",
       seatId: "ship-a",
+      matchId: 1,
       type: "room.claimSeat",
     }),
   );
@@ -156,6 +160,7 @@ function createStartedSpaceInvadersRoom(
     store.applyCommand("ROOM1", {
       participantId: "guest-1",
       seatId: "ship-b",
+      matchId: 1,
       type: "room.claimSeat",
     }),
   );
@@ -164,6 +169,7 @@ function createStartedSpaceInvadersRoom(
     store.applyCommand("ROOM1", {
       command: "start",
       participantId: "host-1",
+      matchId: 1,
       type: "room.lifecycle",
     }),
   );
@@ -189,6 +195,7 @@ function createStartedAsteroidsRoom(
     store.applyCommand("ROOM1", {
       participantId: "host-1",
       seatId: "ship-a",
+      matchId: 1,
       type: "room.claimSeat",
     }),
   );
@@ -196,6 +203,7 @@ function createStartedAsteroidsRoom(
     store.applyCommand("ROOM1", {
       participantId: "guest-1",
       seatId: "ship-b",
+      matchId: 1,
       type: "room.claimSeat",
     }),
   );
@@ -204,6 +212,7 @@ function createStartedAsteroidsRoom(
     store.applyCommand("ROOM1", {
       command: "start",
       participantId: "host-1",
+      matchId: 1,
       type: "room.lifecycle",
     }),
   );
@@ -219,6 +228,7 @@ function serveStartedPongRoom(store: InProcessMultiplayerRoomStore) {
         type: "pong.serve",
       },
       participantId: serveSide === "left" ? "host-1" : "guest-1",
+      matchId: 1,
       type: "game.input",
     }),
   );
@@ -233,6 +243,97 @@ function getTerminalPongStatusForServeSide(serveSide: "left" | "right") {
 }
 
 describe("in-process multiplayer room store", () => {
+  it("scopes match commands to the active generation before advancing runtime", () => {
+    let nowMs = 1_000;
+    const store = createTestRoomStore({ getNowMs: () => nowMs });
+    const started = createStartedPongRoom(store);
+
+    expect(started.room.matchId).toBe(1);
+    expect(expectPongGame(started).matchId).toBe(1);
+
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        input: {
+          direction: "up",
+          type: "pong.setPaddleDirection",
+        },
+        matchId: 1,
+        participantId: "host-1",
+        type: "game.input",
+      }),
+    );
+    const restarted = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        command: "restart",
+        matchId: 1,
+        participantId: "host-1",
+        type: "room.lifecycle",
+      }),
+    );
+    const restartedGame = expectPongGame(restarted);
+
+    expect(restarted.room.matchId).toBe(2);
+    expect(restartedGame).toMatchObject({
+      heldInputs: {},
+      matchId: 2,
+      seq: 1,
+    });
+
+    nowMs += getPongTickDelay() * 3;
+
+    const staleCommands = [
+      {
+        matchId: 1,
+        participantId: "host-1",
+        seatId: "left",
+        type: "room.claimSeat" as const,
+      },
+      {
+        matchId: 1,
+        participantId: "host-1",
+        seatId: "left",
+        type: "room.releaseSeat" as const,
+      },
+      {
+        command: "pause" as const,
+        matchId: 1,
+        participantId: "host-1",
+        type: "room.lifecycle" as const,
+      },
+      {
+        matchId: 1,
+        participantId: "host-1",
+        settings: { gameId: "pong" as const },
+        type: "room.updateSettings" as const,
+      },
+      {
+        gameId: "pong" as const,
+        input: {
+          direction: "down",
+          type: "pong.setPaddleDirection",
+        },
+        matchId: 1,
+        participantId: "host-1",
+        type: "game.input" as const,
+      },
+    ];
+
+    for (const command of staleCommands) {
+      expect(store.applyCommand("ROOM1", command)).toEqual({
+        code: "stale-match",
+        error: "Command belongs to an earlier match. Refresh the party and try again.",
+        success: false,
+      });
+    }
+
+    nowMs = 1_000;
+    const unchanged = expectStoreSuccess(store.getRoom("ROOM1"));
+
+    expect(unchanged.seq).toBe(restarted.seq);
+    expect(unchanged.room).toEqual(restarted.room);
+    expect(expectPongGame(unchanged)).toEqual(restartedGame);
+  });
+
   it("mints opaque participant capabilities without publishing them in snapshots", () => {
     const store = createTestRoomStore();
     const created = store.createRoom({ host: HOST_USER });
@@ -302,6 +403,7 @@ describe("in-process multiplayer room store", () => {
       room: {
         code: "ROOM1",
         hostParticipantId: "host-1",
+        matchId: 1,
         participants: [
           {
             displayName: "Ada Host",
@@ -412,6 +514,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         participantId: "guest-1",
         seatId: "left",
+        matchId: 1,
         type: "room.claimSeat",
       }),
     );
@@ -419,6 +522,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         participantId: "guest-2",
         seatId: "right",
+        matchId: 1,
         type: "room.claimSeat",
       }),
     );
@@ -426,6 +530,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "start",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -460,6 +565,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         participantId: "guest-1",
         seatId: "left",
+        matchId: 1,
         type: "room.claimSeat",
       }),
     );
@@ -467,6 +573,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         participantId: "guest-1",
         seatId: "left",
+        matchId: 1,
         type: "room.releaseSeat",
       }),
     );
@@ -474,6 +581,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         participantId: "host-1",
         seatId: "right",
+        matchId: 1,
         type: "room.claimSeat",
       }),
     );
@@ -510,6 +618,7 @@ describe("in-process multiplayer room store", () => {
             targetScore: 7,
           },
         },
+        matchId: 1,
         type: "room.updateSettings",
       }),
     ).toEqual({
@@ -521,6 +630,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "start",
         participantId: "guest-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     ).toEqual({
@@ -538,6 +648,7 @@ describe("in-process multiplayer room store", () => {
             targetScore: 7,
           },
         },
+        matchId: 1,
         type: "room.updateSettings",
       }),
     );
@@ -552,6 +663,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "start",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     ).toMatchObject({
@@ -575,6 +687,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         participantId: "host-1",
         seatId: "left",
+        matchId: 1,
         type: "room.claimSeat",
       }),
     );
@@ -583,6 +696,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "start",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     ).toMatchObject({
@@ -595,6 +709,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         participantId: "guest-1",
         seatId: "right",
+        matchId: 1,
         type: "room.claimSeat",
       }),
     );
@@ -604,6 +719,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "start",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -643,6 +759,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         participantId: "host-1",
         seatId: "ship-a",
+        matchId: 1,
         type: "room.claimSeat",
       }),
     );
@@ -651,6 +768,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "start",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     ).toMatchObject({
@@ -663,6 +781,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         participantId: "guest-1",
         seatId: "ship-b",
+        matchId: 1,
         type: "room.claimSeat",
       }),
     );
@@ -672,6 +791,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "start",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -725,6 +845,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         participantId: "host-1",
         seatId: "ship-a",
+        matchId: 1,
         type: "room.claimSeat",
       }),
     );
@@ -733,6 +854,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "start",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     ).toMatchObject({
@@ -745,6 +867,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         participantId: "guest-1",
         seatId: "ship-b",
+        matchId: 1,
         type: "room.claimSeat",
       }),
     );
@@ -754,6 +877,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "start",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -817,6 +941,7 @@ describe("in-process multiplayer room store", () => {
           type: "space-invaders.setShipDirection",
         },
         participantId: "host-1",
+        matchId: 1,
         type: "game.input",
       }),
     );
@@ -831,6 +956,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "restart",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -882,6 +1008,7 @@ describe("in-process multiplayer room store", () => {
           type: "asteroids.setShipControls",
         },
         participantId: "host-1",
+        matchId: 1,
         type: "game.input",
       }),
     );
@@ -896,6 +1023,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "restart",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -927,6 +1055,7 @@ describe("in-process multiplayer room store", () => {
           type: "pong.setPaddleDirection",
         },
         participantId: "host-1",
+        matchId: 1,
         type: "game.input",
       }),
     );
@@ -967,6 +1096,7 @@ describe("in-process multiplayer room store", () => {
           type: "space-invaders.setShipDirection",
         },
         participantId: "host-1",
+        matchId: 1,
         type: "game.input",
       }),
     );
@@ -997,6 +1127,7 @@ describe("in-process multiplayer room store", () => {
           type: "space-invaders.fire",
         },
         participantId: "guest-1",
+        matchId: 1,
         type: "game.input",
       }),
     );
@@ -1009,6 +1140,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         participantId: "host-1",
         seatId: "ship-a",
+        matchId: 1,
         type: "room.releaseSeat",
       }),
     );
@@ -1035,6 +1167,7 @@ describe("in-process multiplayer room store", () => {
           type: "asteroids.setShipControls",
         },
         participantId: "host-1",
+        matchId: 1,
         type: "game.input",
       }),
     );
@@ -1069,6 +1202,7 @@ describe("in-process multiplayer room store", () => {
           type: "asteroids.fire",
         },
         participantId: "guest-1",
+        matchId: 1,
         type: "game.input",
       }),
     );
@@ -1081,6 +1215,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         participantId: "host-1",
         seatId: "ship-a",
+        matchId: 1,
         type: "room.releaseSeat",
       }),
     );
@@ -1109,6 +1244,7 @@ describe("in-process multiplayer room store", () => {
           type: "pong.setPaddleDirection",
         },
         participantId: getPongParticipantIdForSide(receivingSide),
+        matchId: 1,
         type: "game.input",
       }),
     );
@@ -1122,6 +1258,7 @@ describe("in-process multiplayer room store", () => {
           type: "pong.serve",
         },
         participantId: servingParticipantId,
+        matchId: 1,
         type: "game.input",
       }),
     );
@@ -1385,6 +1522,7 @@ describe("in-process multiplayer room store", () => {
           type: "pong.serve",
         },
         participantId: receivingParticipantId,
+        matchId: 1,
         type: "game.input",
       }),
     ).toEqual({
@@ -1399,6 +1537,7 @@ describe("in-process multiplayer room store", () => {
           type: "pong.serve",
         },
         participantId: servingParticipantId,
+        matchId: 1,
         type: "game.input",
       }),
     );
@@ -1424,6 +1563,7 @@ describe("in-process multiplayer room store", () => {
           type: "pong.setPaddleDirection",
         },
         participantId: "host-1",
+        matchId: 1,
         type: "game.input",
       }),
     ).toEqual({
@@ -1438,6 +1578,7 @@ describe("in-process multiplayer room store", () => {
           type: "pong.setPaddleDirection",
         },
         participantId: "missing",
+        matchId: 1,
         type: "game.input",
       }),
     ).toEqual({
@@ -1459,6 +1600,7 @@ describe("in-process multiplayer room store", () => {
           type: "pong.setPaddleDirection",
         },
         participantId: "guest-2",
+        matchId: 1,
         type: "game.input",
       }),
     ).toEqual({
@@ -1485,6 +1627,7 @@ describe("in-process multiplayer room store", () => {
           type: "pong.setPaddleDirection",
         },
         participantId: "host-1",
+        matchId: 1,
         type: "game.input",
       }),
     ).toEqual({
@@ -1510,6 +1653,7 @@ describe("in-process multiplayer room store", () => {
           type: "asteroids.setShipControls",
         },
         participantId: "host-1",
+        matchId: 1,
         type: "game.input",
       }),
     ).toEqual({
@@ -1524,6 +1668,7 @@ describe("in-process multiplayer room store", () => {
           type: "asteroids.fire",
         },
         participantId: "host-1",
+        matchId: 1,
         type: "game.input",
       }),
     ).toEqual({
@@ -1544,6 +1689,7 @@ describe("in-process multiplayer room store", () => {
           type: "asteroids.fire",
         },
         participantId: "guest-2",
+        matchId: 1,
         type: "game.input",
       }),
     ).toEqual({
@@ -1570,6 +1716,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "pause",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -1589,6 +1736,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "resume",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -1609,6 +1757,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "restart",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -1635,6 +1784,7 @@ describe("in-process multiplayer room store", () => {
           type: "space-invaders.setShipDirection",
         },
         participantId: "host-1",
+        matchId: 1,
         type: "game.input",
       }),
     );
@@ -1648,6 +1798,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "pause",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -1666,6 +1817,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "resume",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -1684,12 +1836,16 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "restart",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
     const restartedGame = expectSpaceInvadersGame(restarted);
 
     expect(restarted.room.status).toBe("running");
+    expect(restarted.room.matchId).toBe(2);
+    expect(restartedGame.matchId).toBe(2);
+    expect(restartedGame.seq).toBe(1);
     expect(restartedGame.heldInputs).toEqual({});
     expect(restartedGame.snapshot).toMatchObject({
       score: 0,
@@ -1713,6 +1869,7 @@ describe("in-process multiplayer room store", () => {
           type: "space-invaders.setShipDirection",
         },
         participantId: "guest-1",
+        matchId: 2,
         type: "game.input",
       }),
     );
@@ -1720,6 +1877,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "finish",
         participantId: "host-1",
+        matchId: 2,
         type: "room.lifecycle",
       }),
     );
@@ -1746,6 +1904,7 @@ describe("in-process multiplayer room store", () => {
           type: "asteroids.setShipControls",
         },
         participantId: "host-1",
+        matchId: 1,
         type: "game.input",
       }),
     );
@@ -1759,6 +1918,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "pause",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -1777,6 +1937,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "resume",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -1802,6 +1963,7 @@ describe("in-process multiplayer room store", () => {
           type: "asteroids.setShipControls",
         },
         participantId: "guest-1",
+        matchId: 1,
         type: "game.input",
       }),
     );
@@ -1809,6 +1971,7 @@ describe("in-process multiplayer room store", () => {
       store.applyCommand("ROOM1", {
         command: "finish",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -1911,6 +2074,7 @@ describe("in-process multiplayer room store", () => {
           type: "space-invaders.setShipDirection",
         },
         participantId: "host-1",
+        matchId: 1,
         type: "game.input",
       }),
     );
@@ -1950,6 +2114,7 @@ describe("in-process multiplayer room store", () => {
           type: "asteroids.setShipControls",
         },
         participantId: "host-1",
+        matchId: 1,
         type: "game.input",
       }),
     );

@@ -75,6 +75,7 @@ function parseRoomCommand(value: unknown): ParseRoomCommandResult {
 
     return {
       command: {
+        matchId: value.matchId,
         participantId: value.participantId,
         settings: parsedSettings.settings,
         type: "room.updateSettings",
@@ -94,6 +95,7 @@ function parseRoomCommand(value: unknown): ParseRoomCommandResult {
     return {
       command: {
         command: value.command,
+        matchId: value.matchId,
         participantId: value.participantId,
         type: "room.lifecycle",
       },

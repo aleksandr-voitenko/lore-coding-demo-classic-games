@@ -72,16 +72,19 @@ function expectRoomStarted(store: InProcessMultiplayerRoomStore) {
   store.applyCommand("ROOM1", {
     participantId: "host-1",
     seatId: "left",
+    matchId: 1,
     type: "room.claimSeat",
   });
   store.applyCommand("ROOM1", {
     participantId: "guest-1",
     seatId: "right",
+    matchId: 1,
     type: "room.claimSeat",
   });
   const result = store.applyCommand("ROOM1", {
     command: "start",
     participantId: "host-1",
+    matchId: 1,
     type: "room.lifecycle",
   });
 
@@ -135,7 +138,7 @@ describe("multiplayer room route", () => {
         },
         true,
       ),
-      { code: "v2" },
+      { code: "v3" },
     );
 
     expect(response.status).toBe(400);
@@ -160,6 +163,7 @@ describe("multiplayer room route", () => {
       room: {
         code: "ROOM1",
         hostParticipantId: "host-1",
+        matchId: 1,
         status: "lobby",
       },
       seq: 1,
@@ -240,11 +244,13 @@ describe("multiplayer room route", () => {
       {
         participantId: "guest-1",
         seatId: "right",
+        matchId: 1,
         type: "room.claimSeat",
       },
       {
         participantId: "guest-1",
         seatId: "right",
+        matchId: 1,
         type: "room.releaseSeat",
       },
       {
@@ -253,6 +259,7 @@ describe("multiplayer room route", () => {
           type: "pong.setPaddleDirection",
         },
         participantId: "guest-1",
+        matchId: 1,
         type: "game.input",
       },
     ]) {
@@ -286,6 +293,7 @@ describe("multiplayer room route", () => {
             },
           },
           participantId: "guest-1",
+          matchId: 1,
           type: "room.updateSettings",
         },
         true,
@@ -321,6 +329,7 @@ describe("multiplayer room route", () => {
         {
           command: "start",
           participantId: "host-1",
+          matchId: 1,
           type: "room.lifecycle",
         },
         true,
@@ -351,6 +360,7 @@ describe("multiplayer room route", () => {
               targetScore: 7,
             },
           },
+          matchId: 1,
           type: "room.updateSettings",
         },
         true,
@@ -384,6 +394,7 @@ describe("multiplayer room route", () => {
         {
           command: "pause",
           participantId: "host-1",
+          matchId: 1,
           type: "room.lifecycle",
         },
         true,

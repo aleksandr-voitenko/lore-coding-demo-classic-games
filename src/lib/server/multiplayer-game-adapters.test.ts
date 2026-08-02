@@ -38,6 +38,7 @@ describe("multiplayer server game adapter registry", () => {
     const room = {
       code: "ROOM1",
       hostParticipantId: "host-1",
+      matchId: 1,
       participants: [
         {
           displayName: "Ada Host",

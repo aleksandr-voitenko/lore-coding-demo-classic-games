@@ -225,7 +225,12 @@ export function getMultiplayerRoomGameRenderer(
   room: PrivateRoom,
   game: MultiplayerRoomGameSnapshot | null | undefined,
 ) {
-  if (game === null || game === undefined || room.settings.gameId !== game.gameId) {
+  if (
+    game === null ||
+    game === undefined ||
+    room.settings.gameId !== game.gameId ||
+    room.matchId !== game.matchId
+  ) {
     return null;
   }
 

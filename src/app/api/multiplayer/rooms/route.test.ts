@@ -121,6 +121,7 @@ describe("multiplayer rooms route", () => {
       room: {
         code: "ROOM1",
         hostParticipantId: "host-1",
+        matchId: 1,
         seats: [
           {
             id: "left",

@@ -23,6 +23,7 @@ import { MultiplayerRoomTransportError } from "./multiplayer-room-transport";
 const PONG_ROOM: PrivateRoom = {
   code: "PONG-1",
   hostParticipantId: "host-participant",
+  matchId: 1,
   participants: [
     {
       displayName: "Ada",
@@ -92,6 +93,7 @@ const ACTIVE_SNAKE_ROOM: PrivateRoom = {
 const RUNNING_PONG_GAME = {
   gameId: "pong",
   heldInputs: {},
+  matchId: 1,
   seq: 1,
   serverTimeMs: 1_000,
   snapshot: startPongGame(createInitialPongGame()),
@@ -99,6 +101,7 @@ const RUNNING_PONG_GAME = {
 
 const RUNNING_SNAKE_GAME = {
   gameId: "snake",
+  matchId: 1,
   seq: 1,
   serverTimeMs: 1_000,
   snapshot: {},
@@ -212,6 +215,7 @@ describe("multiplayer room lobby", () => {
       } satisfies PrivateRoom;
       const game = {
         gameId,
+        matchId: 1,
         seq: 1,
         serverTimeMs: 1_000,
         snapshot: {},
@@ -226,6 +230,12 @@ describe("multiplayer room lobby", () => {
     ).toBeNull();
     expect(
       getMultiplayerRoomGameRenderer(ACTIVE_SNAKE_ROOM, RUNNING_SNAKE_GAME),
+    ).toBeNull();
+    expect(
+      getMultiplayerRoomGameRenderer(ACTIVE_PONG_ROOM, {
+        ...RUNNING_PONG_GAME,
+        matchId: 2,
+      }),
     ).toBeNull();
   });
 
@@ -317,6 +327,36 @@ describe("multiplayer room lobby", () => {
 
     expect(selectFreshMultiplayerRoomSnapshot(current, staleRoom)).toBe(current);
     expect(selectFreshMultiplayerRoomSnapshot(current, fresherGame)).toBe(fresherGame);
+
+    const nextMatch = {
+      game: {
+        ...RUNNING_PONG_GAME,
+        matchId: 2,
+        seq: 1,
+      },
+      room: {
+        ...ACTIVE_PONG_ROOM,
+        matchId: 2,
+      },
+      seq: 5,
+    };
+    const conflictingGeneration = {
+      game: {
+        ...RUNNING_PONG_GAME,
+        matchId: 2,
+        seq: RUNNING_PONG_GAME.seq + 10,
+      },
+      room: {
+        ...ACTIVE_PONG_ROOM,
+        matchId: 2,
+      },
+      seq: 4,
+    };
+
+    expect(selectFreshMultiplayerRoomSnapshot(current, nextMatch)).toBe(nextMatch);
+    expect(
+      selectFreshMultiplayerRoomSnapshot(current, conflictingGeneration),
+    ).toBe(current);
   });
 
 });

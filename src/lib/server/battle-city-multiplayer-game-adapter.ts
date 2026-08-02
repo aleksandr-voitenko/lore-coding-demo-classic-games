@@ -457,7 +457,7 @@ function createBattleCityRuntimeSnapshot(
   runtime: StoredBattleCityMultiplayerRuntime,
   room: PrivateRoom,
   serverTimeMs: number,
-): BattleCityMultiplayerGameSnapshot {
+): Omit<BattleCityMultiplayerGameSnapshot, "matchId"> {
   runtime.terminalSummary ??= createBattleCityTerminalSummary(
     room,
     runtime.game,

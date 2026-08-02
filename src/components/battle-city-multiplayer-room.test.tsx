@@ -29,6 +29,7 @@ import {
 const ACTIVE_BATTLE_CITY_ROOM: PrivateRoom = {
   code: "TANK-1",
   hostParticipantId: "host-participant",
+  matchId: 1,
   participants: [
     {
       displayName: "Ada",
@@ -97,6 +98,7 @@ function createRunningBattleCityMultiplayerGame(): BattleCityMultiplayerGameStat
 const RUNNING_BATTLE_CITY_GAME = {
   gameId: "battle-city",
   heldInputs: {},
+  matchId: 1,
   seq: 1,
   serverTimeMs: 1_000,
   snapshot: createRunningBattleCityMultiplayerGame(),

@@ -24,6 +24,7 @@ import {
 const ACTIVE_PONG_ROOM: PrivateRoom = {
   code: "PONG-1",
   hostParticipantId: "host-participant",
+  matchId: 1,
   participants: [
     {
       displayName: "Ada",
@@ -70,6 +71,7 @@ const ACTIVE_PONG_ROOM: PrivateRoom = {
 const RUNNING_PONG_GAME = {
   gameId: "pong",
   heldInputs: {},
+  matchId: 1,
   seq: 1,
   serverTimeMs: 1_000,
   snapshot: startPongGame(createInitialPongGame()),

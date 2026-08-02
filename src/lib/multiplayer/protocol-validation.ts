@@ -8,6 +8,7 @@ import type {
   MultiplayerRoomSnapshot,
 } from "./protocol";
 import {
+  isPrivateRoomMatchId,
   normalizePrivateRoomCode,
   type PrivateRoom,
   type PrivateRoomParticipant,
@@ -52,7 +53,11 @@ function isMultiplayerRoomSnapshotUnchecked(
 
   return (
     value.game === undefined ||
-    isMultiplayerGameSnapshot(value.game, value.room.settings.gameId)
+    isMultiplayerGameSnapshot(
+      value.game,
+      value.room.settings.gameId,
+      value.room.matchId,
+    )
   );
 }
 
@@ -106,6 +111,7 @@ function isMultiplayerRealtimeServerMessageUnchecked(
       return (
         isRoomCode(value.roomCode, expectedRoomCode) &&
         isOptionalSequence(value.gameSeq) &&
+        isPrivateRoomMatchId(value.matchId) &&
         isOptionalParticipantCapability(value.participantCapability) &&
         isOptionalEntityId(value.participantId) &&
         (value.participantCapability === undefined ||
@@ -142,6 +148,7 @@ function isPrivateRoom(value: unknown): value is PrivateRoom {
     !isRecord(value) ||
     normalizePrivateRoomCode(value.code) !== value.code ||
     !isEntityId(value.hostParticipantId) ||
+    !isPrivateRoomMatchId(value.matchId) ||
     !Array.isArray(value.participants) ||
     !value.participants.every(isPrivateRoomParticipant) ||
     !Array.isArray(value.seats) ||
@@ -306,12 +313,14 @@ function isPrivateRoomSettingValue(
 function isMultiplayerGameSnapshot(
   value: unknown,
   expectedGameId: string,
+  expectedMatchId: number,
 ): value is MultiplayerRealtimeGameSnapshot {
   return (
     isRecord(value) &&
     typeof value.gameId === "string" &&
     isGameId(value.gameId) &&
     value.gameId === expectedGameId &&
+    value.matchId === expectedMatchId &&
     isSequence(value.seq) &&
     isTimestamp(value.serverTimeMs) &&
     Object.hasOwn(value, "snapshot") &&
@@ -338,10 +347,23 @@ function isSnapshotParticipant(
 function isMultiplayerRoomEvent(
   value: unknown,
 ): value is MultiplayerRealtimeRoomEvent {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const hasGameFields =
+    value.gameId !== undefined ||
+    value.gameSeq !== undefined ||
+    value.matchId !== undefined;
+
   return (
-    isRecord(value) &&
     isOptionalGameId(value.gameId) &&
+    (value.matchId === undefined || isPrivateRoomMatchId(value.matchId)) &&
     isOptionalSequence(value.gameSeq) &&
+    (!hasGameFields ||
+      (value.gameId !== undefined &&
+        value.gameSeq !== undefined &&
+        value.matchId !== undefined)) &&
     Object.hasOwn(value, "payload") &&
     isSequence(value.seq) &&
     isTrimmedString(value.type)
@@ -375,6 +397,7 @@ function isMultiplayerRealtimeRejectionCode(
     case "room-not-found":
     case "seat-not-found":
     case "seat-occupied":
+    case "stale-match":
     case "unsupported-game":
       return true;
     default:

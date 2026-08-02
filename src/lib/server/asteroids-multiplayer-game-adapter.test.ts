@@ -9,6 +9,7 @@ function createAsteroidsRoom(overrides: Partial<PrivateRoom> = {}): PrivateRoom 
   return {
     code: "ROOM1",
     hostParticipantId: "host-1",
+    matchId: 1,
     participants: [
       {
         displayName: "Ada Host",
@@ -231,6 +232,7 @@ describe("asteroids multiplayer server adapter", () => {
             type: "asteroids.setShipControls",
           },
           participantId: " host-1 ",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_000,
@@ -262,6 +264,7 @@ describe("asteroids multiplayer server adapter", () => {
             type: "asteroids.setShipControls",
           },
           participantId: "host-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_010,
@@ -282,6 +285,7 @@ describe("asteroids multiplayer server adapter", () => {
             type: "asteroids.setShipControls",
           },
           participantId: "host-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_020,
@@ -305,6 +309,7 @@ describe("asteroids multiplayer server adapter", () => {
             type: "asteroids.setShipControls",
           },
           participantId: "host-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_030,
@@ -321,6 +326,7 @@ describe("asteroids multiplayer server adapter", () => {
       command: {
         participantId: "host-1",
         seatId: "observer",
+        matchId: 1,
         type: "room.releaseSeat",
       },
       runtime,
@@ -337,6 +343,7 @@ describe("asteroids multiplayer server adapter", () => {
             type: "asteroids.setShipControls",
           },
           participantId: "guest-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_040,
@@ -351,6 +358,7 @@ describe("asteroids multiplayer server adapter", () => {
       command: {
         participantId: "guest-1",
         seatId: "ship-b",
+        matchId: 1,
         type: "room.releaseSeat",
       },
       runtime,
@@ -370,6 +378,7 @@ describe("asteroids multiplayer server adapter", () => {
         command: {
           input: null,
           participantId: "host-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_000,
@@ -388,6 +397,7 @@ describe("asteroids multiplayer server adapter", () => {
             type: "asteroids.fire",
           },
           participantId: "host-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_000,
@@ -406,6 +416,7 @@ describe("asteroids multiplayer server adapter", () => {
             type: "asteroids.fire",
           },
           participantId: "host-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_000,
@@ -427,6 +438,7 @@ describe("asteroids multiplayer server adapter", () => {
             type: "asteroids.fire",
           },
           participantId: "host-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_000,
@@ -450,6 +462,7 @@ describe("asteroids multiplayer server adapter", () => {
             type: "asteroids.teleport",
           },
           participantId: "host-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_000,
@@ -468,6 +481,7 @@ describe("asteroids multiplayer server adapter", () => {
             type: "asteroids.fire",
           },
           participantId: 42,
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_000,
@@ -485,6 +499,7 @@ describe("asteroids multiplayer server adapter", () => {
         command: {
           command: "pause",
           participantId: "host-1",
+          matchId: 1,
           type: "room.lifecycle",
         },
         nowMs: 1_100,
@@ -501,6 +516,7 @@ describe("asteroids multiplayer server adapter", () => {
             type: "asteroids.fire",
           },
           participantId: "host-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_200,
@@ -523,6 +539,7 @@ describe("asteroids multiplayer server adapter", () => {
         command: {
           command: "pause",
           participantId: "host-1",
+          matchId: 1,
           type: "room.lifecycle",
         },
         nowMs: 1_000,
@@ -538,6 +555,7 @@ describe("asteroids multiplayer server adapter", () => {
         command: {
           command: "start",
           participantId: "host-1",
+          matchId: 1,
           type: "room.lifecycle",
         },
         nowMs: 1_000,
@@ -551,6 +569,7 @@ describe("asteroids multiplayer server adapter", () => {
         command: {
           command: "pause",
           participantId: "host-1",
+          matchId: 1,
           type: "room.lifecycle",
         },
         nowMs: 1_100,
@@ -572,6 +591,7 @@ describe("asteroids multiplayer server adapter", () => {
         command: {
           command: "pause",
           participantId: "host-1",
+          matchId: 1,
           type: "room.lifecycle",
         },
         nowMs: 1_200,
@@ -588,6 +608,7 @@ describe("asteroids multiplayer server adapter", () => {
         command: {
           command: "resume",
           participantId: "host-1",
+          matchId: 1,
           type: "room.lifecycle",
         },
         nowMs: 1_300,
@@ -609,6 +630,7 @@ describe("asteroids multiplayer server adapter", () => {
         command: {
           command: "resume",
           participantId: "host-1",
+          matchId: 1,
           type: "room.lifecycle",
         },
         nowMs: 1_400,
@@ -630,6 +652,7 @@ describe("asteroids multiplayer server adapter", () => {
             type: "asteroids.setShipControls",
           },
           participantId: "host-1",
+          matchId: 1,
           type: "game.input",
         },
         nowMs: 1_500,
@@ -651,6 +674,7 @@ describe("asteroids multiplayer server adapter", () => {
         command: {
           command: "restart",
           participantId: "host-1",
+          matchId: 1,
           type: "room.lifecycle",
         },
         nowMs: 1_600,
@@ -675,6 +699,7 @@ describe("asteroids multiplayer server adapter", () => {
         command: {
           command: "finish",
           participantId: "host-1",
+          matchId: 1,
           type: "room.lifecycle",
         },
         nowMs: 1_700,
@@ -697,6 +722,7 @@ describe("asteroids multiplayer server adapter", () => {
         command: {
           command: "finish",
           participantId: "host-1",
+          matchId: 1,
           type: "room.lifecycle",
         },
         nowMs: 1_800,

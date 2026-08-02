@@ -93,6 +93,7 @@ function createStartedRoom(store: InProcessMultiplayerRoomStore) {
     store.applyCommand(created.room.code, {
       command: "start",
       participantId: created.room.hostParticipantId,
+      matchId: 1,
       type: "room.lifecycle",
     }),
   );
@@ -107,6 +108,7 @@ function finishRoom(
     store.applyCommand(roomCode, {
       command: "finish",
       participantId,
+      matchId: 1,
       type: "room.lifecycle",
     }),
   );
@@ -136,6 +138,7 @@ function createStartedPongRoom(store: InProcessMultiplayerRoomStore) {
     store.applyCommand(created.room.code, {
       participantId: "host-1",
       seatId: "left",
+      matchId: 1,
       type: "room.claimSeat",
     }),
   );
@@ -143,6 +146,7 @@ function createStartedPongRoom(store: InProcessMultiplayerRoomStore) {
     store.applyCommand(created.room.code, {
       participantId: "guest-1",
       seatId: "right",
+      matchId: 1,
       type: "room.claimSeat",
     }),
   );
@@ -151,6 +155,7 @@ function createStartedPongRoom(store: InProcessMultiplayerRoomStore) {
     store.applyCommand(created.room.code, {
       command: "start",
       participantId: "host-1",
+      matchId: 1,
       type: "room.lifecycle",
     }),
   );
@@ -202,6 +207,7 @@ describe("in-process multiplayer room retention", () => {
       fixture.store.applyCommand("ROOM1", {
         participantId: "missing-participant",
         seatId: "missing-seat",
+        matchId: 1,
         type: "room.claimSeat",
       }),
       "participant-not-found",
@@ -235,6 +241,7 @@ describe("in-process multiplayer room retention", () => {
           fixture.store.applyCommand(started.room.code, {
             command: "pause",
             participantId: started.room.hostParticipantId,
+            matchId: 1,
             type: "room.lifecycle",
           }),
         );
@@ -315,6 +322,7 @@ describe("in-process multiplayer room retention", () => {
       restartedFixture.store.applyCommand("ROOM1", {
         command: "restart",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -356,6 +364,7 @@ describe("in-process multiplayer room retention", () => {
       pausedFixture.store.applyCommand("ROOM1", {
         command: "pause",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -376,6 +385,7 @@ describe("in-process multiplayer room retention", () => {
           type: "pong.setPaddleDirection",
         },
         participantId: receivingParticipantId,
+        matchId: 1,
         type: "game.input",
       }),
     );
@@ -386,6 +396,7 @@ describe("in-process multiplayer room retention", () => {
       terminalFixture.store.applyCommand("ROOM1", {
         input: { type: "pong.serve" },
         participantId: serveSide === "left" ? "host-1" : "guest-1",
+        matchId: 1,
         type: "game.input",
       }),
     );
@@ -494,6 +505,7 @@ describe("in-process multiplayer room retention", () => {
       pausedFixture.store.applyCommand(pausedRoom.room.code, {
         command: "pause",
         participantId: pausedRoom.room.hostParticipantId,
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );

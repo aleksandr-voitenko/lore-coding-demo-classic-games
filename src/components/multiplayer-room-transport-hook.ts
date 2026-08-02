@@ -53,6 +53,7 @@ type UseMultiplayerRoomWebSocketTransportResult = {
   sendGameInput: <Game extends GameId, Input = MultiplayerGameInputPayload<Game>>(
     gameId: Game,
     input: Input,
+    matchId: number,
     participantId: string,
   ) => Promise<MultiplayerRoomTransportAck>;
   sendRoomCommand: (
@@ -372,6 +373,7 @@ export function useMultiplayerRoomWebSocketTransport({
     <Game extends GameId, Input = MultiplayerGameInputPayload<Game>>(
       gameId: Game,
       input: Input,
+      matchId: number,
       nextParticipantId: string,
     ) => {
       const transport = transportRef.current;
@@ -382,7 +384,7 @@ export function useMultiplayerRoomWebSocketTransport({
         );
       }
 
-      return transport.sendGameInput(gameId, input, nextParticipantId);
+      return transport.sendGameInput(gameId, input, matchId, nextParticipantId);
     },
     [],
   );

@@ -34,13 +34,17 @@ export type PrivateRoomSeat = {
   required: boolean;
 };
 
-export type PrivateRoom = {
-  code: string;
-  hostParticipantId: string;
-  participants: PrivateRoomParticipant[];
+type PrivateRoomMatchState = {
+  matchId: number;
   seats: PrivateRoomSeat[];
   settings: PrivateRoomSettings;
   status: PrivateRoomStatus;
+};
+
+export type PrivateRoom = PrivateRoomMatchState & {
+  code: string;
+  hostParticipantId: string;
+  participants: PrivateRoomParticipant[];
 };
 
 export type PrivateRoomSeatInput = {
@@ -112,6 +116,20 @@ export type PrivateRoomOperationResult =
 
 const PRIVATE_ROOM_CODE_PATTERN = /^[A-Z0-9-]{1,80}$/;
 const PRIVATE_ROOM_ENTITY_ID_PATTERN = /^[a-zA-Z0-9-]{1,80}$/;
+
+export const INITIAL_PRIVATE_ROOM_MATCH_ID = 1;
+
+export function isPrivateRoomMatchId(value: unknown): value is number {
+  return Number.isSafeInteger(value) && typeof value === "number" && value > 0;
+}
+
+export function getNextPrivateRoomMatchId(matchId: number) {
+  if (!isPrivateRoomMatchId(matchId) || matchId === Number.MAX_SAFE_INTEGER) {
+    throw new Error("Private room match id cannot be advanced.");
+  }
+
+  return matchId + 1;
+}
 
 function createPrivateRoomError(
   code: PrivateRoomErrorCode,
@@ -373,6 +391,7 @@ export function createPrivateRoom({
   return createPrivateRoomSuccess({
     code: normalizedCode,
     hostParticipantId,
+    matchId: INITIAL_PRIVATE_ROOM_MATCH_ID,
     participants: [
       {
         displayName: hostDisplayName,
@@ -463,6 +482,13 @@ export function updatePrivateRoomSettings(
     return createPrivateRoomError(
       "invalid-room-settings",
       "Room settings require a supported game id.",
+    );
+  }
+
+  if (normalizedSettings.gameId !== room.settings.gameId) {
+    return createPrivateRoomError(
+      "invalid-room-settings",
+      "Changing games requires replacing the current match.",
     );
   }
 
@@ -675,7 +701,11 @@ export function restartPrivateRoom(
     return createRequiredSeatsError("restarting", requiredSeatLabels);
   }
 
-  return updatePrivateRoomStatus(room, "running");
+  return createPrivateRoomSuccess({
+    ...room,
+    matchId: getNextPrivateRoomMatchId(room.matchId),
+    status: "running",
+  });
 }
 
 export function finishPrivateRoom(

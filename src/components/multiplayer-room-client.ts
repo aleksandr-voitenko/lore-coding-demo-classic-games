@@ -51,6 +51,7 @@ export type MultiplayerRoomClientCommandTransport = {
   sendGameInput: <Game extends GameId, Input = MultiplayerGameInputPayload<Game>>(
     gameId: Game,
     input: Input,
+    matchId: number,
     participantId: string,
   ) => Promise<MultiplayerRoomTransportAck>;
   sendRoomCommand: (
@@ -229,6 +230,7 @@ export async function dispatchMultiplayerRoomClientMessage<
     ? transport.sendGameInput(
         message.gameId,
         message.input,
+        message.matchId,
         message.participantId,
       )
     : transport.sendRoomCommand(message);

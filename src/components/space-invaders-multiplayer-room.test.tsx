@@ -27,6 +27,7 @@ import {
 const ACTIVE_SPACE_INVADERS_ROOM: PrivateRoom = {
   code: "INV-1",
   hostParticipantId: "host-participant",
+  matchId: 1,
   participants: [
     {
       displayName: "Ada",
@@ -69,6 +70,7 @@ const ACTIVE_SPACE_INVADERS_ROOM: PrivateRoom = {
 
 const RUNNING_SPACE_INVADERS_GAME = {
   gameId: "space-invaders",
+  matchId: 1,
   seq: 1,
   serverTimeMs: 1_000,
   snapshot: {

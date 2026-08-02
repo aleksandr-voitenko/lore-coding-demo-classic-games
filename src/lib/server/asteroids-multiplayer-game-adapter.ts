@@ -511,7 +511,7 @@ function createAsteroidsRuntimeSnapshot(
   runtime: StoredAsteroidsMultiplayerRuntime,
   room: PrivateRoom,
   serverTimeMs: number,
-): AsteroidsMultiplayerGameSnapshot {
+): Omit<AsteroidsMultiplayerGameSnapshot, "matchId"> {
   const summary = createAsteroidsTerminalSummary(room, runtime.game);
 
   return {

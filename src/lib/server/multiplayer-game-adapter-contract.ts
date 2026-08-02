@@ -20,17 +20,20 @@ export type { BattleCityMultiplayerGameSnapshot } from "../battle-city-multiplay
 export type MultiplayerServerGameInputCommand<Input = unknown> = {
   gameId?: unknown;
   input: Input;
+  matchId: unknown;
   participantId: unknown;
   type: "game.input";
 };
 
 export type MultiplayerServerGameLifecycleCommand = {
   command: PrivateRoomLifecycleCommand;
+  matchId: unknown;
   participantId: unknown;
   type: "room.lifecycle";
 };
 
 export type MultiplayerServerGameReleaseSeatCommand = {
+  matchId: unknown;
   participantId: unknown;
   seatId: unknown;
   type: "room.releaseSeat";
@@ -57,6 +60,13 @@ type MultiplayerServerGameSnapshotsById =
 
 export type MultiplayerServerGameSnapshot =
   MultiplayerServerGameSnapshotsById[MultiplayerGameId];
+
+type WithoutMatchId<Snapshot> = Snapshot extends unknown
+  ? Omit<Snapshot, "matchId">
+  : never;
+
+export type MultiplayerServerGameAdapterSnapshot =
+  WithoutMatchId<MultiplayerServerGameSnapshot>;
 
 export type MultiplayerServerGameRuntimeErrorCode =
   | PrivateRoomErrorCode
@@ -119,7 +129,7 @@ export type MultiplayerServerGameRuntimeAdapter = {
     room: PrivateRoom;
     runtime: unknown;
     serverTimeMs: number;
-  }) => MultiplayerServerGameSnapshot;
+  }) => MultiplayerServerGameAdapterSnapshot;
   defaultSeats: readonly PrivateRoomSeatInput[];
   defaultSettings: PrivateRoomSettings;
   gameId: MultiplayerGameId;

@@ -20,6 +20,7 @@ import {
   resumePrivateRoom,
   startPrivateRoom,
   updatePrivateRoomSettings,
+  isPrivateRoomMatchId,
 } from "../multiplayer/room";
 import {
   getDefaultMultiplayerServerGameAdapter,
@@ -42,21 +43,25 @@ export type MultiplayerRoomStoreCommand =
       type: "room.joinObserver";
     }
   | {
+      matchId: unknown;
       participantId: unknown;
       seatId: unknown;
       type: "room.claimSeat";
     }
   | {
+      matchId: unknown;
       participantId: unknown;
       seatId: unknown;
       type: "room.releaseSeat";
     }
   | {
       command: PrivateRoomLifecycleCommand;
+      matchId: unknown;
       participantId: unknown;
       type: "room.lifecycle";
     }
   | {
+      matchId: unknown;
       participantId: unknown;
       settings: PrivateRoomSettings;
       type: "room.updateSettings";
@@ -64,6 +69,7 @@ export type MultiplayerRoomStoreCommand =
   | {
       gameId?: unknown;
       input: unknown;
+      matchId: unknown;
       participantId: unknown;
       type: "game.input";
     };
@@ -105,7 +111,8 @@ export type MultiplayerRoomStoreErrorCode =
   | "room-expired"
   | "room-service-invalid-response"
   | "room-service-unavailable"
-  | "room-not-found";
+  | "room-not-found"
+  | "stale-match";
 
 export type MultiplayerRoomStoreResult =
   | {
@@ -204,6 +211,7 @@ type StoredMultiplayerRoom = {
 
 type StoredMultiplayerGameRuntime = {
   adapter: MultiplayerServerGameRuntimeAdapter;
+  matchId: number;
   runtime: unknown;
 };
 
@@ -320,6 +328,7 @@ function clonePrivateRoom(room: PrivateRoom): PrivateRoom {
   return {
     code: room.code,
     hostParticipantId: room.hostParticipantId,
+    matchId: room.matchId,
     participants: room.participants.map((participant) => ({ ...participant })),
     seats: room.seats.map((seat) => ({ ...seat })),
     settings: clonePrivateRoomSettings(room.settings),
@@ -360,6 +369,7 @@ export function isMultiplayerRoomStoreErrorCode(
     case "room-service-unavailable":
     case "seat-not-found":
     case "seat-occupied":
+    case "stale-match":
       return true;
   }
 
@@ -398,7 +408,8 @@ export function getMultiplayerRoomStoreErrorStatus(
     code === "invalid-status" ||
     code === "participant-already-seated" ||
     code === "required-seats-empty" ||
-    code === "seat-occupied"
+    code === "seat-occupied" ||
+    code === "stale-match"
   ) {
     return 409;
   }
@@ -423,6 +434,10 @@ export function shouldAdvanceRoomGameSnapshot(snapshot: MultiplayerRoomSnapshot)
     return false;
   }
 
+  if (snapshot.game.matchId !== snapshot.room.matchId) {
+    return false;
+  }
+
   const adapter = getMultiplayerServerGameAdapter(snapshot.game.gameId);
 
   return (
@@ -444,14 +459,22 @@ function createStoredRoomSnapshot(
     participantId === undefined
       ? undefined
       : room.participants.find((entry) => entry.id === participantId);
-  const game =
-    storedRoom.game === undefined
-      ? undefined
-      : storedRoom.game.adapter.createSnapshot({
-          room,
-          runtime: storedRoom.game.runtime,
-          serverTimeMs,
-        });
+  let game: MultiplayerRoomGameSnapshot | undefined;
+
+  if (storedRoom.game !== undefined) {
+    if (storedRoom.game.matchId !== room.matchId) {
+      throw new Error("Stored game runtime does not match the active room match.");
+    }
+
+    game = {
+      ...storedRoom.game.adapter.createSnapshot({
+        room,
+        runtime: storedRoom.game.runtime,
+        serverTimeMs,
+      }),
+      matchId: storedRoom.game.matchId,
+    } as MultiplayerRoomGameSnapshot;
+  }
 
   return {
     ...(participantCapability === undefined ? {} : { participantCapability }),
@@ -535,6 +558,10 @@ function advanceGameRuntimeTo(storedRoom: StoredMultiplayerRoom, nowMs: number) 
     return false;
   }
 
+  if (storedRoom.game.matchId !== storedRoom.room.matchId) {
+    throw new Error("Stored game runtime does not match the active room match.");
+  }
+
   return storedRoom.game.adapter.advanceRuntimeTo({
     nowMs,
     room: storedRoom.room,
@@ -571,18 +598,33 @@ function refreshStoredRoomTerminalAt(
 function applyGameLifecycleCommand(
   storedRoom: StoredMultiplayerRoom,
   command: Extract<MultiplayerRoomStoreCommand, { type: "room.lifecycle" }>,
+  room: PrivateRoom,
   nowMs: number,
-): MultiplayerRoomStoreFailure | null {
-  const adapter = getMultiplayerServerGameAdapter(storedRoom.room.settings.gameId);
+): MultiplayerRoomStoreFailure | StoredMultiplayerGameRuntime | null {
+  const adapter = getMultiplayerServerGameAdapter(room.settings.gameId);
 
   if (adapter === null) {
     return null;
   }
 
+  if (command.command === "restart") {
+    const result = adapter.createRuntime({ nowMs, room });
+
+    if (!result.success) {
+      return getGameRuntimeStoreFailure(result);
+    }
+
+    return {
+      adapter,
+      matchId: room.matchId,
+      runtime: result.runtime,
+    };
+  }
+
   const result = adapter.applyLifecycleCommand({
     command,
     nowMs,
-    room: storedRoom.room,
+    room,
     runtime: storedRoom.game?.runtime,
   });
 
@@ -591,10 +633,51 @@ function applyGameLifecycleCommand(
   }
 
   if (result.runtime !== undefined) {
-    storedRoom.game = {
+    return {
       adapter,
+      matchId: room.matchId,
       runtime: result.runtime,
     };
+  }
+
+  return storedRoom.game ?? null;
+}
+
+function isMatchTargetedCommand(
+  command: MultiplayerRoomStoreCommand,
+): command is Extract<
+  MultiplayerRoomStoreCommand,
+  {
+    type:
+      | "game.input"
+      | "room.claimSeat"
+      | "room.lifecycle"
+      | "room.releaseSeat"
+      | "room.updateSettings";
+  }
+> {
+  return (
+    command.type === "game.input" ||
+    command.type === "room.claimSeat" ||
+    command.type === "room.lifecycle" ||
+    command.type === "room.releaseSeat" ||
+    command.type === "room.updateSettings"
+  );
+}
+
+function validateCommandMatch(
+  room: PrivateRoom,
+  command: MultiplayerRoomStoreCommand,
+): MultiplayerRoomStoreFailure | null {
+  if (!isMatchTargetedCommand(command)) {
+    return null;
+  }
+
+  if (!isPrivateRoomMatchId(command.matchId) || command.matchId !== room.matchId) {
+    return createStoreFailure(
+      "stale-match",
+      "Command belongs to an earlier match. Refresh the party and try again.",
+    );
   }
 
   return null;
@@ -800,6 +883,12 @@ export class InProcessMultiplayerRoomStore
       return storedRoom;
     }
 
+    const matchFailure = validateCommandMatch(storedRoom.room, command);
+
+    if (matchFailure !== null) {
+      return matchFailure;
+    }
+
     advanceGameRuntimeTo(storedRoom, nowMs);
     refreshStoredRoomTerminalAt(storedRoom, nowMs);
 
@@ -867,17 +956,27 @@ export class InProcessMultiplayerRoomStore
       );
     }
 
-    storedRoom.room = result.room;
-    if (command.type === "room.lifecycle") {
-      const gameLifecycleResult = applyGameLifecycleCommand(storedRoom, command, nowMs);
+    let nextGame = storedRoom.game;
 
-      if (gameLifecycleResult !== null) {
+    if (command.type === "room.lifecycle") {
+      const gameLifecycleResult = applyGameLifecycleCommand(
+        storedRoom,
+        command,
+        result.room,
+        nowMs,
+      );
+
+      if (gameLifecycleResult !== null && "success" in gameLifecycleResult) {
         return gameLifecycleResult;
       }
+
+      nextGame = gameLifecycleResult ?? undefined;
     } else if (command.type === "room.releaseSeat") {
       clearReleasedSeatGameInput(storedRoom, command);
     }
 
+    storedRoom.room = result.room;
+    storedRoom.game = nextGame;
     storedRoom.seq += 1;
     storedRoom.lastMeaningfulActivityAtMs = nowMs;
     refreshStoredRoomTerminalAt(storedRoom, nowMs);

@@ -56,6 +56,7 @@ type RoomCommandMessage = Record<string, unknown> & {
 type GameInputMessage = Record<string, unknown> & {
   gameId?: unknown;
   input?: unknown;
+  matchId?: unknown;
   participantId?: unknown;
   requestId?: unknown;
   roomCode?: unknown;
@@ -527,6 +528,7 @@ export function createMultiplayerRoomWebSocketGateway({
     const command = {
       gameId,
       input: message.input as GameInputStoreCommand["input"],
+      matchId: message.matchId,
       participantId: boundParticipantId,
       type: "game.input",
     } satisfies GameInputStoreCommand;
@@ -809,6 +811,7 @@ function sendAck(
 ) {
   sendServerMessage(socket, {
     ...(snapshot.game === undefined ? {} : { gameSeq: snapshot.game.seq }),
+    matchId: snapshot.room.matchId,
     ...(participantCapability === undefined
       ? {}
       : { participantCapability }),
@@ -877,7 +880,7 @@ function normalizeSnapshotIntervalMs(intervalMs: number) {
 }
 
 function getBroadcastSnapshotCursor(snapshot: MultiplayerRoomSnapshot) {
-  return `${snapshot.seq}:${snapshot.game?.seq ?? "none"}`;
+  return `${snapshot.seq}:${snapshot.room.matchId}:${snapshot.game?.seq ?? "none"}`;
 }
 
 function createBroadcastSnapshot(
@@ -976,6 +979,7 @@ function parseRoomCommand(value: unknown): ParseRoomCommandResult {
   if (value.type === "room.claimSeat") {
     return {
       command: {
+        matchId: value.matchId,
         participantId: value.participantId,
         seatId: value.seatId,
         type: "room.claimSeat",
@@ -987,6 +991,7 @@ function parseRoomCommand(value: unknown): ParseRoomCommandResult {
   if (value.type === "room.releaseSeat") {
     return {
       command: {
+        matchId: value.matchId,
         participantId: value.participantId,
         seatId: value.seatId,
         type: "room.releaseSeat",

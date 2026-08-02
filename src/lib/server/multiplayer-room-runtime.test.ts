@@ -56,6 +56,7 @@ describe("multiplayer room runtime boundary", () => {
           room: {
             code: "ROOM1",
             hostParticipantId: "host-1",
+          matchId: 1,
           },
         },
         success: true,
@@ -97,6 +98,7 @@ describe("multiplayer room runtime boundary", () => {
       store.applyCommand("ROOM1", {
         participantId: "host-1",
         seatId: "left",
+        matchId: 1,
         type: "room.claimSeat",
       }),
     );
@@ -104,6 +106,7 @@ describe("multiplayer room runtime boundary", () => {
       store.applyCommand("ROOM1", {
         participantId: "guest-1",
         seatId: "right",
+        matchId: 1,
         type: "room.claimSeat",
       }),
     );
@@ -112,6 +115,7 @@ describe("multiplayer room runtime boundary", () => {
       store.applyCommand("ROOM1", {
         command: "start",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -122,6 +126,7 @@ describe("multiplayer room runtime boundary", () => {
           type: "pong.serve",
         },
         participantId: serveSide === "left" ? "host-1" : "guest-1",
+        matchId: 1,
         type: "game.input",
       }),
     );
@@ -177,6 +182,7 @@ describe("multiplayer room runtime boundary", () => {
       store.applyCommand("ROOM1", {
         participantId: "host-1",
         seatId: "left",
+        matchId: 1,
         type: "room.claimSeat",
       }),
     );
@@ -184,6 +190,7 @@ describe("multiplayer room runtime boundary", () => {
       store.applyCommand("ROOM1", {
         participantId: "guest-1",
         seatId: "right",
+        matchId: 1,
         type: "room.claimSeat",
       }),
     );
@@ -192,6 +199,7 @@ describe("multiplayer room runtime boundary", () => {
       store.applyCommand("ROOM1", {
         command: "start",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -202,6 +210,7 @@ describe("multiplayer room runtime boundary", () => {
           type: "pong.serve",
         },
         participantId: serveSide === "left" ? "host-1" : "guest-1",
+        matchId: 1,
         type: "game.input",
       }),
     );
@@ -229,6 +238,7 @@ describe("multiplayer room runtime boundary", () => {
       store.applyCommand("ROOM1", {
         command: "finish",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );
@@ -241,6 +251,7 @@ describe("multiplayer room runtime boundary", () => {
       store.applyCommand("ROOM1", {
         command: "restart",
         participantId: "host-1",
+        matchId: 1,
         type: "room.lifecycle",
       }),
     );

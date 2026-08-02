@@ -68,7 +68,10 @@ describe("multiplayer realtime protocol", () => {
     } satisfies MultiplayerRealtimeClientMessage;
     const resume = {
       lastSeq: {
-        game: 12,
+        game: {
+          matchId: 1,
+          seq: 12,
+        },
         room: 7,
       },
       participantCapability: "guest-capability",
@@ -100,7 +103,10 @@ describe("multiplayer realtime protocol", () => {
       roomCode: ROOM_CODE,
     });
     expect(resume.lastSeq).toEqual({
-      game: 12,
+      game: {
+        matchId: 1,
+        seq: 12,
+      },
       room: 7,
     });
     expect(resume.participantCapability).toBe("guest-capability");
@@ -116,6 +122,7 @@ describe("multiplayer realtime protocol", () => {
     const claimSeatCommand = {
       participantId: "guest-1",
       seatId: "left",
+      matchId: 1,
       type: "room.claimSeat",
     } satisfies PrivateRoomCommandMessage;
     const realtimeCommand = {
@@ -132,6 +139,7 @@ describe("multiplayer realtime protocol", () => {
           difficulty: "hard",
         },
       },
+      matchId: 1,
       type: "room.updateSettings",
     } satisfies PrivateRoomClientMessage;
 
@@ -153,6 +161,7 @@ describe("multiplayer realtime protocol", () => {
       },
       participantId: "guest-left",
       roomCode: ROOM_CODE,
+      matchId: 1,
       type: "game.input",
     } satisfies MultiplayerRealtimeGameInputMessage<"pong">;
     const asteroidsInput = {
@@ -164,6 +173,7 @@ describe("multiplayer realtime protocol", () => {
       },
       participantId: "ship-1",
       roomCode: ROOM_CODE,
+      matchId: 1,
       type: "game.input",
     } satisfies MultiplayerRealtimeGameInputMessage<
       "asteroids",
@@ -210,6 +220,7 @@ describe("multiplayer realtime protocol", () => {
     } satisfies MultiplayerTerminalSummary<"won", { score: number }>;
     const gameSnapshot = {
       gameId: "space-invaders",
+      matchId: 1,
       seq: 3,
       serverTimeMs: 1_000,
       summary: terminalSummary,
@@ -241,6 +252,7 @@ describe("multiplayer realtime protocol", () => {
       event: {
         gameId: "space-invaders",
         gameSeq: 4,
+        matchId: 1,
         payload: {
           participantId: "ship-1",
         },
@@ -252,6 +264,7 @@ describe("multiplayer realtime protocol", () => {
     } satisfies MultiplayerRealtimeServerMessage<typeof gameSnapshot>;
     const ackMessage = {
       gameSeq: 4,
+      matchId: 1,
       participantId: "ship-1",
       requestId: "request-input",
       roomCode: ROOM_CODE,
@@ -296,6 +309,7 @@ describe("multiplayer realtime protocol", () => {
         columns: 11,
       },
       gameId: "space-invaders",
+      matchId: 1,
       seq: 2,
       serverTimeMs: 500,
       snapshot: {
@@ -333,6 +347,7 @@ describe("multiplayer realtime protocol", () => {
       },
       participantId: "guest-left",
       requestId: "request-serve",
+      matchId: 1,
       type: "game.input",
     } satisfies PrivateRoomClientMessage<
       "space-invaders",
