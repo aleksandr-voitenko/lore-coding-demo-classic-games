@@ -13,6 +13,7 @@ import {
   type MultiplayerRoomStoreResult,
 } from "./multiplayer-room-runtime";
 import {
+  getMultiplayerAccountPartyErrorStatus,
   MAX_MULTIPLAYER_ACCOUNT_AVAILABILITY_USER_IDS,
   type MultiplayerAccountPartyResult,
 } from "./multiplayer-account-party";
@@ -3000,6 +3001,54 @@ describe("in-process multiplayer room store", () => {
       code: "presence-resolution-limit-reached",
       success: false,
     });
+  });
+
+  it("keeps account availability on the newest sequenced presence operation", () => {
+    const store = createTestRoomStore();
+
+    expect(
+      store.applyAccountCommand({
+        clientId: "sequenced-client-1",
+        operationGeneration: 2,
+        state: "busy",
+        type: "presence.renew",
+        userId: "user-2",
+      }),
+    ).toMatchObject({ availability: "busy", changed: true, success: true });
+    expect(
+      store.applyAccountCommand({
+        clientId: "sequenced-client-1",
+        operationGeneration: 1,
+        state: "available",
+        type: "presence.renew",
+        userId: "user-2",
+      }),
+    ).toMatchObject({ code: "stale-presence-operation", success: false });
+    expect(
+      store.applyAccountCommand({
+        clientId: "sequenced-client-1",
+        operationGeneration: 1,
+        type: "presence.release",
+        userId: "user-2",
+      }),
+    ).toMatchObject({ code: "stale-presence-operation", success: false });
+    expect(
+      store.applyAccountCommand({
+        type: "presence.resolve",
+        userIds: ["user-2"],
+      }),
+    ).toMatchObject({
+      availabilities: [{ availability: "busy", userId: "user-2" }],
+      success: true,
+    });
+    expect(getMultiplayerAccountPartyErrorStatus("stale-presence-operation")).toBe(
+      409,
+    );
+    expect(
+      getMultiplayerAccountPartyErrorStatus(
+        "invalid-presence-operation-generation",
+      ),
+    ).toBe(400);
   });
 
   it("rejects a second party for one host account with a conflict status", () => {

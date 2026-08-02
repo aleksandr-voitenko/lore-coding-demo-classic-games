@@ -214,6 +214,7 @@ export class MultiplayerRoomServiceClient
       payload.accountPartyMemberships !== true ||
       payload.authenticatedAdmission !== true ||
       payload.membershipOnlyReacquisition !== true ||
+      payload.sequencedSocialPresenceOperations !== true ||
       payload.socialPresenceLeases !== true
     ) {
       return createProtocolServiceFailure(

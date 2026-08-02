@@ -347,6 +347,7 @@ async function handleRoomServiceRequest(
         mutationPathSegment: MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT,
         participantCapabilities: true,
         protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
+        sequencedSocialPresenceOperations: accountAuthorityConfigured,
         socialPresenceLeases: accountAuthorityConfigured,
       });
       return;

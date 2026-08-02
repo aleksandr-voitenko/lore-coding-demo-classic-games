@@ -3,6 +3,12 @@ import { normalizeSocialUserId } from "../social";
 
 export const DEFAULT_MULTIPLAYER_SOCIAL_PRESENCE_LEASE_TTL_MS = 45_000;
 export const DEFAULT_MULTIPLAYER_SOCIAL_PRESENCE_MAX_LEASES_PER_ACCOUNT = 16;
+// Keep replay suppression far beyond the browser's five-second request timeout,
+// while bounding authenticated client-id churn in this process-local registry.
+export const DEFAULT_MULTIPLAYER_SOCIAL_PRESENCE_OPERATION_RECORD_TTL_MS =
+  5 * 60_000;
+export const DEFAULT_MULTIPLAYER_SOCIAL_PRESENCE_MAX_OPERATION_TOMBSTONES_PER_ACCOUNT =
+  64;
 
 export const MULTIPLAYER_SOCIAL_BROWSER_PRESENCE_STATES = [
   "available",
@@ -42,11 +48,13 @@ export type MultiplayerSocialPresenceFailureCode =
   | "in-other-party"
   | "invalid-client-id"
   | "invalid-participant-id"
+  | "invalid-presence-operation-generation"
   | "invalid-presence-state"
   | "invalid-room-code"
   | "invalid-user-id"
   | "lease-capacity-reached"
-  | "participant-conflict";
+  | "participant-conflict"
+  | "stale-presence-operation";
 
 export type MultiplayerSocialPresenceFailure = {
   code: MultiplayerSocialPresenceFailureCode;
@@ -95,16 +103,20 @@ export type MultiplayerSocialPresenceRegistryOptions = {
   getNowMs?: () => number;
   leaseTtlMs?: number;
   maxLeasesPerAccount?: number;
+  maxOperationTombstonesPerAccount?: number;
+  operationRecordTtlMs?: number;
 };
 
 export type RenewMultiplayerSocialPresenceLeaseOptions = {
   clientId: unknown;
+  operationGeneration?: unknown;
   state: unknown;
   userId: unknown;
 };
 
 export type ReleaseMultiplayerSocialPresenceLeaseOptions = {
   clientId: unknown;
+  operationGeneration?: unknown;
   userId: unknown;
 };
 
@@ -119,6 +131,27 @@ const MULTIPLAYER_SOCIAL_PRESENCE_CLIENT_ID_PATTERN =
 const MULTIPLAYER_SOCIAL_PARTICIPANT_ID_PATTERN = /^[a-zA-Z0-9-]{1,80}$/;
 
 type StoredPresenceLease = Omit<MultiplayerSocialPresenceLease, "userId">;
+
+type StoredPresenceOperation =
+  | {
+      generation: number;
+      recordedAtMs: number;
+      result:
+        | {
+            created: boolean;
+            lease: StoredPresenceLease;
+            success: true;
+          }
+        | MultiplayerSocialPresenceFailure;
+      state: MultiplayerSocialBrowserPresenceState;
+      type: "renew";
+    }
+  | {
+      generation: number;
+      recordedAtMs: number;
+      released: boolean;
+      type: "release";
+    };
 
 function createPresenceFailure(
   code: MultiplayerSocialPresenceFailureCode,
@@ -149,6 +182,23 @@ function normalizeParticipantId(value: unknown) {
   return MULTIPLAYER_SOCIAL_PARTICIPANT_ID_PATTERN.test(participantId)
     ? participantId
     : null;
+}
+
+function normalizePresenceOperationGeneration(value: unknown) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0
+    ? value
+    : null;
+}
+
+function createStalePresenceOperationFailure() {
+  return createPresenceFailure(
+    "stale-presence-operation",
+    "A newer presence operation has already been applied for this client.",
+  );
 }
 
 function cloneMembership(
@@ -226,16 +276,26 @@ export class MultiplayerSocialPresenceRegistry {
   readonly #leaseTtlMs: number;
   readonly #leasesByUserId = new Map<string, Map<string, StoredPresenceLease>>();
   readonly #maxLeasesPerAccount: number;
+  readonly #maxOperationTombstonesPerAccount: number;
   readonly #membershipsByUserId = new Map<
     string,
     MultiplayerSocialPartyMembership
   >();
+  readonly #operationRecordsByUserId = new Map<
+    string,
+    Map<string, StoredPresenceOperation>
+  >();
+  readonly #operationRecordTtlMs: number;
 
   constructor({
     getNowMs = createDefaultNowMs,
     leaseTtlMs = DEFAULT_MULTIPLAYER_SOCIAL_PRESENCE_LEASE_TTL_MS,
     maxLeasesPerAccount =
       DEFAULT_MULTIPLAYER_SOCIAL_PRESENCE_MAX_LEASES_PER_ACCOUNT,
+    maxOperationTombstonesPerAccount =
+      DEFAULT_MULTIPLAYER_SOCIAL_PRESENCE_MAX_OPERATION_TOMBSTONES_PER_ACCOUNT,
+    operationRecordTtlMs =
+      DEFAULT_MULTIPLAYER_SOCIAL_PRESENCE_OPERATION_RECORD_TTL_MS,
   }: MultiplayerSocialPresenceRegistryOptions = {}) {
     this.#getCurrentTimeMs = getNowMs;
     this.#leaseTtlMs = normalizePositiveInteger(
@@ -246,10 +306,19 @@ export class MultiplayerSocialPresenceRegistry {
       maxLeasesPerAccount,
       "Social presence lease capacity",
     );
+    this.#maxOperationTombstonesPerAccount = normalizePositiveInteger(
+      maxOperationTombstonesPerAccount,
+      "Social presence operation tombstone capacity",
+    );
+    this.#operationRecordTtlMs = normalizePositiveInteger(
+      operationRecordTtlMs,
+      "Social presence operation record TTL",
+    );
   }
 
   renewLease({
     clientId: clientIdValue,
+    operationGeneration: operationGenerationValue,
     state: stateValue,
     userId: userIdValue,
   }: RenewMultiplayerSocialPresenceLeaseOptions): MultiplayerSocialPresenceLeaseResult {
@@ -278,9 +347,47 @@ export class MultiplayerSocialPresenceRegistry {
       );
     }
 
+    const operationGeneration = normalizePresenceOperationGeneration(
+      operationGenerationValue,
+    );
+
+    if (operationGeneration === null) {
+      return createPresenceFailure(
+        "invalid-presence-operation-generation",
+        "Presence operation generation must be a positive integer.",
+      );
+    }
+
     const nowMs = this.#getNowMs();
 
     this.#pruneUserLeases(userId, nowMs);
+    this.#pruneUserOperationRecords(userId, nowMs);
+
+    const existingOperation =
+      this.#operationRecordsByUserId.get(userId)?.get(clientId);
+
+    if (operationGeneration === undefined) {
+      if (existingOperation !== undefined) {
+        return createStalePresenceOperationFailure();
+      }
+    } else if (existingOperation !== undefined) {
+      if (operationGeneration < existingOperation.generation) {
+        return createStalePresenceOperationFailure();
+      }
+
+      if (operationGeneration === existingOperation.generation) {
+        return existingOperation.type === "renew" &&
+          existingOperation.state === stateValue
+          ? existingOperation.result.success
+            ? {
+                created: existingOperation.result.created,
+                lease: { ...existingOperation.result.lease, userId },
+                success: true,
+              }
+            : { ...existingOperation.result }
+          : createStalePresenceOperationFailure();
+      }
+    }
 
     let leasesByClientId = this.#leasesByUserId.get(userId);
     const created = leasesByClientId?.has(clientId) !== true;
@@ -289,10 +396,22 @@ export class MultiplayerSocialPresenceRegistry {
       created &&
       (leasesByClientId?.size ?? 0) >= this.#maxLeasesPerAccount
     ) {
-      return createPresenceFailure(
+      const failure = createPresenceFailure(
         "lease-capacity-reached",
         "This account has reached its active presence lease limit.",
       );
+
+      if (operationGeneration !== undefined) {
+        this.#recordOperation(userId, clientId, {
+          generation: operationGeneration,
+          recordedAtMs: nowMs,
+          result: failure,
+          state: stateValue,
+          type: "renew",
+        });
+      }
+
+      return failure;
     }
 
     const expiresAtMs = nowMs + this.#leaseTtlMs;
@@ -314,6 +433,20 @@ export class MultiplayerSocialPresenceRegistry {
 
     leasesByClientId.set(clientId, storedLease);
 
+    if (operationGeneration !== undefined) {
+      this.#recordOperation(userId, clientId, {
+        generation: operationGeneration,
+        recordedAtMs: nowMs,
+        result: {
+          created,
+          lease: { ...storedLease },
+          success: true,
+        },
+        state: stateValue,
+        type: "renew",
+      });
+    }
+
     return {
       created,
       lease: { ...storedLease, userId },
@@ -323,6 +456,7 @@ export class MultiplayerSocialPresenceRegistry {
 
   releaseLease({
     clientId: clientIdValue,
+    operationGeneration: operationGenerationValue,
     userId: userIdValue,
   }: ReleaseMultiplayerSocialPresenceLeaseOptions): MultiplayerSocialPresenceLeaseReleaseResult {
     const userId = normalizeSocialUserId(userIdValue);
@@ -343,24 +477,69 @@ export class MultiplayerSocialPresenceRegistry {
       );
     }
 
+    const operationGeneration = normalizePresenceOperationGeneration(
+      operationGenerationValue,
+    );
+
+    if (operationGeneration === null) {
+      return createPresenceFailure(
+        "invalid-presence-operation-generation",
+        "Presence operation generation must be a positive integer.",
+      );
+    }
+
+    const nowMs = this.#getNowMs();
+
+    this.#pruneUserLeases(userId, nowMs);
+    this.#pruneUserOperationRecords(userId, nowMs);
+
+    const existingOperation =
+      this.#operationRecordsByUserId.get(userId)?.get(clientId);
+
+    if (operationGeneration === undefined) {
+      if (existingOperation !== undefined) {
+        return createStalePresenceOperationFailure();
+      }
+    } else if (existingOperation !== undefined) {
+      if (operationGeneration < existingOperation.generation) {
+        return createStalePresenceOperationFailure();
+      }
+
+      if (operationGeneration === existingOperation.generation) {
+        return existingOperation.type === "release"
+          ? { released: existingOperation.released, success: true }
+          : createStalePresenceOperationFailure();
+      }
+    }
+
     const leasesByClientId = this.#leasesByUserId.get(userId);
 
     if (leasesByClientId === undefined) {
+      if (operationGeneration !== undefined) {
+        this.#recordOperation(userId, clientId, {
+          generation: operationGeneration,
+          recordedAtMs: nowMs,
+          released: false,
+          type: "release",
+        });
+      }
+
       return { released: false, success: true };
     }
 
-    this.#pruneUserLeases(userId, this.#getNowMs());
+    const released = leasesByClientId.delete(clientId);
 
-    const activeLeasesByClientId = this.#leasesByUserId.get(userId);
-
-    if (activeLeasesByClientId === undefined) {
-      return { released: false, success: true };
-    }
-
-    const released = activeLeasesByClientId.delete(clientId);
-
-    if (activeLeasesByClientId.size === 0) {
+    if (leasesByClientId.size === 0) {
       this.#leasesByUserId.delete(userId);
+    }
+
+    if (operationGeneration !== undefined) {
+      this.#recordOperation(userId, clientId, {
+        generation: operationGeneration,
+        recordedAtMs: nowMs,
+        released,
+        type: "release",
+      });
     }
 
     return { released, success: true };
@@ -477,7 +656,10 @@ export class MultiplayerSocialPresenceRegistry {
       return null;
     }
 
-    this.#pruneUserLeases(userId, this.#getNowMs());
+    const nowMs = this.#getNowMs();
+
+    this.#pruneUserLeases(userId, nowMs);
+    this.#pruneUserOperationRecords(userId, nowMs);
 
     const leasesByClientId = this.#leasesByUserId.get(userId);
     const membership = this.#membershipsByUserId.get(userId) ?? null;
@@ -540,6 +722,10 @@ export class MultiplayerSocialPresenceRegistry {
       prunedLeaseCount += this.#pruneUserLeases(userId, nowMs);
     }
 
+    for (const userId of this.#operationRecordsByUserId.keys()) {
+      this.#pruneUserOperationRecords(userId, nowMs);
+    }
+
     return prunedLeaseCount;
   }
 
@@ -576,5 +762,62 @@ export class MultiplayerSocialPresenceRegistry {
     }
 
     return prunedLeaseCount;
+  }
+
+  #pruneUserOperationRecords(userId: string, nowMs: number) {
+    const recordsByClientId = this.#operationRecordsByUserId.get(userId);
+
+    if (recordsByClientId === undefined) {
+      return;
+    }
+
+    const leasesByClientId = this.#leasesByUserId.get(userId);
+
+    for (const [clientId, operation] of recordsByClientId) {
+      if (
+        leasesByClientId?.has(clientId) !== true &&
+        nowMs >= operation.recordedAtMs &&
+        nowMs - operation.recordedAtMs >= this.#operationRecordTtlMs
+      ) {
+        recordsByClientId.delete(clientId);
+      }
+    }
+
+    let tombstoneCount = [...recordsByClientId.keys()].filter(
+      (clientId) => leasesByClientId?.has(clientId) !== true,
+    ).length;
+
+    for (const clientId of recordsByClientId.keys()) {
+      if (tombstoneCount <= this.#maxOperationTombstonesPerAccount) {
+        break;
+      }
+
+      if (leasesByClientId?.has(clientId) !== true) {
+        recordsByClientId.delete(clientId);
+        tombstoneCount -= 1;
+      }
+    }
+
+    if (recordsByClientId.size === 0) {
+      this.#operationRecordsByUserId.delete(userId);
+    }
+  }
+
+  #recordOperation(
+    userId: string,
+    clientId: string,
+    operation: StoredPresenceOperation,
+  ) {
+    let recordsByClientId = this.#operationRecordsByUserId.get(userId);
+
+    if (recordsByClientId === undefined) {
+      recordsByClientId = new Map();
+      this.#operationRecordsByUserId.set(userId, recordsByClientId);
+    }
+
+    // Refresh insertion order so bounded pruning removes the oldest tombstone.
+    recordsByClientId.delete(clientId);
+    recordsByClientId.set(clientId, operation);
+    this.#pruneUserOperationRecords(userId, operation.recordedAtMs);
   }
 }

@@ -189,6 +189,7 @@ describe("multiplayer room service client", () => {
           mutationPathSegment: "v6",
           participantCapabilities: true,
           protocolVersion: 6,
+          sequencedSocialPresenceOperations: true,
           // Deliberately omit socialPresenceLeases.
         });
       }),
@@ -198,6 +199,41 @@ describe("multiplayer room service client", () => {
       client.applyAccountCommand({
         type: "presence.resolve",
         userIds: [GUEST_USER.id],
+      }),
+    ).resolves.toMatchObject({
+      code: "room-service-invalid-response",
+      success: false,
+    });
+    expect(methods).toEqual(["GET"]);
+  });
+
+  it("does not send account commands to a v6 sidecar without sequenced presence support", async () => {
+    const methods: string[] = [];
+    const client = new MultiplayerRoomServiceClient({
+      baseUrl: "http://service.local/_internal/multiplayer/rooms",
+      fetcher: vi.fn<typeof fetch>(async (_input, init) => {
+        methods.push(init?.method ?? "GET");
+
+        return Response.json({
+          accountPartyMemberships: true,
+          authenticatedAdmission: true,
+          membershipOnlyReacquisition: true,
+          mutationPathSegment: "v6",
+          participantCapabilities: true,
+          protocolVersion: 6,
+          socialPresenceLeases: true,
+          // Deliberately omit sequencedSocialPresenceOperations.
+        });
+      }),
+    });
+
+    await expect(
+      client.applyAccountCommand({
+        clientId: "browser-client-0001",
+        operationGeneration: 1,
+        state: "available",
+        type: "presence.renew",
+        userId: GUEST_USER.id,
       }),
     ).resolves.toMatchObject({
       code: "room-service-invalid-response",
@@ -219,6 +255,7 @@ describe("multiplayer room service client", () => {
           mutationPathSegment: "v6",
           participantCapabilities: true,
           protocolVersion: 6,
+          sequencedSocialPresenceOperations: true,
           socialPresenceLeases: true,
           // Deliberately omit membershipOnlyReacquisition to model an older v6 sidecar.
         });
@@ -253,6 +290,7 @@ describe("multiplayer room service client", () => {
             mutationPathSegment: "v6",
             participantCapabilities: true,
             protocolVersion: 6,
+            sequencedSocialPresenceOperations: true,
             socialPresenceLeases: true,
           },
           { status: 503 },
@@ -292,6 +330,7 @@ describe("multiplayer room service client", () => {
           mutationPathSegment: "v6",
           participantCapabilities: true,
           protocolVersion: 6,
+          sequencedSocialPresenceOperations: true,
           socialPresenceLeases: true,
         });
       }
@@ -459,6 +498,7 @@ describe("multiplayer room service client", () => {
           mutationPathSegment: "v6",
           participantCapabilities: true,
           protocolVersion: 6,
+          sequencedSocialPresenceOperations: true,
           socialPresenceLeases: true,
         });
       }
@@ -529,6 +569,7 @@ describe("multiplayer room service client", () => {
     await expect(
       client.applyAccountCommand({
         clientId: "browser-client-0001",
+        operationGeneration: 7,
         state: "available",
         type: "presence.renew",
         userId: GUEST_USER.id,
@@ -619,6 +660,13 @@ describe("multiplayer room service client", () => {
       authorization: "Bearer service-secret",
       "content-type": "application/json",
       "x-multiplayer-room-protocol-version": "6",
+    });
+    expect(getRequestBody(requests[1]?.init)).toEqual({
+      clientId: "browser-client-0001",
+      operationGeneration: 7,
+      state: "available",
+      type: "presence.renew",
+      userId: GUEST_USER.id,
     });
   });
 
@@ -875,6 +923,7 @@ describe("multiplayer room service client", () => {
               mutationPathSegment: "v6",
               participantCapabilities: true,
               protocolVersion: 6,
+              sequencedSocialPresenceOperations: true,
               socialPresenceLeases: true,
             })
           : Response.json(payload),
@@ -900,6 +949,7 @@ describe("multiplayer room service client", () => {
               mutationPathSegment: "v6",
               participantCapabilities: true,
               protocolVersion: 6,
+              sequencedSocialPresenceOperations: true,
               socialPresenceLeases: true,
             })
           : Response.json({
@@ -940,6 +990,7 @@ describe("multiplayer room service client", () => {
               mutationPathSegment: "v6",
               participantCapabilities: true,
               protocolVersion: 6,
+              sequencedSocialPresenceOperations: true,
               socialPresenceLeases: true,
             })
           : Response.json(
@@ -963,6 +1014,46 @@ describe("multiplayer room service client", () => {
     ).resolves.toEqual({
       code: "recipient-unavailable",
       error: "The recipient is not available.",
+      success: false,
+    });
+  });
+
+  it("preserves stale sequenced presence failures only at conflict status", async () => {
+    const client = new MultiplayerRoomServiceClient({
+      baseUrl: "http://service.local/_internal/multiplayer/rooms",
+      fetcher: vi.fn<typeof fetch>(async (_input, init) =>
+        init?.method === "GET"
+          ? Response.json({
+              accountPartyMemberships: true,
+              authenticatedAdmission: true,
+              membershipOnlyReacquisition: true,
+              mutationPathSegment: "v6",
+              participantCapabilities: true,
+              protocolVersion: 6,
+              sequencedSocialPresenceOperations: true,
+              socialPresenceLeases: true,
+            })
+          : Response.json(
+              {
+                code: "stale-presence-operation",
+                error: "A newer presence operation was applied.",
+                success: false,
+              },
+              { status: 409 },
+            ),
+      ),
+    });
+
+    await expect(
+      client.applyAccountCommand({
+        clientId: "browser-client-0001",
+        operationGeneration: 1,
+        type: "presence.release",
+        userId: GUEST_USER.id,
+      }),
+    ).resolves.toEqual({
+      code: "stale-presence-operation",
+      error: "A newer presence operation was applied.",
       success: false,
     });
   });
@@ -1008,6 +1099,7 @@ describe("multiplayer room service client", () => {
               mutationPathSegment: "v6",
               participantCapabilities: true,
               protocolVersion: 6,
+              sequencedSocialPresenceOperations: true,
               socialPresenceLeases: true,
             })
           : Response.json(payload, { status }),
@@ -1135,6 +1227,7 @@ describe("multiplayer room service client", () => {
             mutationPathSegment: "v6",
             participantCapabilities: true,
             protocolVersion: 6,
+            sequencedSocialPresenceOperations: true,
             socialPresenceLeases: true,
           });
         }

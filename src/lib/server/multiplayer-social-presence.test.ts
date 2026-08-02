@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_MULTIPLAYER_SOCIAL_PRESENCE_LEASE_TTL_MS,
   DEFAULT_MULTIPLAYER_SOCIAL_PRESENCE_MAX_LEASES_PER_ACCOUNT,
+  DEFAULT_MULTIPLAYER_SOCIAL_PRESENCE_MAX_OPERATION_TOMBSTONES_PER_ACCOUNT,
+  DEFAULT_MULTIPLAYER_SOCIAL_PRESENCE_OPERATION_RECORD_TTL_MS,
   MultiplayerSocialPresenceRegistry,
   normalizeMultiplayerSocialPresenceClientId,
 } from "./multiplayer-social-presence";
@@ -14,7 +16,9 @@ function createRegistry(
   options: {
     leaseTtlMs?: number;
     maxLeasesPerAccount?: number;
+    maxOperationTombstonesPerAccount?: number;
     nowMs?: number;
+    operationRecordTtlMs?: number;
   } = {},
 ) {
   let nowMs = options.nowMs ?? 1_000;
@@ -26,6 +30,15 @@ function createRegistry(
     ...(options.maxLeasesPerAccount === undefined
       ? {}
       : { maxLeasesPerAccount: options.maxLeasesPerAccount }),
+    ...(options.maxOperationTombstonesPerAccount === undefined
+      ? {}
+      : {
+          maxOperationTombstonesPerAccount:
+            options.maxOperationTombstonesPerAccount,
+        }),
+    ...(options.operationRecordTtlMs === undefined
+      ? {}
+      : { operationRecordTtlMs: options.operationRecordTtlMs }),
   });
 
   return {
@@ -45,6 +58,12 @@ describe("multiplayer social presence registry", () => {
     expect(
       DEFAULT_MULTIPLAYER_SOCIAL_PRESENCE_MAX_LEASES_PER_ACCOUNT,
     ).toBe(16);
+    expect(
+      DEFAULT_MULTIPLAYER_SOCIAL_PRESENCE_MAX_OPERATION_TOMBSTONES_PER_ACCOUNT,
+    ).toBe(64);
+    expect(
+      DEFAULT_MULTIPLAYER_SOCIAL_PRESENCE_OPERATION_RECORD_TTL_MS,
+    ).toBe(300_000);
 
     for (const leaseTtlMs of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
       expect(
@@ -62,6 +81,36 @@ describe("multiplayer social presence registry", () => {
         () =>
           new MultiplayerSocialPresenceRegistry({ maxLeasesPerAccount }),
       ).toThrow("Social presence lease capacity must be a positive integer.");
+    }
+
+    for (const maxOperationTombstonesPerAccount of [
+      0,
+      -1,
+      1.5,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      expect(
+        () =>
+          new MultiplayerSocialPresenceRegistry({
+            maxOperationTombstonesPerAccount,
+          }),
+      ).toThrow(
+        "Social presence operation tombstone capacity must be a positive integer.",
+      );
+    }
+
+    for (const operationRecordTtlMs of [
+      0,
+      -1,
+      1.5,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      expect(
+        () =>
+          new MultiplayerSocialPresenceRegistry({ operationRecordTtlMs }),
+      ).toThrow(
+        "Social presence operation record TTL must be a positive integer.",
+      );
     }
   });
 
@@ -250,6 +299,312 @@ describe("multiplayer social presence registry", () => {
     expect(
       registry.releaseLease({ clientId: CLIENT_B, userId: "user-2" }),
     ).toEqual({ released: false, success: true });
+  });
+
+  it("fences delayed renew and release operations behind the newest generation", () => {
+    const { registry } = createRegistry();
+
+    expect(
+      registry.releaseLease({
+        clientId: CLIENT_A,
+        operationGeneration: 2,
+        userId: "user-1",
+      }),
+    ).toEqual({ released: false, success: true });
+    expect(
+      registry.renewLease({
+        clientId: CLIENT_A,
+        operationGeneration: 1,
+        state: "available",
+        userId: "user-1",
+      }),
+    ).toMatchObject({ code: "stale-presence-operation", success: false });
+    expect(registry.getEffectiveState("user-1")).toBe("offline");
+
+    expect(
+      registry.renewLease({
+        clientId: CLIENT_A,
+        operationGeneration: 3,
+        state: "busy",
+        userId: "user-1",
+      }),
+    ).toMatchObject({
+      created: true,
+      lease: { state: "busy" },
+      success: true,
+    });
+    expect(
+      registry.releaseLease({
+        clientId: CLIENT_A,
+        operationGeneration: 2,
+        userId: "user-1",
+      }),
+    ).toMatchObject({ code: "stale-presence-operation", success: false });
+    expect(
+      registry.renewLease({
+        clientId: CLIENT_A,
+        operationGeneration: 4,
+        state: "available",
+        userId: "user-1",
+      }),
+    ).toMatchObject({ lease: { state: "available" }, success: true });
+    expect(
+      registry.renewLease({
+        clientId: CLIENT_A,
+        operationGeneration: 3,
+        state: "busy",
+        userId: "user-1",
+      }),
+    ).toMatchObject({ code: "stale-presence-operation", success: false });
+    expect(registry.getEffectiveState("user-1")).toBe("available");
+  });
+
+  it("replays one generation exactly and rejects conflicting generation reuse", () => {
+    const { advanceBy, registry } = createRegistry({ leaseTtlMs: 100 });
+
+    const firstRenewal = registry.renewLease({
+      clientId: CLIENT_A,
+      operationGeneration: 1,
+      state: "available",
+      userId: "user-1",
+    });
+
+    expect(firstRenewal).toMatchObject({
+      created: true,
+      lease: { expiresAtMs: 1_100 },
+      success: true,
+    });
+    advanceBy(50);
+    expect(
+      registry.renewLease({
+        clientId: CLIENT_A,
+        operationGeneration: 1,
+        state: "available",
+        userId: "user-1",
+      }),
+    ).toEqual(firstRenewal);
+    expect(
+      registry.renewLease({
+        clientId: CLIENT_A,
+        operationGeneration: 1,
+        state: "busy",
+        userId: "user-1",
+      }),
+    ).toMatchObject({ code: "stale-presence-operation", success: false });
+
+    const firstRelease = registry.releaseLease({
+      clientId: CLIENT_A,
+      operationGeneration: 2,
+      userId: "user-1",
+    });
+
+    expect(firstRelease).toEqual({ released: true, success: true });
+    expect(
+      registry.releaseLease({
+        clientId: CLIENT_A,
+        operationGeneration: 2,
+        userId: "user-1",
+      }),
+    ).toEqual(firstRelease);
+    expect(
+      registry.renewLease({
+        clientId: CLIENT_A,
+        operationGeneration: 2,
+        state: "available",
+        userId: "user-1",
+      }),
+    ).toMatchObject({ code: "stale-presence-operation", success: false });
+  });
+
+  it("supports legacy operations until a client enters sequenced mode", () => {
+    const { registry } = createRegistry();
+
+    expect(
+      registry.renewLease({
+        clientId: CLIENT_A,
+        state: "available",
+        userId: "user-1",
+      }),
+    ).toMatchObject({ created: true, success: true });
+    expect(
+      registry.renewLease({
+        clientId: CLIENT_A,
+        state: "busy",
+        userId: "user-1",
+      }),
+    ).toMatchObject({ created: false, success: true });
+    expect(
+      registry.renewLease({
+        clientId: CLIENT_A,
+        operationGeneration: 1,
+        state: "available",
+        userId: "user-1",
+      }),
+    ).toMatchObject({ created: false, success: true });
+    expect(
+      registry.releaseLease({ clientId: CLIENT_A, userId: "user-1" }),
+    ).toMatchObject({ code: "stale-presence-operation", success: false });
+    expect(
+      registry.renewLease({
+        clientId: CLIENT_A,
+        state: "busy",
+        userId: "user-1",
+      }),
+    ).toMatchObject({ code: "stale-presence-operation", success: false });
+    expect(registry.getEffectiveState("user-1")).toBe("available");
+  });
+
+  it("bounds replay suppression by time and inactive client-id count", () => {
+    const timedRegistry = createRegistry({ operationRecordTtlMs: 100 });
+
+    timedRegistry.registry.releaseLease({
+      clientId: CLIENT_A,
+      operationGeneration: 2,
+      userId: "user-1",
+    });
+    timedRegistry.advanceBy(99);
+    expect(
+      timedRegistry.registry.renewLease({
+        clientId: CLIENT_A,
+        operationGeneration: 1,
+        state: "available",
+        userId: "user-1",
+      }),
+    ).toMatchObject({ code: "stale-presence-operation", success: false });
+
+    timedRegistry.advanceBy(1);
+    expect(
+      timedRegistry.registry.renewLease({
+        clientId: CLIENT_A,
+        operationGeneration: 1,
+        state: "available",
+        userId: "user-1",
+      }),
+    ).toMatchObject({ created: true, success: true });
+
+    const boundedRegistry = createRegistry({
+      maxOperationTombstonesPerAccount: 1,
+    }).registry;
+
+    boundedRegistry.releaseLease({
+      clientId: CLIENT_A,
+      operationGeneration: 2,
+      userId: "user-1",
+    });
+    boundedRegistry.releaseLease({
+      clientId: CLIENT_B,
+      operationGeneration: 2,
+      userId: "user-1",
+    });
+    expect(
+      boundedRegistry.renewLease({
+        clientId: CLIENT_A,
+        operationGeneration: 1,
+        state: "available",
+        userId: "user-1",
+      }),
+    ).toMatchObject({ created: true, success: true });
+    expect(
+      boundedRegistry.renewLease({
+        clientId: CLIENT_B,
+        operationGeneration: 1,
+        state: "available",
+        userId: "user-1",
+      }),
+    ).toMatchObject({ code: "stale-presence-operation", success: false });
+  });
+
+  it("rejects unsupported operation generations without changing presence", () => {
+    const { registry } = createRegistry();
+
+    for (const operationGeneration of [
+      null,
+      0,
+      -1,
+      1.5,
+      Number.MAX_SAFE_INTEGER + 1,
+      "1",
+    ]) {
+      expect(
+        registry.renewLease({
+          clientId: CLIENT_A,
+          operationGeneration,
+          state: "available",
+          userId: "user-1",
+        }),
+      ).toMatchObject({
+        code: "invalid-presence-operation-generation",
+        success: false,
+      });
+      expect(
+        registry.releaseLease({
+          clientId: CLIENT_A,
+          operationGeneration,
+          userId: "user-1",
+        }),
+      ).toMatchObject({
+        code: "invalid-presence-operation-generation",
+        success: false,
+      });
+    }
+
+    expect(registry.getEffectiveState("user-1")).toBe("offline");
+  });
+
+  it("records a capacity-rejected generation before an older renewal arrives", () => {
+    const { registry } = createRegistry({ maxLeasesPerAccount: 1 });
+
+    expect(
+      registry.renewLease({
+        clientId: CLIENT_A,
+        operationGeneration: 1,
+        state: "available",
+        userId: "user-1",
+      }),
+    ).toMatchObject({ created: true, success: true });
+    const capacityFailure = registry.renewLease({
+      clientId: CLIENT_B,
+      operationGeneration: 2,
+      state: "busy",
+      userId: "user-1",
+    });
+
+    expect(capacityFailure).toMatchObject({
+      code: "lease-capacity-reached",
+      success: false,
+    });
+    expect(
+      registry.renewLease({
+        clientId: CLIENT_B,
+        operationGeneration: 1,
+        state: "available",
+        userId: "user-1",
+      }),
+    ).toMatchObject({ code: "stale-presence-operation", success: false });
+    expect(
+      registry.renewLease({
+        clientId: CLIENT_B,
+        operationGeneration: 2,
+        state: "busy",
+        userId: "user-1",
+      }),
+    ).toEqual(capacityFailure);
+
+    expect(
+      registry.releaseLease({
+        clientId: CLIENT_A,
+        operationGeneration: 2,
+        userId: "user-1",
+      }),
+    ).toMatchObject({ released: true, success: true });
+    expect(
+      registry.renewLease({
+        clientId: CLIENT_B,
+        operationGeneration: 3,
+        state: "busy",
+        userId: "user-1",
+      }),
+    ).toMatchObject({ created: true, success: true });
   });
 
   it("expires leases at the exact boundary and prunes them globally", () => {

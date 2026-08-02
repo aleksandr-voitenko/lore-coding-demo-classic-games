@@ -54,6 +54,17 @@ This file covers React component ownership and shared game UI conventions under
   transition so every rendered frame keeps readable foreground contrast. Keep
   both tabpanel shells mounted so each `aria-controls` target exists, while
   rendering cards only inside the active panel to avoid duplicate form ids.
+  Keep `SocialProvider` as the stable root across launcher early-return
+  surfaces so its overview and lease state survive library/game/party changes.
+  Leave it disabled until the same milestone exposes the nonblocking Friends
+  entry point: the browser must not advertise a user as inviteable on a surface
+  that cannot show or resolve the invitation. Once enabled, library and social
+  launcher surfaces publish `available`, while solo games, replays, and room
+  surfaces publish browser-level `busy`. The room authority upgrades
+  authenticated members to effective `in-party`; the busy fallback also
+  prevents invitations to signed-in legacy guest-link members. Social overview
+  state stays account-scoped across sign-in changes and must never flash the
+  previous account's graph.
 - `multiplayer-room-lobby.tsx` owns the generic private-room lobby/shell UI and
   browser session state: participant resolution, fresh snapshot selection,
   host derivation, diagnostics presentation, and pending form/action state.

@@ -467,6 +467,7 @@ describe("multiplayer room sidecar", () => {
       mutationPathSegment: MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT,
       participantCapabilities: true,
       protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
+      sequencedSocialPresenceOperations: false,
       socialPresenceLeases: false,
     });
     expect(unversionedMutationResponse.status).toBe(426);
@@ -631,7 +632,15 @@ describe("multiplayer room sidecar", () => {
 
     const presenceResponse = await postAccountCommand({
       clientId: "client_account_b",
+      operationGeneration: 2,
       state: "available",
+      type: "presence.renew",
+      userId: "user-2",
+    });
+    const stalePresenceResponse = await postAccountCommand({
+      clientId: "client_account_b",
+      operationGeneration: 1,
+      state: "busy",
       type: "presence.renew",
       userId: "user-2",
     });
@@ -653,6 +662,12 @@ describe("multiplayer room sidecar", () => {
       changed: true,
       outcome: "presence",
       success: true,
+    });
+    expect(stalePresenceResponse.status).toBe(409);
+    await expect(readAccountPartyResult(stalePresenceResponse)).resolves.toEqual({
+      code: "stale-presence-operation",
+      error: "A newer presence operation has already been applied for this client.",
+      success: false,
     });
     expect(availabilityResponse.status).toBe(200);
     await expect(readAccountPartyResult(availabilityResponse)).resolves.toEqual({
@@ -1127,6 +1142,7 @@ describe("multiplayer room sidecar", () => {
       mutationPathSegment: MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT,
       participantCapabilities: true,
       protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
+      sequencedSocialPresenceOperations: true,
       socialPresenceLeases: true,
     });
     expect(unauthorizedResponse.status).toBe(401);

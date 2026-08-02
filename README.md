@@ -385,6 +385,20 @@ allows 10, and party-invitation creation allows 20; all return `429` with
 and 100 pending outgoing friend requests, plus 20 pending incoming and 20
 pending outgoing party invitations.
 
+The browser social foundation validates every successful payload before
+exposing it to UI state. Once the Friends surface enables it, a signed-in
+document uses one cryptographic per-document presence id, renews its 45-second
+lease every 15 seconds only while visible, renews again on focus, and sends a
+keepalive release when hidden or unloaded. Logout gives that advisory release a
+short opportunity to finish before clearing the authenticating session cookie;
+the TTL remains the fallback. Presence operations carry an increasing
+per-document generation, and the room authority suppresses delayed replays for
+up to five minutes within a bounded 64-client tombstone set per account.
+Generationless legacy operations remain valid only until that client identity
+first uses the sequenced contract. Social overview loading keeps the last valid
+same-account graph during refresh, suppresses stale account and request results,
+refreshes on focus, and otherwise polls every 30 seconds only while visible.
+
 Presence leases, effective busy/in-party status, parties, matches, observer
 queues, and participant capabilities remain volatile and are never reconstructed
 from social rows. Invitation creation validates the relationship, asks the

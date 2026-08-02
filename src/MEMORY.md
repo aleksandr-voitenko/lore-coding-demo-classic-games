@@ -17,6 +17,11 @@ rules live in child memory files for `src/app`, `src/components`, `src/lib`, and
   state for all games; `use-current-user.tsx`, which owns the signed-in user
   context and auth actions; and `use-game-session.ts`, which records signed-in
   play sessions without moving timing logic into deterministic engines.
+  `use-social-overview.ts` retains the last valid signed-in social graph while
+  generation-scoping results to the current account, coalesces passive polling
+  and focus refreshes, and polls only while the document is visible.
+  `use-social-presence.ts` projects launcher surface state into one volatile
+  per-document lease through the shared presence controller.
 - `src/lib/` owns deterministic game engines and pure/shared logic. See
   `src/lib/MEMORY.md`.
 - `src/lib/server/` owns Node-only server storage adapters and parsing helpers.

@@ -31,6 +31,7 @@ import {
   removeMultiplayerRoomParticipantCredentials,
   writeMultiplayerRoomParticipantCredentials,
 } from "@/components/multiplayer-room-participant-credentials";
+import { SocialProvider } from "@/components/social-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserAccountControls } from "@/components/user-account-controls";
 import { useCurrentUser } from "@/hooks/use-current-user";
@@ -415,28 +416,34 @@ export function GameLauncher({
       activeRoomSession.userId === currentUserId;
 
     return (
-      <MultiplayerRoomLobby
-        initialAuthMode={initialAuthMode}
-        initialParticipantCapability={
-          credentialsBelongToCurrentUser
-            ? activeRoomSession.participantCapability
-            : null
-        }
-        initialParticipantId={
-          credentialsBelongToCurrentUser
-            ? activeRoomSession.participantId
-            : null
-        }
-        initialRoom={activeRoomSession.room}
-        initialRoomCode={activeRoomSession.roomCode}
-        key={`${activeRoomSession.roomCode}:${currentUserId ?? "guest"}`}
-        onBackToLibrary={returnToLibraryFromRoom}
-      />
+      <SocialProvider enabled={false} presenceState="busy">
+        <MultiplayerRoomLobby
+          initialAuthMode={initialAuthMode}
+          initialParticipantCapability={
+            credentialsBelongToCurrentUser
+              ? activeRoomSession.participantCapability
+              : null
+          }
+          initialParticipantId={
+            credentialsBelongToCurrentUser
+              ? activeRoomSession.participantId
+              : null
+          }
+          initialRoom={activeRoomSession.room}
+          initialRoomCode={activeRoomSession.roomCode}
+          key={`${activeRoomSession.roomCode}:${currentUserId ?? "guest"}`}
+          onBackToLibrary={returnToLibraryFromRoom}
+        />
+      </SocialProvider>
     );
   }
 
   if (isGlobalLeaderboardVisible) {
-    return <GlobalLeaderboardScreen onBackToMenu={returnToMenu} />;
+    return (
+      <SocialProvider enabled={false} presenceState="available">
+        <GlobalLeaderboardScreen onBackToMenu={returnToMenu} />
+      </SocialProvider>
+    );
   }
 
   if (selectedGame !== null) {
@@ -444,12 +451,14 @@ export function GameLauncher({
     const initialGameProps = createInitialGameProps(selectedGame, parameterValues);
 
     return (
-      <SelectedGame
-        {...initialGameProps}
-        onBackToMenu={returnToMenu}
-        onReplayBackToProfile={returnToProfile}
-        replayMode={selectedReplayMode ?? undefined}
-      />
+      <SocialProvider enabled={false} presenceState="busy">
+        <SelectedGame
+          {...initialGameProps}
+          onBackToMenu={returnToMenu}
+          onReplayBackToProfile={returnToProfile}
+          replayMode={selectedReplayMode ?? undefined}
+        />
+      </SocialProvider>
     );
   }
 
@@ -472,12 +481,13 @@ export function GameLauncher({
   }
 
   return (
-    <main
-      className="min-h-svh bg-[var(--chrome-page)] px-4 py-6 text-[var(--chrome-ink)] sm:px-6 lg:py-8"
-      data-testid="game-menu"
-      ref={restoreMenuViewport}
-    >
-      <section className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <SocialProvider enabled={false} presenceState="available">
+      <main
+        className="min-h-svh bg-[var(--chrome-page)] px-4 py-6 text-[var(--chrome-ink)] sm:px-6 lg:py-8"
+        data-testid="game-menu"
+        ref={restoreMenuViewport}
+      >
+        <section className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <header className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center lg:grid-cols-[repeat(3,minmax(0,1fr))]">
           <div className="flex max-w-2xl items-center gap-4 lg:col-start-1">
             <div
@@ -610,8 +620,9 @@ export function GameLauncher({
             </div>
           );
         })}
-      </section>
-    </main>
+        </section>
+      </main>
+    </SocialProvider>
   );
 }
 

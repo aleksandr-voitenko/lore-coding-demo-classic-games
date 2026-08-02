@@ -138,6 +138,24 @@ This file covers deterministic game engines and shared source logic under
   search or user directory. Legacy passwordless account rows are excluded from
   discovery and social relationships. Keep SQLite transactions, session
   authorization, and invitation admission out of this shared module.
+  `social-client.ts` owns defensive browser parsing and typed request errors for
+  `/api/social`, including numeric `Retry-After` handling and validation that
+  accepted invitation credentials identify the participant in the returned
+  authoritative snapshot. `social-presence-client.ts` owns one cryptographic
+  per-document lease identity, serialized renew/release ordering, visible-only
+  15-second renewal against the 45-second server TTL, and best-effort keepalive
+  release. Presence requests have a bounded lifetime so a stalled request cannot
+  hold later renewal or recovery work forever. Every browser operation carries
+  an increasing per-document generation. The volatile authority suppresses
+  delayed lower generations for up to five minutes within a cap of 64 inactive
+  client tombstones per account; active leases retain their ordering record.
+  Missing generations remain a rollout-only legacy mode until that client id
+  first enters sequenced mode. Logout gives authenticated lease release a
+  bounded head start before deleting the session cookie; the server TTL remains
+  the fallback when that advisory cleanup cannot finish in time. The sidecar
+  protocol handshake must advertise sequenced presence support before a service
+  client sends account commands, so deploy the sidecar before clients that
+  require this capability.
 - `game-replay.ts` owns shared replay run ids, seed normalization, deterministic
   replay random creation, active-play replay clocks, API path/client helpers,
   base replay payload validation, and generic cursor coordinate

@@ -69,6 +69,9 @@ export function createSocialPresenceRouteHandlers(
           clientId: isRecord(body.payload)
             ? body.payload.clientId
             : undefined,
+          operationGeneration: isRecord(body.payload)
+            ? body.payload.operationGeneration
+            : undefined,
           type: "presence.release",
           userId: authentication.user.id,
         },
@@ -96,6 +99,9 @@ export function createSocialPresenceRouteHandlers(
         {
           clientId: isRecord(body.payload)
             ? body.payload.clientId
+            : undefined,
+          operationGeneration: isRecord(body.payload)
+            ? body.payload.operationGeneration
             : undefined,
           state: isRecord(body.payload) ? body.payload.state : undefined,
           type: "presence.renew",

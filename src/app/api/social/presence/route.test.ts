@@ -7,6 +7,7 @@ import { createSocialPresenceRouteHandlers } from "./route-handlers";
 
 const USER = { displayName: "Ada", id: "user-1" };
 const CLIENT_ID = "browser-client-123";
+const OPERATION_GENERATION = 7;
 
 function createRequest(
   method: "DELETE" | "POST",
@@ -67,6 +68,7 @@ describe("social presence route", () => {
     const response = await handlers.POST(
       createRequest("POST", {
         clientId: CLIENT_ID,
+        operationGeneration: OPERATION_GENERATION,
         state: "available",
         userId: "forged-user",
       }),
@@ -79,6 +81,7 @@ describe("social presence route", () => {
     );
     expect(accountAuthority.applyAccountCommand).toHaveBeenCalledWith({
       clientId: CLIENT_ID,
+      operationGeneration: OPERATION_GENERATION,
       state: "available",
       type: "presence.renew",
       userId: USER.id,
@@ -94,7 +97,11 @@ describe("social presence route", () => {
     async (availability) => {
       const { handlers } = createHarness(availability);
       const response = await handlers.POST(
-        createRequest("POST", { clientId: CLIENT_ID, state: "busy" }),
+        createRequest("POST", {
+          clientId: CLIENT_ID,
+          operationGeneration: OPERATION_GENERATION,
+          state: "busy",
+        }),
       );
 
       expect(response.status).toBe(200);
@@ -107,6 +114,7 @@ describe("social presence route", () => {
     const response = await handlers.DELETE(
       createRequest("DELETE", {
         clientId: CLIENT_ID,
+        operationGeneration: OPERATION_GENERATION,
         userId: "forged-user",
       }),
     );
@@ -114,10 +122,35 @@ describe("social presence route", () => {
     expect(response.status).toBe(200);
     expect(accountAuthority.applyAccountCommand).toHaveBeenCalledWith({
       clientId: CLIENT_ID,
+      operationGeneration: OPERATION_GENERATION,
       type: "presence.release",
       userId: USER.id,
     });
   });
+
+  it.each(["DELETE", "POST"] as const)(
+    "forwards a missing generation on legacy %s presence",
+    async (method) => {
+      const { accountAuthority, handlers } = createHarness(
+        method === "DELETE" ? "offline" : "available",
+      );
+      const response = await handlers[method](
+        createRequest(method, {
+          clientId: CLIENT_ID,
+          ...(method === "POST" ? { state: "available" } : {}),
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(accountAuthority.applyAccountCommand).toHaveBeenCalledWith({
+        clientId: CLIENT_ID,
+        operationGeneration: undefined,
+        ...(method === "POST" ? { state: "available" } : {}),
+        type: method === "POST" ? "presence.renew" : "presence.release",
+        userId: USER.id,
+      });
+    },
+  );
 
   it("requires authentication before reading or forwarding the mutation", async () => {
     const accountAuthority = {
@@ -133,7 +166,11 @@ describe("social presence route", () => {
     const response = await handlers.POST(
       createRequest(
         "POST",
-        { clientId: CLIENT_ID, state: "available" },
+        {
+          clientId: CLIENT_ID,
+          operationGeneration: OPERATION_GENERATION,
+          state: "available",
+        },
         false,
       ),
     );
@@ -154,7 +191,11 @@ describe("social presence route", () => {
       },
     );
     const response = await handlers.POST(
-      createRequest("POST", { clientId: CLIENT_ID, state: "available" }),
+      createRequest("POST", {
+        clientId: CLIENT_ID,
+        operationGeneration: OPERATION_GENERATION,
+        state: "available",
+      }),
     );
 
     expect(response.status).toBe(429);
@@ -176,7 +217,11 @@ describe("social presence route", () => {
       },
     );
     const response = await handlers.POST(
-      createRequest("POST", { clientId: CLIENT_ID, state: "available" }),
+      createRequest("POST", {
+        clientId: CLIENT_ID,
+        operationGeneration: OPERATION_GENERATION,
+        state: "available",
+      }),
     );
 
     expect(response.status).toBe(502);
@@ -184,4 +229,45 @@ describe("social presence route", () => {
       code: "room-service-invalid-response",
     });
   });
+
+  it.each([
+    ["zero", 0],
+    ["negative", -1],
+    ["fractional", 1.5],
+    ["unsafe", Number.MAX_SAFE_INTEGER + 1],
+    ["string", "1"],
+  ])(
+    "forwards a raw %s operation generation for authority validation",
+    async (_name, operationGeneration) => {
+      const applyAccountCommand = vi.fn(async () => ({
+        code: "invalid-presence-operation-generation" as const,
+        error: "Presence operation generation is not supported.",
+        success: false as const,
+      }));
+      const handlers = createSocialPresenceRouteHandlers(
+        { getUserBySessionToken: vi.fn(async () => USER) },
+        { applyAccountCommand },
+      );
+      const response = await handlers.POST(
+        createRequest("POST", {
+          clientId: CLIENT_ID,
+          operationGeneration,
+          state: "available",
+        }),
+      );
+
+      expect(applyAccountCommand).toHaveBeenCalledWith({
+        clientId: CLIENT_ID,
+        operationGeneration,
+        state: "available",
+        type: "presence.renew",
+        userId: USER.id,
+      });
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        code: "invalid-presence-operation-generation",
+        error: "Presence operation generation is not supported.",
+      });
+    },
+  );
 });

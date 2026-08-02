@@ -8,12 +8,14 @@ export const MAX_MULTIPLAYER_ACCOUNT_AVAILABILITY_USER_IDS = 256;
 export type MultiplayerAccountPartyCommand =
   | {
       clientId: unknown;
+      operationGeneration?: unknown;
       state: unknown;
       type: "presence.renew";
       userId: unknown;
     }
   | {
       clientId: unknown;
+      operationGeneration?: unknown;
       type: "presence.release";
       userId: unknown;
     }
@@ -53,6 +55,7 @@ export type MultiplayerAccountPartyFailureCode =
   | "invalid-client-id"
   | "invalid-invitation-intent"
   | "invalid-participant-id"
+  | "invalid-presence-operation-generation"
   | "invalid-presence-state"
   | "invalid-room-code"
   | "invalid-user-id"
@@ -68,7 +71,8 @@ export type MultiplayerAccountPartyFailureCode =
   | "room-expired"
   | "room-not-found"
   | "room-service-invalid-response"
-  | "room-service-unavailable";
+  | "room-service-unavailable"
+  | "stale-presence-operation";
 
 export type MultiplayerAccountPartyFailure = {
   code: MultiplayerAccountPartyFailureCode;
@@ -181,7 +185,8 @@ export function getMultiplayerAccountPartyErrorStatus(
     code === "in-other-party" ||
     code === "observer-limit-reached" ||
     code === "participant-conflict" ||
-    code === "recipient-unavailable"
+    code === "recipient-unavailable" ||
+    code === "stale-presence-operation"
   ) {
     return 409;
   }
@@ -198,6 +203,7 @@ export function isMultiplayerAccountPartyFailureCode(
     case "invalid-client-id":
     case "invalid-invitation-intent":
     case "invalid-participant-id":
+    case "invalid-presence-operation-generation":
     case "invalid-presence-state":
     case "invalid-room-code":
     case "invalid-user-id":
@@ -214,6 +220,7 @@ export function isMultiplayerAccountPartyFailureCode(
     case "room-not-found":
     case "room-service-invalid-response":
     case "room-service-unavailable":
+    case "stale-presence-operation":
       return true;
   }
 
