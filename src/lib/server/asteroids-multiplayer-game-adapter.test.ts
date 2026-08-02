@@ -10,6 +10,8 @@ function createAsteroidsRoom(overrides: Partial<PrivateRoom> = {}): PrivateRoom 
     code: "ROOM1",
     hostParticipantId: "host-1",
     matchId: 1,
+    nextMatchParticipantIds: [],
+    observerLimit: 8,
     participants: [
       {
         displayName: "Ada Host",
@@ -68,8 +70,10 @@ function createAsteroidsRuntime(room = createAsteroidsRoom()) {
 function createAsteroidsSnapshot(
   runtime: unknown,
   room = createAsteroidsRoom(),
+  matchRoom = room,
 ): AsteroidsMultiplayerGameSnapshot {
   const snapshot = asteroidsMultiplayerRuntimeAdapter.createSnapshot({
+    matchRoom,
     room,
     runtime,
     serverTimeMs: 1_500,

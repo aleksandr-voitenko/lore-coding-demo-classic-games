@@ -30,6 +30,8 @@ const ACTIVE_BATTLE_CITY_ROOM: PrivateRoom = {
   code: "TANK-1",
   hostParticipantId: "host-participant",
   matchId: 1,
+  nextMatchParticipantIds: [],
+  observerLimit: 8,
   participants: [
     {
       displayName: "Ada",

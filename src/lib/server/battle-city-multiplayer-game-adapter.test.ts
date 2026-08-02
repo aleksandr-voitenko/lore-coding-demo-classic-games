@@ -22,6 +22,8 @@ function createBattleCityRoom(
     code: "ROOM1",
     hostParticipantId: "host-1",
     matchId: 1,
+    nextMatchParticipantIds: [],
+    observerLimit: 8,
     participants: [
       {
         displayName: "Ada Host",
@@ -86,8 +88,10 @@ function createBattleCityRuntime(room = createBattleCityRoom()) {
 function createBattleCitySnapshot(
   runtime: unknown,
   room = createBattleCityRoom(),
+  matchRoom = room,
 ): BattleCityMultiplayerGameSnapshot {
   const snapshot = battleCityMultiplayerRuntimeAdapter.createSnapshot({
+    matchRoom,
     room,
     runtime,
     serverTimeMs: 1_500,
@@ -678,8 +682,8 @@ describe("Tank Patrol multiplayer server adapter", () => {
           : seat,
       ),
     });
-    expect(createBattleCitySnapshot(runtime, releasedRoom).summary).toEqual(
-      terminalSummary,
-    );
+    expect(
+      createBattleCitySnapshot(runtime, releasedRoom, room).summary,
+    ).toEqual(terminalSummary);
   });
 });

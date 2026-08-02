@@ -23,7 +23,11 @@ folder.
   current players by seat ordinal, including empty slots, onto the target
   adapter's exactly two required seats. Creation and replacement reject any
   other seat contract. Seat changes and replacement are restricted to
-  lobby/finished states.
+  lobby/finished states. Watching is derived from seat occupancy and bounded by
+  `observerLimit`, so an unseated host is still a watcher while retaining host
+  ownership. The model also owns FIFO next-match queueing/cancellation, queue
+  promotion at match boundaries, explicit member leave, host transfer, and
+  close-when-no-successor outcomes.
 - `protocol.ts` owns the shared realtime envelope types. The envelope should
   stay stable across games: connection messages identify the room, room commands
   wrap the private-room command model, game input carries `gameId` plus a nested

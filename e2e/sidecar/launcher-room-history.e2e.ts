@@ -166,7 +166,7 @@ test("Forward bootstraps authoritative room state with the cached host capabilit
   await expect(page.getByTestId("multiplayer-room-status")).toHaveText("Lobby");
   await expect(page.getByTestId("multiplayer-room-seat-left")).toContainText(hostName);
   await expect(page.getByTestId("multiplayer-room-current-participant")).toHaveText(
-    `${hostName} · Host`,
+    `${hostName} · Player · Host`,
   );
 
   await page.goBack();

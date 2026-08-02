@@ -125,7 +125,12 @@ export type MultiplayerServerGameRuntimeAdapter = {
     nowMs: number;
     room: PrivateRoom;
   }) => MultiplayerServerGameRuntimeCreateResult;
+  /**
+   * Projects live runtime state while keeping terminal attribution tied to the
+   * immutable room captured when this match started.
+   */
   createSnapshot: (options: {
+    matchRoom: PrivateRoom;
     room: PrivateRoom;
     runtime: unknown;
     serverTimeMs: number;

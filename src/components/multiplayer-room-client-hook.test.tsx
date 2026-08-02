@@ -24,6 +24,8 @@ const ROOM: PrivateRoom = {
   code: "ROOM1",
   hostParticipantId: "host-1",
   matchId: 1,
+  nextMatchParticipantIds: [],
+  observerLimit: 8,
   participants: [
     {
       displayName: "Ada",
@@ -87,6 +89,7 @@ function createRoomClientOptions(
     lastSeq: { game: { matchId: 1, seq: 4 }, room: 3 },
     onConnectionError: vi.fn(),
     onDiagnosticsPingSample: vi.fn(),
+    onMembershipEnded: vi.fn(),
     onParticipantCapability: vi.fn(),
     onParticipantId: vi.fn(),
     onSnapshot: vi.fn(),
@@ -141,6 +144,7 @@ describe("useMultiplayerRoomClient", () => {
       lastSeq: options.lastSeq,
       onConnectionError: options.onConnectionError,
       onDiagnosticsPingSample: options.onDiagnosticsPingSample,
+      onMembershipEnded: options.onMembershipEnded,
       onParticipantCapability: options.onParticipantCapability,
       onParticipantId: options.onParticipantId,
       participantCapability: options.participantCapability,

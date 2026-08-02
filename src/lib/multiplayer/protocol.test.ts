@@ -59,6 +59,10 @@ function createProtocolRoom(settings: PrivateRoomSettings): PrivateRoom {
 }
 
 describe("multiplayer realtime protocol", () => {
+  it("uses protocol v5 for party membership lifecycle messages", () => {
+    expect(MULTIPLAYER_ROOM_PROTOCOL_VERSION).toBe(5);
+  });
+
   it("carries connection hello, resume, diagnostics ping, and bootstrap messages for a room", () => {
     const hello = {
       displayName: "Guest Hero",
@@ -129,6 +133,20 @@ describe("multiplayer realtime protocol", () => {
       matchId: 1,
       type: "room.claimSeat",
     } satisfies PrivateRoomCommandMessage;
+    const joinNextMatchCommand = {
+      matchId: 1,
+      participantId: "guest-1",
+      type: "room.joinNextMatch",
+    } satisfies PrivateRoomCommandMessage;
+    const cancelNextMatchCommand = {
+      matchId: 1,
+      participantId: "guest-1",
+      type: "room.cancelNextMatch",
+    } satisfies PrivateRoomCommandMessage;
+    const leaveCommand = {
+      participantId: "guest-1",
+      type: "room.leave",
+    } satisfies PrivateRoomCommandMessage;
     const realtimeCommand = {
       command: claimSeatCommand,
       requestId: "request-claim",
@@ -161,6 +179,9 @@ describe("multiplayer realtime protocol", () => {
     });
     expect(realtimeCommand.command.type).toBe("room.claimSeat");
     expect(joinPlayerCommand.type).toBe("room.joinPlayer");
+    expect(joinNextMatchCommand.matchId).toBe(1);
+    expect(cancelNextMatchCommand.type).toBe("room.cancelNextMatch");
+    expect(leaveCommand).not.toHaveProperty("matchId");
     expect(httpCommand.type).toBe("room.updateSettings");
     expect(httpCommand.settings.gameId).toBe("asteroids");
     expect(replaceMatchCommand.settings.gameId).toBe("space-invaders");
@@ -292,6 +313,19 @@ describe("multiplayer realtime protocol", () => {
       roomCode: ROOM_CODE,
       type: "room.commandRejected",
     } satisfies MultiplayerRealtimeServerMessage<typeof gameSnapshot>;
+    const partyClosedMessage = {
+      matchId: 1,
+      reason: "The host left and no signed-in member could take over.",
+      roomCode: ROOM_CODE,
+      seq: 10,
+      type: "party.closed",
+    } satisfies MultiplayerRealtimeServerMessage<typeof gameSnapshot>;
+    const membershipEndedMessage = {
+      participantId: "ship-1",
+      reason: "left",
+      roomCode: ROOM_CODE,
+      type: "room.membershipEnded",
+    } satisfies MultiplayerRealtimeServerMessage<typeof gameSnapshot>;
     const pingMessage = {
       nonce: "ping-1",
       serverTimeMs: 1_250,
@@ -313,6 +347,8 @@ describe("multiplayer realtime protocol", () => {
     expect(eventMessage.event.gameSeq).toBe(4);
     expect(ackMessage.seq).toBe(9);
     expect(rejectionMessage.code).toBe("invalid-command");
+    expect(partyClosedMessage.seq).toBe(10);
+    expect(membershipEndedMessage.reason).toBe("left");
     expect(pingMessage.serverTimeMs).toBe(1_250);
     expect(pongMessage.clientTimeMs).toBe(1_200);
   });

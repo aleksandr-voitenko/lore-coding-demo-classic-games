@@ -61,6 +61,20 @@ export type MultiplayerRoomTransportPingSample = {
   serverTimeMs: number;
 };
 
+export type MultiplayerRoomMembershipEnded =
+  | {
+      participantId: string;
+      reason: "left";
+      roomCode: string;
+    }
+  | {
+      matchId: number;
+      reason: "party-closed";
+      roomCode: string;
+      seq: number;
+      message: string;
+    };
+
 export type MultiplayerRoomWebSocketLike = {
   readonly readyState: number;
   addEventListener<EventName extends keyof MultiplayerRoomWebSocketEventMap>(
@@ -104,6 +118,7 @@ type CreateWebSocketTransportOptions = {
   onClose?: () => void;
   onDiagnosticsPingSample?: (sample: MultiplayerRoomTransportPingSample) => void;
   onError?: (error: MultiplayerRoomTransportError) => void;
+  onMembershipEnded?: (event: MultiplayerRoomMembershipEnded) => void;
   onParticipantCapability?: (participantCapability: string) => void;
   onParticipantId?: (participantId: string) => void;
   onSnapshot: (snapshot: MultiplayerRoomTransportSnapshot) => void;
@@ -288,6 +303,7 @@ export function createMultiplayerRoomWebSocketTransport({
   onClose,
   onDiagnosticsPingSample,
   onError,
+  onMembershipEnded,
   onParticipantCapability,
   onParticipantId,
   onSnapshot,
@@ -519,6 +535,43 @@ export function createMultiplayerRoomWebSocketTransport({
       }
 
       rejectPendingRequest(message.requestId, error);
+      return;
+    }
+
+    if (message.type === "room.membershipEnded") {
+      onMembershipEnded?.({
+        participantId: message.participantId,
+        reason: "left",
+        roomCode: message.roomCode,
+      });
+      terminateTransport({
+        closeSocket: true,
+        error: new MultiplayerRoomTransportError(
+          "Party membership ended.",
+          { code: "participant-unauthorized" },
+        ),
+        notifyClose: false,
+        reportError: false,
+      });
+      return;
+    }
+
+    if (message.type === "party.closed") {
+      onMembershipEnded?.({
+        matchId: message.matchId,
+        message: message.reason,
+        reason: "party-closed",
+        roomCode: message.roomCode,
+        seq: message.seq,
+      });
+      terminateTransport({
+        closeSocket: true,
+        error: new MultiplayerRoomTransportError(message.reason, {
+          code: "party-closed",
+        }),
+        notifyClose: false,
+        reportError: false,
+      });
       return;
     }
 

@@ -50,6 +50,9 @@ function isWebSocketOnlyCommandType(value: unknown) {
   return (
     value === "room.joinObserver" ||
     value === "room.joinPlayer" ||
+    value === "room.joinNextMatch" ||
+    value === "room.cancelNextMatch" ||
+    value === "room.leave" ||
     value === "room.claimSeat" ||
     value === "room.releaseSeat" ||
     value === "game.input"
@@ -211,6 +214,13 @@ export function createMultiplayerRoomRouteHandlers(
 
       if (!result.success) {
         return createMultiplayerRoomErrorResponse(result);
+      }
+
+      if (result.outcome === "party-closed") {
+        return NextResponse.json(
+          { error: "This party has closed." },
+          { status: 410 },
+        );
       }
 
       return NextResponse.json(result.snapshot);

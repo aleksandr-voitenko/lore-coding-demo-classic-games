@@ -20,6 +20,8 @@ const ROOM: PrivateRoom = {
   code: "ROOM1",
   hostParticipantId: "host-1",
   matchId: 1,
+  nextMatchParticipantIds: [],
+  observerLimit: 8,
   participants: [
     {
       displayName: "Ada",
@@ -344,7 +346,7 @@ describe("multiplayer room HTTP client", () => {
     });
 
     expect(fetcher).toHaveBeenCalledWith(
-      `${MULTIPLAYER_ROOMS_API_PATH}/v4`,
+      `${MULTIPLAYER_ROOMS_API_PATH}/v5`,
       expect.objectContaining({ method: "POST" }),
     );
     expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({
@@ -421,7 +423,7 @@ describe("multiplayer room HTTP client", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(fetcher).toHaveBeenNthCalledWith(
       1,
-      `${MULTIPLAYER_ROOMS_API_PATH}/ROOM1/v4`,
+      `${MULTIPLAYER_ROOMS_API_PATH}/ROOM1/v5`,
       expect.objectContaining({ method: "POST" }),
     );
     expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({

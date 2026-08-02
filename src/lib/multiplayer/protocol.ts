@@ -6,7 +6,7 @@ import type {
   PrivateRoomSettings,
 } from "./room";
 
-export const MULTIPLAYER_ROOM_PROTOCOL_VERSION = 4 as const;
+export const MULTIPLAYER_ROOM_PROTOCOL_VERSION = 5 as const;
 export const MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT =
   `v${MULTIPLAYER_ROOM_PROTOCOL_VERSION}`;
 export const MULTIPLAYER_ROOM_PROTOCOL_VERSION_HEADER =
@@ -114,6 +114,23 @@ export type PrivateRoomCommandMessage =
       matchId: number;
       participantId: string;
       requestId?: string;
+      type: "room.joinNextMatch";
+    }
+  | {
+      matchId: number;
+      participantId: string;
+      requestId?: string;
+      type: "room.cancelNextMatch";
+    }
+  | {
+      participantId: string;
+      requestId?: string;
+      type: "room.leave";
+    }
+  | {
+      matchId: number;
+      participantId: string;
+      requestId?: string;
       seatId: string;
       type: "room.claimSeat";
     }
@@ -212,6 +229,7 @@ export type MultiplayerRealtimeRejectionCode =
   | "duplicate-room"
   | "invalid-command"
   | "invalid-message"
+  | "party-closed"
   | "participant-unauthorized"
   | "protocol-version-mismatch"
   | "room-expired"
@@ -270,6 +288,19 @@ export type MultiplayerRealtimeServerMessage<
       requestId?: string;
       roomCode?: string;
       type: "room.commandRejected";
+    }
+  | {
+      matchId: number;
+      reason: string;
+      roomCode: string;
+      seq: number;
+      type: "party.closed";
+    }
+  | {
+      participantId: string;
+      reason: "left";
+      roomCode: string;
+      type: "room.membershipEnded";
     }
   | {
       nonce?: string;

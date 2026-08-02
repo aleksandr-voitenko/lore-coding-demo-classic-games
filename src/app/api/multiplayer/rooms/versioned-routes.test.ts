@@ -21,9 +21,11 @@ vi.mock("@/lib/server/sqlite-user-profile-store", () => ({
 import { POST as postRoomV2 } from "./[code]/v2/route";
 import { POST as postRoomV3 } from "./[code]/v3/route";
 import { POST as postRoomV4 } from "./[code]/v4/route";
+import { POST as postRoomV5 } from "./[code]/v5/route";
 import { POST as postRoomsV2 } from "./v2/route";
 import { POST as postRoomsV3 } from "./v3/route";
 import { POST as postRoomsV4 } from "./v4/route";
+import { POST as postRoomsV5 } from "./v5/route";
 
 const USER = {
   displayName: "Ada Host",
@@ -40,6 +42,8 @@ const SNAPSHOT = {
     code: "ROOM1",
     hostParticipantId: "host-1",
     matchId: 1,
+    nextMatchParticipantIds: [],
+    observerLimit: 8,
     participants: [
       {
         displayName: "Ada Host",
@@ -71,21 +75,24 @@ describe("versioned multiplayer mutation routes", () => {
     vi.clearAllMocks();
     stores.user.getUserBySessionToken.mockResolvedValue(USER);
     stores.room.createRoom.mockResolvedValue({
+      outcome: "snapshot",
       participantCapability: "host-capability",
       snapshot: SNAPSHOT,
       success: true,
     });
     stores.room.getRoom.mockResolvedValue({
+      outcome: "snapshot",
       snapshot: SNAPSHOT,
       success: true,
     });
     stores.room.applyCommand.mockResolvedValue({
+      outcome: "snapshot",
       snapshot: SNAPSHOT,
       success: true,
     });
   });
 
-  it("retires protocol-v2 and v3 mutation routes before touching stores", async () => {
+  it("retires protocol-v2 through v4 mutation routes before touching stores", async () => {
     const responses = await Promise.all([
       postRoomsV2(
         createRequest("/api/multiplayer/rooms/v2", { gameId: "pong" }),
@@ -107,10 +114,20 @@ describe("versioned multiplayer mutation routes", () => {
           type: "room.lifecycle",
         }),
       ),
+      postRoomsV4(
+        createRequest("/api/multiplayer/rooms/v4", { gameId: "pong" }),
+      ),
+      postRoomV4(
+        createRequest("/api/multiplayer/rooms/ROOM1/v4", {
+          command: "start",
+          matchId: 1,
+          type: "room.lifecycle",
+        }),
+      ),
     ]);
 
     expect(responses.map((response) => response.status)).toEqual([
-      426, 426, 426, 426,
+      426, 426, 426, 426, 426, 426,
     ]);
     expect(stores.user.getUserBySessionToken).not.toHaveBeenCalled();
     expect(stores.room.createRoom).not.toHaveBeenCalled();
@@ -118,9 +135,9 @@ describe("versioned multiplayer mutation routes", () => {
     expect(stores.room.applyCommand).not.toHaveBeenCalled();
   });
 
-  it("serves protocol-v4 room creation through the active handler", async () => {
-    const response = await postRoomsV4(
-      createRequest("/api/multiplayer/rooms/v4", { gameId: "pong" }),
+  it("serves protocol-v5 room creation through the active handler", async () => {
+    const response = await postRoomsV5(
+      createRequest("/api/multiplayer/rooms/v5", { gameId: "pong" }),
     );
 
     expect(response.status).toBe(201);
@@ -133,9 +150,9 @@ describe("versioned multiplayer mutation routes", () => {
     });
   });
 
-  it("serves protocol-v4 host commands with the authenticated actor", async () => {
-    const response = await postRoomV4(
-      createRequest("/api/multiplayer/rooms/ROOM1/v4", {
+  it("serves protocol-v5 host commands with the authenticated actor", async () => {
+    const response = await postRoomV5(
+      createRequest("/api/multiplayer/rooms/ROOM1/v5", {
         command: "start",
         matchId: 1,
         participantId: "forged-participant",

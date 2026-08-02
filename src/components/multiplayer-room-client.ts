@@ -4,6 +4,7 @@ import { useCallback } from "react";
 
 import {
   type MultiplayerRoomTransportAck,
+  type MultiplayerRoomMembershipEnded,
   type MultiplayerRoomTransportPingSample,
   type MultiplayerRoomTransportStatus,
   useMultiplayerRoomWebSocketTransport,
@@ -82,6 +83,7 @@ type UseMultiplayerRoomClientOptions = {
   lastSeq?: MultiplayerRealtimeConnectionCursor | null;
   onConnectionError?: (error: Error) => void;
   onDiagnosticsPingSample?: (sample: MultiplayerRoomTransportPingSample) => void;
+  onMembershipEnded?: (event: MultiplayerRoomMembershipEnded) => void;
   onParticipantCapability?: (participantCapability: string) => void;
   onParticipantId?: (participantId: string) => void;
   onSnapshot: (
@@ -247,6 +249,7 @@ export function useMultiplayerRoomClient({
   lastSeq,
   onConnectionError,
   onDiagnosticsPingSample,
+  onMembershipEnded,
   onParticipantCapability,
   onParticipantId,
   onSnapshot,
@@ -261,6 +264,7 @@ export function useMultiplayerRoomClient({
     lastSeq,
     onConnectionError,
     onDiagnosticsPingSample,
+    onMembershipEnded,
     onParticipantCapability,
     onParticipantId,
     onSnapshot: (snapshot) => {

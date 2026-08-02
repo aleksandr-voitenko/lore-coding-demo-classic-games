@@ -23,6 +23,7 @@ import {
   type MultiplayerRoomSnapshot,
   type MultiplayerRoomStore,
   type MultiplayerRoomStoreResult,
+  type MultiplayerRoomStoreSnapshotResult,
 } from "./multiplayer-room-runtime";
 import { createMultiplayerRoomWebSocketGateway } from "./multiplayer-room-websocket";
 
@@ -45,6 +46,7 @@ afterEach(async () => {
 
 function createTestRoomStore({
   getNowMs,
+  maxConnectionsPerParticipant,
   maxRooms,
   participantCapabilities = [
     "host-capability",
@@ -57,6 +59,7 @@ function createTestRoomStore({
   roomCodes = ["ROOM1"],
 }: {
   getNowMs?: () => number;
+  maxConnectionsPerParticipant?: number;
   maxRooms?: number;
   participantCapabilities?: string[];
   participantIds?: string[];
@@ -84,6 +87,9 @@ function createTestRoomStore({
       participantIds[participantIdIndex++] ?? `${role}-${participantIdIndex}`,
     createRoomCode: () => roomCodes[roomCodeIndex++] ?? "ROOM-FALLBACK",
     getNowMs,
+    ...(maxConnectionsPerParticipant === undefined
+      ? {}
+      : { maxConnectionsPerParticipant }),
     maxRooms,
     retentionPolicy,
   });
@@ -94,6 +100,12 @@ function expectStoreSuccess(result: MultiplayerRoomStoreResult) {
 
   if (!result.success) {
     throw new Error(result.error);
+  }
+
+  expect(result.outcome).toBe("snapshot");
+
+  if (result.outcome !== "snapshot") {
+    throw new Error("Expected a room snapshot.");
   }
 
   return result.snapshot;
@@ -907,8 +919,12 @@ describe("multiplayer room WebSocket gateway", () => {
       (_, index) => `ROOM${index + 1}`,
     );
     const participantIds = roomCodes.map((_, index) => `host-${index + 1}`);
+    const participantCapabilities = roomCodes.map(
+      (_, index) => `host-capability-${index + 1}`,
+    );
     const store = createTestRoomStore({
       maxRooms: roomCodes.length,
+      participantCapabilities,
       participantIds,
       roomCodes,
     });
@@ -920,10 +936,24 @@ describe("multiplayer room WebSocket gateway", () => {
 
     const { gateway, url } = await createGatewayFixture(store);
 
-    for (const roomCode of roomCodes) {
+    for (const [index, roomCode] of roomCodes.entries()) {
       const client = await connectClient(url);
+      const bootstrapPromise = waitForServerMessage(
+        client,
+        (message) =>
+          message.type === "connection.bootstrap" &&
+          message.requestId === `churn-${roomCode}`,
+      );
 
-      await bootstrapClient(client, roomCode);
+      sendClientMessage(client, {
+        participantCapability: participantCapabilities[index],
+        participantId: participantIds[index],
+        requestId: `churn-${roomCode}`,
+        roomCode,
+        type: "connection.resume",
+      });
+      await bootstrapPromise;
+
       const closePromise = waitForClientClose(client);
 
       client.close();
@@ -1188,6 +1218,336 @@ describe("multiplayer room WebSocket gateway", () => {
     );
   });
 
+  it("acks leave before ending every socket for the departed identity", async () => {
+    const store = createTestRoomStore();
+    createLobbyRoom(store);
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        displayName: "Grace Guest",
+        type: "room.joinObserver",
+      }),
+    );
+    const { gateway, url } = await createGatewayFixture(store, {
+      snapshotIntervalMs: 0,
+    });
+    const host = await connectClient(url);
+    const leavingGuest = await connectClient(url);
+    const guestSiblingSocket = await connectClient(url);
+
+    await bootstrapClient(host, "ROOM1", "host-1");
+    await bootstrapClient(leavingGuest, "ROOM1", "guest-1");
+    await bootstrapClient(guestSiblingSocket, "ROOM1", "guest-1");
+
+    const leavingGuestMessages: MultiplayerRealtimeServerMessage[] = [];
+    const guestSiblingMessages: MultiplayerRealtimeServerMessage[] = [];
+    const recordLeavingGuestMessage = (data: RawData) => {
+      const message = JSON.parse(rawDataToText(data)) as unknown;
+
+      if (isServerMessage(message)) {
+        leavingGuestMessages.push(message);
+      }
+    };
+    const recordGuestSiblingMessage = (data: RawData) => {
+      const message = JSON.parse(rawDataToText(data)) as unknown;
+
+      if (isServerMessage(message)) {
+        guestSiblingMessages.push(message);
+      }
+    };
+    const hostSnapshotPromise = waitForServerMessage(
+      host,
+      (message) =>
+        message.type === "room.snapshot" && message.snapshot.seq === 3,
+    );
+    const leavingGuestClosePromise = waitForClientClose(leavingGuest);
+    const guestSiblingClosePromise = waitForClientClose(guestSiblingSocket);
+
+    leavingGuest.on("message", recordLeavingGuestMessage);
+    guestSiblingSocket.on("message", recordGuestSiblingMessage);
+    sendClientMessage(leavingGuest, {
+      command: {
+        participantId: "guest-1",
+        type: "room.leave",
+      },
+      requestId: "guest-leave",
+      roomCode: "ROOM1",
+      type: "room.command",
+    });
+
+    const [hostSnapshot] = await Promise.all([
+      hostSnapshotPromise,
+      leavingGuestClosePromise,
+      guestSiblingClosePromise,
+    ]);
+
+    leavingGuest.off("message", recordLeavingGuestMessage);
+    guestSiblingSocket.off("message", recordGuestSiblingMessage);
+    expect(leavingGuestMessages).toEqual([
+      {
+        matchId: 1,
+        participantId: "guest-1",
+        requestId: "guest-leave",
+        roomCode: "ROOM1",
+        seq: 3,
+        type: "room.commandAck",
+      },
+      {
+        participantId: "guest-1",
+        reason: "left",
+        roomCode: "ROOM1",
+        type: "room.membershipEnded",
+      },
+    ]);
+    expect(guestSiblingMessages).toEqual([
+      {
+        participantId: "guest-1",
+        reason: "left",
+        roomCode: "ROOM1",
+        type: "room.membershipEnded",
+      },
+    ]);
+    expect(hostSnapshot).toMatchObject({
+      snapshot: {
+        room: {
+          participants: [expect.objectContaining({ id: "host-1" })],
+        },
+        seq: 3,
+      },
+      type: "room.snapshot",
+    });
+    expect(leavingGuest.readyState).toBe(WebSocket.CLOSED);
+    expect(guestSiblingSocket.readyState).toBe(WebSocket.CLOSED);
+    expect(
+      store.resolveParticipantCapability("ROOM1", "guest-capability"),
+    ).toBeNull();
+    expect(gateway.getTrackedRoomCounts()).toMatchObject({
+      subscribedRooms: 1,
+    });
+  });
+
+  it("delivers party closure after the host leave ack and detaches everyone", async () => {
+    const store = createTestRoomStore();
+    createLobbyRoom(store);
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        displayName: "Unsigned Guest",
+        type: "room.joinPlayer",
+      }),
+    );
+    const { gateway, url } = await createGatewayFixture(store, {
+      snapshotIntervalMs: 0,
+    });
+    const host = await connectClient(url);
+    const guest = await connectClient(url);
+
+    await bootstrapClient(host, "ROOM1", "host-1");
+    await bootstrapClient(guest, "ROOM1", "guest-1");
+
+    const hostMessages: MultiplayerRealtimeServerMessage[] = [];
+    const guestMessages: MultiplayerRealtimeServerMessage[] = [];
+    const recordHostMessage = (data: RawData) => {
+      const message = JSON.parse(rawDataToText(data)) as unknown;
+
+      if (isServerMessage(message)) {
+        hostMessages.push(message);
+      }
+    };
+    const recordGuestMessage = (data: RawData) => {
+      const message = JSON.parse(rawDataToText(data)) as unknown;
+
+      if (isServerMessage(message)) {
+        guestMessages.push(message);
+      }
+    };
+    const hostClosePromise = waitForClientClose(host);
+    const guestClosePromise = waitForClientClose(guest);
+    const closureReason =
+      "The host left and no connected signed-in member could take over, so the party closed.";
+
+    host.on("message", recordHostMessage);
+    guest.on("message", recordGuestMessage);
+    sendClientMessage(host, {
+      command: {
+        participantId: "host-1",
+        type: "room.leave",
+      },
+      requestId: "host-leave",
+      roomCode: "ROOM1",
+      type: "room.command",
+    });
+
+    await Promise.all([hostClosePromise, guestClosePromise]);
+
+    host.off("message", recordHostMessage);
+    guest.off("message", recordGuestMessage);
+    expect(hostMessages).toEqual([
+      {
+        matchId: 1,
+        participantId: "host-1",
+        requestId: "host-leave",
+        roomCode: "ROOM1",
+        seq: 3,
+        type: "room.commandAck",
+      },
+      {
+        matchId: 1,
+        reason: closureReason,
+        roomCode: "ROOM1",
+        seq: 3,
+        type: "party.closed",
+      },
+    ]);
+    expect(guestMessages).toEqual([
+      {
+        matchId: 1,
+        reason: closureReason,
+        roomCode: "ROOM1",
+        seq: 3,
+        type: "party.closed",
+      },
+    ]);
+    expect(host.readyState).toBe(WebSocket.CLOSED);
+    expect(guest.readyState).toBe(WebSocket.CLOSED);
+    expect(gateway.getTrackedRoomCounts()).toEqual({
+      activeSnapshotRooms: 0,
+      broadcastCursors: 0,
+      subscribedRooms: 0,
+    });
+    expect(store.getRoom("ROOM1")).toEqual({
+      code: "party-closed",
+      error: closureReason,
+      success: false,
+    });
+  });
+
+  it("rejects a capability-bound participant attempting to leave as someone else", async () => {
+    const store = createTestRoomStore();
+    createLobbyRoom(store);
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        displayName: "Grace Guest",
+        type: "room.joinObserver",
+      }),
+    );
+    const applyCommand = vi.spyOn(store, "applyCommand");
+    const { url } = await createGatewayFixture(store, {
+      snapshotIntervalMs: 0,
+    });
+    const guest = await connectClient(url);
+
+    await bootstrapClient(guest, "ROOM1", "guest-1");
+    const rejectionPromise = waitForServerMessage(
+      guest,
+      (message) =>
+        message.type === "room.commandRejected" &&
+        message.requestId === "spoof-host-leave",
+    );
+
+    sendClientMessage(guest, {
+      command: {
+        participantId: "host-1",
+        type: "room.leave",
+      },
+      requestId: "spoof-host-leave",
+      roomCode: "ROOM1",
+      type: "room.command",
+    });
+
+    await expect(rejectionPromise).resolves.toEqual({
+      code: "participant-unauthorized",
+      error: "Participant credentials are invalid or no longer active.",
+      requestId: "spoof-host-leave",
+      roomCode: "ROOM1",
+      type: "room.commandRejected",
+    });
+    expect(applyCommand).not.toHaveBeenCalled();
+    expect(guest.readyState).toBe(WebSocket.OPEN);
+    expect(expectStoreSuccess(store.getRoom("ROOM1")).room.participants).toEqual([
+      expect.objectContaining({ id: "host-1", role: "host" }),
+      expect.objectContaining({ id: "guest-1", role: "observer" }),
+    ]);
+  });
+
+  it("enforces the participant connection ceiling and releases closed slots", async () => {
+    const store = createTestRoomStore({
+      maxConnectionsPerParticipant: 2,
+    });
+    createLobbyRoom(store);
+    const unregisterParticipantConnection = vi.spyOn(
+      store,
+      "unregisterParticipantConnection",
+    );
+    const { gateway, url } = await createGatewayFixture(store, {
+      snapshotIntervalMs: 0,
+    });
+    const first = await connectClient(url);
+    const second = await connectClient(url);
+    const rejected = await connectClient(url);
+
+    await bootstrapClient(first, "ROOM1", "host-1");
+    await bootstrapClient(second, "ROOM1", "host-1");
+    const ceilingRejectionPromise = waitForServerMessage(
+      rejected,
+      (message) =>
+        message.type === "room.commandRejected" &&
+        message.requestId === "host-third-connection",
+    );
+
+    sendClientMessage(rejected, {
+      participantCapability: "host-capability",
+      participantId: "host-1",
+      requestId: "host-third-connection",
+      roomCode: "ROOM1",
+      type: "connection.resume",
+    });
+
+    await expect(ceilingRejectionPromise).resolves.toEqual({
+      code: "participant-unauthorized",
+      error: "Participant credentials are invalid or no longer active.",
+      requestId: "host-third-connection",
+      roomCode: "ROOM1",
+      type: "room.commandRejected",
+    });
+    expect(gateway.getTrackedRoomCounts()).toMatchObject({
+      subscribedRooms: 1,
+    });
+
+    const firstClosePromise = waitForClientClose(first);
+
+    first.close();
+    await firstClosePromise;
+    await vi.waitFor(() => {
+      expect(unregisterParticipantConnection).toHaveBeenCalledWith(
+        "ROOM1",
+        "host-1",
+      );
+    });
+
+    const retryBootstrapPromise = waitForServerMessage(
+      rejected,
+      (message) =>
+        message.type === "connection.bootstrap" &&
+        message.requestId === "host-third-retry",
+    );
+
+    sendClientMessage(rejected, {
+      participantCapability: "host-capability",
+      participantId: "host-1",
+      requestId: "host-third-retry",
+      roomCode: "ROOM1",
+      type: "connection.resume",
+    });
+
+    await expect(retryBootstrapPromise).resolves.toMatchObject({
+      requestId: "host-third-retry",
+      snapshot: {
+        participant: expect.objectContaining({ id: "host-1" }),
+      },
+      type: "connection.bootstrap",
+    });
+    expect(gateway.webSocketServer.clients.size).toBe(2);
+  });
+
   it("keeps public observer joins guest-only and returns their capability only in the private ack", async () => {
     const store = createTestRoomStore();
     createLobbyRoom(store);
@@ -1196,7 +1556,7 @@ describe("multiplayer room WebSocket gateway", () => {
     const observer = await connectClient(url);
 
     await bootstrapClient(sender);
-    await bootstrapClient(observer);
+    await bootstrapClient(observer, "ROOM1", "host-1");
 
     const ackPromise = waitForServerMessage(
       sender,
@@ -1258,7 +1618,7 @@ describe("multiplayer room WebSocket gateway", () => {
     const observer = await connectClient(url);
 
     await bootstrapClient(sender);
-    await bootstrapClient(observer);
+    await bootstrapClient(observer, "ROOM1", "host-1");
 
     const ackPromise = waitForServerMessage(
       sender,
@@ -1312,7 +1672,7 @@ describe("multiplayer room WebSocket gateway", () => {
     const observer = await connectClient(url);
 
     await bootstrapClient(sender);
-    await bootstrapClient(observer);
+    await bootstrapClient(observer, "ROOM1", "host-1");
 
     const ackPromise = waitForServerMessage(
       sender,
@@ -1421,7 +1781,7 @@ describe("multiplayer room WebSocket gateway", () => {
     const observer = await connectClient(url);
 
     await bootstrapClient(sender);
-    await bootstrapClient(observer);
+    await bootstrapClient(observer, "ROOM1", "host-1");
     const observerSnapshotPromise = waitForServerMessage(
       observer,
       (message) => message.type === "room.snapshot" && message.snapshot.seq === 2,
@@ -1595,7 +1955,7 @@ describe("multiplayer room WebSocket gateway", () => {
     const observer = await connectClient(url);
 
     await bootstrapClient(sender, "ROOM1", "host-1");
-    await bootstrapClient(observer);
+    await bootstrapClient(observer, "ROOM1", "guest-1");
 
     const expectedGameSeq = started.game!.seq + 1;
     const ackPromise = waitForServerMessage(
@@ -1757,7 +2117,7 @@ describe("multiplayer room WebSocket gateway", () => {
     const observer = await connectClient(url);
 
     await bootstrapClient(sender, "ROOM1", "guest-1");
-    await bootstrapClient(observer);
+    await bootstrapClient(observer, "ROOM1", "host-1");
 
     const expectedGameSeq = started.game!.seq + 1;
     const ackPromise = waitForServerMessage(
@@ -1849,7 +2209,7 @@ describe("multiplayer room WebSocket gateway", () => {
     const observer = await connectClient(url);
 
     await bootstrapClient(sender, "ROOM1", "guest-1");
-    await bootstrapClient(observer);
+    await bootstrapClient(observer, "ROOM1", "host-1");
 
     const expectedGameSeq = started.game!.seq + 1;
     const ackPromise = waitForServerMessage(
@@ -1946,7 +2306,7 @@ describe("multiplayer room WebSocket gateway", () => {
     const { url } = await createGatewayFixture(store, { snapshotIntervalMs: 10 });
     const observer = await connectClient(url);
 
-    await bootstrapClient(observer);
+    await bootstrapClient(observer, "ROOM1", "host-1");
 
     const runningSnapshotPromise = waitForServerMessage(
       observer,
@@ -1974,48 +2334,52 @@ describe("multiplayer room WebSocket gateway", () => {
     expect(gameSnapshot?.ball.position.x).not.toBe(startedPongGame.ball.position.x);
   });
 
-  it("stops pumping and rejects subscribers after an anonymous active room expires", async () => {
-    let nowMs = 0;
-    const store = createTestRoomStore({
-      getNowMs: () => nowMs,
-      retentionPolicy: {
-        inProgressIdleTtlMs: 1_000,
-        sweepIntervalMs: 100,
-      },
-    });
+  it("does not subscribe anonymous bootstraps to later snapshots", async () => {
+    const store = createTestRoomStore();
     createStartedPongRoom(store);
-    const getRoom = vi.spyOn(store, "getRoom");
     const { gateway, url } = await createGatewayFixture(store, {
-      snapshotIntervalMs: 16,
+      snapshotIntervalMs: 0,
     });
     const client = await connectClient(url);
 
     await bootstrapClient(client);
-    nowMs = 1_000;
-    const rejectionPromise = waitForServerMessage(
-      client,
-      (message) =>
-        message.type === "room.commandRejected" &&
-        message.code === "room-expired",
+    expect(gateway.getTrackedRoomCounts()).toEqual({
+      activeSnapshotRooms: 0,
+      broadcastCursors: 0,
+      subscribedRooms: 0,
+    });
+    const laterMessages: MultiplayerRealtimeServerMessage[] = [];
+    const recordMessage = (data: RawData) => {
+      const message = JSON.parse(rawDataToText(data)) as unknown;
+
+      if (isServerMessage(message)) {
+        laterMessages.push(message);
+      }
+    };
+
+    client.on("message", recordMessage);
+    const updated = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        input: {
+          direction: "up",
+          type: "pong.setPaddleDirection",
+        },
+        matchId: 1,
+        participantId: "host-1",
+        type: "game.input",
+      }),
     );
 
-    await expect(rejectionPromise).resolves.toMatchObject({
-      code: "room-expired",
-      error: "Room has expired. Create or join a new room.",
-      roomCode: "ROOM1",
-      type: "room.commandRejected",
-    });
-    await vi.waitFor(() => {
-      expect(gateway.getTrackedRoomCounts()).toEqual({
-        activeSnapshotRooms: 0,
-        broadcastCursors: 0,
-        subscribedRooms: 0,
-      });
-    });
-    const lookupCountAfterExpiry = getRoom.mock.calls.length;
+    gateway.broadcastSnapshot(updated);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    client.off("message", recordMessage);
 
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(getRoom).toHaveBeenCalledTimes(lookupCountAfterExpiry);
+    expect(laterMessages).toEqual([]);
+    expect(gateway.getTrackedRoomCounts()).toEqual({
+      activeSnapshotRooms: 0,
+      broadcastCursors: 0,
+      subscribedRooms: 0,
+    });
   });
 
   it("keeps pumping after a transient room-service lookup failure", async () => {
@@ -2025,7 +2389,8 @@ describe("multiplayer room WebSocket gateway", () => {
     const started = serveStartedPongRoom(backingStore);
     let failNextLookup = false;
     let transientFailureCount = 0;
-    const getRoom = vi.fn((roomCode: unknown): MultiplayerRoomStoreResult => {
+    const getRoom = vi.fn(
+      (roomCode: unknown): MultiplayerRoomStoreSnapshotResult => {
       if (failNextLookup) {
         failNextLookup = false;
         transientFailureCount += 1;
@@ -2037,18 +2402,25 @@ describe("multiplayer room WebSocket gateway", () => {
       }
 
       return backingStore.getRoom(roomCode);
-    });
+      },
+    );
     const store = {
       applyCommand: backingStore.applyCommand.bind(backingStore),
       createRoom: backingStore.createRoom.bind(backingStore),
       getRoom,
-    } satisfies MultiplayerRoomStore;
+      registerParticipantConnection:
+        backingStore.registerParticipantConnection.bind(backingStore),
+      resolveParticipantCapability:
+        backingStore.resolveParticipantCapability.bind(backingStore),
+      unregisterParticipantConnection:
+        backingStore.unregisterParticipantConnection.bind(backingStore),
+    } satisfies MultiplayerRoomStore & MultiplayerRoomParticipantConnectionStore;
     const { gateway, url } = await createGatewayFixture(store, {
       snapshotIntervalMs: 16,
     });
     const observer = await connectClient(url);
 
-    await bootstrapClient(observer);
+    await bootstrapClient(observer, "ROOM1", "host-1");
     failNextLookup = true;
     nowMs = 80;
     const freshSnapshotPromise = waitForServerMessage(
@@ -2078,7 +2450,7 @@ describe("multiplayer room WebSocket gateway", () => {
     const { url } = await createGatewayFixture(store, { snapshotIntervalMs: 10 });
     const observer = await connectClient(url);
 
-    await bootstrapClient(observer);
+    await bootstrapClient(observer, "ROOM1", "host-1");
 
     const runningSnapshotPromise = waitForServerMessage(
       observer,
@@ -2114,7 +2486,7 @@ describe("multiplayer room WebSocket gateway", () => {
     const { url } = await createGatewayFixture(store, { snapshotIntervalMs: 10 });
     const observer = await connectClient(url);
 
-    await bootstrapClient(observer);
+    await bootstrapClient(observer, "ROOM1", "host-1");
 
     const runningSnapshotPromise = waitForServerMessage(
       observer,

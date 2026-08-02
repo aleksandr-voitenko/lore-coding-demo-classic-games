@@ -310,6 +310,142 @@ test("host replaces the match without replacing the party", async ({
   await expect(page).toHaveURL(new RegExp(`\\?room=${roomCode}$`));
 });
 
+test("watcher queues for the next match and party leave closes cleanly", async ({
+  baseURL,
+  browser,
+  page,
+}, testInfo) => {
+  const appBaseURL = baseURL ?? "http://127.0.0.1:3110";
+  const hostName = createPlayerName(
+    "Queue Host",
+    testInfo.workerIndex,
+    testInfo.retry,
+  );
+  const guestName = createPlayerName(
+    "Queue Guest",
+    testInfo.workerIndex,
+    testInfo.retry,
+  );
+  const watcherName = createPlayerName(
+    "Queue Watcher",
+    testInfo.workerIndex,
+    testInfo.retry,
+  );
+
+  await openLauncher(page);
+  await signUpFromLauncher(page, hostName);
+  await hostMultiplayerRoomFromLauncher(page, "pong");
+
+  const roomCode = (
+    await page.getByTestId("multiplayer-room-code").innerText()
+  ).trim();
+  const guestContext = await browser.newContext();
+  const watcherContext = await browser.newContext();
+  const guestPage = await guestContext.newPage();
+  const watcherPage = await watcherContext.newPage();
+  const guestIssues = collectBrowserIssues(guestPage);
+  const watcherIssues = collectBrowserIssues(watcherPage);
+
+  try {
+    await guestPage.goto(new URL(`/?room=${roomCode}`, appBaseURL).toString());
+    await guestPage
+      .getByTestId("multiplayer-room-display-name-input")
+      .fill(guestName);
+    await guestPage.getByTestId("multiplayer-room-join-button").click();
+    await expect(
+      guestPage.getByTestId("multiplayer-room-current-participant"),
+    ).toHaveText(`${guestName} · Player`);
+
+    await page.getByTestId("multiplayer-room-start-button").click();
+    await expect(guestPage.getByTestId("pong-multiplayer-room")).toBeVisible();
+
+    await watcherPage.goto(
+      new URL(`/?room=${roomCode}`, appBaseURL).toString(),
+    );
+    await watcherPage
+      .getByTestId("multiplayer-room-display-name-input")
+      .fill(watcherName);
+    await watcherPage.getByTestId("multiplayer-room-watch-button").click();
+    await expect(
+      watcherPage.getByTestId("multiplayer-room-current-participant"),
+    ).toHaveText(`${watcherName} · Watching`);
+
+    await watcherPage.getByTestId("multiplayer-party-join-next-button").click();
+    await expect(
+      watcherPage.getByTestId("multiplayer-party-queue-position"),
+    ).toHaveText("Waiting for next match · Position 1");
+    await watcherPage
+      .getByTestId("multiplayer-party-cancel-next-button")
+      .click();
+    await expect(
+      watcherPage.getByTestId("multiplayer-party-queue-position"),
+    ).toHaveCount(0);
+    await watcherPage.getByTestId("multiplayer-party-join-next-button").click();
+    await expect(
+      watcherPage.getByTestId("multiplayer-party-queue-position"),
+    ).toHaveText("Waiting for next match · Position 1");
+
+    const guestLeaveButton = guestPage.getByTestId(
+      "multiplayer-party-leave-button",
+    );
+    await guestLeaveButton.click();
+    await expect(
+      guestPage.getByTestId("multiplayer-leave-party-dialog"),
+    ).toBeVisible();
+    await guestPage.getByTestId("multiplayer-leave-party-cancel").click();
+    await expect(guestLeaveButton).toBeFocused();
+    await guestLeaveButton.click();
+    await guestPage.getByTestId("multiplayer-leave-party-confirm").click();
+    await expect(
+      guestPage.getByTestId("multiplayer-room-membership-ended"),
+    ).toContainText("You left the party");
+    await expect(
+      guestPage.getByRole("heading", { name: "You left" }),
+    ).toBeFocused();
+    await expect(
+      watcherPage.getByTestId("multiplayer-party-queue-position"),
+    ).toHaveText("Waiting for next match · Position 1");
+    await expect(page.getByTestId("multiplayer-room-seat-right")).toContainText(
+      "Open",
+    );
+
+    await page.getByTestId("multiplayer-room-restart-button").click();
+    await expect(
+      watcherPage.getByTestId("multiplayer-room-current-participant"),
+    ).toHaveText(`${watcherName} · Player`);
+    await expect(
+      watcherPage.getByTestId("multiplayer-room-seat-right"),
+    ).toContainText(watcherName);
+    await expect(
+      watcherPage.getByTestId("multiplayer-room-join-outcome"),
+    ).toHaveCount(0);
+
+    await page.getByTestId("multiplayer-party-leave-button").click();
+    await expect(
+      page.getByTestId("multiplayer-leave-party-dialog"),
+    ).toBeVisible();
+    await page.getByTestId("multiplayer-leave-party-confirm").click();
+    await expect(
+      watcherPage.getByTestId("multiplayer-room-membership-ended"),
+    ).toContainText("the party closed");
+    await expect(
+      page.getByTestId("multiplayer-room-membership-ended"),
+    ).toContainText("the party closed");
+    await expect(
+      page.getByRole("heading", { name: "Party closed" }),
+    ).toBeFocused();
+    await expect(
+      watcherPage.getByRole("heading", { name: "Party closed" }),
+    ).toBeFocused();
+
+    expect(guestIssues).toEqual([]);
+    expect(watcherIssues).toEqual([]);
+  } finally {
+    await guestContext.close();
+    await watcherContext.close();
+  }
+});
+
 test("Pong private room reaches guest over the sidecar WebSocket path", async ({
   baseURL,
   browser,
@@ -380,7 +516,7 @@ test("Pong private room reaches guest over the sidecar WebSocket path", async ({
       await fullLobbyPage.getByTestId("multiplayer-room-join-button").click();
       await expect(
         fullLobbyPage.getByTestId("multiplayer-room-current-participant"),
-      ).toHaveText(`${fullLobbyName} · Observer`);
+      ).toHaveText(`${fullLobbyName} · Watching`);
       await expect(
         fullLobbyPage.getByTestId("multiplayer-room-join-outcome"),
       ).toHaveText("The game is active or full, so you joined as a watcher.");
@@ -421,7 +557,7 @@ test("Pong private room reaches guest over the sidecar WebSocket path", async ({
       await latePage.getByTestId("multiplayer-room-join-button").click();
       await expect(
         latePage.getByTestId("multiplayer-room-current-participant"),
-      ).toHaveText(`${lateName} · Observer`);
+      ).toHaveText(`${lateName} · Watching`);
       await expect(latePage.getByTestId("multiplayer-room-join-outcome")).toHaveText(
         "The game is active or full, so you joined as a watcher.",
       );

@@ -36,6 +36,8 @@ const ACTIVE_ASTEROIDS_ROOM: PrivateRoom = {
   code: "AST-1",
   hostParticipantId: "host-participant",
   matchId: 1,
+  nextMatchParticipantIds: [],
+  observerLimit: 8,
   participants: [
     {
       displayName: "Ada",

@@ -23,6 +23,8 @@ const ROOM: PrivateRoom = {
   code: "ROOM1",
   hostParticipantId: "host-1",
   matchId: 1,
+  nextMatchParticipantIds: [],
+  observerLimit: 8,
   participants: [
     {
       displayName: "Ada",
@@ -604,6 +606,163 @@ describe("multiplayer room WebSocket message shapes", () => {
       expect(onClose).not.toHaveBeenCalled();
       expect(socket.readyState).toBe(3);
       expect(vi.getTimerCount()).toBe(0);
+
+      transport.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ends a departed participant transport once without requesting reconnect", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const onClose = vi.fn();
+      const onError = vi.fn();
+      const onMembershipEnded = vi.fn();
+      const transport = createMultiplayerRoomWebSocketTransport({
+        commandAckTimeoutMs: 5_000,
+        onBootstrap: () => {},
+        onClose,
+        onError,
+        onMembershipEnded,
+        onSnapshot: () => {},
+        roomCode: "ROOM1",
+        url: "ws://127.0.0.1:3001/multiplayer/rooms",
+        webSocketConstructor: FakeWebSocket,
+      });
+      const socket = FakeWebSocket.instances[0]!;
+
+      socket.emitOpen();
+      socket.emitMessage({
+        protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
+        requestId: JSON.parse(socket.sentMessages[0]!).requestId,
+        roomCode: "ROOM1",
+        snapshot: {
+          room: ROOM,
+          seq: 1,
+        },
+        type: "connection.bootstrap",
+      });
+
+      const pendingAck = transport.sendRoomCommand({
+        matchId: 1,
+        participantId: "guest-1",
+        seatId: "right",
+        type: "room.claimSeat",
+      });
+      const pendingAckRejection = expect(pendingAck).rejects.toMatchObject({
+        code: "participant-unauthorized",
+        message: "Party membership ended.",
+      });
+      const membershipEndedMessage = {
+        participantId: "guest-1",
+        reason: "left",
+        roomCode: "ROOM1",
+        type: "room.membershipEnded",
+      } as const;
+
+      socket.emitMessage(membershipEndedMessage);
+
+      await pendingAckRejection;
+      expect(onMembershipEnded).toHaveBeenCalledOnce();
+      expect(onMembershipEnded).toHaveBeenCalledWith({
+        participantId: "guest-1",
+        reason: "left",
+        roomCode: "ROOM1",
+      });
+      expect(onClose).not.toHaveBeenCalled();
+      expect(onError).not.toHaveBeenCalled();
+      expect(socket.readyState).toBe(3);
+      expect(vi.getTimerCount()).toBe(0);
+
+      socket.emitMessage(membershipEndedMessage);
+      socket.emitClose();
+      vi.advanceTimersByTime(5_000);
+
+      expect(onMembershipEnded).toHaveBeenCalledOnce();
+      expect(onClose).not.toHaveBeenCalled();
+      expect(FakeWebSocket.instances).toHaveLength(1);
+
+      transport.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ends a closed party transport once without requesting reconnect", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const onClose = vi.fn();
+      const onError = vi.fn();
+      const onMembershipEnded = vi.fn();
+      const transport = createMultiplayerRoomWebSocketTransport({
+        commandAckTimeoutMs: 5_000,
+        onBootstrap: () => {},
+        onClose,
+        onError,
+        onMembershipEnded,
+        onSnapshot: () => {},
+        roomCode: "ROOM1",
+        url: "ws://127.0.0.1:3001/multiplayer/rooms",
+        webSocketConstructor: FakeWebSocket,
+      });
+      const socket = FakeWebSocket.instances[0]!;
+
+      socket.emitOpen();
+      socket.emitMessage({
+        protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
+        requestId: JSON.parse(socket.sentMessages[0]!).requestId,
+        roomCode: "ROOM1",
+        snapshot: {
+          room: ROOM,
+          seq: 1,
+        },
+        type: "connection.bootstrap",
+      });
+
+      const pendingAck = transport.sendRoomCommand({
+        matchId: 1,
+        participantId: "guest-1",
+        seatId: "right",
+        type: "room.claimSeat",
+      });
+      const pendingAckRejection = expect(pendingAck).rejects.toMatchObject({
+        code: "party-closed",
+        message: "The host closed this party.",
+      });
+      const partyClosedMessage = {
+        matchId: 1,
+        reason: "The host closed this party.",
+        roomCode: "ROOM1",
+        seq: 2,
+        type: "party.closed",
+      } as const;
+
+      socket.emitMessage(partyClosedMessage);
+
+      await pendingAckRejection;
+      expect(onMembershipEnded).toHaveBeenCalledOnce();
+      expect(onMembershipEnded).toHaveBeenCalledWith({
+        matchId: 1,
+        message: "The host closed this party.",
+        reason: "party-closed",
+        roomCode: "ROOM1",
+        seq: 2,
+      });
+      expect(onClose).not.toHaveBeenCalled();
+      expect(onError).not.toHaveBeenCalled();
+      expect(socket.readyState).toBe(3);
+      expect(vi.getTimerCount()).toBe(0);
+
+      socket.emitMessage(partyClosedMessage);
+      socket.emitClose();
+      vi.advanceTimersByTime(5_000);
+
+      expect(onMembershipEnded).toHaveBeenCalledOnce();
+      expect(onClose).not.toHaveBeenCalled();
+      expect(FakeWebSocket.instances).toHaveLength(1);
 
       transport.close();
     } finally {

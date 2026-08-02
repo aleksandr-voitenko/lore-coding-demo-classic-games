@@ -12,10 +12,14 @@ import type {
 } from "./multiplayer-room-runtime";
 
 function expectStoreSuccess(result: MultiplayerRoomStoreResult) {
-  expect(result.success).toBe(true);
+  expect(result).toMatchObject({ outcome: "snapshot", success: true });
 
   if (!result.success) {
     throw new Error(result.error);
+  }
+
+  if (result.outcome !== "snapshot") {
+    throw new Error("Expected the room store to return a snapshot.");
   }
 
   return result.snapshot;

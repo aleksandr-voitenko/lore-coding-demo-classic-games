@@ -92,8 +92,12 @@ export const pongMultiplayerRuntimeAdapter: MultiplayerServerGameRuntimeAdapter 
   createRuntime({ nowMs, room }) {
     return createPongRuntime(room, nowMs);
   },
-  createSnapshot({ room, runtime, serverTimeMs }) {
-    return createPongRuntimeSnapshot(getPongRuntime(runtime), room, serverTimeMs);
+  createSnapshot({ matchRoom, runtime, serverTimeMs }) {
+    return createPongRuntimeSnapshot(
+      getPongRuntime(runtime),
+      matchRoom,
+      serverTimeMs,
+    );
   },
   defaultSeats: DEFAULT_PONG_PRIVATE_ROOM_SEATS,
   defaultSettings: DEFAULT_PONG_PRIVATE_ROOM_SETTINGS,
@@ -512,10 +516,10 @@ function clearReleasedPongSeatHeldInput(
 
 function createPongRuntimeSnapshot(
   runtime: StoredPongMultiplayerRuntime,
-  room: PrivateRoom,
+  matchRoom: PrivateRoom,
   serverTimeMs: number,
 ): Omit<PongMultiplayerGameSnapshot, "matchId"> {
-  const summary = createPongTerminalSummary(room, runtime.game);
+  const summary = createPongTerminalSummary(matchRoom, runtime.game);
 
   return {
     gameId: "pong",
@@ -528,7 +532,7 @@ function createPongRuntimeSnapshot(
 }
 
 function createPongTerminalSummary(
-  room: PrivateRoom,
+  matchRoom: PrivateRoom,
   game: PongGameState,
 ): PongMultiplayerTerminalSummary | undefined {
   if (game.status !== "won" && game.status !== "lost") {
@@ -544,11 +548,11 @@ function createPongTerminalSummary(
       leftScore: game.score.player,
       rightScore: game.score.cpu,
       targetScore: game.targetScore,
-      winnerParticipantId: getSeatParticipantId(room, winnerSeatId),
+      winnerParticipantId: getSeatParticipantId(matchRoom, winnerSeatId),
       winnerSeatId,
     },
-    seats: createMultiplayerTerminalSummarySeats(room),
-    settings: room.settings,
+    seats: createMultiplayerTerminalSummarySeats(matchRoom),
+    settings: matchRoom.settings,
     status: game.status,
   };
 }

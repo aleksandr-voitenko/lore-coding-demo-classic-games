@@ -103,16 +103,19 @@ The sidecar defaults to `127.0.0.1:3001`, exposes `GET /healthz`, accepts public
 room WebSocket upgrades on `/multiplayer/rooms`, and serves the internal JSON
 room service on `/_internal/multiplayer/rooms`:
 
-- `POST /_internal/multiplayer/rooms` creates a room.
+- `POST /_internal/multiplayer/rooms/v5` creates a room.
 - `GET /_internal/multiplayer/rooms/<code>` reads a room snapshot.
-- `POST /_internal/multiplayer/rooms/<code>` applies a parsed room command.
+- `POST /_internal/multiplayer/rooms/v5/<code>` applies a parsed room command.
 
 Override the bind address and path with `MULTIPLAYER_SIDECAR_HOST`,
 `MULTIPLAYER_SIDECAR_PORT`, `MULTIPLAYER_SIDECAR_WEBSOCKET_PATH`, and
 `MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH` when wiring it behind a local proxy. The
 sidecar retains at most 256 rooms by default; set
 `MULTIPLAYER_SIDECAR_MAX_ROOMS` to a positive integer when a deployment needs a
-different per-process capacity.
+different per-process capacity. A party allows eight watchers and four live
+WebSocket tabs per participant by default. Tune those independent fanout bounds
+with `MULTIPLAYER_SIDECAR_MAX_OBSERVERS_PER_PARTY` (a non-negative integer) and
+`MULTIPLAYER_SIDECAR_MAX_CONNECTIONS_PER_PARTICIPANT` (a positive integer).
 
 The sidecar pushes fresh snapshots for subscribed running rooms every 33ms by
 default; tune that with `MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS` during
@@ -161,9 +164,21 @@ maps each occupied slot to the same ordinal seat in the next game, increments th
 match generation, and clears the previous game runtime. Seats and games cannot
 be changed during a running or paused match. When an adapter reaches its natural
 terminal state, the room becomes finished automatically so the host can choose
-the next game. Invite viewers can still choose Join game or Watch from the party
-panel beside an active board; a full or active play attempt explains that it
-joined them as a watcher.
+the next game. The Party panel remains visible beside active and finished games,
+separates the two player slots from Watching, and shows watcher capacity. A
+watcher can join an open slot between matches or enter the FIFO `Next match`
+queue while play is active; queued players are promoted only at a restart or
+game-replacement boundary, never into a running game. `Watch instead` releases a
+seat only between matches and cannot exceed the watcher limit. A full or active
+play attempt falls back to watching only while watcher capacity remains.
+
+Leaving the party is distinct from navigating back to the library. A seated
+player who leaves has held input cleared and frees the slot without changing the
+completed match's participant attribution. If the host leaves, ownership moves
+to the earliest connected signed-in member; when no such member exists, the
+party closes for everyone. The closing and departing-member messages are
+terminal client events, clear room-scoped credentials, and do not reconnect the
+old membership.
 
 Volatile rooms also have bounded idle retention. An unconnected lobby expires
 after 60 minutes without a successful participant or host command; an
@@ -264,20 +279,23 @@ until the WebSocket sidecar has its own authenticated host session model.
 The gateway resolves participant capabilities during resume and derives seat and
 game-input actors from the bound socket. Participant ids submitted without a
 valid capability cannot resume or authorize commands, and public observer joins
-cannot attach an account identity.
+cannot attach an account identity. Anonymous invite previews receive one
+bootstrap snapshot but are not retained as room subscribers; only recognized
+members receive ongoing fanout. Per-participant connection ceilings prevent one
+capability from creating unbounded subscriber tabs.
 
 The sidecar room service endpoints are internal service endpoints; public HTTP
 room creation and host authorization should still flow through the Next API
 routes. If the internal hop needs a bearer token, set the same secret in
 `MULTIPLAYER_ROOM_SERVICE_CLIENT_BEARER_TOKEN` for the Next process and
 `MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN` for the sidecar process.
-Persistent-party mutations require protocol version 4. The Next process
+Party queue, capacity, and leave mutations require protocol version 5. The Next process
 preflights the authenticated internal collection endpoint, then sends create and
-command POSTs through its advertised `/v4` mutation path with
-`x-multiplayer-room-protocol-version: 4`; the sidecar rejects legacy paths or a
+command POSTs through its advertised `/v5` mutation path with
+`x-multiplayer-room-protocol-version: 5`; the sidecar rejects legacy paths or a
 missing/mismatched header before reading a mutation body. Browser create and
-host-command POSTs likewise use `/api/multiplayer/rooms/v4` and
-`/api/multiplayer/rooms/<code>/v4`; the v3, v2, and unversioned POST routes
+host-command POSTs likewise use `/api/multiplayer/rooms/v5` and
+`/api/multiplayer/rooms/<code>/v5`; the v4, v3, v2, and unversioned POST routes
 return 426. Browser
 `connection.hello` and `connection.resume` messages and the corresponding
 bootstrap carry the same version, and a mismatched bootstrap closes without

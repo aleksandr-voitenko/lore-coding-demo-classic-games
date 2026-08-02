@@ -86,6 +86,12 @@ This file covers React component ownership and shared game UI conventions under
   HTTP room mutations use versioned paths, and an unversioned/mismatched
   WebSocket bootstrap is terminal: ignore pre-bootstrap snapshots, close the
   socket, and do not schedule reconnects against the incompatible gateway.
+  `multiplayer-party-panel.tsx` derives player slots from seats rather than role
+  labels, keeps Watching and FIFO Next match lists visible during and after play,
+  and owns Join game, Join next match, Cancel, Watch instead, and Leave party
+  presentation. Membership-ended and party-closed messages clear local
+  credentials, show a terminal room message, and suppress reconnect. Back to
+  library remains navigation and must not implicitly leave the party.
 - Active multiplayer game UI should be selected through a client
   renderer/input registry keyed by `gameId`. A renderer consumes authoritative
   server snapshots/events and emits adapter-owned intents through the generic

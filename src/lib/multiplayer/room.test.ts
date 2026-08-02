@@ -7,12 +7,17 @@ import type {
 import {
   addPrivateRoomGuestParticipantAsObserver,
   addPrivateRoomGuestParticipantAsPlayer,
+  cancelPrivateRoomNextMatchRequest,
   claimPrivateRoomSeat,
   createPrivateRoom,
   finishPrivateRoom,
+  finishPrivateRoomAfterGameTerminal,
+  getPrivateRoomGuestPlayerAdmissionRole,
   getPrivateRoomInvitePath,
+  leavePrivateRoom,
   normalizePrivateRoomCode,
   pausePrivateRoom,
+  queuePrivateRoomParticipantForNextMatch,
   releasePrivateRoomSeat,
   replacePrivateRoomMatch,
   restartPrivateRoom,
@@ -134,6 +139,8 @@ describe("private multiplayer rooms", () => {
         code: "ALPHA-7",
         hostParticipantId: HOST_ID,
         matchId: 1,
+        nextMatchParticipantIds: [],
+        observerLimit: 8,
         participants: [
           {
             displayName: "Ada Host",
@@ -264,6 +271,123 @@ describe("private multiplayer rooms", () => {
     });
     expect(updatedRoom.status).toBe("lobby");
     expect(room.participants).toHaveLength(1);
+  });
+
+  it("caps watchers without blocking an available player slot", () => {
+    const room = expectRoomResult(
+      createPrivateRoom({
+        code: "watch-cap",
+        host: {
+          displayName: "Host Player",
+          participantId: HOST_ID,
+          userId: HOST_USER_ID,
+        },
+        observerLimit: 1,
+        seats: TWO_PLAYER_SEATS,
+        settings: { gameId: "pong" },
+      }),
+    );
+    const watchedRoom = addObserver(room, "watcher-1");
+    const playerResult = addPrivateRoomGuestParticipantAsPlayer(watchedRoom, {
+      displayName: "Player Two",
+      participantId: "player-2",
+    });
+
+    expect(playerResult).toMatchObject({
+      room: {
+        participants: expect.arrayContaining([
+          expect.objectContaining({ id: "player-2", role: "player" }),
+        ]),
+        seats: [
+          expect.objectContaining({ occupiedByParticipantId: HOST_ID }),
+          expect.objectContaining({ occupiedByParticipantId: "player-2" }),
+        ],
+      },
+      success: true,
+    });
+
+    const fullRoom = playerResult.success ? playerResult.room : watchedRoom;
+
+    expect(
+      addPrivateRoomGuestParticipantAsObserver(fullRoom, {
+        displayName: "Another Watcher",
+        participantId: "watcher-2",
+      }),
+    ).toEqual({
+      code: "observer-limit-reached",
+      error: "This party already has the maximum number of watchers.",
+      success: false,
+    });
+    expect(
+      addPrivateRoomGuestParticipantAsPlayer(startRoom(fullRoom), {
+        displayName: "Late Player",
+        participantId: "late-player",
+      }),
+    ).toEqual({
+      code: "observer-limit-reached",
+      error: "This party already has the maximum number of watchers.",
+      success: false,
+    });
+    expect(
+      releasePrivateRoomSeat(fullRoom, {
+        participantId: "player-2",
+        seatId: "right",
+      }),
+    ).toEqual({
+      code: "observer-limit-reached",
+      error: "This party already has the maximum number of watchers.",
+      success: false,
+    });
+  });
+
+  it("does not admit a new player ahead of an existing next-match queue", () => {
+    const room = expectRoomResult(
+      createPrivateRoom({
+        code: "queue-priority",
+        host: {
+          displayName: "Host Player",
+          participantId: HOST_ID,
+          userId: HOST_USER_ID,
+        },
+        observerLimit: 1,
+        seats: TWO_PLAYER_SEATS,
+        settings: { gameId: "pong" },
+      }),
+    );
+    const playerRoom = expectRoomResult(
+      addPrivateRoomGuestParticipantAsPlayer(room, {
+        displayName: "Player Two",
+        participantId: "player-2",
+      }),
+    );
+    const runningRoom = startRoom(playerRoom);
+    const watchedRoom = addObserver(runningRoom, "watcher-1");
+    const queuedRoom = expectRoomResult(
+      queuePrivateRoomParticipantForNextMatch(watchedRoom, {
+        participantId: "watcher-1",
+      }),
+    );
+    const leftResult = leavePrivateRoom(queuedRoom, {
+      participantId: "player-2",
+    });
+
+    if (!leftResult.success || leftResult.closed) {
+      throw new Error(leftResult.success ? "Party unexpectedly closed." : leftResult.error);
+    }
+
+    const finishedRoom = finishPrivateRoomAfterGameTerminal(leftResult.room);
+
+    expect(getPrivateRoomGuestPlayerAdmissionRole(finishedRoom)).toBe("observer");
+    expect(
+      addPrivateRoomGuestParticipantAsPlayer(finishedRoom, {
+        displayName: "Queue Skipper",
+        participantId: "late-player",
+      }),
+    ).toEqual({
+      code: "observer-limit-reached",
+      error: "This party already has the maximum number of watchers.",
+      success: false,
+    });
   });
 
   it("adds a guest player atomically or falls back to watching an active match", () => {
@@ -728,6 +852,248 @@ describe("private multiplayer rooms", () => {
       role: "observer",
       userId: null,
     });
+  });
+
+  it("queues watchers for the next match in idempotent FIFO order", () => {
+    const runningRoom = startRoom(createReadyRoom());
+    const watchedRoom = addObserver(
+      addObserver(runningRoom, "watcher-1"),
+      "watcher-2",
+    );
+
+    expect(
+      queuePrivateRoomParticipantForNextMatch(watchedRoom, {
+        participantId: "guest-1",
+      }),
+    ).toEqual({
+      code: "participant-already-seated",
+      error: "Only watchers can wait for the next match.",
+      success: false,
+    });
+
+    const firstResult = queuePrivateRoomParticipantForNextMatch(watchedRoom, {
+      participantId: "watcher-1",
+    });
+
+    expect(firstResult.success).toBe(true);
+
+    if (!firstResult.success) {
+      throw new Error(firstResult.error);
+    }
+
+    const secondResult = queuePrivateRoomParticipantForNextMatch(firstResult.room, {
+      participantId: "watcher-2",
+    });
+
+    expect(secondResult).toMatchObject({
+      room: {
+        nextMatchParticipantIds: ["watcher-1", "watcher-2"],
+      },
+      success: true,
+    });
+
+    if (!secondResult.success) {
+      throw new Error(secondResult.error);
+    }
+
+    expect(
+      queuePrivateRoomParticipantForNextMatch(secondResult.room, {
+        participantId: "watcher-1",
+      }),
+    ).toEqual(secondResult);
+
+    const cancelledResult = cancelPrivateRoomNextMatchRequest(secondResult.room, {
+      participantId: "watcher-1",
+    });
+
+    expect(cancelledResult).toMatchObject({
+      room: {
+        nextMatchParticipantIds: ["watcher-2"],
+      },
+      success: true,
+    });
+    const cancelledRoom = cancelledResult.success
+      ? cancelledResult.room
+      : secondResult.room;
+
+    expect(
+      cancelPrivateRoomNextMatchRequest(cancelledRoom, {
+        participantId: "watcher-1",
+      }),
+    ).toEqual(cancelledResult);
+  });
+
+  it("never promotes a queued watcher mid-match and fills an open seat on restart", () => {
+    const runningRoom = startRoom(createReadyRoom());
+    const watchedRoom = addObserver(runningRoom, "watcher-1");
+    const queuedResult = queuePrivateRoomParticipantForNextMatch(watchedRoom, {
+      participantId: "watcher-1",
+    });
+
+    expect(queuedResult.success).toBe(true);
+
+    if (!queuedResult.success) {
+      throw new Error(queuedResult.error);
+    }
+
+    const leftResult = leavePrivateRoom(queuedResult.room, {
+      participantId: "guest-1",
+    });
+
+    expect(leftResult).toMatchObject({
+      closed: false,
+      room: {
+        nextMatchParticipantIds: ["watcher-1"],
+        seats: [
+          expect.objectContaining({ occupiedByParticipantId: HOST_ID }),
+          expect.objectContaining({ occupiedByParticipantId: null }),
+        ],
+        status: "running",
+      },
+      success: true,
+    });
+
+    if (!leftResult.success || leftResult.closed) {
+      throw new Error(leftResult.success ? "Party unexpectedly closed." : leftResult.error);
+    }
+
+    const finishedRoom = finishPrivateRoomAfterGameTerminal(leftResult.room);
+
+    expect(finishedRoom).toMatchObject({
+      nextMatchParticipantIds: ["watcher-1"],
+      participants: expect.arrayContaining([
+        expect.objectContaining({ id: "watcher-1", role: "observer" }),
+      ]),
+      seats: [
+        expect.objectContaining({ occupiedByParticipantId: HOST_ID }),
+        expect.objectContaining({ occupiedByParticipantId: null }),
+      ],
+      status: "finished",
+    });
+
+    const restartedResult = restartPrivateRoom(finishedRoom, {
+      participantId: HOST_ID,
+    });
+
+    expect(restartedResult).toMatchObject({
+      room: {
+        matchId: 2,
+        nextMatchParticipantIds: [],
+        participants: expect.arrayContaining([
+          expect.objectContaining({ id: "watcher-1", role: "player" }),
+        ]),
+        seats: [
+          expect.objectContaining({ occupiedByParticipantId: HOST_ID }),
+          expect.objectContaining({ occupiedByParticipantId: "watcher-1" }),
+        ],
+        status: "running",
+      },
+      success: true,
+    });
+  });
+
+  it("keeps an open between-match seat reserved for the FIFO queue head", () => {
+    const runningRoom = startRoom(createReadyRoom());
+    const watchedRoom = addObserver(
+      addObserver(runningRoom, "watcher-1"),
+      "watcher-2",
+    );
+    const queuedResult = queuePrivateRoomParticipantForNextMatch(watchedRoom, {
+      participantId: "watcher-1",
+    });
+
+    if (!queuedResult.success) {
+      throw new Error(queuedResult.error);
+    }
+
+    const leftResult = leavePrivateRoom(queuedResult.room, {
+      participantId: "guest-1",
+    });
+
+    if (!leftResult.success || leftResult.closed) {
+      throw new Error(leftResult.success ? "Party unexpectedly closed." : leftResult.error);
+    }
+
+    const finishedRoom = finishPrivateRoomAfterGameTerminal(leftResult.room);
+
+    expect(
+      claimPrivateRoomSeat(finishedRoom, {
+        participantId: "watcher-2",
+        seatId: "right",
+      }),
+    ).toEqual({
+      code: "seat-occupied",
+      error: "An earlier watcher has priority for the next open seat.",
+      success: false,
+    });
+    expect(
+      claimPrivateRoomSeat(finishedRoom, {
+        participantId: "watcher-1",
+        seatId: "right",
+      }),
+    ).toMatchObject({
+      room: {
+        nextMatchParticipantIds: [],
+        seats: [
+          expect.objectContaining({ occupiedByParticipantId: HOST_ID }),
+          expect.objectContaining({ occupiedByParticipantId: "watcher-1" }),
+        ],
+      },
+      success: true,
+    });
+  });
+
+  it("removes leaving members and transfers host ownership only to an eligible successor", () => {
+    const signedInResult = addPrivateRoomGuestParticipantAsObserver(
+      addObserver(createLobbyRoom(), "guest-1"),
+      {
+        displayName: "Signed In Friend",
+        participantId: "member-2",
+        userId: "user-2",
+      },
+    );
+
+    expect(signedInResult.success).toBe(true);
+
+    if (!signedInResult.success) {
+      throw new Error(signedInResult.error);
+    }
+
+    expect(
+      leavePrivateRoom(signedInResult.room, {
+        participantId: HOST_ID,
+        successorParticipantId: "guest-1",
+      }),
+    ).toEqual({
+      code: "invalid-host-successor",
+      error: "Party ownership can only transfer to a signed-in member.",
+      success: false,
+    });
+
+    const transferredResult = leavePrivateRoom(signedInResult.room, {
+      participantId: HOST_ID,
+      successorParticipantId: "member-2",
+    });
+
+    expect(transferredResult).toMatchObject({
+      closed: false,
+      room: {
+        hostParticipantId: "member-2",
+        nextMatchParticipantIds: [],
+        participants: [
+          expect.objectContaining({ id: "guest-1", role: "observer" }),
+          expect.objectContaining({ id: "member-2", role: "host" }),
+        ],
+        seats: [
+          expect.objectContaining({ occupiedByParticipantId: null }),
+          expect.objectContaining({ occupiedByParticipantId: null }),
+        ],
+      },
+      success: true,
+    });
+    expect(
+      leavePrivateRoom(createLobbyRoom(), { participantId: HOST_ID }),
+    ).toEqual({ closed: true, success: true });
   });
 
   it("defines protocol message shapes around room commands and snapshots", () => {

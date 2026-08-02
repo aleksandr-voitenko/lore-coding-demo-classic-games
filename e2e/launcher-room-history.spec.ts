@@ -14,7 +14,7 @@ test("private rooms follow browser Back and Forward navigation", async ({ page }
 
     if (
       request.method() === "POST" &&
-      url.pathname === "/api/multiplayer/rooms/v4"
+      url.pathname === "/api/multiplayer/rooms/v5"
     ) {
       roomCreateRequestCount += 1;
     }
@@ -32,7 +32,7 @@ test("private rooms follow browser Back and Forward navigation", async ({ page }
   expect(roomCode).toMatch(/^[A-F0-9-]+$/);
   await expect(page).toHaveURL(new RegExp(`\\?room=${roomCode}$`));
   await expect(page.getByTestId("multiplayer-room-current-participant")).toHaveText(
-    "Room History Hero · Host",
+    "Room History Hero · Player · Host",
   );
   expect(roomCreateRequestCount).toBe(1);
 
@@ -62,7 +62,7 @@ test("a delayed stale room response cannot replace a newer create attempt", asyn
   const releaseRoomRequests: (() => void)[] = [];
   let roomResponseCount = 0;
 
-  await page.route("**/api/multiplayer/rooms/v4", async (route) => {
+  await page.route("**/api/multiplayer/rooms/v5", async (route) => {
     const request = route.request();
 
     if (request.method() !== "POST") {
@@ -81,7 +81,7 @@ test("a delayed stale room response cannot replace a newer create attempt", asyn
 
     if (
       request.method() === "POST" &&
-      url.pathname === "/api/multiplayer/rooms/v4"
+      url.pathname === "/api/multiplayer/rooms/v5"
     ) {
       roomResponseCount += 1;
     }

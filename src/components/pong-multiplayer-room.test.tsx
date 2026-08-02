@@ -25,6 +25,8 @@ const ACTIVE_PONG_ROOM: PrivateRoom = {
   code: "PONG-1",
   hostParticipantId: "host-participant",
   matchId: 1,
+  nextMatchParticipantIds: [],
+  observerLimit: 8,
   participants: [
     {
       displayName: "Ada",

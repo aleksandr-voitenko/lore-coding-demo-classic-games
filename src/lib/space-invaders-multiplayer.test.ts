@@ -2743,6 +2743,8 @@ describe("space invaders multiplayer state model", () => {
         code: "SPACE-ROOM",
         hostParticipantId: "host",
         matchId: 1,
+        nextMatchParticipantIds: [],
+        observerLimit: 8,
         participants: [],
         seats: [],
         settings: {

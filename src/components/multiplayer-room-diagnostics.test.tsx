@@ -17,6 +17,8 @@ const ROOM = {
   code: "ROOM1",
   hostParticipantId: "host-1",
   matchId: 1,
+  nextMatchParticipantIds: [],
+  observerLimit: 8,
   participants: [],
   seats: [],
   settings: {

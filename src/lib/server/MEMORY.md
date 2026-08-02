@@ -66,7 +66,14 @@ This file covers Node-only server helpers and storage adapters under
   generation, supplies the target adapter's seats, and clears the old runtime.
   When an adapter reports its runtime terminal, the store synchronizes the room
   to `finished` and advances room sequence once so replacement is available
-  without a separate host finish command.
+  without a separate host finish command. Each runtime also retains an immutable
+  match-start room projection for terminal seat and winner attribution; live
+  membership changes continue to use the canonical party room. Watchers may
+  enter an idempotent FIFO next-match queue. It never changes a running roster
+  and promotes into open seats only at a lobby start, finished-match restart, or
+  game replacement. Explicit leave removes the member's seat, queue entry,
+  capability, connections, and held input. A leaving host transfers to the
+  earliest connected signed-in member or closes the party when none exists.
   The store bounds that volatile authority to 256 rooms by default. Successful
   room/game commands refresh meaningful activity; passive reads, snapshot
   advancement, handshakes, and diagnostics do not. Unconnected lobbies expire
@@ -81,7 +88,9 @@ This file covers Node-only server helpers and storage adapters under
   guest admission mint separate 256-bit participant capabilities, retain only
   SHA-256 hashes beside the volatile room, and return the raw value only in the
   creating HTTP response or joining socket acknowledgement. `getRoom` and room
-  snapshots must never contain a capability.
+  snapshots must never contain a capability. The store also enforces an
+  independently configurable watcher limit (eight by default) and
+  per-participant connection limit (four by default).
 - `multiplayer-room-websocket.ts` owns the reusable Node WebSocket gateway for
   the realtime sidecar. It adapts the generic protocol envelopes to the room
   runtime, accepts an injectable `MultiplayerRoomStore`, rejects public
@@ -96,10 +105,13 @@ This file covers Node-only server helpers and storage adapters under
   seat and game-input actors from that binding, promotes a socket only after a
   successful guest join, and releases presence on close, error, or room change.
   Client-submitted participant ids never establish authority, public joins
-  cannot assert an account user id, and anonymous invite viewers remain
-  read-only and do not protect retention. Its public
+  cannot assert an account user id, and anonymous invite viewers receive a
+  bootstrap snapshot but are not ongoing subscribers and do not protect
+  retention. Recognized members receive queue/cancel/leave broadcasts; leave
+  detaches every socket for that participant, while party closure sends one
+  terminal event and detaches all members. Its public
   factory defaults inbound client messages to 64 KiB through `ws` `maxPayload`
-  while preserving explicit caller overrides. Protocol v4 carries match ids in
+  while preserving explicit caller overrides. Protocol v5 carries match ids in
   game snapshots, reconnect cursors, command acknowledgements, and every
   match-scoped command. The gateway includes the generation in broadcast
   deduplication and relays stale-match failures without acknowledging or
@@ -109,6 +121,8 @@ This file covers Node-only server helpers and storage adapters under
   wrapper around the gateway. It parses `MULTIPLAYER_SIDECAR_HOST`,
   `MULTIPLAYER_SIDECAR_PORT`, `MULTIPLAYER_SIDECAR_WEBSOCKET_PATH`,
   `MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH`,
+  `MULTIPLAYER_SIDECAR_MAX_CONNECTIONS_PER_PARTICIPANT`,
+  `MULTIPLAYER_SIDECAR_MAX_OBSERVERS_PER_PARTY`,
   `MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS`, and optional
   `MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN`. It also parses the strict
   positive `MULTIPLAYER_SIDECAR_MAX_ROOMS` capacity override, owns the one-minute

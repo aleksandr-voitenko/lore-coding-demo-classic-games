@@ -214,14 +214,16 @@ export function createMultiplayerRoomWebSocketGateway({
 
     roomCodeBySocket.set(socket, roomCode);
 
+    if (resolvedParticipantId === undefined) {
+      return "assigned";
+    }
+
     const sockets = socketsByRoomCode.get(roomCode) ?? new Set<WebSocket>();
 
     sockets.add(socket);
     socketsByRoomCode.set(roomCode, sockets);
 
-    if (resolvedParticipantId !== undefined) {
-      participantIdBySocket.set(socket, resolvedParticipantId);
-    }
+    participantIdBySocket.set(socket, resolvedParticipantId);
 
     return "assigned";
   }
@@ -250,6 +252,54 @@ export function createMultiplayerRoomWebSocketGateway({
     }
   }
 
+  function endParticipantMembership(
+    roomCode: string,
+    participantId: string,
+  ) {
+    const participantSockets = Array.from(
+      socketsByRoomCode.get(roomCode) ?? [],
+    ).filter(
+      (candidate) => participantIdBySocket.get(candidate) === participantId,
+    );
+
+    for (const participantSocket of participantSockets) {
+      sendServerMessage(participantSocket, {
+        participantId,
+        reason: "left",
+        roomCode,
+        type: "room.membershipEnded",
+      });
+      removeSocketFromRoom(participantSocket);
+      participantSocket.close();
+    }
+  }
+
+  function endPartySubscriptions(
+    result: Extract<
+      MultiplayerRoomStoreResult,
+      { outcome: "party-closed"; success: true }
+    >,
+  ) {
+    const sockets = Array.from(
+      socketsByRoomCode.get(result.roomCode) ?? [],
+    );
+
+    activeSnapshotRoomCodes.delete(result.roomCode);
+    lastBroadcastCursorByRoomCode.delete(result.roomCode);
+
+    for (const participantSocket of sockets) {
+      sendServerMessage(participantSocket, {
+        matchId: result.matchId,
+        reason: result.reason,
+        roomCode: result.roomCode,
+        seq: result.seq,
+        type: "party.closed",
+      });
+      removeSocketFromRoom(participantSocket);
+      participantSocket.close();
+    }
+  }
+
   async function handleStoreResult(
     socket: WebSocket,
     result: MultiplayerRoomStoreResult,
@@ -265,6 +315,12 @@ export function createMultiplayerRoomWebSocketGateway({
         requestId,
         roomCode,
       });
+      return;
+    }
+
+    if (result.outcome === "party-closed") {
+      sendAckForPartyClosure(socket, result, requestId);
+      endPartySubscriptions(result);
       return;
     }
 
@@ -295,6 +351,13 @@ export function createMultiplayerRoomWebSocketGateway({
           participantIdBySocket.get(socket) ??
           getCommandParticipantId(command),
         result.participantCapability,
+      );
+    }
+
+    if (result.departedParticipantId !== undefined) {
+      endParticipantMembership(
+        result.snapshot.room.code,
+        result.departedParticipantId,
       );
     }
 
@@ -370,7 +433,9 @@ export function createMultiplayerRoomWebSocketGateway({
       recognizedParticipantId,
     );
 
-    rememberBroadcastSnapshot(result.snapshot);
+    if (recognizedParticipantId !== undefined) {
+      rememberBroadcastSnapshot(result.snapshot);
+    }
     sendServerMessage(socket, {
       ...(requestId === undefined ? {} : { requestId }),
       protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
@@ -826,6 +891,24 @@ function sendAck(
   });
 }
 
+function sendAckForPartyClosure(
+  socket: WebSocket,
+  result: Extract<
+    MultiplayerRoomStoreResult,
+    { outcome: "party-closed"; success: true }
+  >,
+  requestId: string | undefined,
+) {
+  sendServerMessage(socket, {
+    matchId: result.matchId,
+    participantId: result.departedParticipantId,
+    ...(requestId === undefined ? {} : { requestId }),
+    roomCode: result.roomCode,
+    seq: result.seq,
+    type: "room.commandAck",
+  });
+}
+
 function sendRejection(
   socket: WebSocket,
   {
@@ -986,6 +1069,30 @@ function parseRoomCommand(value: unknown): ParseRoomCommandResult {
       command: {
         displayName: value.displayName,
         type: "room.joinPlayer",
+      },
+      success: true,
+    };
+  }
+
+  if (
+    value.type === "room.joinNextMatch" ||
+    value.type === "room.cancelNextMatch"
+  ) {
+    return {
+      command: {
+        matchId: value.matchId,
+        participantId: value.participantId,
+        type: value.type,
+      },
+      success: true,
+    };
+  }
+
+  if (value.type === "room.leave") {
+    return {
+      command: {
+        participantId: value.participantId,
+        type: "room.leave",
       },
       success: true,
     };

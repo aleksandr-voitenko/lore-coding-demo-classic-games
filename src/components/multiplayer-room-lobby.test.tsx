@@ -24,6 +24,8 @@ const PONG_ROOM: PrivateRoom = {
   code: "PONG-1",
   hostParticipantId: "host-participant",
   matchId: 1,
+  nextMatchParticipantIds: [],
+  observerLimit: 8,
   participants: [
     {
       displayName: "Ada",
@@ -107,8 +109,28 @@ const RUNNING_SNAKE_GAME = {
   snapshot: {},
 } satisfies MultiplayerRoomGameSnapshot<"snake", Record<string, never>>;
 
+function getTestElementOpeningTag(markup: string, testId: string) {
+  const match = markup.match(
+    new RegExp(`<[^>]+data-testid="${testId}"[^>]*>`),
+  );
+
+  expect(match).not.toBeNull();
+
+  return match![0];
+}
+
+function expectTestButtonDisabled(
+  markup: string,
+  testId: string,
+  expected: boolean,
+) {
+  expect(
+    /\sdisabled=""/.test(getTestElementOpeningTag(markup, testId)),
+  ).toBe(expected);
+}
+
 describe("multiplayer room lobby", () => {
-  it("renders loaded room details, seats, participants, and host controls", () => {
+  it("renders loaded room details, the party roster, and host controls", () => {
     const markup = renderToStaticMarkup(
       <CurrentUserProvider initialUser={{ displayName: "Ada", id: "user-1" }}>
         <MultiplayerRoomLobby
@@ -128,9 +150,11 @@ describe("multiplayer room lobby", () => {
     expect(markup).toContain("/?room=PONG-1");
     expect(markup).toContain("420 x 560");
     expect(markup).toContain('data-testid="multiplayer-room-seat-left"');
-    expect(markup).toContain('data-testid="multiplayer-room-release-seat-left"');
-    expect(markup).toContain('data-testid="multiplayer-room-claim-seat-right"');
-    expect(markup).toContain('data-testid="multiplayer-room-participant-host-participant"');
+    expect(markup).toContain('data-testid="multiplayer-party-panel"');
+    expect(markup).toContain('data-testid="multiplayer-party-player-1"');
+    expect(markup).toContain('data-testid="multiplayer-party-watcher-guest-participant"');
+    expect(markup).toContain('data-testid="multiplayer-party-watch-instead-button"');
+    expect(markup).toContain('data-testid="multiplayer-party-leave-button"');
     expect(markup).toContain('data-testid="multiplayer-room-host-controls"');
     expect(markup).toContain('data-testid="multiplayer-room-start-button"');
     expect(markup).toContain('data-testid="multiplayer-room-next-game-select"');
@@ -172,8 +196,133 @@ describe("multiplayer room lobby", () => {
     expect(markup).toContain('data-testid="multiplayer-room-join-button"');
     expect(markup).toContain('data-testid="multiplayer-room-watch-button"');
     expect(markup).toContain("Join game");
-    expect(markup).toContain('data-testid="multiplayer-room-claim-seat-right"');
+    expect(markup).toContain('data-testid="multiplayer-party-panel"');
     expect(markup).not.toContain('data-testid="multiplayer-room-host-controls"');
+  });
+
+  it("explains the open player slot while live actions wait for the room stream", () => {
+    const room = {
+      ...PONG_ROOM,
+      observerLimit: 1,
+    } satisfies PrivateRoom;
+    const markup = renderToStaticMarkup(
+      <MultiplayerRoomLobby
+        initialRoom={room}
+        initialRoomCode="PONG-1"
+        onBackToLibrary={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain('data-testid="multiplayer-room-watcher-limit"');
+    expect(markup).toContain(
+      "Watching is full, but you can join the open player slot.",
+    );
+    expect(markup).toMatch(
+      /aria-describedby="[^"]+" data-testid="multiplayer-room-join-button"/,
+    );
+    expect(markup).toMatch(
+      /aria-describedby="[^"]+" data-testid="multiplayer-room-watch-button"/,
+    );
+    expect(markup).toContain('id="multiplayer-room-connection-status"');
+    expect(markup).toContain("Preparing the live party connection.");
+    expectTestButtonDisabled(markup, "multiplayer-room-join-button", true);
+    expectTestButtonDisabled(markup, "multiplayer-room-watch-button", true);
+  });
+
+  it("does not let a new guest bypass a full watcher queue for an open next-match slot", () => {
+    const room = {
+      ...PONG_ROOM,
+      nextMatchParticipantIds: ["guest-participant"],
+      observerLimit: 1,
+      status: "finished",
+    } satisfies PrivateRoom;
+    const markup = renderToStaticMarkup(
+      <MultiplayerRoomLobby
+        initialRoom={room}
+        initialRoomCode="PONG-1"
+        onBackToLibrary={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain('data-testid="multiplayer-party-next-guest-participant"');
+    expect(markup).toContain('data-testid="multiplayer-room-watcher-limit"');
+    expect(markup).toContain(
+      "Watching is full and the open slot is reserved for the next player in line.",
+    );
+    expectTestButtonDisabled(markup, "multiplayer-room-join-button", true);
+    expectTestButtonDisabled(markup, "multiplayer-room-watch-button", true);
+  });
+
+  it("shows the active watcher roster while full capacity blocks another guest", () => {
+    const watcher = {
+      displayName: "Lin",
+      id: "watcher-participant",
+      role: "observer" as const,
+      userId: null,
+    };
+    const room = {
+      ...ACTIVE_PONG_ROOM,
+      observerLimit: 1,
+      participants: [...ACTIVE_PONG_ROOM.participants, watcher],
+    } satisfies PrivateRoom;
+    const markup = renderToStaticMarkup(
+      <MultiplayerRoomLobby
+        initialGame={RUNNING_PONG_GAME}
+        initialRoom={room}
+        initialRoomCode="PONG-1"
+        initialSeq={4}
+        onBackToLibrary={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain('data-testid="multiplayer-room-active-party-panel"');
+    expect(markup).toContain(
+      'data-testid="multiplayer-party-watcher-watcher-participant"',
+    );
+    expect(markup).toContain('aria-label="1 of 1 watcher places used"');
+    expectTestButtonDisabled(markup, "multiplayer-room-join-button", true);
+    expectTestButtonDisabled(markup, "multiplayer-room-watch-button", true);
+  });
+
+  it("keeps a watcher and their queue controls visible after the match finishes", () => {
+    const watcher = {
+      displayName: "Lin",
+      id: "watcher-participant",
+      role: "observer" as const,
+      userId: null,
+    };
+    const room = {
+      ...ACTIVE_PONG_ROOM,
+      nextMatchParticipantIds: [watcher.id],
+      participants: [...ACTIVE_PONG_ROOM.participants, watcher],
+      status: "finished",
+    } satisfies PrivateRoom;
+    const markup = renderToStaticMarkup(
+      <MultiplayerRoomLobby
+        initialGame={RUNNING_PONG_GAME}
+        initialParticipantId={watcher.id}
+        initialRoom={room}
+        initialRoomCode="PONG-1"
+        initialSeq={5}
+        onBackToLibrary={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain('data-testid="pong-multiplayer-room"');
+    expect(markup).toContain('data-testid="multiplayer-room-active-party-panel"');
+    expect(markup).toContain(
+      'data-testid="multiplayer-party-watcher-watcher-participant"',
+    );
+    expect(markup).toContain(
+      'data-testid="multiplayer-party-next-watcher-participant"',
+    );
+    expect(markup).toContain(
+      "Waiting for next match · Position 1",
+    );
+    expect(markup).toContain(
+      'data-testid="multiplayer-party-cancel-next-button"',
+    );
+    expect(markup).toContain('data-testid="multiplayer-party-leave-button"');
   });
 
   it("keeps lobby UI for lobby rooms even when no game snapshot exists", () => {
@@ -186,7 +335,7 @@ describe("multiplayer room lobby", () => {
       />,
     );
 
-    expect(markup).toContain('data-testid="multiplayer-room-seats"');
+    expect(markup).toContain('data-testid="multiplayer-party-players"');
     expect(markup).not.toContain('data-testid="pong-multiplayer-room"');
   });
 
@@ -209,7 +358,7 @@ describe("multiplayer room lobby", () => {
     expect(markup).toContain('data-testid="pong-multiplayer-score-left"');
     expect(markup).toContain("Ada · Left Paddle");
     expect(markup).toContain('data-testid="multiplayer-room-host-controls"');
-    expect(markup).not.toContain('data-testid="multiplayer-room-seats"');
+    expect(markup).toContain('data-testid="multiplayer-party-panel"');
   });
 
   it("keeps Join game and Watch available beside an active match", () => {
@@ -228,7 +377,9 @@ describe("multiplayer room lobby", () => {
     expect(markup).toContain('data-testid="multiplayer-room-join-form"');
     expect(markup).toContain('data-testid="multiplayer-room-join-button"');
     expect(markup).toContain('data-testid="multiplayer-room-watch-button"');
-    expect(markup).toContain("Players and watchers");
+    expect(markup).toContain(">Players</h3>");
+    expect(markup).toContain(">Watching</h3>");
+    expect(markup).toContain(">Next match</h3>");
   });
 
   it("selects registered active game renderers only when room and snapshot game ids match", () => {
@@ -279,7 +430,7 @@ describe("multiplayer room lobby", () => {
 
     expect(markup).toContain('data-testid="multiplayer-room-game"');
     expect(markup).toContain("Snake");
-    expect(markup).toContain('data-testid="multiplayer-room-seats"');
+    expect(markup).toContain('data-testid="multiplayer-party-panel"');
     expect(markup).not.toContain('data-testid="pong-multiplayer-room"');
   });
 

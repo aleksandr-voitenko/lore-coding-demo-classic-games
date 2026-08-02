@@ -17,6 +17,7 @@ import {
   createMultiplayerRoomWebSocketTransport,
   getConfiguredMultiplayerRoomWebSocketUrl,
   type MultiplayerRoomTransportAck,
+  type MultiplayerRoomMembershipEnded,
   type MultiplayerRoomTransportPingSample,
   type MultiplayerRoomTransportSnapshot,
   type MultiplayerRoomTransportStatus,
@@ -38,6 +39,7 @@ type UseMultiplayerRoomWebSocketTransportOptions = {
   lastSeq?: MultiplayerRealtimeConnectionCursor | null;
   onConnectionError?: (error: MultiplayerRoomTransportError) => void;
   onDiagnosticsPingSample?: (sample: MultiplayerRoomTransportPingSample) => void;
+  onMembershipEnded?: (event: MultiplayerRoomMembershipEnded) => void;
   onParticipantCapability?: (participantCapability: string) => void;
   onParticipantId?: (participantId: string) => void;
   onSnapshot: (snapshot: MultiplayerRoomTransportSnapshot) => void;
@@ -72,6 +74,7 @@ export function useMultiplayerRoomWebSocketTransport({
   lastSeq,
   onConnectionError,
   onDiagnosticsPingSample,
+  onMembershipEnded,
   onParticipantCapability,
   onParticipantId,
   onSnapshot,
@@ -90,6 +93,7 @@ export function useMultiplayerRoomWebSocketTransport({
     lastSeq,
     onConnectionError,
     onDiagnosticsPingSample,
+    onMembershipEnded,
     onParticipantCapability,
     onParticipantId,
     onSnapshot,
@@ -107,6 +111,7 @@ export function useMultiplayerRoomWebSocketTransport({
       lastSeq,
       onConnectionError,
       onDiagnosticsPingSample,
+      onMembershipEnded,
       onParticipantCapability,
       onParticipantId,
       onSnapshot,
@@ -118,6 +123,7 @@ export function useMultiplayerRoomWebSocketTransport({
     lastSeq,
     onConnectionError,
     onDiagnosticsPingSample,
+    onMembershipEnded,
     onParticipantCapability,
     onParticipantId,
     onSnapshot,
@@ -239,6 +245,16 @@ export function useMultiplayerRoomWebSocketTransport({
             if (isCurrent) {
               latestOptionsRef.current.onConnectionError?.(error);
             }
+          },
+          onMembershipEnded: (event) => {
+            if (!isCurrent) {
+              return;
+            }
+
+            selectedUnavailable = true;
+            hasBootstrappedRef.current = false;
+            setStatus("unavailable");
+            latestOptionsRef.current.onMembershipEnded?.(event);
           },
           onDiagnosticsPingSample: (sample) => {
             if (isCurrent) {

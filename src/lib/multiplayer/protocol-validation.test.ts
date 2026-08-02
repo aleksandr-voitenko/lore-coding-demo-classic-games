@@ -15,6 +15,8 @@ const ROOM = {
   code: "ROOM1",
   hostParticipantId: "host-1",
   matchId: 1,
+  nextMatchParticipantIds: [],
+  observerLimit: 4,
   participants: [
     {
       displayName: "Ada",
@@ -155,6 +157,25 @@ describe("multiplayer protocol validation", () => {
         type: "room.commandRejected",
       },
       {
+        code: "party-closed",
+        error: "The party has closed.",
+        roomCode: "ROOM1",
+        type: "room.commandRejected",
+      },
+      {
+        matchId: 1,
+        reason: "The host left and no signed-in member could take over.",
+        roomCode: "ROOM1",
+        seq: 6,
+        type: "party.closed",
+      },
+      {
+        participantId: "guest-1",
+        reason: "left",
+        roomCode: "ROOM1",
+        type: "room.membershipEnded",
+      },
+      {
         nonce: "ping-1",
         serverTimeMs: 1_100,
         type: "connection.ping",
@@ -228,6 +249,34 @@ describe("multiplayer protocol validation", () => {
       },
     ],
     [
+      "party closure without a match id",
+      {
+        reason: "Party closed.",
+        roomCode: "ROOM1",
+        seq: 6,
+        type: "party.closed",
+      },
+    ],
+    [
+      "party closure with an empty reason",
+      {
+        matchId: 1,
+        reason: "",
+        roomCode: "ROOM1",
+        seq: 6,
+        type: "party.closed",
+      },
+    ],
+    [
+      "membership end with an unsupported reason",
+      {
+        participantId: "guest-1",
+        reason: "removed",
+        roomCode: "ROOM1",
+        type: "room.membershipEnded",
+      },
+    ],
+    [
       "invalid ping timestamp",
       { serverTimeMs: Number.NaN, type: "connection.ping" },
     ],
@@ -255,6 +304,17 @@ describe("multiplayer protocol validation", () => {
     [
       "an invalid room match id",
       { ...SNAPSHOT, room: { ...ROOM, matchId: 0 } },
+    ],
+    [
+      "a missing next-match queue",
+      {
+        ...SNAPSHOT,
+        room: { ...ROOM, nextMatchParticipantIds: undefined },
+      },
+    ],
+    [
+      "a negative observer limit",
+      { ...SNAPSHOT, room: { ...ROOM, observerLimit: -1 } },
     ],
     [
       "a malformed participant",
@@ -432,8 +492,80 @@ describe("multiplayer protocol validation", () => {
         ],
       },
     },
+    {
+      name: "an unknown queued participant",
+      room: {
+        ...ROOM,
+        nextMatchParticipantIds: ["missing-participant"],
+      },
+    },
+    {
+      name: "a seated queued participant",
+      room: {
+        ...ROOM,
+        nextMatchParticipantIds: ["guest-1"],
+      },
+    },
+    {
+      name: "a duplicate queued participant",
+      room: {
+        ...ROOM,
+        nextMatchParticipantIds: ["watcher-1", "watcher-1"],
+        participants: [
+          ...ROOM.participants,
+          {
+            displayName: "Katherine",
+            id: "watcher-1",
+            role: "observer",
+            userId: null,
+          },
+        ],
+      },
+    },
+    {
+      name: "more watchers than the observer limit",
+      room: {
+        ...ROOM,
+        observerLimit: 0,
+        participants: [
+          ...ROOM.participants,
+          {
+            displayName: "Katherine",
+            id: "watcher-1",
+            role: "observer",
+            userId: null,
+          },
+        ],
+      },
+    },
   ])("rejects room state with $name", ({ room }) => {
     expect(isMultiplayerRoomSnapshot({ ...SNAPSHOT, room })).toBe(false);
+  });
+
+  it("accepts a unique FIFO next-match queue of known unseated members", () => {
+    const queuedRoom = {
+      ...ROOM,
+      nextMatchParticipantIds: ["watcher-1", "watcher-2"],
+      participants: [
+        ...ROOM.participants,
+        {
+          displayName: "Katherine",
+          id: "watcher-1",
+          role: "observer" as const,
+          userId: null,
+        },
+        {
+          displayName: "Dorothy",
+          id: "watcher-2",
+          role: "observer" as const,
+          userId: null,
+        },
+      ],
+    } satisfies PrivateRoom;
+
+    expect(
+      isMultiplayerRoomSnapshot({ ...SNAPSHOT, room: queuedRoom }),
+    ).toBe(true);
   });
 
   it("accepts deeply nested JSON-like room settings without a recursion limit", () => {

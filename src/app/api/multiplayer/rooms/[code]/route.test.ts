@@ -60,6 +60,12 @@ function expectRoomCreated(store: InProcessMultiplayerRoomStore) {
     throw new Error(result.error);
   }
 
+  expect(result.outcome).toBe("snapshot");
+
+  if (result.outcome !== "snapshot") {
+    throw new Error("Expected room creation to return a snapshot.");
+  }
+
   return result.snapshot;
 }
 
@@ -92,6 +98,12 @@ function expectRoomStarted(store: InProcessMultiplayerRoomStore) {
 
   if (!result.success) {
     throw new Error(result.error);
+  }
+
+  expect(result.outcome).toBe("snapshot");
+
+  if (result.outcome !== "snapshot") {
+    throw new Error("Expected room start to return a snapshot.");
   }
 
   return result.snapshot;
@@ -244,6 +256,20 @@ describe("multiplayer room route", () => {
       {
         displayName: "Guest Hero",
         type: "room.joinPlayer",
+      },
+      {
+        matchId: 1,
+        participantId: "guest-1",
+        type: "room.joinNextMatch",
+      },
+      {
+        matchId: 1,
+        participantId: "guest-1",
+        type: "room.cancelNextMatch",
+      },
+      {
+        participantId: "guest-1",
+        type: "room.leave",
       },
       {
         participantId: "guest-1",

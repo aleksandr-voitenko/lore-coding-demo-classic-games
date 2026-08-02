@@ -64,6 +64,12 @@ function expectStoreSuccess(result: MultiplayerRoomStoreResult) {
     throw new Error(result.error);
   }
 
+  expect(result.outcome).toBe("snapshot");
+
+  if (result.outcome !== "snapshot") {
+    throw new Error("Expected a room snapshot.");
+  }
+
   return result.snapshot;
 }
 

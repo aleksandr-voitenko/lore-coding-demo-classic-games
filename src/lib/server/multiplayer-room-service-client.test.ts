@@ -21,6 +21,8 @@ const ROOM_SNAPSHOT = {
     code: "ROOM1",
     hostParticipantId: "host-1",
     matchId: 1,
+    nextMatchParticipantIds: [],
+    observerLimit: 8,
     participants: [
       {
         displayName: "Ada Host",
@@ -148,18 +150,19 @@ describe("multiplayer room service client", () => {
         init?.method === "GET"
       ) {
         return Response.json({
-          mutationPathSegment: "v4",
+          mutationPathSegment: "v5",
           participantCapabilities: true,
-          protocolVersion: 4,
+          protocolVersion: 5,
         });
       }
 
       if (
-        url.endsWith("/_internal/multiplayer/rooms/v4") &&
+        url.endsWith("/_internal/multiplayer/rooms/v5") &&
         init?.method === "POST"
       ) {
         return Response.json(
           {
+            outcome: "snapshot",
             participantCapability: "host-capability",
             snapshot: ROOM_SNAPSHOT,
             success: true,
@@ -173,6 +176,7 @@ describe("multiplayer room service client", () => {
         init?.method === "GET"
       ) {
         return Response.json({
+          outcome: "snapshot",
           snapshot: {
             ...ROOM_SNAPSHOT,
             seq: 2,
@@ -182,10 +186,11 @@ describe("multiplayer room service client", () => {
       }
 
       if (
-        url.endsWith("/_internal/multiplayer/rooms/v4/ROOM1") &&
+        url.endsWith("/_internal/multiplayer/rooms/v5/ROOM1") &&
         init?.method === "POST"
       ) {
         return Response.json({
+          outcome: "snapshot",
           snapshot: {
             ...ROOM_SNAPSHOT,
             seq: 3,
@@ -217,11 +222,13 @@ describe("multiplayer room service client", () => {
         },
       }),
     ).resolves.toEqual({
+      outcome: "snapshot",
       participantCapability: "host-capability",
       snapshot: ROOM_SNAPSHOT,
       success: true,
     });
     await expect(client.getRoom("room1")).resolves.toEqual({
+      outcome: "snapshot",
       snapshot: {
         ...ROOM_SNAPSHOT,
         seq: 2,
@@ -234,6 +241,7 @@ describe("multiplayer room service client", () => {
         type: "room.joinObserver",
       }),
     ).resolves.toEqual({
+      outcome: "snapshot",
       snapshot: {
         ...ROOM_SNAPSHOT,
         seq: 3,
@@ -243,10 +251,10 @@ describe("multiplayer room service client", () => {
 
     expect(requests.map((request) => request.url)).toEqual([
       "http://service.local/_internal/multiplayer/rooms",
-      "http://service.local/_internal/multiplayer/rooms/v4",
+      "http://service.local/_internal/multiplayer/rooms/v5",
       "http://service.local/_internal/multiplayer/rooms/ROOM1",
       "http://service.local/_internal/multiplayer/rooms",
-      "http://service.local/_internal/multiplayer/rooms/v4/ROOM1",
+      "http://service.local/_internal/multiplayer/rooms/v5/ROOM1",
     ]);
     expect(requests.map((request) => request.init?.method)).toEqual([
       "GET",
@@ -264,7 +272,7 @@ describe("multiplayer room service client", () => {
         accept: "application/json",
         authorization: "Bearer service-secret",
         "content-type": "application/json",
-        "x-multiplayer-room-protocol-version": "4",
+        "x-multiplayer-room-protocol-version": "5",
       },
       {
         accept: "application/json",
@@ -278,7 +286,7 @@ describe("multiplayer room service client", () => {
         accept: "application/json",
         authorization: "Bearer service-secret",
         "content-type": "application/json",
-        "x-multiplayer-room-protocol-version": "4",
+        "x-multiplayer-room-protocol-version": "5",
       },
     ]);
     expect(getRequestBody(requests[1]?.init)).toEqual({
@@ -394,9 +402,9 @@ describe("multiplayer room service client", () => {
           init?.method === "GET"
         ) {
           return Response.json({
-            mutationPathSegment: "v4",
+            mutationPathSegment: "v5",
             participantCapabilities: true,
-            protocolVersion: 4,
+            protocolVersion: 5,
           });
         }
 

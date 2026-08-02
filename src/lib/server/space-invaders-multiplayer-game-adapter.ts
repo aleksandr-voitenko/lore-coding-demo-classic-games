@@ -102,10 +102,10 @@ export const spaceInvadersMultiplayerRuntimeAdapter: MultiplayerServerGameRuntim
   createRuntime({ nowMs, room }) {
     return createSpaceInvadersRuntime(room, nowMs);
   },
-  createSnapshot({ room, runtime, serverTimeMs }) {
+  createSnapshot({ matchRoom, runtime, serverTimeMs }) {
     return createSpaceInvadersRuntimeSnapshot(
       getSpaceInvadersRuntime(runtime),
-      room,
+      matchRoom,
       serverTimeMs,
     );
   },
@@ -548,10 +548,10 @@ function clearReleasedSpaceInvadersSeatHeldInput(
 
 function createSpaceInvadersRuntimeSnapshot(
   runtime: StoredSpaceInvadersMultiplayerRuntime,
-  room: PrivateRoom,
+  matchRoom: PrivateRoom,
   serverTimeMs: number,
 ): Omit<SpaceInvadersMultiplayerServerGameSnapshot, "matchId"> {
-  const summary = createSpaceInvadersTerminalSummary(room, runtime.game);
+  const summary = createSpaceInvadersTerminalSummary(matchRoom, runtime.game);
 
   return {
     gameId: "space-invaders",
@@ -564,7 +564,7 @@ function createSpaceInvadersRuntimeSnapshot(
 }
 
 function createSpaceInvadersTerminalSummary(
-  room: PrivateRoom,
+  matchRoom: PrivateRoom,
   game: SpaceInvadersMultiplayerGameState,
 ): SpaceInvadersMultiplayerTerminalSummary | undefined {
   if (game.status !== "won" && game.status !== "lost") {
@@ -580,8 +580,8 @@ function createSpaceInvadersTerminalSummary(
       result: game.status,
       score: game.score,
     },
-    seats: createMultiplayerTerminalSummarySeats(room),
-    settings: room.settings,
+    seats: createMultiplayerTerminalSummarySeats(matchRoom),
+    settings: matchRoom.settings,
     status: game.status,
   };
 }

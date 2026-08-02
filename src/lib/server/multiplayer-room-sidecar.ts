@@ -6,6 +6,7 @@ import {
   MULTIPLAYER_ROOM_PROTOCOL_VERSION,
   MULTIPLAYER_ROOM_PROTOCOL_VERSION_HEADER,
 } from "../multiplayer/protocol";
+import { DEFAULT_PRIVATE_ROOM_OBSERVER_LIMIT } from "../multiplayer/room";
 import {
   DEFAULT_MULTIPLAYER_ROOM_SNAPSHOT_INTERVAL_MS,
   createMultiplayerRoomWebSocketGateway,
@@ -13,6 +14,7 @@ import {
 } from "./multiplayer-room-websocket";
 import {
   DEFAULT_MULTIPLAYER_ROOM_MAX_ROOMS,
+  DEFAULT_MULTIPLAYER_ROOM_MAX_CONNECTIONS_PER_PARTICIPANT,
   DEFAULT_MULTIPLAYER_ROOM_RETENTION_POLICY,
   InProcessMultiplayerRoomStore,
   getMultiplayerRoomStoreErrorStatus,
@@ -39,6 +41,10 @@ export const MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH_ENV =
   "MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH";
 export const MULTIPLAYER_SIDECAR_MAX_ROOMS_ENV =
   "MULTIPLAYER_SIDECAR_MAX_ROOMS";
+export const MULTIPLAYER_SIDECAR_MAX_CONNECTIONS_PER_PARTICIPANT_ENV =
+  "MULTIPLAYER_SIDECAR_MAX_CONNECTIONS_PER_PARTICIPANT";
+export const MULTIPLAYER_SIDECAR_MAX_OBSERVERS_PER_PARTY_ENV =
+  "MULTIPLAYER_SIDECAR_MAX_OBSERVERS_PER_PARTY";
 export const MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS_ENV =
   "MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS";
 
@@ -48,6 +54,8 @@ const MAX_ROOM_SERVICE_JSON_BODY_BYTES = 64 * 1024;
 export type MultiplayerRoomSidecarConfig = {
   healthPath: string;
   host: string;
+  maxConnectionsPerParticipant: number;
+  maxObserversPerParty: number;
   maxRooms: number;
   port: number;
   readinessPath: string;
@@ -91,6 +99,16 @@ export function parseMultiplayerRoomSidecarConfig(
     host:
       getOptionalEnvString(env.MULTIPLAYER_SIDECAR_HOST) ??
       DEFAULT_MULTIPLAYER_SIDECAR_HOST,
+    maxConnectionsPerParticipant: parsePositiveIntegerEnv(
+      env[MULTIPLAYER_SIDECAR_MAX_CONNECTIONS_PER_PARTICIPANT_ENV],
+      MULTIPLAYER_SIDECAR_MAX_CONNECTIONS_PER_PARTICIPANT_ENV,
+      DEFAULT_MULTIPLAYER_ROOM_MAX_CONNECTIONS_PER_PARTICIPANT,
+    ),
+    maxObserversPerParty: parseNonNegativeIntegerEnv(
+      env[MULTIPLAYER_SIDECAR_MAX_OBSERVERS_PER_PARTY_ENV],
+      MULTIPLAYER_SIDECAR_MAX_OBSERVERS_PER_PARTY_ENV,
+      DEFAULT_PRIVATE_ROOM_OBSERVER_LIMIT,
+    ),
     maxRooms: parsePositiveIntegerEnv(
       env[MULTIPLAYER_SIDECAR_MAX_ROOMS_ENV],
       MULTIPLAYER_SIDECAR_MAX_ROOMS_ENV,
@@ -117,7 +135,9 @@ export function createMultiplayerRoomSidecar(
   config: MultiplayerRoomSidecarConfig = parseMultiplayerRoomSidecarConfig(),
 ): MultiplayerRoomSidecar {
   const store = new InProcessMultiplayerRoomStore({
+    maxConnectionsPerParticipant: config.maxConnectionsPerParticipant,
     maxRooms: config.maxRooms,
+    observerLimit: config.maxObserversPerParty,
   });
   const server = createServer((request, response) => {
     void handleHttpRequest(config, store, gateway, request, response).catch(
@@ -379,7 +399,7 @@ async function handleRoomServiceRequest(
 
   const result = await roomStore.applyCommand(route.roomCode, command.command);
 
-  if (result.success) {
+  if (result.success && result.outcome === "snapshot") {
     gateway.broadcastSnapshot(result.snapshot);
   }
 
@@ -540,6 +560,8 @@ function parseRoomServiceCommand(value: unknown):
   if (
     value.type === "room.joinObserver" ||
     value.type === "room.joinPlayer" ||
+    value.type === "room.joinNextMatch" ||
+    value.type === "room.cancelNextMatch" ||
     value.type === "room.claimSeat" ||
     value.type === "room.releaseSeat" ||
     value.type === "game.input"
@@ -849,6 +871,26 @@ function parsePositiveIntegerEnv(
 
   if (!Number.isSafeInteger(integer) || integer <= 0) {
     throw new Error(`${envName} must be a positive integer.`);
+  }
+
+  return integer;
+}
+
+function parseNonNegativeIntegerEnv(
+  value: string | undefined,
+  envName: string,
+  fallback: number,
+) {
+  const trimmedValue = getOptionalEnvString(value);
+
+  if (trimmedValue === undefined) {
+    return fallback;
+  }
+
+  const integer = Number(trimmedValue);
+
+  if (!Number.isSafeInteger(integer) || integer < 0) {
+    throw new Error(`${envName} must be a non-negative integer.`);
   }
 
   return integer;

@@ -9,9 +9,11 @@ import {
   MULTIPLAYER_ROOM_PROTOCOL_VERSION_HEADER,
 } from "@/lib/multiplayer/protocol";
 import {
+  DEFAULT_MULTIPLAYER_ROOM_MAX_CONNECTIONS_PER_PARTICIPANT,
   DEFAULT_MULTIPLAYER_ROOM_RETENTION_POLICY,
   type MultiplayerRoomStoreResult,
 } from "./multiplayer-room-runtime";
+import { DEFAULT_PRIVATE_ROOM_OBSERVER_LIMIT } from "../multiplayer/room";
 
 import {
   DEFAULT_MULTIPLAYER_SIDECAR_HOST,
@@ -21,6 +23,8 @@ import {
   DEFAULT_MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH,
   DEFAULT_MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS,
   DEFAULT_MULTIPLAYER_SIDECAR_WEBSOCKET_PATH,
+  MULTIPLAYER_SIDECAR_MAX_CONNECTIONS_PER_PARTICIPANT_ENV,
+  MULTIPLAYER_SIDECAR_MAX_OBSERVERS_PER_PARTY_ENV,
   MULTIPLAYER_SIDECAR_HEALTH_PATH,
   createMultiplayerRoomSidecar,
   parseMultiplayerRoomSidecarConfig,
@@ -47,6 +51,9 @@ function createTestConfig(
   return {
     healthPath: MULTIPLAYER_SIDECAR_HEALTH_PATH,
     host: "127.0.0.1",
+    maxConnectionsPerParticipant:
+      DEFAULT_MULTIPLAYER_ROOM_MAX_CONNECTIONS_PER_PARTICIPANT,
+    maxObserversPerParty: DEFAULT_PRIVATE_ROOM_OBSERVER_LIMIT,
     maxRooms: DEFAULT_MULTIPLAYER_SIDECAR_MAX_ROOMS,
     port: 0,
     readinessPath: DEFAULT_MULTIPLAYER_SIDECAR_READINESS_PATH,
@@ -186,6 +193,12 @@ function expectStoreSuccess(result: MultiplayerRoomStoreResult) {
     throw new Error(result.error);
   }
 
+  expect(result.outcome).toBe("snapshot");
+
+  if (result.outcome !== "snapshot") {
+    throw new Error("Expected a room snapshot.");
+  }
+
   return result.snapshot;
 }
 
@@ -221,6 +234,9 @@ describe("multiplayer room sidecar", () => {
     expect(parseMultiplayerRoomSidecarConfig({})).toEqual({
       healthPath: MULTIPLAYER_SIDECAR_HEALTH_PATH,
       host: DEFAULT_MULTIPLAYER_SIDECAR_HOST,
+      maxConnectionsPerParticipant:
+        DEFAULT_MULTIPLAYER_ROOM_MAX_CONNECTIONS_PER_PARTICIPANT,
+      maxObserversPerParty: DEFAULT_PRIVATE_ROOM_OBSERVER_LIMIT,
       maxRooms: DEFAULT_MULTIPLAYER_SIDECAR_MAX_ROOMS,
       port: DEFAULT_MULTIPLAYER_SIDECAR_PORT,
       readinessPath: DEFAULT_MULTIPLAYER_SIDECAR_READINESS_PATH,
@@ -234,6 +250,8 @@ describe("multiplayer room sidecar", () => {
     expect(
       parseMultiplayerRoomSidecarConfig({
         MULTIPLAYER_SIDECAR_HOST: " 0.0.0.0 ",
+        [MULTIPLAYER_SIDECAR_MAX_CONNECTIONS_PER_PARTICIPANT_ENV]: "6",
+        [MULTIPLAYER_SIDECAR_MAX_OBSERVERS_PER_PARTY_ENV]: "12",
         MULTIPLAYER_SIDECAR_MAX_ROOMS: "512",
         MULTIPLAYER_SIDECAR_PORT: "3002",
         MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH: " /_sidecar/rooms ",
@@ -244,6 +262,8 @@ describe("multiplayer room sidecar", () => {
     ).toEqual({
       healthPath: MULTIPLAYER_SIDECAR_HEALTH_PATH,
       host: "0.0.0.0",
+      maxConnectionsPerParticipant: 6,
+      maxObserversPerParty: 12,
       maxRooms: 512,
       port: 3002,
       readinessPath: DEFAULT_MULTIPLAYER_SIDECAR_READINESS_PATH,
@@ -255,6 +275,22 @@ describe("multiplayer room sidecar", () => {
   });
 
   it("rejects invalid sidecar port and path configuration", () => {
+    expect(() =>
+      parseMultiplayerRoomSidecarConfig({
+        [MULTIPLAYER_SIDECAR_MAX_CONNECTIONS_PER_PARTICIPANT_ENV]: "0",
+      }),
+    ).toThrow(
+      `${MULTIPLAYER_SIDECAR_MAX_CONNECTIONS_PER_PARTICIPANT_ENV} must be a positive integer`,
+    );
+
+    expect(() =>
+      parseMultiplayerRoomSidecarConfig({
+        [MULTIPLAYER_SIDECAR_MAX_OBSERVERS_PER_PARTY_ENV]: "-1",
+      }),
+    ).toThrow(
+      `${MULTIPLAYER_SIDECAR_MAX_OBSERVERS_PER_PARTY_ENV} must be a non-negative integer`,
+    );
+
     expect(() =>
       parseMultiplayerRoomSidecarConfig({
         MULTIPLAYER_SIDECAR_MAX_ROOMS: "0",
@@ -372,7 +408,7 @@ describe("multiplayer room sidecar", () => {
     expect(client.readyState).toBe(WebSocket.OPEN);
   });
 
-  it("advertises protocol v4 and rejects unversioned or v3 mutation paths before room creation", async () => {
+  it("advertises protocol v5 and rejects unversioned or v4 mutation paths before room creation", async () => {
     const sidecar = await createStartedSidecar();
     const origin = getOrigin(sidecar);
     const serviceBaseUrl = `${origin}/_internal/rooms`;
@@ -388,7 +424,7 @@ describe("multiplayer room sidecar", () => {
       headers: ROOM_SERVICE_MUTATION_HEADERS,
       method: "POST",
     });
-    const v3MutationResponse = await fetch(`${serviceBaseUrl}/v3`, {
+    const v4MutationResponse = await fetch(`${serviceBaseUrl}/v4`, {
       body: "{",
       headers: ROOM_SERVICE_MUTATION_HEADERS,
       method: "POST",
@@ -405,8 +441,8 @@ describe("multiplayer room sidecar", () => {
     await expect(mutationResponse.json()).resolves.toEqual({
       error: "Room service protocol version is not supported.",
     });
-    expect(v3MutationResponse.status).toBe(426);
-    await expect(v3MutationResponse.json()).resolves.toEqual({
+    expect(v4MutationResponse.status).toBe(426);
+    await expect(v4MutationResponse.json()).resolves.toEqual({
       error: "Room service protocol version is not supported.",
     });
     expect(roomResponse.status).toBe(404);
@@ -436,7 +472,11 @@ describe("multiplayer room sidecar", () => {
     const firstResult = await readStoreResult(firstResponse);
     const firstSnapshot = expectStoreSuccess(firstResult);
 
-    if (!firstResult.success || firstResult.participantCapability === undefined) {
+    if (
+      !firstResult.success ||
+      firstResult.outcome !== "snapshot" ||
+      firstResult.participantCapability === undefined
+    ) {
       throw new Error("Expected room creation to include a host capability.");
     }
     const client = await connectClient(

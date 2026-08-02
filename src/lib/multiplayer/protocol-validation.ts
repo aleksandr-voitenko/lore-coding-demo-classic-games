@@ -126,6 +126,19 @@ function isMultiplayerRealtimeServerMessageUnchecked(
         isOptionalString(value.requestId) &&
         isOptionalRoomCode(value.roomCode, expectedRoomCode)
       );
+    case "party.closed":
+      return (
+        isRoomCode(value.roomCode, expectedRoomCode) &&
+        isPrivateRoomMatchId(value.matchId) &&
+        isTrimmedString(value.reason) &&
+        isSequence(value.seq)
+      );
+    case "room.membershipEnded":
+      return (
+        isRoomCode(value.roomCode, expectedRoomCode) &&
+        isEntityId(value.participantId) &&
+        value.reason === "left"
+      );
     case "connection.ping":
       return (
         isOptionalString(value.nonce) &&
@@ -149,6 +162,8 @@ function isPrivateRoom(value: unknown): value is PrivateRoom {
     normalizePrivateRoomCode(value.code) !== value.code ||
     !isEntityId(value.hostParticipantId) ||
     !isPrivateRoomMatchId(value.matchId) ||
+    !Array.isArray(value.nextMatchParticipantIds) ||
+    !isSequence(value.observerLimit) ||
     !Array.isArray(value.participants) ||
     !value.participants.every(isPrivateRoomParticipant) ||
     !Array.isArray(value.seats) ||
@@ -206,6 +221,30 @@ function isPrivateRoom(value: unknown): value is PrivateRoom {
     }
 
     seatedParticipantIds.add(seat.occupiedByParticipantId);
+  }
+
+  const nextMatchParticipantIds = new Set<string>();
+
+  for (const participantId of value.nextMatchParticipantIds) {
+    if (
+      !isEntityId(participantId) ||
+      !participantIds.has(participantId) ||
+      seatedParticipantIds.has(participantId) ||
+      nextMatchParticipantIds.has(participantId)
+    ) {
+      return false;
+    }
+
+    nextMatchParticipantIds.add(participantId);
+  }
+
+  if (
+    nextMatchParticipantIds.size > value.observerLimit ||
+    value.participants.filter(
+      (participant) => !seatedParticipantIds.has(participant.id),
+    ).length > value.observerLimit
+  ) {
+    return false;
   }
 
   return value.participants.every((participant) => {
@@ -382,13 +421,18 @@ function isMultiplayerRealtimeRejectionCode(
     case "invalid-command":
     case "invalid-display-name":
     case "invalid-host":
+    case "invalid-host-successor":
     case "invalid-message":
+    case "invalid-observer-limit":
     case "invalid-participant":
     case "invalid-room-code":
     case "invalid-room-settings":
     case "invalid-seat":
     case "invalid-status":
     case "not-host":
+    case "next-match-queue-full":
+    case "observer-limit-reached":
+    case "party-closed":
     case "participant-already-seated":
     case "participant-not-found":
     case "participant-not-seated":
@@ -470,7 +514,7 @@ function isOptionalSequence(value: unknown) {
   return value === undefined || isSequence(value);
 }
 
-function isSequence(value: unknown) {
+function isSequence(value: unknown): value is number {
   return (
     typeof value === "number" &&
     Number.isSafeInteger(value) &&

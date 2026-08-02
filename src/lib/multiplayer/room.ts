@@ -44,6 +44,8 @@ type PrivateRoomMatchState = {
 export type PrivateRoom = PrivateRoomMatchState & {
   code: string;
   hostParticipantId: string;
+  nextMatchParticipantIds: string[];
+  observerLimit: number;
   participants: PrivateRoomParticipant[];
 };
 
@@ -62,6 +64,7 @@ export type PrivateRoomHostInput = {
 export type CreatePrivateRoomOptions = {
   code: unknown;
   host: PrivateRoomHostInput;
+  observerLimit?: unknown;
   seats: readonly PrivateRoomSeatInput[];
   settings: PrivateRoomSettings;
 };
@@ -81,6 +84,10 @@ export type PrivateRoomActorOptions = {
   participantId: unknown;
 };
 
+export type LeavePrivateRoomOptions = PrivateRoomActorOptions & {
+  successorParticipantId?: unknown;
+};
+
 export type UpdatePrivateRoomSettingsOptions = PrivateRoomActorOptions & {
   settings: PrivateRoomSettings;
 };
@@ -95,34 +102,53 @@ export type PrivateRoomErrorCode =
   | "duplicate-seat"
   | "invalid-display-name"
   | "invalid-host"
+  | "invalid-host-successor"
+  | "invalid-observer-limit"
   | "invalid-participant"
   | "invalid-room-code"
   | "invalid-room-settings"
   | "invalid-seat"
   | "invalid-status"
   | "not-host"
+  | "observer-limit-reached"
   | "participant-already-seated"
   | "participant-not-found"
   | "participant-not-seated"
+  | "next-match-queue-full"
   | "required-seats-empty"
   | "seat-not-found"
   | "seat-occupied";
+
+export type PrivateRoomOperationFailure = {
+  code: PrivateRoomErrorCode;
+  error: string;
+  success: false;
+};
 
 export type PrivateRoomOperationResult =
   | {
       room: PrivateRoom;
       success: true;
     }
+  | PrivateRoomOperationFailure;
+
+export type PrivateRoomLeaveOperationResult =
   | {
-      code: PrivateRoomErrorCode;
-      error: string;
-      success: false;
-    };
+      closed: false;
+      room: PrivateRoom;
+      success: true;
+    }
+  | {
+      closed: true;
+      success: true;
+    }
+  | PrivateRoomOperationFailure;
 
 const PRIVATE_ROOM_CODE_PATTERN = /^[A-Z0-9-]{1,80}$/;
 const PRIVATE_ROOM_ENTITY_ID_PATTERN = /^[a-zA-Z0-9-]{1,80}$/;
 
 export const INITIAL_PRIVATE_ROOM_MATCH_ID = 1;
+export const DEFAULT_PRIVATE_ROOM_OBSERVER_LIMIT = 8;
 
 export function isPrivateRoomMatchId(value: unknown): value is number {
   return Number.isSafeInteger(value) && typeof value === "number" && value > 0;
@@ -139,7 +165,7 @@ export function getNextPrivateRoomMatchId(matchId: number) {
 function createPrivateRoomError(
   code: PrivateRoomErrorCode,
   error: string,
-): PrivateRoomOperationResult {
+): PrivateRoomOperationFailure {
   return {
     code,
     error,
@@ -149,6 +175,16 @@ function createPrivateRoomError(
 
 function createPrivateRoomSuccess(room: PrivateRoom): PrivateRoomOperationResult {
   return {
+    room,
+    success: true,
+  };
+}
+
+function createPrivateRoomLeaveSuccess(
+  room: PrivateRoom,
+): PrivateRoomLeaveOperationResult {
+  return {
+    closed: false,
     room,
     success: true,
   };
@@ -169,6 +205,12 @@ function normalizePrivateRoomEntityId(value: unknown) {
 
   return entityId !== null && PRIVATE_ROOM_ENTITY_ID_PATTERN.test(entityId)
     ? entityId
+    : null;
+}
+
+function normalizePrivateRoomObserverLimit(value: unknown) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
     : null;
 }
 
@@ -276,6 +318,90 @@ function findSeatOccupiedByParticipant(room: PrivateRoom, participantId: string)
   );
 }
 
+function getSeatedParticipantIds(room: PrivateRoom) {
+  return new Set(
+    room.seats.flatMap((seat) =>
+      seat.occupiedByParticipantId === null
+        ? []
+        : [seat.occupiedByParticipantId],
+    ),
+  );
+}
+
+export function getPrivateRoomWatchingParticipantIds(room: PrivateRoom) {
+  const seatedParticipantIds = getSeatedParticipantIds(room);
+
+  return room.participants.flatMap((participant) =>
+    seatedParticipantIds.has(participant.id) ? [] : [participant.id],
+  );
+}
+
+function applyPrivateRoomParticipantRoles(
+  room: PrivateRoom,
+  seats: readonly PrivateRoomSeat[],
+) {
+  const seatedParticipantIds = new Set(
+    seats.flatMap((seat) =>
+      seat.occupiedByParticipantId === null
+        ? []
+        : [seat.occupiedByParticipantId],
+    ),
+  );
+
+  return room.participants.map((participant) =>
+    participant.id === room.hostParticipantId
+      ? {
+          ...participant,
+          role: "host" as const,
+        }
+      : {
+          ...participant,
+          role: seatedParticipantIds.has(participant.id)
+            ? ("player" as const)
+            : ("observer" as const),
+        },
+  );
+}
+
+function promotePrivateRoomNextMatchQueue(room: PrivateRoom): PrivateRoom {
+  const participantIds = new Set(
+    room.participants.map((participant) => participant.id),
+  );
+  const seatedParticipantIds = getSeatedParticipantIds(room);
+  const nextMatchParticipantIds = room.nextMatchParticipantIds.filter(
+    (participantId) =>
+      participantIds.has(participantId) &&
+      !seatedParticipantIds.has(participantId),
+  );
+  let queueIndex = 0;
+  const seats = room.seats.map((seat) => {
+    if (seat.occupiedByParticipantId !== null) {
+      return seat;
+    }
+
+    const participantId = nextMatchParticipantIds[queueIndex];
+
+    if (participantId === undefined) {
+      return seat;
+    }
+
+    queueIndex += 1;
+    seatedParticipantIds.add(participantId);
+
+    return {
+      ...seat,
+      occupiedByParticipantId: participantId,
+    };
+  });
+
+  return {
+    ...room,
+    nextMatchParticipantIds: nextMatchParticipantIds.slice(queueIndex),
+    participants: applyPrivateRoomParticipantRoles(room, seats),
+    seats,
+  };
+}
+
 function isPrivateRoomBetweenMatches(room: PrivateRoom) {
   return room.status === "lobby" || room.status === "finished";
 }
@@ -284,6 +410,7 @@ export function getPrivateRoomGuestPlayerAdmissionRole(
   room: PrivateRoom,
 ): "observer" | "player" {
   return isPrivateRoomBetweenMatches(room) &&
+    room.nextMatchParticipantIds.length === 0 &&
     room.seats.some((seat) => seat.occupiedByParticipantId === null)
     ? "player"
     : "observer";
@@ -379,6 +506,7 @@ export function normalizePrivateRoomDisplayName(value: unknown) {
 export function createPrivateRoom({
   code,
   host,
+  observerLimit = DEFAULT_PRIVATE_ROOM_OBSERVER_LIMIT,
   seats,
   settings,
 }: CreatePrivateRoomOptions): PrivateRoomOperationResult {
@@ -399,6 +527,15 @@ export function createPrivateRoom({
     return createPrivateRoomError(
       "invalid-host",
       "Private rooms require a signed-in host.",
+    );
+  }
+
+  const normalizedObserverLimit = normalizePrivateRoomObserverLimit(observerLimit);
+
+  if (normalizedObserverLimit === null) {
+    return createPrivateRoomError(
+      "invalid-observer-limit",
+      "Party watcher limit must be a non-negative integer.",
     );
   }
 
@@ -427,6 +564,8 @@ export function createPrivateRoom({
     code: normalizedCode,
     hostParticipantId,
     matchId: INITIAL_PRIVATE_ROOM_MATCH_ID,
+    nextMatchParticipantIds: [],
+    observerLimit: normalizedObserverLimit,
     participants: [
       {
         displayName: hostDisplayName,
@@ -448,9 +587,10 @@ export function createPrivateRoom({
   });
 }
 
-export function addPrivateRoomGuestParticipantAsObserver(
+function addPrivateRoomParticipant(
   room: PrivateRoom,
   { displayName, participantId, userId = null }: AddPrivateRoomGuestParticipantOptions,
+  role: "observer" | "player",
 ): PrivateRoomOperationResult {
   const normalizedParticipantId = normalizePrivateRoomEntityId(participantId);
 
@@ -487,6 +627,18 @@ export function addPrivateRoomGuestParticipantAsObserver(
     );
   }
 
+  if (
+    normalizedUserId !== null &&
+    room.participants.some(
+      (participant) => participant.userId === normalizedUserId,
+    )
+  ) {
+    return createPrivateRoomError(
+      "duplicate-participant",
+      "This user is already a member of the party.",
+    );
+  }
+
   return createPrivateRoomSuccess({
     ...room,
     participants: [
@@ -494,11 +646,37 @@ export function addPrivateRoomGuestParticipantAsObserver(
       {
         displayName: normalizedDisplayName,
         id: normalizedParticipantId,
-        role: "observer",
+        role,
         userId: normalizedUserId,
       },
     ],
   });
+}
+
+export function addPrivateRoomGuestParticipantAsObserver(
+  room: PrivateRoom,
+  options: AddPrivateRoomGuestParticipantOptions,
+): PrivateRoomOperationResult {
+  const participantResult = addPrivateRoomParticipant(
+    room,
+    options,
+    "observer",
+  );
+
+  if (!participantResult.success) {
+    return participantResult;
+  }
+
+  if (
+    getPrivateRoomWatchingParticipantIds(room).length >= room.observerLimit
+  ) {
+    return createPrivateRoomError(
+      "observer-limit-reached",
+      "This party already has the maximum number of watchers.",
+    );
+  }
+
+  return participantResult;
 }
 
 export function addPrivateRoomGuestParticipantAsPlayer(
@@ -506,21 +684,29 @@ export function addPrivateRoomGuestParticipantAsPlayer(
   options: AddPrivateRoomGuestParticipantOptions,
 ): PrivateRoomOperationResult {
   const admissionRole = getPrivateRoomGuestPlayerAdmissionRole(room);
-  const observerResult = addPrivateRoomGuestParticipantAsObserver(room, options);
 
-  if (!observerResult.success || admissionRole === "observer") {
-    return observerResult;
+  if (admissionRole === "observer") {
+    return addPrivateRoomGuestParticipantAsObserver(room, options);
   }
 
-  const openSeat = observerResult.room.seats.find(
+  const playerResult = addPrivateRoomParticipant(room, options, "player");
+
+  if (!playerResult.success) {
+    return playerResult;
+  }
+
+  const openSeat = playerResult.room.seats.find(
     (seat) => seat.occupiedByParticipantId === null,
   );
 
   if (openSeat === undefined) {
-    return observerResult;
+    return createPrivateRoomError(
+      "seat-occupied",
+      "Player seats became unavailable while joining the party.",
+    );
   }
 
-  return claimPrivateRoomSeat(observerResult.room, {
+  return claimPrivateRoomSeat(playerResult.room, {
     participantId: options.participantId,
     seatId: openSeat.id,
   });
@@ -616,34 +802,17 @@ export function replacePrivateRoomMatch(
     ...seat,
     occupiedByParticipantId: playersBySeatOrdinal[index] ?? null,
   }));
-  const seatedParticipantIds = new Set(
-    nextSeats.flatMap((seat) =>
-      seat.occupiedByParticipantId === null
-        ? []
-        : [seat.occupiedByParticipantId],
-    ),
-  );
 
-  return createPrivateRoomSuccess({
+  const nextRoom: PrivateRoom = {
     ...room,
     matchId: getNextPrivateRoomMatchId(room.matchId),
-    participants: room.participants.map((participant) =>
-      participant.id === room.hostParticipantId
-        ? {
-            ...participant,
-            role: "host",
-          }
-        : {
-            ...participant,
-            role: seatedParticipantIds.has(participant.id)
-              ? "player"
-              : "observer",
-          },
-    ),
+    participants: applyPrivateRoomParticipantRoles(room, nextSeats),
     seats: nextSeats,
     settings: normalizedSettings,
     status: "lobby",
-  });
+  };
+
+  return createPrivateRoomSuccess(promotePrivateRoomNextMatchQueue(nextRoom));
 }
 
 export function claimPrivateRoomSeat(
@@ -694,8 +863,23 @@ export function claimPrivateRoomSeat(
     );
   }
 
+  const nextQueuedParticipantId = room.nextMatchParticipantIds[0];
+
+  if (
+    nextQueuedParticipantId !== undefined &&
+    nextQueuedParticipantId !== normalizedParticipantId
+  ) {
+    return createPrivateRoomError(
+      "seat-occupied",
+      "An earlier watcher has priority for the next open seat.",
+    );
+  }
+
   return createPrivateRoomSuccess({
     ...room,
+    nextMatchParticipantIds: room.nextMatchParticipantIds.filter(
+      (participantId) => participantId !== normalizedParticipantId,
+    ),
     participants: room.participants.map((participant) =>
       participant.id === normalizedParticipantId && participant.role !== "host"
         ? {
@@ -753,25 +937,210 @@ export function releasePrivateRoomSeat(
     );
   }
 
+  const seats = room.seats.map((seat) =>
+    seat.id === normalizedSeatId
+      ? {
+          ...seat,
+          occupiedByParticipantId: null,
+        }
+      : seat,
+  );
+  const releasedRoom: PrivateRoom = {
+    ...room,
+    participants: applyPrivateRoomParticipantRoles(room, seats),
+    seats,
+  };
+  const nextRoom =
+    room.status === "lobby"
+      ? promotePrivateRoomNextMatchQueue(releasedRoom)
+      : releasedRoom;
+
+  if (
+    getPrivateRoomWatchingParticipantIds(nextRoom).length > room.observerLimit
+  ) {
+    return createPrivateRoomError(
+      "observer-limit-reached",
+      "This party already has the maximum number of watchers.",
+    );
+  }
+
+  return createPrivateRoomSuccess(nextRoom);
+}
+
+export function queuePrivateRoomParticipantForNextMatch(
+  room: PrivateRoom,
+  { participantId }: PrivateRoomActorOptions,
+): PrivateRoomOperationResult {
+  const normalizedParticipantId = normalizePrivateRoomEntityId(participantId);
+
+  if (
+    normalizedParticipantId === null ||
+    findParticipant(room, normalizedParticipantId) === null
+  ) {
+    return createPrivateRoomError(
+      "participant-not-found",
+      "Participant is not in the room.",
+    );
+  }
+
+  if (findSeatOccupiedByParticipant(room, normalizedParticipantId) !== null) {
+    return createPrivateRoomError(
+      "participant-already-seated",
+      "Only watchers can wait for the next match.",
+    );
+  }
+
+  if (room.nextMatchParticipantIds.includes(normalizedParticipantId)) {
+    return createPrivateRoomSuccess(room);
+  }
+
+  if (room.nextMatchParticipantIds.length >= room.observerLimit) {
+    return createPrivateRoomError(
+      "next-match-queue-full",
+      "The next-match queue is full.",
+    );
+  }
+
+  const queuedRoom: PrivateRoom = {
+    ...room,
+    nextMatchParticipantIds: [
+      ...room.nextMatchParticipantIds,
+      normalizedParticipantId,
+    ],
+  };
+
+  return createPrivateRoomSuccess(
+    room.status === "lobby"
+      ? promotePrivateRoomNextMatchQueue(queuedRoom)
+      : queuedRoom,
+  );
+}
+
+export function cancelPrivateRoomNextMatchRequest(
+  room: PrivateRoom,
+  { participantId }: PrivateRoomActorOptions,
+): PrivateRoomOperationResult {
+  const normalizedParticipantId = normalizePrivateRoomEntityId(participantId);
+
+  if (
+    normalizedParticipantId === null ||
+    findParticipant(room, normalizedParticipantId) === null
+  ) {
+    return createPrivateRoomError(
+      "participant-not-found",
+      "Participant is not in the room.",
+    );
+  }
+
+  if (!room.nextMatchParticipantIds.includes(normalizedParticipantId)) {
+    return createPrivateRoomSuccess(room);
+  }
+
   return createPrivateRoomSuccess({
     ...room,
-    participants: room.participants.map((participant) =>
-      participant.id === normalizedParticipantId && participant.role === "player"
-        ? {
-            ...participant,
-            role: "observer",
-          }
-        : participant,
-    ),
-    seats: room.seats.map((seat) =>
-      seat.id === normalizedSeatId
-        ? {
-            ...seat,
-            occupiedByParticipantId: null,
-          }
-        : seat,
+    nextMatchParticipantIds: room.nextMatchParticipantIds.filter(
+      (queuedParticipantId) =>
+        queuedParticipantId !== normalizedParticipantId,
     ),
   });
+}
+
+export function leavePrivateRoom(
+  room: PrivateRoom,
+  { participantId, successorParticipantId }: LeavePrivateRoomOptions,
+): PrivateRoomLeaveOperationResult {
+  const normalizedParticipantId = normalizePrivateRoomEntityId(participantId);
+  const participant =
+    normalizedParticipantId === null
+      ? null
+      : findParticipant(room, normalizedParticipantId);
+
+  if (participant === null || normalizedParticipantId === null) {
+    return createPrivateRoomError(
+      "participant-not-found",
+      "Participant is not in the room.",
+    );
+  }
+
+  const leavingHost = normalizedParticipantId === room.hostParticipantId;
+
+  if (
+    leavingHost &&
+    (successorParticipantId === undefined || successorParticipantId === null)
+  ) {
+    return { closed: true, success: true };
+  }
+
+  const normalizedSuccessorParticipantId =
+    successorParticipantId === undefined || successorParticipantId === null
+      ? null
+      : normalizePrivateRoomEntityId(successorParticipantId);
+
+  if (!leavingHost && normalizedSuccessorParticipantId !== null) {
+    return createPrivateRoomError(
+      "invalid-host-successor",
+      "Only a leaving host can transfer party ownership.",
+    );
+  }
+
+  if (leavingHost) {
+    const successor =
+      normalizedSuccessorParticipantId === null
+        ? null
+        : findParticipant(room, normalizedSuccessorParticipantId);
+
+    if (
+      successor === null ||
+      successor.id === normalizedParticipantId ||
+      successor.userId === null
+    ) {
+      return createPrivateRoomError(
+        "invalid-host-successor",
+        "Party ownership can only transfer to a signed-in member.",
+      );
+    }
+  }
+
+  const hostParticipantId =
+    normalizedSuccessorParticipantId ?? room.hostParticipantId;
+  const participants = room.participants
+    .filter((entry) => entry.id !== normalizedParticipantId)
+    .map((entry) =>
+      entry.id === hostParticipantId
+        ? {
+            ...entry,
+            role: "host" as const,
+          }
+        : entry,
+    );
+  const seats = room.seats.map((seat) =>
+    seat.occupiedByParticipantId === normalizedParticipantId
+      ? {
+          ...seat,
+          occupiedByParticipantId: null,
+        }
+      : seat,
+  );
+  const departedRoom: PrivateRoom = {
+    ...room,
+    hostParticipantId,
+    nextMatchParticipantIds: room.nextMatchParticipantIds.filter(
+      (queuedParticipantId) =>
+        queuedParticipantId !== normalizedParticipantId,
+    ),
+    participants,
+    seats,
+  };
+  const roleAdjustedRoom: PrivateRoom = {
+    ...departedRoom,
+    participants: applyPrivateRoomParticipantRoles(departedRoom, seats),
+  };
+
+  return createPrivateRoomLeaveSuccess(
+    room.status === "lobby"
+      ? promotePrivateRoomNextMatchQueue(roleAdjustedRoom)
+      : roleAdjustedRoom,
+  );
 }
 
 export function startPrivateRoom(
@@ -791,13 +1160,14 @@ export function startPrivateRoom(
     );
   }
 
-  const requiredSeatLabels = getUnoccupiedRequiredSeatLabels(room);
+  const readyRoom = promotePrivateRoomNextMatchQueue(room);
+  const requiredSeatLabels = getUnoccupiedRequiredSeatLabels(readyRoom);
 
   if (requiredSeatLabels.length > 0) {
     return createRequiredSeatsError("starting", requiredSeatLabels);
   }
 
-  return updatePrivateRoomStatus(room, "running");
+  return updatePrivateRoomStatus(readyRoom, "running");
 }
 
 export function pausePrivateRoom(
@@ -857,17 +1227,27 @@ export function restartPrivateRoom(
     );
   }
 
-  const requiredSeatLabels = getUnoccupiedRequiredSeatLabels(room);
+  const readyRoom = promotePrivateRoomNextMatchQueue(room);
+  const requiredSeatLabels = getUnoccupiedRequiredSeatLabels(readyRoom);
 
   if (requiredSeatLabels.length > 0) {
     return createRequiredSeatsError("restarting", requiredSeatLabels);
   }
 
   return createPrivateRoomSuccess({
-    ...room,
-    matchId: getNextPrivateRoomMatchId(room.matchId),
+    ...readyRoom,
+    matchId: getNextPrivateRoomMatchId(readyRoom.matchId),
     status: "running",
   });
+}
+
+export function finishPrivateRoomAfterGameTerminal(room: PrivateRoom) {
+  return room.status === "running" || room.status === "paused"
+    ? {
+        ...room,
+        status: "finished" as const,
+      }
+    : room;
 }
 
 export function finishPrivateRoom(
@@ -887,5 +1267,5 @@ export function finishPrivateRoom(
     );
   }
 
-  return updatePrivateRoomStatus(room, "finished");
+  return createPrivateRoomSuccess(finishPrivateRoomAfterGameTerminal(room));
 }

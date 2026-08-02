@@ -6,7 +6,10 @@ import {
   MULTIPLAYER_ROOM_PROTOCOL_VERSION_HEADER,
 } from "../multiplayer/protocol";
 import { isMultiplayerRoomSnapshot } from "../multiplayer/protocol-validation";
-import { normalizePrivateRoomCode } from "../multiplayer/room";
+import {
+  isPrivateRoomMatchId,
+  normalizePrivateRoomCode,
+} from "../multiplayer/room";
 
 import type {
   CreateMultiplayerRoomOptions,
@@ -14,6 +17,7 @@ import type {
   MultiplayerRoomStore,
   MultiplayerRoomStoreCommand,
   MultiplayerRoomStoreResult,
+  MultiplayerRoomStoreSnapshotResult,
 } from "./multiplayer-room-runtime";
 import { isMultiplayerRoomStoreErrorCode } from "./multiplayer-room-runtime";
 
@@ -46,17 +50,17 @@ export class MultiplayerRoomServiceClient implements MultiplayerRoomStore {
 
   async createRoom(
     options: CreateMultiplayerRoomOptions,
-  ): Promise<MultiplayerRoomStoreResult> {
+  ): Promise<MultiplayerRoomStoreSnapshotResult> {
     const protocolFailure = await this.#verifyMutationProtocol();
 
     if (protocolFailure !== null) {
       return protocolFailure;
     }
 
-    return this.#request("POST", undefined, options);
+    return this.#requestSnapshot("POST", undefined, options);
   }
 
-  async getRoom(roomCode: unknown): Promise<MultiplayerRoomStoreResult> {
+  async getRoom(roomCode: unknown): Promise<MultiplayerRoomStoreSnapshotResult> {
     const normalizedRoomCode = normalizePrivateRoomCode(roomCode);
 
     if (normalizedRoomCode === null) {
@@ -66,7 +70,7 @@ export class MultiplayerRoomServiceClient implements MultiplayerRoomStore {
       );
     }
 
-    return this.#request("GET", normalizedRoomCode);
+    return this.#requestSnapshot("GET", normalizedRoomCode);
   }
 
   async applyCommand(
@@ -183,6 +187,21 @@ export class MultiplayerRoomServiceClient implements MultiplayerRoomStore {
     return result;
   }
 
+  async #requestSnapshot(
+    method: HttpMethod,
+    roomCode: string | undefined,
+    body?: unknown,
+  ): Promise<MultiplayerRoomStoreSnapshotResult> {
+    const result = await this.#request(method, roomCode, body);
+
+    return result.success && result.outcome === "party-closed"
+      ? createServiceFailure(
+          "room-service-invalid-response",
+          "Room service returned a party-closed outcome for a snapshot request.",
+        )
+      : result;
+  }
+
   #getRequestUrl(roomCode: string | undefined, mutation: boolean) {
     const baseUrl = mutation
       ? `${this.#baseUrl}/${MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT}`
@@ -270,8 +289,36 @@ function parseMultiplayerRoomServiceResult(
   }
 
   if (value.success) {
+    if (value.outcome === "party-closed") {
+      const reason = value.reason;
+      const roomCode = value.roomCode;
+
+      if (
+        !isEntityId(value.departedParticipantId) ||
+        !isPrivateRoomMatchId(value.matchId) ||
+        typeof reason !== "string" ||
+        typeof roomCode !== "string" ||
+        normalizePrivateRoomCode(roomCode) !== roomCode ||
+        !isSequence(value.seq)
+      ) {
+        return null;
+      }
+
+      return {
+        departedParticipantId: value.departedParticipantId,
+        matchId: value.matchId,
+        outcome: "party-closed",
+        reason,
+        roomCode,
+        seq: value.seq,
+        success: true,
+      };
+    }
+
     if (
+      value.outcome !== "snapshot" ||
       !isMultiplayerRoomSnapshot(value.snapshot) ||
+      !isOptionalEntityId(value.departedParticipantId) ||
       !isOptionalParticipantCapability(value.participantCapability) ||
       (value.participantCapability !== undefined &&
         value.snapshot.participant === undefined)
@@ -280,6 +327,10 @@ function parseMultiplayerRoomServiceResult(
     }
 
     return {
+      ...(value.departedParticipantId === undefined
+        ? {}
+        : { departedParticipantId: value.departedParticipantId }),
+      outcome: "snapshot",
       ...(value.participantCapability === undefined
         ? {}
         : { participantCapability: value.participantCapability }),
@@ -300,6 +351,18 @@ function parseMultiplayerRoomServiceResult(
   }
 
   return null;
+}
+
+function isEntityId(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.trim() === value;
+}
+
+function isOptionalEntityId(value: unknown): value is string | undefined {
+  return value === undefined || isEntityId(value);
+}
+
+function isSequence(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
 function isOptionalParticipantCapability(

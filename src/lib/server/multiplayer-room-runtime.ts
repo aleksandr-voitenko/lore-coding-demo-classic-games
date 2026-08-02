@@ -4,20 +4,27 @@ import type { PrivateRoomLifecycleCommand } from "../multiplayer/protocol";
 import type {
   PrivateRoom,
   PrivateRoomErrorCode,
+  PrivateRoomOperationFailure,
   PrivateRoomSeatInput,
   PrivateRoomSettingValue,
   PrivateRoomSettings,
 } from "../multiplayer/room";
 import {
+  DEFAULT_PRIVATE_ROOM_OBSERVER_LIMIT,
   addPrivateRoomGuestParticipantAsPlayer,
   addPrivateRoomGuestParticipantAsObserver,
+  cancelPrivateRoomNextMatchRequest,
   claimPrivateRoomSeat,
   createPrivateRoom,
   finishPrivateRoom,
+  finishPrivateRoomAfterGameTerminal,
+  getPrivateRoomWatchingParticipantIds,
   getPrivateRoomGuestPlayerAdmissionRole,
   isPrivateRoomMatchId,
+  leavePrivateRoom,
   normalizePrivateRoomCode,
   pausePrivateRoom,
+  queuePrivateRoomParticipantForNextMatch,
   releasePrivateRoomSeat,
   replacePrivateRoomMatch,
   restartPrivateRoom,
@@ -44,10 +51,26 @@ export type MultiplayerRoomStoreCommand =
   | {
       displayName: unknown;
       type: "room.joinObserver";
+      userId?: unknown;
     }
   | {
       displayName: unknown;
       type: "room.joinPlayer";
+      userId?: unknown;
+    }
+  | {
+      matchId: unknown;
+      participantId: unknown;
+      type: "room.joinNextMatch";
+    }
+  | {
+      matchId: unknown;
+      participantId: unknown;
+      type: "room.cancelNextMatch";
+    }
+  | {
+      participantId: unknown;
+      type: "room.leave";
     }
   | {
       matchId: unknown;
@@ -120,6 +143,7 @@ export type MultiplayerRoomStoreErrorCode =
   | PrivateRoomErrorCode
   | "duplicate-room"
   | "invalid-command"
+  | "party-closed"
   | "room-capacity-reached"
   | "room-expired"
   | "room-service-invalid-response"
@@ -127,29 +151,48 @@ export type MultiplayerRoomStoreErrorCode =
   | "room-not-found"
   | "stale-match";
 
+export type MultiplayerRoomStoreSnapshotSuccess = {
+  departedParticipantId?: string;
+  outcome: "snapshot";
+  participantCapability?: string;
+  snapshot: MultiplayerRoomSnapshot;
+  success: true;
+};
+
+export type MultiplayerRoomStoreFailure = {
+  code: MultiplayerRoomStoreErrorCode;
+  error: string;
+  success: false;
+};
+
+export type MultiplayerRoomStoreSnapshotResult =
+  | MultiplayerRoomStoreSnapshotSuccess
+  | MultiplayerRoomStoreFailure;
+
 export type MultiplayerRoomStoreResult =
+  | MultiplayerRoomStoreSnapshotSuccess
   | {
-      participantCapability?: string;
-      snapshot: MultiplayerRoomSnapshot;
+      departedParticipantId: string;
+      matchId: number;
+      outcome: "party-closed";
+      reason: string;
+      roomCode: string;
+      seq: number;
       success: true;
     }
-  | {
-      code: MultiplayerRoomStoreErrorCode;
-      error: string;
-      success: false;
-    };
+  | MultiplayerRoomStoreFailure;
 
 export type MultiplayerRoomStoreOperationResult =
   | MultiplayerRoomStoreResult
   | Promise<MultiplayerRoomStoreResult>;
 
-type MultiplayerRoomStoreFailure = Extract<
-  MultiplayerRoomStoreResult,
-  { success: false }
->;
+export type MultiplayerRoomStoreSnapshotOperationResult =
+  | MultiplayerRoomStoreSnapshotResult
+  | Promise<MultiplayerRoomStoreSnapshotResult>;
+
 type MultiplayerRoomStoreSuccess = Extract<
   MultiplayerRoomStoreResult,
-  { success: true }
+  { outcome: "snapshot"; success: true }
 >;
 
 export type MultiplayerRoomStore = {
@@ -157,8 +200,10 @@ export type MultiplayerRoomStore = {
     roomCode: unknown,
     command: MultiplayerRoomStoreCommand,
   ) => MultiplayerRoomStoreOperationResult;
-  createRoom: (options: CreateMultiplayerRoomOptions) => MultiplayerRoomStoreOperationResult;
-  getRoom: (roomCode: unknown) => MultiplayerRoomStoreOperationResult;
+  createRoom: (
+    options: CreateMultiplayerRoomOptions,
+  ) => MultiplayerRoomStoreSnapshotOperationResult;
+  getRoom: (roomCode: unknown) => MultiplayerRoomStoreSnapshotOperationResult;
 };
 
 /**
@@ -189,6 +234,7 @@ type MultiplayerRoomRetentionPolicy = {
 };
 
 export const DEFAULT_MULTIPLAYER_ROOM_MAX_ROOMS = 256;
+export const DEFAULT_MULTIPLAYER_ROOM_MAX_CONNECTIONS_PER_PARTICIPANT = 4;
 export const DEFAULT_MULTIPLAYER_ROOM_RETENTION_POLICY = {
   inProgressIdleTtlMs: 2 * 60 * 60 * 1_000,
   lobbyIdleTtlMs: 60 * 60 * 1_000,
@@ -206,6 +252,8 @@ type CreateInProcessMultiplayerRoomStoreOptions = {
   ) => string;
   createRoomCode?: () => string;
   getNowMs?: () => number;
+  maxConnectionsPerParticipant?: number;
+  observerLimit?: number;
   maxRooms?: number;
   retentionPolicy?: Partial<MultiplayerRoomRetentionPolicy>;
 };
@@ -224,6 +272,7 @@ type StoredMultiplayerRoom = {
 
 type StoredMultiplayerGameRuntime = {
   adapter: MultiplayerServerGameRuntimeAdapter;
+  matchRoom: PrivateRoom;
   matchId: number;
   runtime: unknown;
 };
@@ -231,7 +280,9 @@ type StoredMultiplayerGameRuntime = {
 const INITIAL_ROOM_SEQUENCE = 1;
 
 type MultiplayerRoomTombstone = {
+  error: string;
   expiredAtMs: number;
+  kind: "closed" | "expired";
 };
 
 function createDefaultRoomCode() {
@@ -266,6 +317,14 @@ export function isMultiplayerRoomParticipantConnectionStore(
 function normalizePositiveInteger(value: number, name: string) {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer.`);
+  }
+
+  return value;
+}
+
+function normalizeNonNegativeInteger(value: number, name: string) {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${name} must be a non-negative integer.`);
   }
 
   return value;
@@ -342,6 +401,8 @@ function clonePrivateRoom(room: PrivateRoom): PrivateRoom {
     code: room.code,
     hostParticipantId: room.hostParticipantId,
     matchId: room.matchId,
+    nextMatchParticipantIds: [...room.nextMatchParticipantIds],
+    observerLimit: room.observerLimit,
     participants: room.participants.map((participant) => ({ ...participant })),
     seats: room.seats.map((seat) => ({ ...seat })),
     settings: clonePrivateRoomSettings(room.settings),
@@ -367,10 +428,14 @@ export function isMultiplayerRoomStoreErrorCode(
     case "duplicate-participant":
     case "duplicate-room":
     case "invalid-command":
+    case "invalid-host-successor":
+    case "invalid-observer-limit":
     case "invalid-room-code":
     case "invalid-room-settings":
     case "invalid-status":
     case "not-host":
+    case "next-match-queue-full":
+    case "observer-limit-reached":
     case "participant-already-seated":
     case "participant-not-found":
     case "participant-not-seated":
@@ -378,6 +443,7 @@ export function isMultiplayerRoomStoreErrorCode(
     case "room-capacity-reached":
     case "room-expired":
     case "room-not-found":
+    case "party-closed":
     case "room-service-invalid-response":
     case "room-service-unavailable":
     case "seat-not-found":
@@ -393,6 +459,10 @@ export function getMultiplayerRoomStoreErrorStatus(
   code: MultiplayerRoomStoreErrorCode,
 ) {
   if (code === "room-expired") {
+    return 410;
+  }
+
+  if (code === "party-closed") {
     return 410;
   }
 
@@ -419,6 +489,8 @@ export function getMultiplayerRoomStoreErrorStatus(
     code === "duplicate-room" ||
     code === "duplicate-participant" ||
     code === "invalid-status" ||
+    code === "next-match-queue-full" ||
+    code === "observer-limit-reached" ||
     code === "participant-already-seated" ||
     code === "required-seats-empty" ||
     code === "seat-occupied" ||
@@ -466,6 +538,7 @@ function createStoredRoomSnapshot(
   serverTimeMs: number,
   participantId?: string,
   participantCapability?: string,
+  departedParticipantId?: string,
 ): MultiplayerRoomStoreSuccess {
   const room = clonePrivateRoom(storedRoom.room);
   const participant =
@@ -481,6 +554,7 @@ function createStoredRoomSnapshot(
 
     game = {
       ...storedRoom.game.adapter.createSnapshot({
+        matchRoom: clonePrivateRoom(storedRoom.game.matchRoom),
         room,
         runtime: storedRoom.game.runtime,
         serverTimeMs,
@@ -490,7 +564,11 @@ function createStoredRoomSnapshot(
   }
 
   return {
+    ...(departedParticipantId === undefined
+      ? {}
+      : { departedParticipantId }),
     ...(participantCapability === undefined ? {} : { participantCapability }),
+    outcome: "snapshot",
     snapshot: {
       ...(game === undefined ? {} : { game }),
       ...(participant === undefined ? {} : { participant }),
@@ -521,7 +599,10 @@ function getCommandParticipantIdValue(
   command: Extract<
     MultiplayerRoomStoreCommand,
     | { type: "game.input" }
+    | { type: "room.cancelNextMatch" }
     | { type: "room.claimSeat" }
+    | { type: "room.joinNextMatch" }
+    | { type: "room.leave" }
     | { type: "room.lifecycle" }
     | { type: "room.releaseSeat" }
     | { type: "room.replaceMatch" }
@@ -534,7 +615,7 @@ function getCommandParticipantIdValue(
 }
 
 function getPrivateRoomOperationFailure(
-  result: Extract<ReturnType<typeof createPrivateRoom>, { success: false }>,
+  result: PrivateRoomOperationFailure,
 ): MultiplayerRoomStoreFailure {
   return {
     code: result.code,
@@ -605,10 +686,7 @@ function synchronizeStoredRoomTerminalStatus(
     return;
   }
 
-  storedRoom.room = {
-    ...storedRoom.room,
-    status: "finished",
-  };
+  storedRoom.room = finishPrivateRoomAfterGameTerminal(storedRoom.room);
   storedRoom.seq += 1;
 }
 
@@ -648,6 +726,7 @@ function applyGameLifecycleCommand(
 
     return {
       adapter,
+      matchRoom: clonePrivateRoom(room),
       matchId: room.matchId,
       runtime: result.runtime,
     };
@@ -667,6 +746,12 @@ function applyGameLifecycleCommand(
   if (result.runtime !== undefined) {
     return {
       adapter,
+      matchRoom:
+        command.command === "start" ||
+        storedRoom.game === undefined ||
+        storedRoom.game.matchId !== room.matchId
+          ? clonePrivateRoom(room)
+          : storedRoom.game.matchRoom,
       matchId: room.matchId,
       runtime: result.runtime,
     };
@@ -682,7 +767,9 @@ function isMatchTargetedCommand(
   {
     type:
       | "game.input"
+      | "room.cancelNextMatch"
       | "room.claimSeat"
+      | "room.joinNextMatch"
       | "room.lifecycle"
       | "room.releaseSeat"
       | "room.replaceMatch"
@@ -691,7 +778,9 @@ function isMatchTargetedCommand(
 > {
   return (
     command.type === "game.input" ||
+    command.type === "room.cancelNextMatch" ||
     command.type === "room.claimSeat" ||
+    command.type === "room.joinNextMatch" ||
     command.type === "room.lifecycle" ||
     command.type === "room.releaseSeat" ||
     command.type === "room.replaceMatch" ||
@@ -767,6 +856,65 @@ function clearReleasedSeatGameInput(
   });
 }
 
+function clearDepartedParticipantGameInput(
+  storedRoom: StoredMultiplayerRoom,
+  participantId: string,
+) {
+  if (storedRoom.game === undefined) {
+    return;
+  }
+
+  for (const seat of storedRoom.room.seats) {
+    if (seat.occupiedByParticipantId !== participantId) {
+      continue;
+    }
+
+    storedRoom.game.adapter.clearInputForReleasedSeat({
+      command: {
+        matchId: storedRoom.room.matchId,
+        participantId,
+        seatId: seat.id,
+        type: "room.releaseSeat",
+      },
+      runtime: storedRoom.game.runtime,
+    });
+  }
+}
+
+function getConnectedSignedInHostSuccessor(
+  storedRoom: StoredMultiplayerRoom,
+  departingParticipantId: string,
+) {
+  return (
+    storedRoom.room.participants.find(
+      (participant) =>
+        participant.id !== departingParticipantId &&
+        participant.userId !== null &&
+        (storedRoom.connectionCountsByParticipantId.get(participant.id) ?? 0) > 0,
+    )?.id ?? null
+  );
+}
+
+function removeDepartedParticipantAuthority(
+  storedRoom: StoredMultiplayerRoom,
+  participantId: string,
+  nowMs: number,
+) {
+  const connectionCount =
+    storedRoom.connectionCountsByParticipantId.get(participantId) ?? 0;
+
+  storedRoom.connectionCountsByParticipantId.delete(participantId);
+  storedRoom.connectedParticipantCount = Math.max(
+    0,
+    storedRoom.connectedParticipantCount - connectionCount,
+  );
+  storedRoom.participantCapabilityHashesByParticipantId.delete(participantId);
+
+  if (storedRoom.connectedParticipantCount === 0) {
+    storedRoom.lastDisconnectedAtMs = nowMs;
+  }
+}
+
 function getCreateRoomSeats(
   settings: PrivateRoomSettings,
   seats: readonly PrivateRoomSeatInput[] | undefined,
@@ -787,7 +935,9 @@ export class InProcessMultiplayerRoomStore
   ) => string;
   readonly #createRoomCode: () => string;
   readonly #getNowMs: () => number;
+  readonly #maxConnectionsPerParticipant: number;
   readonly #maxRooms: number;
+  readonly #observerLimit: number;
   readonly #retentionPolicy: MultiplayerRoomRetentionPolicy;
   readonly #rooms = new Map<string, StoredMultiplayerRoom>();
   readonly #tombstones = new Map<string, MultiplayerRoomTombstone>();
@@ -798,14 +948,24 @@ export class InProcessMultiplayerRoomStore
     createParticipantId = createDefaultParticipantId,
     createRoomCode = createDefaultRoomCode,
     getNowMs = createDefaultNowMs,
+    maxConnectionsPerParticipant = DEFAULT_MULTIPLAYER_ROOM_MAX_CONNECTIONS_PER_PARTICIPANT,
     maxRooms = DEFAULT_MULTIPLAYER_ROOM_MAX_ROOMS,
+    observerLimit = DEFAULT_PRIVATE_ROOM_OBSERVER_LIMIT,
     retentionPolicy,
   }: CreateInProcessMultiplayerRoomStoreOptions = {}) {
     this.#createParticipantCapability = createParticipantCapability;
     this.#createParticipantId = createParticipantId;
     this.#createRoomCode = createRoomCode;
     this.#getNowMs = getNowMs;
+    this.#maxConnectionsPerParticipant = normalizePositiveInteger(
+      maxConnectionsPerParticipant,
+      "Participant connection limit",
+    );
     this.#maxRooms = normalizePositiveInteger(maxRooms, "Room capacity");
+    this.#observerLimit = normalizeNonNegativeInteger(
+      observerLimit,
+      "Party watcher limit",
+    );
     this.#retentionPolicy = normalizeRetentionPolicy(retentionPolicy);
     this.#lastSweepAtMs = getNowMs();
   }
@@ -814,7 +974,7 @@ export class InProcessMultiplayerRoomStore
     host,
     seats,
     settings = getDefaultMultiplayerServerGameAdapter().defaultSettings,
-  }: CreateMultiplayerRoomOptions): MultiplayerRoomStoreResult {
+  }: CreateMultiplayerRoomOptions): MultiplayerRoomStoreSnapshotResult {
     const nowMs = this.#getNowMs();
 
     this.#sweepIfDue(nowMs);
@@ -842,6 +1002,7 @@ export class InProcessMultiplayerRoomStore
         participantId: hostParticipantId,
         userId: host.id,
       },
+      observerLimit: this.#observerLimit,
       seats: getCreateRoomSeats(settings, seats),
       settings,
     });
@@ -886,7 +1047,7 @@ export class InProcessMultiplayerRoomStore
     );
   }
 
-  getRoom(roomCode: unknown): MultiplayerRoomStoreResult {
+  getRoom(roomCode: unknown): MultiplayerRoomStoreSnapshotResult {
     const nowMs = this.#getNowMs();
 
     this.#sweepIfDue(nowMs);
@@ -943,12 +1104,83 @@ export class InProcessMultiplayerRoomStore
       );
     }
 
+    if (command.type === "room.leave") {
+      const participantId = getCommandParticipantIdValue(command);
+      const departingParticipant = storedRoom.room.participants.find(
+        (participant) => participant.id === participantId,
+      );
+
+      if (participantId === undefined || departingParticipant === undefined) {
+        return createStoreFailure(
+          "participant-not-found",
+          "Participant is not in the room.",
+        );
+      }
+
+      const successorParticipantId =
+        departingParticipant.id === storedRoom.room.hostParticipantId
+          ? getConnectedSignedInHostSuccessor(storedRoom, participantId)
+          : null;
+      const leaveResult = leavePrivateRoom(storedRoom.room, {
+        participantId,
+        ...(successorParticipantId === null
+          ? {}
+          : { successorParticipantId }),
+      });
+
+      if (!leaveResult.success) {
+        return getPrivateRoomOperationFailure(leaveResult);
+      }
+
+      clearDepartedParticipantGameInput(storedRoom, participantId);
+      removeDepartedParticipantAuthority(storedRoom, participantId, nowMs);
+
+      const nextSeq = storedRoom.seq + 1;
+
+      if (leaveResult.closed) {
+        const reason =
+          "The host left and no connected signed-in member could take over, so the party closed.";
+        const closedResult = {
+          departedParticipantId: participantId,
+          matchId: storedRoom.room.matchId,
+          outcome: "party-closed",
+          reason,
+          roomCode: storedRoom.room.code,
+          seq: nextSeq,
+          success: true,
+        } as const satisfies MultiplayerRoomStoreResult;
+
+        this.#closeParty(
+          storedRoom.room.code,
+          nowMs,
+          reason,
+        );
+
+        return closedResult;
+      }
+
+      storedRoom.room = leaveResult.room;
+      storedRoom.seq = nextSeq;
+      storedRoom.lastMeaningfulActivityAtMs = nowMs;
+      refreshStoredRoomTerminalAt(storedRoom, nowMs);
+
+      return createStoredRoomSnapshot(
+        storedRoom,
+        nowMs,
+        undefined,
+        undefined,
+        participantId,
+      );
+    }
+
     let participantCapability: string | undefined;
     let participantId: string | undefined;
     let result:
       | ReturnType<typeof addPrivateRoomGuestParticipantAsObserver>
       | ReturnType<typeof addPrivateRoomGuestParticipantAsPlayer>
+      | ReturnType<typeof cancelPrivateRoomNextMatchRequest>
       | ReturnType<typeof claimPrivateRoomSeat>
+      | ReturnType<typeof queuePrivateRoomParticipantForNextMatch>
       | ReturnType<typeof releasePrivateRoomSeat>
       | ReturnType<typeof replacePrivateRoomMatch>
       | ReturnType<typeof updatePrivateRoomSettings>
@@ -963,6 +1195,17 @@ export class InProcessMultiplayerRoomStore
           ? getPrivateRoomGuestPlayerAdmissionRole(storedRoom.room)
           : "observer";
 
+      if (
+        admissionRole === "observer" &&
+        getPrivateRoomWatchingParticipantIds(storedRoom.room).length >=
+          storedRoom.room.observerLimit
+      ) {
+        return createStoreFailure(
+          "observer-limit-reached",
+          "This party already has the maximum number of watchers.",
+        );
+      }
+
       participantId = this.#createParticipantId({
         role: admissionRole,
         roomCode: storedRoom.room.code,
@@ -975,7 +1218,14 @@ export class InProcessMultiplayerRoomStore
       result = addParticipant(storedRoom.room, {
         displayName: command.displayName,
         participantId,
+        userId: command.userId,
       });
+    } else if (command.type === "room.joinNextMatch") {
+      participantId = getCommandParticipantIdValue(command);
+      result = queuePrivateRoomParticipantForNextMatch(storedRoom.room, command);
+    } else if (command.type === "room.cancelNextMatch") {
+      participantId = getCommandParticipantIdValue(command);
+      result = cancelPrivateRoomNextMatchRequest(storedRoom.room, command);
     } else if (command.type === "room.claimSeat") {
       participantId = getCommandParticipantIdValue(command);
       result = claimPrivateRoomSeat(storedRoom.room, command);
@@ -1118,6 +1368,10 @@ export class InProcessMultiplayerRoomStore
     const previousCount =
       storedRoom.connectionCountsByParticipantId.get(normalizedParticipantId) ?? 0;
 
+    if (previousCount >= this.#maxConnectionsPerParticipant) {
+      return false;
+    }
+
     storedRoom.connectionCountsByParticipantId.set(
       normalizedParticipantId,
       previousCount + 1,
@@ -1219,12 +1473,15 @@ export class InProcessMultiplayerRoomStore
 
     this.#pruneTombstones(nowMs);
 
-    return this.#tombstones.has(normalizedRoomCode)
-      ? createStoreFailure(
-          "room-expired",
-          "Room has expired. Create or join a new room.",
-        )
-      : createStoreFailure("room-not-found", "Room was not found.");
+    const tombstone = this.#tombstones.get(normalizedRoomCode);
+
+    if (tombstone === undefined) {
+      return createStoreFailure("room-not-found", "Room was not found.");
+    }
+
+    return tombstone.kind === "closed"
+      ? createStoreFailure("party-closed", tombstone.error)
+      : createStoreFailure("room-expired", tombstone.error);
   }
 
   #makeRoomCapacity(nowMs: number) {
@@ -1340,7 +1597,21 @@ export class InProcessMultiplayerRoomStore
 
   #expireRoom(roomCode: string, nowMs: number) {
     this.#rooms.delete(roomCode);
-    this.#tombstones.set(roomCode, { expiredAtMs: nowMs });
+    this.#tombstones.set(roomCode, {
+      error: "Room has expired. Create or join a new room.",
+      expiredAtMs: nowMs,
+      kind: "expired",
+    });
+    this.#pruneTombstones(nowMs);
+  }
+
+  #closeParty(roomCode: string, nowMs: number, error: string) {
+    this.#rooms.delete(roomCode);
+    this.#tombstones.set(roomCode, {
+      error,
+      expiredAtMs: nowMs,
+      kind: "closed",
+    });
     this.#pruneTombstones(nowMs);
   }
 

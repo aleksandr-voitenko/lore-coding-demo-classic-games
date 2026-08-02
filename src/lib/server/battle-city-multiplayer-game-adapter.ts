@@ -98,10 +98,10 @@ export const battleCityMultiplayerRuntimeAdapter: MultiplayerServerGameRuntimeAd
   createRuntime({ nowMs, room }) {
     return createBattleCityRuntime(room, nowMs);
   },
-  createSnapshot({ room, runtime, serverTimeMs }) {
+  createSnapshot({ matchRoom, runtime, serverTimeMs }) {
     return createBattleCityRuntimeSnapshot(
       getBattleCityRuntime(runtime),
-      room,
+      matchRoom,
       serverTimeMs,
     );
   },
@@ -177,10 +177,6 @@ function advanceBattleCityRuntimeTo(
     runtime.lastTickMs += BATTLE_CITY_TICK_MS;
 
     if (runtime.game.status === "lost") {
-      runtime.terminalSummary ??= createBattleCityTerminalSummary(
-        room,
-        runtime.game,
-      );
       resetBattleCityRuntimeClock(runtime, nowMs);
       break;
     }
@@ -455,11 +451,11 @@ function clearReleasedBattleCitySeatHeldInput(
 
 function createBattleCityRuntimeSnapshot(
   runtime: StoredBattleCityMultiplayerRuntime,
-  room: PrivateRoom,
+  matchRoom: PrivateRoom,
   serverTimeMs: number,
 ): Omit<BattleCityMultiplayerGameSnapshot, "matchId"> {
   runtime.terminalSummary ??= createBattleCityTerminalSummary(
-    room,
+    matchRoom,
     runtime.game,
   );
   const summary = runtime.terminalSummary;
@@ -492,7 +488,7 @@ function cloneBattleCityTerminalSummary(
 }
 
 function createBattleCityTerminalSummary(
-  room: PrivateRoom,
+  matchRoom: PrivateRoom,
   game: BattleCityMultiplayerGameState,
 ): BattleCityMultiplayerTerminalSummary | undefined {
   if (game.status !== "lost") {
@@ -518,8 +514,8 @@ function createBattleCityTerminalSummary(
       player2Score: game.player2Score,
       stage: game.stage,
     },
-    seats: createMultiplayerTerminalSummarySeats(room),
-    settings: room.settings,
+    seats: createMultiplayerTerminalSummarySeats(matchRoom),
+    settings: matchRoom.settings,
     status: "lost",
   };
 }

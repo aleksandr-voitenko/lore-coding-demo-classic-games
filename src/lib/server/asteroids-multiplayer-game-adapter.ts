@@ -100,10 +100,10 @@ export const asteroidsMultiplayerRuntimeAdapter: MultiplayerServerGameRuntimeAda
   createRuntime({ nowMs, room }) {
     return createAsteroidsRuntime(room, nowMs);
   },
-  createSnapshot({ room, runtime, serverTimeMs }) {
+  createSnapshot({ matchRoom, runtime, serverTimeMs }) {
     return createAsteroidsRuntimeSnapshot(
       getAsteroidsRuntime(runtime),
-      room,
+      matchRoom,
       serverTimeMs,
     );
   },
@@ -509,10 +509,10 @@ function clearReleasedAsteroidsSeatHeldInput(
 
 function createAsteroidsRuntimeSnapshot(
   runtime: StoredAsteroidsMultiplayerRuntime,
-  room: PrivateRoom,
+  matchRoom: PrivateRoom,
   serverTimeMs: number,
 ): Omit<AsteroidsMultiplayerGameSnapshot, "matchId"> {
-  const summary = createAsteroidsTerminalSummary(room, runtime.game);
+  const summary = createAsteroidsTerminalSummary(matchRoom, runtime.game);
 
   return {
     gameId: "asteroids",
@@ -525,7 +525,7 @@ function createAsteroidsRuntimeSnapshot(
 }
 
 function createAsteroidsTerminalSummary(
-  room: PrivateRoom,
+  matchRoom: PrivateRoom,
   game: AsteroidsMultiplayerGameState,
 ): AsteroidsMultiplayerTerminalSummary | undefined {
   if (game.status !== "lost") {
@@ -540,8 +540,8 @@ function createAsteroidsTerminalSummary(
       score: game.score,
       wave: game.wave,
     },
-    seats: createMultiplayerTerminalSummarySeats(room),
-    settings: room.settings,
+    seats: createMultiplayerTerminalSummarySeats(matchRoom),
+    settings: matchRoom.settings,
     status: game.status,
   };
 }
