@@ -92,8 +92,10 @@ const MULTIPLAYER_ROOM_CONNECTION_STATUS_ID =
   "multiplayer-room-connection-status";
 
 type MultiplayerRoomLobbyProps = {
+  focusHeadingOnMount?: boolean;
   initialAuthMode?: UserAuthMode | null;
   initialGame?: MultiplayerRoomGameSnapshot | null;
+  initialJoinOutcomeMessage?: string | null;
   initialParticipantCapability?: string | null;
   initialParticipantId?: string | null;
   initialRoom?: PrivateRoom | null;
@@ -258,8 +260,10 @@ export function selectFreshMultiplayerRoomSnapshot<
 }
 
 export function MultiplayerRoomLobby({
+  focusHeadingOnMount = false,
   initialAuthMode = null,
   initialGame = null,
+  initialJoinOutcomeMessage = null,
   initialParticipantCapability = null,
   initialParticipantId = null,
   initialRoom = null,
@@ -321,6 +325,7 @@ export function MultiplayerRoomLobby({
   );
   const roomSnapshotRef = useRef(roomSnapshot);
   const membershipEndedHeadingRef = useRef<HTMLHeadingElement>(null);
+  const roomHeadingRef = useRef<HTMLHeadingElement>(null);
   const previousHostParticipantIdRef = useRef(
     initialRoom?.hostParticipantId ?? null,
   );
@@ -328,6 +333,14 @@ export function MultiplayerRoomLobby({
   const game = roomSnapshot?.game;
   const displayName = displayNameInput ?? user?.displayName ?? "";
   const inviteLink = getPrivateRoomShareLink(normalizedRoomCode, browserOrigin);
+
+  useEffect(() => {
+    if (!focusHeadingOnMount) {
+      return;
+    }
+
+    queueMicrotask(() => roomHeadingRef.current?.focus());
+  }, [focusHeadingOnMount]);
   const participantFromLocalId = getParticipantById(room, participantId);
   const activeParticipant = participantFromLocalId;
   const activeParticipantId = participantFromLocalId?.id ?? null;
@@ -850,13 +863,14 @@ export function MultiplayerRoomLobby({
       />
     ) : null;
   const joinOutcomeMessage =
-    activeParticipant === null || activeSeat !== null || joinIntent === null
+    initialJoinOutcomeMessage ??
+    (activeParticipant === null || activeSeat !== null || joinIntent === null
       ? null
       : joinIntent === "play" && activeParticipant.role === "observer"
         ? "The game is active or full, so you joined as a watcher."
         : joinIntent === "watch"
           ? "You joined as a watcher."
-          : null;
+          : null);
 
   return (
     <main
@@ -877,7 +891,12 @@ export function MultiplayerRoomLobby({
               <ArrowLeftIcon aria-hidden="true" />
             </Button>
             <div className="min-w-0">
-              <h1 className="text-3xl font-semibold tracking-normal text-[var(--chrome-ink)]">
+              <h1
+                className="rounded-sm text-3xl font-semibold tracking-normal text-[var(--chrome-ink)] outline-none focus:ring-3 focus:ring-[var(--chrome-focus-ring)]"
+                data-testid="multiplayer-room-heading"
+                ref={roomHeadingRef}
+                tabIndex={-1}
+              >
                 Private Party
               </h1>
               <p

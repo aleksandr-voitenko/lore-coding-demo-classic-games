@@ -8,8 +8,10 @@ import {
   SocialCenterTrigger,
   formatSocialActionError,
   getPartyInvitationAcceptanceMessage,
+  getPartyInvitationIntentDescription,
   getSocialAvailabilityLabel,
   isAmbiguousPartyAcceptanceError,
+  isRetryablePartyAcceptanceRecoveryError,
 } from "./social-center";
 import { SocialProvider } from "./social-provider";
 
@@ -32,20 +34,43 @@ describe("social center", () => {
 
   it("allows invitation acceptance only with a handoff and available presence", () => {
     expect(getPartyInvitationAcceptanceMessage("available", true)).toBeNull();
-    expect(getPartyInvitationAcceptanceMessage("busy", true)).toContain(
-      "Current status: Busy",
+    expect(getPartyInvitationAcceptanceMessage("busy", true)).toBe(
+      "Finish the current game before accepting this invitation.",
     );
-    expect(getPartyInvitationAcceptanceMessage("in-party", true)).toContain(
-      "In a party",
+    expect(getPartyInvitationAcceptanceMessage("in-party", false)).toBe(
+      "Leave your current party before accepting another invitation.",
     );
-    expect(getPartyInvitationAcceptanceMessage("offline", true)).toContain(
-      "Offline",
+    expect(getPartyInvitationAcceptanceMessage("offline", true)).toBe(
+      "Reconnect before accepting this invitation.",
     );
-    expect(getPartyInvitationAcceptanceMessage("unknown", true)).toContain(
-      "Checking availability",
+    expect(getPartyInvitationAcceptanceMessage("unknown", true)).toBe(
+      "Wait for your availability to finish updating before accepting.",
     );
     expect(getPartyInvitationAcceptanceMessage("available", false)).toBe(
-      "Joining from Friends is not available on this screen yet.",
+      "Return to the Game Library or Leaderboards to accept this invitation.",
+    );
+  });
+
+  it("explains observer admission without promising a player seat", () => {
+    const invitation = {
+      createdAt: "2026-08-03T00:00:00.000Z",
+      expiresAt: "2026-08-03T00:05:00.000Z",
+      id: "invitation-1",
+      intent: "play" as const,
+      inviter: { displayName: "Ada", id: "user-1" },
+      recipient: { displayName: "Grace", id: "user-2" },
+      resolvedAt: null,
+      status: "pending" as const,
+      updatedAt: "2026-08-03T00:00:00.000Z",
+    };
+
+    expect(getPartyInvitationIntentDescription(invitation)).toBe(
+      "Play invitation. Accepting offers a player spot when available, otherwise Watching; capacity is checked when you accept.",
+    );
+    expect(
+      getPartyInvitationIntentDescription({ ...invitation, intent: "watch" }),
+    ).toBe(
+      "Watch invitation. Accepting joins as Watching; capacity is checked when you accept.",
     );
   });
 
@@ -96,6 +121,34 @@ describe("social center", () => {
     expect(isAmbiguousPartyAcceptanceError(new Error("Callback failed."))).toBe(
       false,
     );
+  });
+
+  it("retains accepted-membership recovery only for retryable authority errors", () => {
+    for (const [status, code] of [
+      [429, "participant-capability-limit-reached"],
+      [409, "party-invitation-acceptance-in-progress"],
+      [502, "room-service-unavailable"],
+    ] as const) {
+      expect(
+        isRetryablePartyAcceptanceRecoveryError(
+          new SocialClientError({
+            code,
+            message: "Try again.",
+            status,
+          }),
+        ),
+      ).toBe(true);
+    }
+
+    expect(
+      isRetryablePartyAcceptanceRecoveryError(
+        new SocialClientError({
+          code: "party-closed",
+          message: "Party closed.",
+          status: 409,
+        }),
+      ),
+    ).toBe(false);
   });
 
   it("renders its trigger only for an enabled signed-in account", () => {

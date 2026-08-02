@@ -4,17 +4,113 @@ import { describe, expect, it } from "vitest";
 import { CurrentUserProvider } from "@/hooks/use-current-user";
 import { GAME_CATALOG } from "@/lib/game-catalog";
 import { MULTIPLAYER_GAME_IDS } from "@/lib/multiplayer/game-registry";
+import type { PrivateRoom } from "@/lib/multiplayer/room";
+import type { SocialPartyInvitationAcceptance } from "@/lib/social-client";
 
 import {
   GameLauncher,
+  createLauncherPartyInvitationHandoff,
   createLauncherPrivateRoomSettings,
+  getLauncherPrivateRoomCreateError,
   getLauncherPrivateRoomCodeFromSearch,
+  isLauncherRoomCreateRequestCurrent,
 } from "./game-launcher";
 import { GAME_CARDS, createDefaultParameterValues } from "./game-launcher-config";
 import { PLAYABLE_GAME_COMPONENTS } from "./game-launcher-playables";
 
 const LAUNCHER_ARTWORK_SIZES =
   "(min-width: 1200px) 23.333rem, (min-width: 944px) calc(33.333vw - 1.667rem), (min-width: 640px) calc(50vw - 2rem), calc(100vw - 2rem)";
+
+const ACCEPTED_PARTY_ROOM: PrivateRoom = {
+  code: "PONG-1",
+  hostParticipantId: "host-participant",
+  matchId: 1,
+  nextMatchParticipantIds: [],
+  observerLimit: 2,
+  participants: [
+    {
+      displayName: "Host",
+      id: "host-participant",
+      role: "host",
+      userId: "user-host",
+    },
+    {
+      displayName: "Friend",
+      id: "friend-participant",
+      role: "observer",
+      userId: "user-friend",
+    },
+  ],
+  seats: [
+    {
+      id: "left",
+      label: "Left paddle",
+      occupiedByParticipantId: "host-participant",
+      required: true,
+    },
+    {
+      id: "right",
+      label: "Right paddle",
+      occupiedByParticipantId: null,
+      required: true,
+    },
+  ],
+  settings: { gameId: "pong" },
+  status: "lobby",
+};
+
+function createAcceptedPartyRoomForRole(
+  role: "host" | "observer" | "player",
+): PrivateRoom {
+  if (role === "observer") {
+    return ACCEPTED_PARTY_ROOM;
+  }
+
+  return {
+    ...ACCEPTED_PARTY_ROOM,
+    hostParticipantId:
+      role === "host" ? "friend-participant" : "host-participant",
+    participants: ACCEPTED_PARTY_ROOM.participants.map((participant) => {
+      if (participant.id === "friend-participant") {
+        return { ...participant, role };
+      }
+
+      return role === "host" ? { ...participant, role: "player" } : participant;
+    }),
+    seats: ACCEPTED_PARTY_ROOM.seats.map((seat) =>
+      seat.id === "right"
+        ? { ...seat, occupiedByParticipantId: "friend-participant" }
+        : seat,
+    ),
+  };
+}
+
+function createPartyAcceptance(
+  overrides: Partial<SocialPartyInvitationAcceptance> = {},
+): SocialPartyInvitationAcceptance {
+  return {
+    admission: "admitted",
+    invitation: {
+      createdAt: "2026-08-03T00:00:00.000Z",
+      expiresAt: "2026-08-03T00:05:00.000Z",
+      id: "invitation-1",
+      intent: "watch",
+      inviter: { displayName: "Host", id: "user-host" },
+      recipient: { displayName: "Friend", id: "user-friend" },
+      resolvedAt: "2026-08-03T00:01:00.000Z",
+      status: "accepted",
+      updatedAt: "2026-08-03T00:01:00.000Z",
+    },
+    participantCapability: "friend-capability",
+    participantId: "friend-participant",
+    snapshot: {
+      participant: ACCEPTED_PARTY_ROOM.participants[1],
+      room: ACCEPTED_PARTY_ROOM,
+      seq: 17,
+    },
+    ...overrides,
+  };
+}
 
 const EXPECTED_PARAMETER_SELECTS = [
   {
@@ -279,6 +375,149 @@ describe("game launcher", () => {
     expect(getLauncherPrivateRoomCodeFromSearch("")).toBeNull();
     expect(getLauncherPrivateRoomCodeFromSearch("?room=pong-1")).toBe("PONG-1");
     expect(getLauncherPrivateRoomCodeFromSearch("?room=bad%20code")).toBe("bad code");
+  });
+
+  it("creates an account-scoped launcher handoff from accepted party credentials", () => {
+    const handoff = createLauncherPartyInvitationHandoff(
+      createPartyAcceptance({ admission: "reacquired" }),
+      "user-friend",
+      7,
+    );
+
+    expect(handoff).toMatchObject({
+      activeRoomSession: {
+        accountEpoch: 7,
+        focusHeadingOnMount: true,
+        game: null,
+        joinOutcomeMessage:
+          "You accepted Host's Watch invitation and joined as Watching.",
+        participantCapability: "friend-capability",
+        participantId: "friend-participant",
+        room: ACCEPTED_PARTY_ROOM,
+        roomCode: "PONG-1",
+        seq: 17,
+        userId: "user-friend",
+      },
+      credentials: {
+        participantCapability: "friend-capability",
+        participantId: "friend-participant",
+        userId: "user-friend",
+      },
+      invitePath: "/?room=PONG-1",
+    });
+    expect(handoff.invitePath).not.toContain("friend-capability");
+    expect(handoff.activeRoomSession.joinOutcomeMessage).not.toContain(
+      "friend-capability",
+    );
+  });
+
+  it("rejects room-create settlement after its account epoch changes", () => {
+    const isAccountEpochCurrent = (candidate: number) => candidate === 8;
+
+    expect(
+      isLauncherRoomCreateRequestCurrent({
+        currentGeneration: 12,
+        isAccountEpochCurrent,
+        requestAccountEpoch: 7,
+        requestGeneration: 12,
+      }),
+    ).toBe(false);
+    expect(
+      isLauncherRoomCreateRequestCurrent({
+        currentGeneration: 13,
+        isAccountEpochCurrent,
+        requestAccountEpoch: 8,
+        requestGeneration: 12,
+      }),
+    ).toBe(false);
+    expect(
+      isLauncherRoomCreateRequestCurrent({
+        currentGeneration: 12,
+        isAccountEpochCurrent,
+        requestAccountEpoch: 8,
+        requestGeneration: 12,
+      }),
+    ).toBe(true);
+    expect(
+      getLauncherPrivateRoomCreateError(
+        { accountEpoch: 7, message: "Account A could not create a room." },
+        8,
+      ),
+    ).toBeNull();
+    expect(
+      getLauncherPrivateRoomCreateError(
+        { accountEpoch: 8, message: "Account B could not create a room." },
+        8,
+      ),
+    ).toBe("Account B could not create a room.");
+  });
+
+  it("describes Play fallback authoritatively and rejects another account's handoff", () => {
+    const acceptance = createPartyAcceptance({
+      invitation: {
+        ...createPartyAcceptance().invitation,
+        intent: "play",
+      },
+    });
+
+    expect(
+      createLauncherPartyInvitationHandoff(acceptance, "user-friend", 7)
+        .activeRoomSession.joinOutcomeMessage,
+    ).toBe(
+      "You accepted Host's Play invitation and joined as Watching because no player spot was available. You can request the next match.",
+    );
+    expect(() =>
+      createLauncherPartyInvitationHandoff(acceptance, "user-other", 8),
+    ).toThrow("no longer matches the signed-in account");
+    expect(() =>
+      createLauncherPartyInvitationHandoff(acceptance, null, 8),
+    ).toThrow("no longer matches the signed-in account");
+    const playerRoom = createAcceptedPartyRoomForRole("player");
+    const hostRoom = createAcceptedPartyRoomForRole("host");
+    const reacquiredPlayer = createLauncherPartyInvitationHandoff(
+      createPartyAcceptance({
+        admission: "reacquired",
+        snapshot: {
+          participant: playerRoom.participants[1],
+          room: playerRoom,
+          seq: 17,
+        },
+      }),
+      "user-friend",
+      7,
+    );
+    const reacquiredHost = createLauncherPartyInvitationHandoff(
+      createPartyAcceptance({
+        admission: "reacquired",
+        snapshot: {
+          participant: hostRoom.participants[1],
+          room: hostRoom,
+          seq: 17,
+        },
+      }),
+      "user-friend",
+      7,
+    );
+
+    expect(reacquiredPlayer.activeRoomSession.joinOutcomeMessage).toBe(
+      "You accepted Host's Watch invitation and joined as a player.",
+    );
+    expect(reacquiredHost.activeRoomSession.joinOutcomeMessage).toBe(
+      "You accepted Host's Watch invitation and are now the party host.",
+    );
+    expect(() =>
+      createLauncherPartyInvitationHandoff(
+        createPartyAcceptance({
+          snapshot: {
+            participant: playerRoom.participants[1],
+            room: playerRoom,
+            seq: 17,
+          },
+        }),
+        "user-friend",
+        7,
+      ),
+    ).toThrow("unsupported role");
   });
 
   it("renders the room lobby instead of the launcher grid when a room code is present", () => {

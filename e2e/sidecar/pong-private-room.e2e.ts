@@ -274,7 +274,7 @@ test("Multiplayer diagnostics reports sidecar WebSocket ping", async ({
   );
 });
 
-test("host invites an available friend to watch without sharing a link", async ({
+test("friends manage and accept a Watch invitation without sharing a link", async ({
   browser,
   page,
 }, testInfo) => {
@@ -294,8 +294,10 @@ test("host invites an available friend to watch without sharing a link", async (
   const friendBrowserIssues = collectBrowserIssues(friendPage);
 
   await openLauncher(friendPage);
+  await friendPage.getByTestId("cookie-notice-dismiss").click();
   await signUpFromLauncher(friendPage, friendName);
   await openLauncher(page);
+  await page.getByTestId("cookie-notice-dismiss").click();
   await signUpFromLauncher(page, hostName);
   await page.getByTestId("social-center-trigger").click();
   const hostFriendsDialog = page.getByTestId("social-center-dialog");
@@ -417,6 +419,229 @@ test("host invites an available friend to watch without sharing a link", async (
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(externallyResolvedCancelButton).toHaveCount(0);
   await expect(invitationFriendStatus).toBeFocused();
+
+  await watchInvitationButton.click();
+  await expect(
+    invitationFriendRow.getByRole("button", {
+      name: `Cancel watch invitation to ${friendName}`,
+    }),
+  ).toBeFocused();
+
+  await friendPage.reload();
+  await friendPage.getByTestId("social-center-trigger").click();
+  await expect(incomingPartyInvitation).toBeVisible();
+
+  await friendDialog.getByTestId("social-center-close-button").click();
+  await hostMultiplayerRoomFromLauncher(friendPage, "pong");
+  await friendPage.getByTestId("social-center-trigger").click();
+  await expect(incomingPartyInvitation).toBeVisible();
+  const inPartyAcceptButton = incomingPartyInvitation.getByRole("button", {
+    name: `Accept Watch invitation from ${hostName}`,
+  });
+  const inPartyDeclineButton = incomingPartyInvitation.getByRole("button", {
+    name: `Decline Watch invitation from ${hostName}`,
+  });
+
+  await expect(inPartyAcceptButton).toBeDisabled();
+  await expect(inPartyAcceptButton).toHaveAccessibleDescription(
+    /Leave your current party before accepting another invitation/i,
+  );
+  await expect(inPartyDeclineButton).toBeEnabled();
+  await inPartyDeclineButton.click();
+  const partyInvitationsHeading = friendDialog.getByRole("heading", {
+    exact: true,
+    name: "Party invitations",
+  });
+
+  await expect(partyInvitationsHeading).toBeFocused();
+  await expect(partyInvitationsHeading).not.toHaveCSS("box-shadow", "none");
+  await friendDialog.getByTestId("social-center-close-button").click();
+  await friendPage.getByTestId("multiplayer-party-leave-button").click();
+  await friendPage.getByTestId("multiplayer-leave-party-confirm").click();
+  await expect(
+    friendPage.getByTestId("multiplayer-room-membership-ended"),
+  ).toBeVisible();
+  await friendPage
+    .getByTestId("multiplayer-room-membership-ended-back-button")
+    .click();
+  await expect(friendPage.getByTestId("game-menu")).toBeVisible();
+
+  await page.reload();
+  await expect(invitationFriendRow).toContainText(
+    "Available · Player spot open",
+  );
+  await expect(watchInvitationButton).toBeEnabled();
+  await watchInvitationButton.click();
+
+  await friendPage.reload();
+  await friendPage.getByTestId("social-center-trigger").click();
+  await expect(incomingPartyInvitation).toBeVisible();
+  const acceptWatchInvitationButton = incomingPartyInvitation.getByRole(
+    "button",
+    { name: `Accept Watch invitation from ${hostName}` },
+  );
+
+  await expect(acceptWatchInvitationButton).toHaveAccessibleDescription(
+    /Accepting joins as Watching.*capacity is checked when you accept/i,
+  );
+  await expect(acceptWatchInvitationButton).toBeEnabled();
+
+  let acceptancePatchCount = 0;
+  let interruptNextAcceptanceResponse = true;
+  friendPage.on("request", (request) => {
+    if (
+      request.method() === "PATCH" &&
+      /\/api\/social\/party-invitations\/[^/]+$/.test(
+        new URL(request.url()).pathname,
+      ) &&
+      request.postData()?.includes('"decision":"accept"')
+    ) {
+      acceptancePatchCount += 1;
+    }
+  });
+  await friendPage.route("**/api/social/party-invitations/*", async (route) => {
+    const request = route.request();
+    const isAcceptance =
+      request.method() === "PATCH" &&
+      request.postData()?.includes('"decision":"accept"');
+
+    if (isAcceptance && interruptNextAcceptanceResponse) {
+      interruptNextAcceptanceResponse = false;
+      const committedResponse = await route.fetch();
+      await route.fulfill({ response: committedResponse, body: "{}" });
+      return;
+    }
+
+    await route.continue();
+  });
+  await friendPage.evaluate(() => {
+    const originalFetch = window.fetch.bind(window);
+    const originalPushState = window.history.pushState.bind(window.history);
+    let acceptanceAttempt = 0;
+    let failNextPush = true;
+
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const requestUrl =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      const requestMethod = (
+        init?.method ?? (input instanceof Request ? input.method : "GET")
+      ).toUpperCase();
+      const requestBody =
+        typeof init?.body === "string"
+          ? init.body
+          : input instanceof Request
+            ? await input.clone().text()
+            : "";
+      const isAcceptance =
+        requestMethod === "PATCH" &&
+        /\/api\/social\/party-invitations\/[^/]+$/.test(
+          new URL(requestUrl, window.location.origin).pathname,
+        ) &&
+        requestBody.includes('"decision":"accept"');
+
+      if (isAcceptance) {
+        acceptanceAttempt += 1;
+
+        if (acceptanceAttempt <= 2) {
+          return new Response(
+            JSON.stringify({
+              code: "party-invitation-acceptance-in-progress",
+              error:
+                "This party invitation is already being accepted. Try again shortly.",
+            }),
+            {
+              headers: { "Content-Type": "application/json" },
+              status: 409,
+            },
+          );
+        }
+      }
+
+      return originalFetch(input, init);
+    };
+
+    Object.defineProperty(window.history, "pushState", {
+      configurable: true,
+      value: (
+        data: unknown,
+        unused: string,
+        url?: string | URL | null,
+      ) => {
+        if (failNextPush) {
+          failNextPush = false;
+          throw new Error("History unavailable.");
+        }
+
+        originalPushState(data, unused, url);
+      },
+    });
+  });
+
+  await acceptWatchInvitationButton.click();
+  const handoffRetry = friendDialog.getByTestId("social-party-handoff-retry");
+  const confirmAcceptanceButton = handoffRetry.getByRole("button", {
+    name: `Confirm watch invitation acceptance from ${hostName}`,
+  });
+
+  await expect(friendDialog.getByTestId("social-center-action-error")).toContainText(
+    "could not be confirmed yet",
+  );
+  await expect(confirmAcceptanceButton).toBeFocused();
+  expect(acceptancePatchCount).toBe(0);
+
+  await confirmAcceptanceButton.click();
+
+  await expect(friendDialog.getByTestId("social-center-action-error")).toContainText(
+    "could not be recovered yet",
+  );
+  await expect(confirmAcceptanceButton).toBeFocused();
+  expect(acceptancePatchCount).toBe(0);
+
+  await confirmAcceptanceButton.click();
+
+  await expect(friendDialog.getByTestId("social-center-action-error")).toContainText(
+    "invitation response",
+  );
+  await expect(confirmAcceptanceButton).toBeFocused();
+  expect(acceptancePatchCount).toBe(1);
+
+  await confirmAcceptanceButton.click();
+  const openAcceptedPartyButton = handoffRetry.getByRole("button", {
+    name: `Open accepted watch invitation from ${hostName}`,
+  });
+
+  await expect(friendDialog.getByTestId("social-center-action-error")).toContainText(
+    "party was accepted but could not be opened",
+  );
+  await expect(openAcceptedPartyButton).toBeFocused();
+  expect(acceptancePatchCount).toBe(2);
+
+  await openAcceptedPartyButton.click();
+  await expect(friendPage.getByTestId("multiplayer-room-lobby")).toBeVisible();
+  await expect(friendPage).toHaveURL(new RegExp(`\\?room=${roomCode}$`));
+  const acceptedRoomHeading = friendPage.getByTestId(
+    "multiplayer-room-heading",
+  );
+
+  await expect(acceptedRoomHeading).toBeFocused();
+  await expect(acceptedRoomHeading).not.toHaveCSS("box-shadow", "none");
+  await expect(
+    friendPage.getByTestId("multiplayer-room-current-participant"),
+  ).toHaveText(`${friendName} · Watching`);
+  await expect(friendPage.getByTestId("multiplayer-room-join-outcome")).toContainText(
+    `accepted ${hostName}'s Watch invitation and joined as Watching`,
+  );
+  expect(acceptancePatchCount).toBe(2);
+
+  await friendPage.reload();
+  await expect(
+    friendPage.getByTestId("multiplayer-room-current-participant"),
+  ).toHaveText(`${friendName} · Watching`);
+  await expect(friendPage).toHaveURL(new RegExp(`\\?room=${roomCode}$`));
   expect(hostBrowserIssues).toEqual([]);
   expect(friendBrowserIssues).toEqual([]);
 

@@ -398,7 +398,19 @@ blocking confirmations, invitation decline/cancel actions, and explicit
 availability labels. It never renders a private room code or participant
 capability. Incoming party invitations remain visible on busy/in-party surfaces,
 but acceptance is disabled unless presence is `available` and the current
-launcher surface can adopt the returned private credentials.
+launcher surface can adopt the returned private credentials. Library and
+leaderboard acceptance opens the party directly without a link: the launcher
+validates the accepting account, invalidates any older room-creation request,
+pushes only the canonical room URL, stores the participant capability in
+account-scoped session storage, and boots the room from the authoritative room,
+game, and sequence snapshot. The adopted credentials and snapshot are also
+bound to the current sign-in epoch, so switching away and back cannot revive an
+older account's handoff. Busy and in-party rows explain what must finish or be
+left before acceptance, while Decline remains available. Watch explicitly joins
+Watching; Play may join a player spot or fall back to Watching, and the
+destination announces the role the server actually admitted. An interrupted
+acceptance retries the idempotent server endpoint, while a completed acceptance
+whose local launcher handoff fails retries only that in-memory handoff.
 
 The authenticated current party host also gets an Invite friends panel beside
 the Party roster in both lobby and active-game layouts. Available friends have

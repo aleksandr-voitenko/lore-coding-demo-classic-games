@@ -70,10 +70,31 @@ This file covers React component ownership and shared game UI conventions under
   launcher surface provides the credential-adoption callback and presence is
   `available`. If the acceptance response is lost or invalid, retain the
   invitation id in account-scoped component memory and retry that same endpoint
-  so its membership-only recovery path can respond. If server acceptance
-  succeeds but launcher adoption fails, retain the returned credentials in the
+  so its membership-only recovery path can respond. Do the same for an explicit
+  retryable authority response even on the initial attempt: another tab may
+  already own the acceptance claim or the mutation result may be uncertain. If
+  server acceptance succeeds but launcher adoption fails, retain the returned
+  credentials in the
   same in-memory scope and retry only local adoption. Never render or log the
-  capability.
+  capability. Pass the launcher adoption callback through every SocialCenter
+  branch so an accepted handoff remains retryable across surface changes, but
+  gate ordinary acceptance with both effective availability and an immediate
+  launcher-surface flag; a presence update alone must not reopen acceptance
+  while a room or solo surface is already mounting. Adoption must recheck the
+  current account, invalidate an older room-creation generation, navigate before
+  mutating local credential/session state, clear prior launcher surfaces, and
+  seed `MultiplayerRoomLobby` with the returned room, game, and sequence. Bind
+  that adopted snapshot and its private capability to the current account epoch
+  as well as the account id so switching away and back cannot reactivate an old
+  handoff. The accepted snapshot's participant role—not invitation intent—owns
+  the arrival message because Play can legitimately fall back to Watching. Move
+  focus to the room heading after successful adoption; ambiguous server recovery
+  and local-only adoption recovery focus their respective retry actions instead.
+  Fence ordinary host-room creation success, failure, and cleanup with the
+  synchronous account epoch check too; passive account-change cleanup is too
+  late to prevent a settling request from navigating or storing credentials.
+  Bind its pending indicator and error message to that epoch as well so no
+  previous account state flashes across a sign-in boundary.
   The launcher injects `SocialPartyInviteControls` into the generic room shell,
   but `MultiplayerRoomLobby` decides whether to render it from the live,
   account-bound `isHost` check. Show it above the lobby Party roster and between

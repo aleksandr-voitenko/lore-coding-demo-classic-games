@@ -6,6 +6,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -50,6 +51,8 @@ import {
   type PrivateRoom,
   type PrivateRoomSettings,
 } from "@/lib/multiplayer/room";
+import type { MultiplayerRoomGameSnapshot } from "@/lib/multiplayer/protocol";
+import type { SocialPartyInvitationAcceptance } from "@/lib/social-client";
 import type { UserAuthMode } from "@/lib/user-profile";
 import { cn } from "@/lib/utils";
 
@@ -65,17 +68,28 @@ type GameLauncherProps = {
 };
 
 type ActiveRoomSession = {
+  accountEpoch: number;
+  focusHeadingOnMount: boolean;
+  game: MultiplayerRoomGameSnapshot | null;
+  joinOutcomeMessage: string | null;
   participantCapability: string | null;
   participantId: string | null;
   room: PrivateRoom | null;
   roomCode: string;
+  seq: number;
   userId: string | null;
 };
 
 type PrivateRoomCreateRequest = {
+  accountEpoch: number;
   gameId: GameId;
   generation: number;
   userId: string;
+};
+
+type PrivateRoomCreateError = {
+  accountEpoch: number;
+  message: string;
 };
 
 type RoomParticipantCapability = {
@@ -118,8 +132,10 @@ export function GameLauncher({
   initialReplayGameId = null,
   initialRoomCode = null,
 }: GameLauncherProps) {
-  const { user } = useCurrentUser();
+  const { accountEpoch, isAccountEpochCurrent, user } = useCurrentUser();
   const currentUserId = user?.id ?? null;
+  const currentAccountEpochRef = useRef(accountEpoch);
+  const currentUserIdRef = useRef(currentUserId);
   // Public participant ids are paired with private, account-scoped capabilities.
   const roomParticipantCapabilityHistoryRef = useRef<
     Map<string, RoomParticipantCapability>
@@ -140,6 +156,7 @@ export function GameLauncher({
         credentials?.participantId ?? null,
         credentials?.participantCapability ?? null,
         credentials?.userId ?? currentUserId,
+        accountEpoch,
       );
     },
   );
@@ -154,7 +171,8 @@ export function GameLauncher({
   const [parameterValues, setParameterValues] = useState<GameParameterValues>(() =>
     createDefaultParameterValues(),
   );
-  const [privateRoomCreateError, setPrivateRoomCreateError] = useState<string | null>(null);
+  const [privateRoomCreateError, setPrivateRoomCreateError] =
+    useState<PrivateRoomCreateError | null>(null);
   const [privateRoomCreateRequest, setPrivateRoomCreateRequest] =
     useState<PrivateRoomCreateRequest | null>(null);
   // Return-to-menu paths opt into restoring this viewport after a full-screen game view exits.
@@ -165,17 +183,23 @@ export function GameLauncher({
   const activeGameCards =
     activeGameLibraryTab === "multiplayer" ? MULTIPLAYER_GAME_CARDS : GAME_CARDS;
   const privateRoomCreatingGameId =
-    privateRoomCreateRequest?.userId === currentUserId
+    privateRoomCreateRequest?.accountEpoch === accountEpoch &&
+    privateRoomCreateRequest.userId === currentUserId
       ? privateRoomCreateRequest.gameId
       : null;
   const privateRoomCreatingGame =
     privateRoomCreatingGameId === null
       ? null
       : GAME_CARDS.find((game) => game.id === privateRoomCreatingGameId) ?? null;
+  const currentPrivateRoomCreateError = getLauncherPrivateRoomCreateError(
+    privateRoomCreateError,
+    accountEpoch,
+  );
   const displayedPrivateRoomCreateError =
-    user !== null && privateRoomCreateError === MULTIPLAYER_SIGN_IN_REQUIRED_MESSAGE
+    user !== null &&
+    currentPrivateRoomCreateError === MULTIPLAYER_SIGN_IN_REQUIRED_MESSAGE
       ? null
-      : privateRoomCreateError;
+      : currentPrivateRoomCreateError;
   const multiplayerStatusMessage =
     activeGameLibraryTab !== "multiplayer"
       ? null
@@ -185,6 +209,11 @@ export function GameLauncher({
             ? MULTIPLAYER_SIGN_IN_REQUIRED_MESSAGE
             : null
           : `Creating ${privateRoomCreatingGame.label} room`);
+
+  useLayoutEffect(() => {
+    currentAccountEpochRef.current = accountEpoch;
+    currentUserIdRef.current = currentUserId;
+  }, [accountEpoch, currentUserId]);
 
   useEffect(() => {
     for (const [roomCode, capability] of roomParticipantCapabilityHistoryRef.current) {
@@ -233,6 +262,7 @@ export function GameLauncher({
           selectedCredentials?.participantId ?? null,
           selectedCredentials?.participantCapability ?? null,
           selectedCredentials?.userId ?? currentUserId,
+          accountEpoch,
         );
       });
       setPrivateRoomCreateError(null);
@@ -245,7 +275,7 @@ export function GameLauncher({
       roomCreateRequestGenerationRef.current += 1;
       window.removeEventListener("popstate", handlePopState);
     };
-  }, [currentUserId]);
+  }, [accountEpoch, currentUserId]);
 
   const selectGame = useCallback((gameId: GameId) => {
     menuViewportRef.current = {
@@ -345,7 +375,10 @@ export function GameLauncher({
   const createPrivateRoomForGame = useCallback(
     async (game: GameCard) => {
       if (currentUserId === null) {
-        setPrivateRoomCreateError(MULTIPLAYER_SIGN_IN_REQUIRED_MESSAGE);
+        setPrivateRoomCreateError({
+          accountEpoch,
+          message: MULTIPLAYER_SIGN_IN_REQUIRED_MESSAGE,
+        });
         return;
       }
 
@@ -354,8 +387,10 @@ export function GameLauncher({
       }
 
       const requestGeneration = roomCreateRequestGenerationRef.current + 1;
+      const requestAccountEpoch = accountEpoch;
       roomCreateRequestGenerationRef.current = requestGeneration;
       setPrivateRoomCreateRequest({
+        accountEpoch: requestAccountEpoch,
         gameId: game.id,
         generation: requestGeneration,
         userId: currentUserId,
@@ -368,7 +403,14 @@ export function GameLauncher({
           settings: createLauncherPrivateRoomSettings(game, parameterValues),
         });
 
-        if (roomCreateRequestGenerationRef.current !== requestGeneration) {
+        if (
+          !isLauncherRoomCreateRequestCurrent({
+            currentGeneration: roomCreateRequestGenerationRef.current,
+            isAccountEpochCurrent,
+            requestAccountEpoch,
+            requestGeneration,
+          })
+        ) {
           return;
         }
 
@@ -379,10 +421,15 @@ export function GameLauncher({
         }
 
         const activeRoom = {
+          accountEpoch,
+          focusHeadingOnMount: false,
+          game: null,
+          joinOutcomeMessage: null,
           participantCapability: result.participantCapability,
           participantId: result.participantId,
           room: result.room,
           roomCode: result.room.code,
+          seq: 0,
           userId: currentUserId,
         } satisfies ActiveRoomSession;
 
@@ -398,32 +445,104 @@ export function GameLauncher({
         });
         setActiveRoomSession(activeRoom);
       } catch (error) {
-        if (roomCreateRequestGenerationRef.current !== requestGeneration) {
+        if (
+          !isLauncherRoomCreateRequestCurrent({
+            currentGeneration: roomCreateRequestGenerationRef.current,
+            isAccountEpochCurrent,
+            requestAccountEpoch,
+            requestGeneration,
+          })
+        ) {
           return;
         }
 
-        setPrivateRoomCreateError(
-          error instanceof Error ? error.message : "Could not create room.",
-        );
+        setPrivateRoomCreateError({
+          accountEpoch: requestAccountEpoch,
+          message:
+            error instanceof Error ? error.message : "Could not create room.",
+        });
       } finally {
-        if (roomCreateRequestGenerationRef.current === requestGeneration) {
+        if (
+          isLauncherRoomCreateRequestCurrent({
+            currentGeneration: roomCreateRequestGenerationRef.current,
+            isAccountEpochCurrent,
+            requestAccountEpoch,
+            requestGeneration,
+          })
+        ) {
           setPrivateRoomCreateRequest((currentRequest) =>
-            currentRequest?.generation === requestGeneration ? null : currentRequest,
+            currentRequest?.generation === requestGeneration &&
+            currentRequest.accountEpoch === requestAccountEpoch
+              ? null
+              : currentRequest,
           );
         }
       }
     },
-    [currentUserId, parameterValues, privateRoomCreatingGameId],
+    [
+      accountEpoch,
+      currentUserId,
+      isAccountEpochCurrent,
+      parameterValues,
+      privateRoomCreatingGameId,
+    ],
+  );
+
+  const handlePartyInvitationAccepted = useCallback(
+    (acceptance: SocialPartyInvitationAcceptance) => {
+      const handoff = createLauncherPartyInvitationHandoff(
+        acceptance,
+        currentUserIdRef.current,
+        currentAccountEpochRef.current,
+      );
+
+      // An accepted party supersedes any host-room request still in flight.
+      roomCreateRequestGenerationRef.current += 1;
+      setPrivateRoomCreateError(null);
+      setPrivateRoomCreateRequest(null);
+
+      // Navigate before adopting credentials so a history failure leaves the
+      // accepted response available for SocialCenter's local-only retry.
+      window.history.pushState(null, "", handoff.invitePath);
+      roomParticipantCapabilityHistoryRef.current.set(
+        handoff.activeRoomSession.roomCode,
+        handoff.credentials,
+      );
+      writeMultiplayerRoomParticipantCredentials(
+        handoff.activeRoomSession.roomCode,
+        handoff.credentials,
+      );
+
+      shouldRestoreMenuViewportRef.current = false;
+      setIsGlobalLeaderboardVisible(false);
+      setSelectedGameId(null);
+      setSelectedReplayMode(null);
+      setActiveRoomSession(handoff.activeRoomSession);
+    },
+    [],
   );
 
   if (activeRoomSession !== null) {
     const credentialsBelongToCurrentUser =
+      activeRoomSession.accountEpoch === accountEpoch &&
       activeRoomSession.userId === currentUserId;
 
     return (
       <SocialProvider enabled presenceState="busy">
         <MultiplayerRoomLobby
+          focusHeadingOnMount={
+            credentialsBelongToCurrentUser &&
+            activeRoomSession.focusHeadingOnMount
+          }
           initialAuthMode={initialAuthMode}
+          initialGame={
+            credentialsBelongToCurrentUser ? activeRoomSession.game : null
+          }
+          initialJoinOutcomeMessage={
+            credentialsBelongToCurrentUser
+              ? activeRoomSession.joinOutcomeMessage
+              : null
+          }
           initialParticipantCapability={
             credentialsBelongToCurrentUser
               ? activeRoomSession.participantCapability
@@ -434,14 +553,21 @@ export function GameLauncher({
               ? activeRoomSession.participantId
               : null
           }
-          initialRoom={activeRoomSession.room}
+          initialRoom={
+            credentialsBelongToCurrentUser ? activeRoomSession.room : null
+          }
           initialRoomCode={activeRoomSession.roomCode}
+          initialSeq={
+            credentialsBelongToCurrentUser ? activeRoomSession.seq : 0
+          }
           key={`${activeRoomSession.roomCode}:${currentUserId ?? "guest"}`}
           onBackToLibrary={returnToLibraryFromRoom}
           socialCenterTrigger={<SocialCenterTrigger />}
           socialPartyInviteControls={SocialPartyInviteControls}
         />
-        <SocialCenter />
+        <SocialCenter
+          onPartyInvitationAccepted={handlePartyInvitationAccepted}
+        />
       </SocialProvider>
     );
   }
@@ -453,7 +579,10 @@ export function GameLauncher({
           onBackToMenu={returnToMenu}
           socialCenterTrigger={<SocialCenterTrigger />}
         />
-        <SocialCenter />
+        <SocialCenter
+          canAcceptPartyInvitations
+          onPartyInvitationAccepted={handlePartyInvitationAccepted}
+        />
       </SocialProvider>
     );
   }
@@ -470,7 +599,9 @@ export function GameLauncher({
           onReplayBackToProfile={returnToProfile}
           replayMode={selectedReplayMode ?? undefined}
         />
-        <SocialCenter />
+        <SocialCenter
+          onPartyInvitationAccepted={handlePartyInvitationAccepted}
+        />
       </SocialProvider>
     );
   }
@@ -636,7 +767,10 @@ export function GameLauncher({
         })}
         </section>
       </main>
-      <SocialCenter />
+      <SocialCenter
+        canAcceptPartyInvitations
+        onPartyInvitationAccepted={handlePartyInvitationAccepted}
+      />
     </SocialProvider>
   );
 }
@@ -793,14 +927,115 @@ function createUnloadedActiveRoomSession(
   participantId: string | null = null,
   participantCapability: string | null = null,
   userId: string | null = null,
+  accountEpoch = 0,
 ): ActiveRoomSession {
   return {
+    accountEpoch,
+    focusHeadingOnMount: false,
+    game: null,
+    joinOutcomeMessage: null,
     participantCapability,
     participantId,
     room: null,
     roomCode,
+    seq: 0,
     userId,
   };
+}
+
+export function createLauncherPartyInvitationHandoff(
+  acceptance: SocialPartyInvitationAcceptance,
+  currentUserId: string | null,
+  currentAccountEpoch: number,
+) {
+  const participant = acceptance.snapshot.participant;
+  const roomCode = normalizePrivateRoomCode(acceptance.snapshot.room.code);
+  const invitePath = getPrivateRoomInvitePath(roomCode);
+
+  if (
+    currentUserId === null ||
+    acceptance.invitation.recipient.id !== currentUserId ||
+    participant?.id !== acceptance.participantId ||
+    participant.userId !== currentUserId
+  ) {
+    throw new Error(
+      "The accepted party no longer matches the signed-in account.",
+    );
+  }
+
+  if (
+    acceptance.admission === "admitted" &&
+    (participant.role === "host" ||
+      (acceptance.invitation.intent === "watch" &&
+        participant.role !== "observer"))
+  ) {
+    throw new Error("The accepted party returned an unsupported role.");
+  }
+
+  if (
+    roomCode === null ||
+    roomCode !== acceptance.snapshot.room.code ||
+    invitePath === null
+  ) {
+    throw new Error("The accepted party returned an unsupported room.");
+  }
+
+  const intentLabel =
+    acceptance.invitation.intent === "play" ? "Play" : "Watch";
+  const joinOutcomeMessage =
+    participant.role === "observer"
+      ? acceptance.invitation.intent === "play"
+        ? `You accepted ${acceptance.invitation.inviter.displayName}'s Play invitation and joined as Watching because no player spot was available. You can request the next match.`
+        : `You accepted ${acceptance.invitation.inviter.displayName}'s Watch invitation and joined as Watching.`
+      : participant.role === "host"
+        ? `You accepted ${acceptance.invitation.inviter.displayName}'s ${intentLabel} invitation and are now the party host.`
+        : `You accepted ${acceptance.invitation.inviter.displayName}'s ${intentLabel} invitation and joined as a player.`;
+  const credentials = {
+    participantCapability: acceptance.participantCapability,
+    participantId: acceptance.participantId,
+    userId: currentUserId,
+  } satisfies RoomParticipantCapability;
+
+  return {
+    activeRoomSession: {
+      accountEpoch: currentAccountEpoch,
+      focusHeadingOnMount: true,
+      game: acceptance.snapshot.game ?? null,
+      joinOutcomeMessage,
+      participantCapability: acceptance.participantCapability,
+      participantId: acceptance.participantId,
+      room: acceptance.snapshot.room,
+      roomCode,
+      seq: acceptance.snapshot.seq,
+      userId: currentUserId,
+    } satisfies ActiveRoomSession,
+    credentials,
+    invitePath,
+  };
+}
+
+export function isLauncherRoomCreateRequestCurrent({
+  currentGeneration,
+  isAccountEpochCurrent,
+  requestAccountEpoch,
+  requestGeneration,
+}: {
+  currentGeneration: number;
+  isAccountEpochCurrent: (accountEpoch: number) => boolean;
+  requestAccountEpoch: number;
+  requestGeneration: number;
+}) {
+  return (
+    currentGeneration === requestGeneration &&
+    isAccountEpochCurrent(requestAccountEpoch)
+  );
+}
+
+export function getLauncherPrivateRoomCreateError(
+  error: PrivateRoomCreateError | null,
+  currentAccountEpoch: number,
+) {
+  return error?.accountEpoch === currentAccountEpoch ? error.message : null;
 }
 
 function getGameLibraryTabId(tab: GameLibraryTab) {

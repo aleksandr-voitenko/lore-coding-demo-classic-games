@@ -13,6 +13,7 @@ import {
 import {
   type FormEvent,
   type ReactNode,
+  type Ref,
   useCallback,
   useEffect,
   useRef,
@@ -46,6 +47,7 @@ import {
 import { MAX_USER_DISPLAY_NAME_LENGTH } from "@/lib/user-profile";
 
 type SocialCenterProps = {
+  canAcceptPartyInvitations?: boolean;
   onPartyInvitationAccepted?: (
     acceptance: SocialPartyInvitationAcceptance,
   ) => Promise<void> | void;
@@ -67,6 +69,8 @@ type PendingPartyHandoff =
       invitation: SocialPartyInvitation;
       kind: "acceptance";
     };
+
+type PartyInvitationAction = "accept" | "decline";
 
 type SocialActionResult<Result> =
   | { ok: true; value: Result }
@@ -95,15 +99,28 @@ export function getPartyInvitationAcceptanceMessage(
   availability: SocialAvailability,
   canAdoptParty: boolean,
 ) {
-  if (!canAdoptParty) {
-    return "Joining from Friends is not available on this screen yet.";
+  switch (availability) {
+    case "busy":
+      return "Finish the current game before accepting this invitation.";
+    case "in-party":
+      return "Leave your current party before accepting another invitation.";
+    case "offline":
+      return "Reconnect before accepting this invitation.";
+    case "unknown":
+      return "Wait for your availability to finish updating before accepting.";
+    case "available":
+      return canAdoptParty
+        ? null
+        : "Return to the Game Library or Leaderboards to accept this invitation.";
   }
+}
 
-  return availability === "available"
-    ? null
-    : `You can accept when your status is Available. Current status: ${getSocialAvailabilityLabel(
-        availability,
-      )}.`;
+export function getPartyInvitationIntentDescription(
+  invitation: SocialPartyInvitation,
+) {
+  return invitation.intent === "watch"
+    ? "Watch invitation. Accepting joins as Watching; capacity is checked when you accept."
+    : "Play invitation. Accepting offers a player spot when available, otherwise Watching; capacity is checked when you accept.";
 }
 
 export function formatSocialActionError(error: unknown) {
@@ -119,6 +136,36 @@ export function isAmbiguousPartyAcceptanceError(error: unknown) {
     error instanceof SocialClientError &&
     (error.code === "network-error" || error.code === "invalid-response")
   );
+}
+
+export function isRetryablePartyAcceptanceRecoveryError(error: unknown) {
+  return (
+    error instanceof SocialClientError &&
+    (error.code === "party-invitation-acceptance-in-progress" ||
+      error.status === 429 ||
+      error.status >= 500)
+  );
+}
+
+function isResolvedPartyInvitationError(error: unknown) {
+  return (
+    error instanceof SocialClientError &&
+    (error.code === "party-invitation-expired" ||
+      error.code === "party-invitation-not-found" ||
+      error.code === "party-invitation-not-pending")
+  );
+}
+
+function setButtonRef(
+  refs: Map<string, HTMLButtonElement>,
+  invitationId: string,
+  button: HTMLButtonElement | null,
+) {
+  if (button === null) {
+    refs.delete(invitationId);
+  } else {
+    refs.set(invitationId, button);
+  }
 }
 
 export function SocialCenterTrigger() {
@@ -161,6 +208,7 @@ export function SocialCenterTrigger() {
 }
 
 export function SocialCenter({
+  canAcceptPartyInvitations = false,
   onPartyInvitationAccepted,
 }: SocialCenterProps = {}) {
   const { accountEpoch, user } = useCurrentUser();
@@ -172,6 +220,7 @@ export function SocialCenter({
 
   return (
     <SocialCenterAccountScope
+      canAcceptPartyInvitations={canAcceptPartyInvitations}
       key={`${accountEpoch}:${user.id}`}
       onPartyInvitationAccepted={onPartyInvitationAccepted}
     />
@@ -179,6 +228,7 @@ export function SocialCenter({
 }
 
 function SocialCenterAccountScope({
+  canAcceptPartyInvitations,
   onPartyInvitationAccepted,
 }: SocialCenterProps) {
   const {
@@ -197,6 +247,8 @@ function SocialCenterAccountScope({
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmation, setConfirmation] =
     useState<PendingConfirmation | null>(null);
+  const [activePartyInvitationActions, setActivePartyInvitationActions] =
+    useState<Record<string, PartyInvitationAction>>({});
   const [isPartyAdoptionPending, setIsPartyAdoptionPending] = useState(false);
   const [pendingPartyHandoff, setPendingPartyHandoff] =
     useState<PendingPartyHandoff | null>(null);
@@ -208,7 +260,52 @@ function SocialCenterAccountScope({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const confirmationCancelRef = useRef<HTMLButtonElement | null>(null);
   const confirmationReturnFocusRef = useRef<HTMLButtonElement | null>(null);
+  const partyHandoffRetryRef = useRef<HTMLButtonElement | null>(null);
+  const partyInvitationAcceptRefs = useRef(
+    new Map<string, HTMLButtonElement>(),
+  );
+  const partyInvitationDeclineRefs = useRef(
+    new Map<string, HTMLButtonElement>(),
+  );
+  const partyInvitationAcceptanceInFlightRef = useRef<string | null>(null);
+  const focusedPartyInvitationActionRef = useRef<{
+    button: HTMLButtonElement;
+    invitationId: string;
+  } | null>(null);
+  const partyInvitationsTitleRef = useRef<HTMLHeadingElement | null>(null);
+  const pendingPartyInvitationFocusRef = useRef<{
+    invitationId: string;
+    nextInvitationId: string | null;
+  } | null>(null);
+  const [partyFocusRequestVersion, setPartyFocusRequestVersion] = useState(0);
   const wasOpenRef = useRef(false);
+  const acceptanceMessage = getPartyInvitationAcceptanceMessage(
+    availability,
+    canAcceptPartyInvitations === true &&
+      onPartyInvitationAccepted !== undefined,
+  );
+
+  const focusPartyInvitationFallback = useCallback(
+    (invitationId: string | null) => {
+      const acceptButton =
+        acceptanceMessage === null && invitationId !== null
+          ? partyInvitationAcceptRefs.current.get(invitationId)
+          : undefined;
+      const declineButton =
+        invitationId === null
+          ? undefined
+          : partyInvitationDeclineRefs.current.get(invitationId);
+
+      if (acceptButton !== undefined && !acceptButton.disabled) {
+        acceptButton.focus();
+      } else if (declineButton !== undefined && !declineButton.disabled) {
+        declineButton.focus();
+      } else {
+        partyInvitationsTitleRef.current?.focus();
+      }
+    },
+    [acceptanceMessage],
+  );
 
   const resetLocalState = useCallback(() => {
     setActionError(null);
@@ -253,6 +350,60 @@ function SocialCenterAccountScope({
 
     queueMicrotask(() => confirmationCancelRef.current?.focus());
   }, [confirmation]);
+
+  useEffect(() => {
+    if (!isSocialCenterOpen || pendingPartyHandoff === null) {
+      return;
+    }
+
+    queueMicrotask(() => partyHandoffRetryRef.current?.focus());
+  }, [isSocialCenterOpen, pendingPartyHandoff]);
+
+  useEffect(() => {
+    const focusRequest = pendingPartyInvitationFocusRef.current;
+    const incomingInvitations = overview?.incomingPartyInvitations ?? [];
+
+    if (
+      focusRequest === null ||
+      incomingInvitations.some(
+        (invitation) => invitation.id === focusRequest.invitationId,
+      )
+    ) {
+      return;
+    }
+
+    pendingPartyInvitationFocusRef.current = null;
+    queueMicrotask(() =>
+      focusPartyInvitationFallback(focusRequest.nextInvitationId),
+    );
+  }, [focusPartyInvitationFallback, overview?.incomingPartyInvitations, partyFocusRequestVersion]);
+
+  useEffect(() => {
+    const focusedAction = focusedPartyInvitationActionRef.current;
+
+    if (focusedAction === null || focusedAction.button.isConnected) {
+      return;
+    }
+
+    focusedPartyInvitationActionRef.current = null;
+    const handoffInvitationId =
+      pendingPartyHandoff?.kind === "adoption"
+        ? pendingPartyHandoff.acceptance.invitation.id
+        : pendingPartyHandoff?.invitation.id;
+
+    if (
+      pendingPartyInvitationFocusRef.current?.invitationId ===
+        focusedAction.invitationId ||
+      handoffInvitationId === focusedAction.invitationId ||
+      !document.hasFocus()
+    ) {
+      return;
+    }
+
+    const nextInvitationId =
+      overview?.incomingPartyInvitations[0]?.id ?? null;
+    queueMicrotask(() => focusPartyInvitationFallback(nextInvitationId));
+  }, [focusPartyInvitationFallback, overview?.incomingPartyInvitations, pendingPartyHandoff]);
 
   async function runAction<Result>(
     key: string,
@@ -319,6 +470,40 @@ function SocialCenterAccountScope({
     setConfirmation({ action, description, key, label });
   }
 
+  function setActivePartyInvitationAction(
+    invitationId: string,
+    action: PartyInvitationAction | null,
+  ) {
+    setActivePartyInvitationActions((current) => {
+      const next = { ...current };
+
+      if (action === null) {
+        delete next[invitationId];
+      } else {
+        next[invitationId] = action;
+      }
+
+      return next;
+    });
+  }
+
+  function requestPartyInvitationRemovalFocus(invitationId: string) {
+    const invitations = overview?.incomingPartyInvitations ?? [];
+    const invitationIndex = invitations.findIndex(
+      (invitation) => invitation.id === invitationId,
+    );
+    const nextInvitation =
+      invitations[invitationIndex + 1] ??
+      invitations[invitationIndex - 1] ??
+      null;
+
+    pendingPartyInvitationFocusRef.current = {
+      invitationId,
+      nextInvitationId: nextInvitation?.id ?? null,
+    };
+    setPartyFocusRequestVersion((current) => current + 1);
+  }
+
   async function adoptAcceptedParty(
     acceptance: SocialPartyInvitationAcceptance,
   ) {
@@ -345,12 +530,24 @@ function SocialCenterAccountScope({
   async function handleAcceptPartyInvitation(
     invitation: SocialPartyInvitation,
   ) {
-    if (onPartyInvitationAccepted === undefined) {
+    if (
+      onPartyInvitationAccepted === undefined ||
+      partyInvitationAcceptanceInFlightRef.current !== null ||
+      (pendingPartyHandoff !== null &&
+        (pendingPartyHandoff.kind === "adoption"
+          ? pendingPartyHandoff.acceptance.invitation.id
+          : pendingPartyHandoff.invitation.id) !== invitation.id)
+    ) {
       return;
     }
 
+    partyInvitationAcceptanceInFlightRef.current = invitation.id;
     setActionError(null);
     setStatusMessage(null);
+    setActivePartyInvitationAction(invitation.id, "accept");
+    const isAcceptanceRecovery =
+      pendingPartyHandoff?.kind === "acceptance" &&
+      pendingPartyHandoff.invitation.id === invitation.id;
 
     try {
       const acceptance = await runMutation(
@@ -359,20 +556,89 @@ function SocialCenterAccountScope({
       );
       setSearchResult(null);
       setSearchSubmitted(false);
-      setStatusMessage("Party invitation accepted.");
+      setStatusMessage(
+        `${invitation.intent === "play" ? "Play" : "Watch"} invitation from ${invitation.inviter.displayName} accepted.`,
+      );
       setPendingPartyHandoff({ acceptance, kind: "adoption" });
       await adoptAcceptedParty(acceptance);
     } catch (error) {
       if (isAmbiguousPartyAcceptanceError(error)) {
         setPendingPartyHandoff({ invitation, kind: "acceptance" });
         setActionError(
-          "The party response was interrupted. Confirm acceptance to recover it safely.",
+          `The ${invitation.intent === "play" ? "Play" : "Watch"} invitation response from ${invitation.inviter.displayName} was interrupted. Confirm acceptance to recover it safely.`,
+        );
+        return;
+      }
+
+      if (isResolvedPartyInvitationError(error)) {
+        setPendingPartyHandoff(null);
+        setStatusMessage(
+          `${invitation.intent === "play" ? "Play" : "Watch"} invitation from ${invitation.inviter.displayName} is no longer available.`,
+        );
+        requestPartyInvitationRemovalFocus(invitation.id);
+        return;
+      }
+
+      if (isRetryablePartyAcceptanceRecoveryError(error)) {
+        setPendingPartyHandoff({ invitation, kind: "acceptance" });
+        setActionError(
+          isAcceptanceRecovery
+            ? `Party access for the ${invitation.intent === "play" ? "Play" : "Watch"} invitation from ${invitation.inviter.displayName} could not be recovered yet. ${formatSocialActionError(error)}`
+            : `Party acceptance for the ${invitation.intent === "play" ? "Play" : "Watch"} invitation from ${invitation.inviter.displayName} could not be confirmed yet. ${formatSocialActionError(error)}`,
         );
         return;
       }
 
       setPendingPartyHandoff(null);
-      setActionError(formatSocialActionError(error));
+      setActionError(
+        `Could not accept the ${invitation.intent === "play" ? "Play" : "Watch"} invitation from ${invitation.inviter.displayName}. ${formatSocialActionError(error)}`,
+      );
+    } finally {
+      if (partyInvitationAcceptanceInFlightRef.current === invitation.id) {
+        partyInvitationAcceptanceInFlightRef.current = null;
+      }
+      setActivePartyInvitationAction(invitation.id, null);
+    }
+  }
+
+  async function handleDeclinePartyInvitation(
+    invitation: SocialPartyInvitation,
+  ) {
+    const key = `party-invitation:${invitation.id}`;
+    const intentLabel = invitation.intent === "play" ? "Play" : "Watch";
+    let invitationRemoved = false;
+
+    setActionError(null);
+    setStatusMessage(null);
+    setActivePartyInvitationAction(invitation.id, "decline");
+
+    try {
+      await runMutation(key, () =>
+        declineSocialPartyInvitation(invitation.id),
+      );
+      invitationRemoved = true;
+      setSearchResult(null);
+      setSearchSubmitted(false);
+      setStatusMessage(
+        `${intentLabel} invitation from ${invitation.inviter.displayName} declined.`,
+      );
+    } catch (error) {
+      if (isResolvedPartyInvitationError(error)) {
+        invitationRemoved = true;
+        setStatusMessage(
+          `${intentLabel} invitation from ${invitation.inviter.displayName} is no longer available.`,
+        );
+      } else {
+        setActionError(
+          `Could not decline the ${intentLabel} invitation from ${invitation.inviter.displayName}. ${formatSocialActionError(error)}`,
+        );
+      }
+    } finally {
+      setActivePartyInvitationAction(invitation.id, null);
+
+      if (invitationRemoved) {
+        requestPartyInvitationRemovalFocus(invitation.id);
+      }
     }
   }
 
@@ -384,11 +650,10 @@ function SocialCenterAccountScope({
     }
   }
 
-  const acceptanceMessage = getPartyInvitationAcceptanceMessage(
-    availability,
-    onPartyInvitationAccepted !== undefined,
-  );
   const discoveryPending = isMutationPending("social-discovery");
+  const anyPartyAcceptancePending =
+    pendingPartyHandoff !== null ||
+    Object.values(activePartyInvitationActions).includes("accept");
 
   return (
     <Dialog.Root onOpenChange={handleOpenChange} open={isSocialCenterOpen}>
@@ -616,6 +881,11 @@ function SocialCenterAccountScope({
                     : `Confirm the invitation from ${pendingPartyHandoff.invitation.inviter.displayName} to recover the party.`}
                 </p>
                 <Button
+                  aria-label={
+                    pendingPartyHandoff.kind === "adoption"
+                      ? `Open accepted ${pendingPartyHandoff.acceptance.invitation.intent} invitation from ${pendingPartyHandoff.acceptance.invitation.inviter.displayName}`
+                      : `Confirm ${pendingPartyHandoff.invitation.intent} invitation acceptance from ${pendingPartyHandoff.invitation.inviter.displayName}`
+                  }
                   className="mt-3 min-h-11"
                   disabled={
                     pendingPartyHandoff.kind === "adoption"
@@ -633,6 +903,7 @@ function SocialCenterAccountScope({
                       );
                     }
                   }}
+                  ref={partyHandoffRetryRef}
                   type="button"
                 >
                   {pendingPartyHandoff.kind === "adoption"
@@ -705,60 +976,156 @@ function SocialCenterAccountScope({
                   id="social-party-invitations"
                   itemCount={overview.incomingPartyInvitations.length}
                   title="Party invitations"
+                  titleRef={partyInvitationsTitleRef}
+                  titleTabIndex={-1}
                 >
                   {overview.incomingPartyInvitations.map((invitation) => {
                     const key = `party-invitation:${invitation.id}`;
                     const pending = isMutationPending(key);
+                    const activeAction =
+                      activePartyInvitationActions[invitation.id];
+                    const recoveryKind =
+                      pendingPartyHandoff?.kind === "adoption" &&
+                      pendingPartyHandoff.acceptance.invitation.id ===
+                        invitation.id
+                        ? "adoption"
+                        : pendingPartyHandoff?.kind === "acceptance" &&
+                            pendingPartyHandoff.invitation.id === invitation.id
+                          ? "acceptance"
+                          : null;
+                    const actionPending =
+                      pending ||
+                      activeAction !== undefined ||
+                      recoveryKind !== null;
+                    const intentLabel =
+                      invitation.intent === "play" ? "Play" : "Watch";
+                    const statusId = `social-party-invitation-${invitation.id}-status`;
+                    const rowStatus =
+                      activeAction === "accept"
+                        ? `Accepting ${intentLabel} invitation from ${invitation.inviter.displayName}...`
+                        : activeAction === "decline"
+                          ? `Declining ${intentLabel} invitation from ${invitation.inviter.displayName}...`
+                          : recoveryKind === "adoption"
+                            ? `This ${intentLabel} invitation is already accepted. Use Open accepted party above to continue.`
+                            : recoveryKind === "acceptance"
+                              ? `This ${intentLabel} invitation needs confirmation. Use Confirm party acceptance above to continue.`
+                              : pendingPartyHandoff !== null
+                                ? `Finish recovering or opening the accepted party before accepting this ${intentLabel} invitation.`
+                                : [
+                                    getPartyInvitationIntentDescription(
+                                      invitation,
+                                    ),
+                                    acceptanceMessage,
+                                  ]
+                                    .filter(
+                                      (message): message is string =>
+                                        message !== null,
+                                    )
+                                    .join(" ");
 
                     return (
                       <SocialRow
                         key={invitation.id}
-                        subtitle={`${invitation.intent === "play" ? "Play" : "Watch"} invitation`}
+                        subtitle={rowStatus}
+                        subtitleAriaLive="polite"
+                        subtitleId={statusId}
                         testId={`incoming-party-invitation-${invitation.id}`}
                         title={invitation.inviter.displayName}
                       >
                         <Button
-                          aria-describedby={
-                            acceptanceMessage === null
-                              ? undefined
-                              : "social-party-acceptance-help"
+                          aria-describedby={statusId}
+                          aria-label={
+                            activeAction === "accept"
+                              ? `Accepting ${intentLabel} invitation from ${invitation.inviter.displayName}`
+                              : `Accept ${intentLabel} invitation from ${invitation.inviter.displayName}`
                           }
                           className="min-h-11"
-                          disabled={pending || acceptanceMessage !== null}
+                          disabled={
+                            actionPending ||
+                            anyPartyAcceptancePending ||
+                            acceptanceMessage !== null
+                          }
                           onClick={() =>
                             void handleAcceptPartyInvitation(invitation)
                           }
+                          onBlur={(event) => {
+                            const button = event.currentTarget;
+
+                            queueMicrotask(() => {
+                              if (
+                                button.isConnected &&
+                                focusedPartyInvitationActionRef.current
+                                  ?.button === button
+                              ) {
+                                focusedPartyInvitationActionRef.current = null;
+                              }
+                            });
+                          }}
+                          onFocus={(event) => {
+                            focusedPartyInvitationActionRef.current = {
+                              button: event.currentTarget,
+                              invitationId: invitation.id,
+                            };
+                          }}
+                          ref={(button) =>
+                            setButtonRef(
+                              partyInvitationAcceptRefs.current,
+                              invitation.id,
+                              button,
+                            )
+                          }
                           type="button"
                         >
-                          Accept
+                          {activeAction === "accept" ? "Accepting..." : "Accept"}
                         </Button>
                         <Button
+                          aria-describedby={statusId}
+                          aria-label={
+                            activeAction === "decline"
+                              ? `Declining ${intentLabel} invitation from ${invitation.inviter.displayName}`
+                              : `Decline ${intentLabel} invitation from ${invitation.inviter.displayName}`
+                          }
                           className="min-h-11"
-                          disabled={pending}
+                          disabled={actionPending}
                           onClick={() =>
-                            void runAction(
-                              key,
-                              () => declineSocialPartyInvitation(invitation.id),
-                              "Party invitation declined.",
+                            void handleDeclinePartyInvitation(invitation)
+                          }
+                          onBlur={(event) => {
+                            const button = event.currentTarget;
+
+                            queueMicrotask(() => {
+                              if (
+                                button.isConnected &&
+                                focusedPartyInvitationActionRef.current
+                                  ?.button === button
+                              ) {
+                                focusedPartyInvitationActionRef.current = null;
+                              }
+                            });
+                          }}
+                          onFocus={(event) => {
+                            focusedPartyInvitationActionRef.current = {
+                              button: event.currentTarget,
+                              invitationId: invitation.id,
+                            };
+                          }}
+                          ref={(button) =>
+                            setButtonRef(
+                              partyInvitationDeclineRefs.current,
+                              invitation.id,
+                              button,
                             )
                           }
                           type="button"
                           variant="outline"
                         >
-                          Decline
+                          {activeAction === "decline"
+                            ? "Declining..."
+                            : "Decline"}
                         </Button>
                       </SocialRow>
                     );
                   })}
-                  {acceptanceMessage !== null &&
-                  overview.incomingPartyInvitations.length > 0 ? (
-                    <p
-                      className="text-xs font-medium text-[var(--chrome-muted)]"
-                      id="social-party-acceptance-help"
-                    >
-                      {acceptanceMessage}
-                    </p>
-                  ) : null}
                 </SocialSection>
 
                 <SocialSection
@@ -1106,12 +1473,16 @@ function SocialSection({
   id,
   itemCount,
   title,
+  titleRef,
+  titleTabIndex,
 }: {
   children: ReactNode;
   emptyMessage: string;
   id: string;
   itemCount: number;
   title: string;
+  titleRef?: Ref<HTMLHeadingElement>;
+  titleTabIndex?: number;
 }) {
   return (
     <section
@@ -1119,7 +1490,12 @@ function SocialSection({
       className="rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-page)] p-4"
       data-testid={id}
     >
-      <h2 className="text-lg font-semibold" id={`${id}-title`}>
+      <h2
+        className="rounded-sm text-lg font-semibold outline-none focus:ring-3 focus:ring-[var(--chrome-focus-ring)]"
+        id={`${id}-title`}
+        ref={titleRef}
+        tabIndex={titleTabIndex}
+      >
         {title}
       </h2>
       <div className="mt-3 flex flex-col gap-3">
@@ -1138,11 +1514,15 @@ function SocialSection({
 function SocialRow({
   children,
   subtitle,
+  subtitleAriaLive,
+  subtitleId,
   testId,
   title,
 }: {
   children: ReactNode;
   subtitle: string;
+  subtitleAriaLive?: "assertive" | "off" | "polite";
+  subtitleId?: string;
   testId?: string;
   title: string;
 }) {
@@ -1153,7 +1533,11 @@ function SocialRow({
     >
       <div className="min-w-0">
         <h3 className="truncate text-sm font-semibold">{title}</h3>
-        <p className="mt-0.5 text-xs font-medium text-[var(--chrome-muted)]">
+        <p
+          aria-live={subtitleAriaLive}
+          className="mt-0.5 text-xs font-medium text-[var(--chrome-muted)]"
+          id={subtitleId}
+        >
           {subtitle}
         </p>
       </div>

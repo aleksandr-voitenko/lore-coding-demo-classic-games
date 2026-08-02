@@ -45,7 +45,13 @@ This file covers Playwright browser-flow coverage under `e2e/`.
   path because Play/Watch must stay disabled until the live party stream is
   active. It covers friendship setup, linkless Watch creation, party-code
   redaction, accessible admission help, local cancellation, external decline,
-  and focus recovery when the pending action disappears asynchronously.
+  focus recovery when the pending action disappears asynchronously, an in-party
+  recipient's disabled Accept and still-enabled Decline actions, recipient
+  acceptance as Watching, an interrupted committed acceptance response, a
+  transient acceptance-in-progress response on both the initial attempt and its
+  first retry, membership-only reacquisition, an injected one-time local history
+  failure, local-only handoff retry without an additional acceptance request,
+  visible destination focus, and same-account credential recovery after reload.
 - `sidecar/tank-patrol-private-room.e2e.ts` covers Tank Patrol's required
   Player 1/Player 2 seat claims, authoritative Stage 1 start, both rendered
   tanks, and bidirectional held-movement delivery across two browser contexts.

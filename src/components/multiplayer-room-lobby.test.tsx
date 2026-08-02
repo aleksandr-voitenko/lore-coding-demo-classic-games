@@ -160,6 +160,13 @@ describe("multiplayer room lobby", () => {
     );
 
     expect(markup).toContain('data-testid="multiplayer-room-lobby"');
+    const roomHeading = getTestElementOpeningTag(
+      markup,
+      "multiplayer-room-heading",
+    );
+
+    expect(roomHeading).toContain('tabindex="-1"');
+    expect(roomHeading).toContain("focus:ring-3");
     expect(markup).toContain('data-testid="multiplayer-room-game"');
     expect(markup).toContain("Pong");
     expect(markup).toContain('data-testid="multiplayer-room-status"');
@@ -416,6 +423,27 @@ describe("multiplayer room lobby", () => {
     expect(markup).toContain('data-testid="multiplayer-party-panel"');
     expect(markup).toContain(
       'data-testid="test-social-party-invite-controls"',
+    );
+  });
+
+  it("renders the authoritative accepted-invitation outcome", () => {
+    const markup = renderToStaticMarkup(
+      <CurrentUserProvider
+        initialUser={{ displayName: "Grace", id: "user-2" }}
+      >
+        <MultiplayerRoomLobby
+          initialJoinOutcomeMessage="You accepted Ada's Watch invitation and joined as Watching."
+          initialParticipantId="guest-participant"
+          initialRoom={PONG_ROOM}
+          initialRoomCode="PONG-1"
+          onBackToLibrary={vi.fn()}
+        />
+      </CurrentUserProvider>,
+    );
+
+    expect(markup).toContain('data-testid="multiplayer-room-join-outcome"');
+    expect(markup).toContain(
+      "You accepted Ada&#x27;s Watch invitation and joined as Watching.",
     );
   });
 
