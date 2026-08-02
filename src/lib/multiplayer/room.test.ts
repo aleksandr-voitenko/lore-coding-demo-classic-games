@@ -6,6 +6,7 @@ import type {
 } from "./protocol";
 import {
   addPrivateRoomGuestParticipantAsObserver,
+  addPrivateRoomGuestParticipantAsPlayer,
   claimPrivateRoomSeat,
   createPrivateRoom,
   finishPrivateRoom,
@@ -13,6 +14,7 @@ import {
   normalizePrivateRoomCode,
   pausePrivateRoom,
   releasePrivateRoomSeat,
+  replacePrivateRoomMatch,
   restartPrivateRoom,
   resumePrivateRoom,
   startPrivateRoom,
@@ -102,15 +104,11 @@ function startRoom(room: PrivateRoom) {
 }
 
 function createReadyRoom() {
-  return claimSeat(
-    claimSeat(addObserver(addObserver(createLobbyRoom(), "guest-2")), "guest-1", "left"),
-    "guest-2",
-    "right",
-  );
+  return claimSeat(addObserver(createLobbyRoom()), "guest-1", "right");
 }
 
 describe("private multiplayer rooms", () => {
-  it("creates a lobby room with a signed-in host, generic settings, and empty seats", () => {
+  it("creates a lobby room with a signed-in host in the first player slot", () => {
     const settings: PrivateRoomSettings = {
       gameId: "space-invaders",
       parameters: {
@@ -148,7 +146,7 @@ describe("private multiplayer rooms", () => {
           {
             id: "left",
             label: "Left",
-            occupiedByParticipantId: null,
+            occupiedByParticipantId: HOST_ID,
             required: true,
           },
           {
@@ -163,6 +161,49 @@ describe("private multiplayer rooms", () => {
       },
       success: true,
     });
+  });
+
+  it("requires exactly two required seats for party creation and replacement", () => {
+    for (const seats of [
+      [{ id: "only", label: "Only", required: true }],
+      [
+        { id: "one", label: "One", required: true },
+        { id: "two", label: "Two", required: true },
+        { id: "three", label: "Three", required: true },
+      ],
+      [
+        { id: "one", label: "One", required: true },
+        { id: "two", label: "Two", required: false },
+      ],
+    ]) {
+      expect(
+        createPrivateRoom({
+          code: "party-room",
+          host: {
+            displayName: "Ada Host",
+            participantId: HOST_ID,
+            userId: HOST_USER_ID,
+          },
+          seats,
+          settings: { gameId: "pong" },
+        }),
+      ).toEqual({
+        code: "invalid-seat",
+        error: "Party games require exactly two required player seats.",
+        success: false,
+      });
+      expect(
+        replacePrivateRoomMatch(createLobbyRoom(), {
+          participantId: HOST_ID,
+          seats,
+          settings: { gameId: "asteroids" },
+        }),
+      ).toEqual({
+        code: "invalid-seat",
+        error: "Party games require exactly two required player seats.",
+        success: false,
+      });
+    }
   });
 
   it("rejects room creation without a signed-in host user id", () => {
@@ -225,17 +266,57 @@ describe("private multiplayer rooms", () => {
     expect(room.participants).toHaveLength(1);
   });
 
-  it("claims and releases seats while updating non-host roles immutably", () => {
-    const lobbyRoom = addObserver(createLobbyRoom());
-    const seatedRoom = claimSeat(lobbyRoom, "guest-1", "left");
-    const releasedRoomResult = releasePrivateRoomSeat(seatedRoom, {
+  it("adds a guest player atomically or falls back to watching an active match", () => {
+    const lobbyRoom = createLobbyRoom();
+    const playerResult = addPrivateRoomGuestParticipantAsPlayer(lobbyRoom, {
+      displayName: "Guest Player",
       participantId: "guest-1",
-      seatId: "left",
     });
 
-    expect(seatedRoom.seats[0]).toEqual({
-      id: "left",
-      label: "Left",
+    expect(playerResult).toMatchObject({
+      room: {
+        participants: expect.arrayContaining([
+          expect.objectContaining({ id: "guest-1", role: "player" }),
+        ]),
+        seats: [
+          expect.objectContaining({ occupiedByParticipantId: HOST_ID }),
+          expect.objectContaining({ occupiedByParticipantId: "guest-1" }),
+        ],
+      },
+      success: true,
+    });
+
+    const runningRoom = startRoom(
+      playerResult.success ? playerResult.room : lobbyRoom,
+    );
+    const observerResult = addPrivateRoomGuestParticipantAsPlayer(runningRoom, {
+      displayName: "Late Guest",
+      participantId: "guest-2",
+    });
+
+    expect(observerResult).toMatchObject({
+      room: {
+        participants: expect.arrayContaining([
+          expect.objectContaining({ id: "guest-2", role: "observer" }),
+        ]),
+        seats: runningRoom.seats,
+        status: "running",
+      },
+      success: true,
+    });
+  });
+
+  it("claims and releases seats while updating non-host roles immutably", () => {
+    const lobbyRoom = addObserver(createLobbyRoom());
+    const seatedRoom = claimSeat(lobbyRoom, "guest-1", "right");
+    const releasedRoomResult = releasePrivateRoomSeat(seatedRoom, {
+      participantId: "guest-1",
+      seatId: "right",
+    });
+
+    expect(seatedRoom.seats[1]).toEqual({
+      id: "right",
+      label: "Right",
       occupiedByParticipantId: "guest-1",
       required: true,
     });
@@ -244,7 +325,7 @@ describe("private multiplayer rooms", () => {
     ).toMatchObject({
       role: "player",
     });
-    expect(lobbyRoom.seats[0]?.occupiedByParticipantId).toBeNull();
+    expect(lobbyRoom.seats[1]?.occupiedByParticipantId).toBeNull();
     expect(
       lobbyRoom.participants.find((participant) => participant.id === "guest-1"),
     ).toMatchObject({
@@ -260,12 +341,131 @@ describe("private multiplayer rooms", () => {
         ]),
         seats: expect.arrayContaining([
           expect.objectContaining({
-            id: "left",
+            id: "right",
             occupiedByParticipantId: null,
           }),
         ]),
       },
       success: true,
+    });
+  });
+
+  it("replaces a finished match while preserving player order and party membership", () => {
+    const finishedRoomResult = finishPrivateRoom(startRoom(createReadyRoom()), {
+      participantId: HOST_ID,
+    });
+
+    expect(finishedRoomResult.success).toBe(true);
+
+    if (!finishedRoomResult.success) {
+      throw new Error(finishedRoomResult.error);
+    }
+
+    const result = replacePrivateRoomMatch(finishedRoomResult.room, {
+      participantId: HOST_ID,
+      seats: [
+        { id: "blue", label: "Blue", required: true },
+        { id: "green", label: "Green", required: true },
+      ],
+      settings: {
+        gameId: "asteroids",
+        parameters: { difficulty: "hard" },
+      },
+    });
+
+    expect(result).toMatchObject({
+      room: {
+        code: finishedRoomResult.room.code,
+        hostParticipantId: HOST_ID,
+        matchId: 2,
+        participants: finishedRoomResult.room.participants,
+        seats: [
+          expect.objectContaining({
+            id: "blue",
+            occupiedByParticipantId: HOST_ID,
+          }),
+          expect.objectContaining({
+            id: "green",
+            occupiedByParticipantId: "guest-1",
+          }),
+        ],
+        settings: {
+          gameId: "asteroids",
+          parameters: { difficulty: "hard" },
+        },
+        status: "lobby",
+      },
+      success: true,
+    });
+    expect(finishedRoomResult.room.matchId).toBe(1);
+    expect(finishedRoomResult.room.settings.gameId).toBe("pong");
+  });
+
+  it("preserves empty player slots by ordinal when replacing a match", () => {
+    const releasedHostResult = releasePrivateRoomSeat(createReadyRoom(), {
+      participantId: HOST_ID,
+      seatId: "left",
+    });
+
+    expect(releasedHostResult.success).toBe(true);
+
+    if (!releasedHostResult.success) {
+      throw new Error(releasedHostResult.error);
+    }
+
+    const result = replacePrivateRoomMatch(releasedHostResult.room, {
+      participantId: HOST_ID,
+      seats: [
+        { id: "blue", label: "Blue", required: true },
+        { id: "green", label: "Green", required: true },
+      ],
+      settings: { gameId: "asteroids" },
+    });
+
+    expect(result).toMatchObject({
+      room: {
+        participants: [
+          expect.objectContaining({ id: HOST_ID, role: "host" }),
+          expect.objectContaining({ id: "guest-1", role: "player" }),
+        ],
+        seats: [
+          expect.objectContaining({
+            id: "blue",
+            occupiedByParticipantId: null,
+          }),
+          expect.objectContaining({
+            id: "green",
+            occupiedByParticipantId: "guest-1",
+          }),
+        ],
+      },
+      success: true,
+    });
+  });
+
+  it("rejects active match replacement and active seat changes", () => {
+    const runningRoom = startRoom(createReadyRoom());
+
+    expect(
+      replacePrivateRoomMatch(runningRoom, {
+        participantId: HOST_ID,
+        seats: TWO_PLAYER_SEATS,
+        settings: { gameId: "asteroids" },
+      }),
+    ).toEqual({
+      code: "invalid-status",
+      error: "Finish the current match before choosing another game.",
+      success: false,
+    });
+    expect(
+      releasePrivateRoomSeat(runningRoom, {
+        participantId: "guest-1",
+        seatId: "right",
+      }),
+    ).toEqual({
+      code: "invalid-status",
+      error: "Player seats can only change between matches.",
+      success: false,
     });
   });
 
@@ -430,7 +630,7 @@ describe("private multiplayer rooms", () => {
   });
 
   it("guards starting on required seats before allowing host lifecycle transitions", () => {
-    const oneSeatRoom = claimSeat(addObserver(createLobbyRoom()), "guest-1", "left");
+    const oneSeatRoom = createLobbyRoom();
 
     expect(startPrivateRoom(oneSeatRoom, { participantId: HOST_ID })).toEqual({
       code: "required-seats-empty",
@@ -438,7 +638,7 @@ describe("private multiplayer rooms", () => {
       success: false,
     });
 
-    const readyRoom = claimSeat(addObserver(oneSeatRoom, "guest-2"), "guest-2", "right");
+    const readyRoom = claimSeat(addObserver(oneSeatRoom), "guest-1", "right");
     const runningRoom = startRoom(readyRoom);
     const pausedRoomResult = pausePrivateRoom(runningRoom, { participantId: HOST_ID });
 

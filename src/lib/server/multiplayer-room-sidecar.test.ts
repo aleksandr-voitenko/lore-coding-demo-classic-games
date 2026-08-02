@@ -372,7 +372,7 @@ describe("multiplayer room sidecar", () => {
     expect(client.readyState).toBe(WebSocket.OPEN);
   });
 
-  it("advertises its capability protocol and rejects an unversioned mutation path before room creation", async () => {
+  it("advertises protocol v4 and rejects unversioned or v3 mutation paths before room creation", async () => {
     const sidecar = await createStartedSidecar();
     const origin = getOrigin(sidecar);
     const serviceBaseUrl = `${origin}/_internal/rooms`;
@@ -388,6 +388,11 @@ describe("multiplayer room sidecar", () => {
       headers: ROOM_SERVICE_MUTATION_HEADERS,
       method: "POST",
     });
+    const v3MutationResponse = await fetch(`${serviceBaseUrl}/v3`, {
+      body: "{",
+      headers: ROOM_SERVICE_MUTATION_HEADERS,
+      method: "POST",
+    });
     const roomResponse = await fetch(`${serviceBaseUrl}/ROOM1`);
 
     expect(handshakeResponse.status).toBe(200);
@@ -398,6 +403,10 @@ describe("multiplayer room sidecar", () => {
     });
     expect(mutationResponse.status).toBe(426);
     await expect(mutationResponse.json()).resolves.toEqual({
+      error: "Room service protocol version is not supported.",
+    });
+    expect(v3MutationResponse.status).toBe(426);
+    await expect(v3MutationResponse.json()).resolves.toEqual({
       error: "Room service protocol version is not supported.",
     });
     expect(roomResponse.status).toBe(404);
@@ -571,7 +580,7 @@ describe("multiplayer room sidecar", () => {
       {
         body: JSON.stringify({
           participantId: guestParticipantId,
-          seatId: "left",
+          seatId: "right",
           matchId: 1,
           type: "room.claimSeat",
         }),
@@ -592,7 +601,7 @@ describe("multiplayer room sidecar", () => {
     expect(afterRejectedCommandSnapshot.room.seats).toEqual([
       expect.objectContaining({
         id: "left",
-        occupiedByParticipantId: null,
+        occupiedByParticipantId: hostParticipantId,
       }),
       expect.objectContaining({
         id: "right",
@@ -602,7 +611,7 @@ describe("multiplayer room sidecar", () => {
 
     const httpCommandBroadcastPromise = waitForServerMessage(
       client,
-      (message) => hasSeatOccupantSnapshot(message, "left", guestParticipantId),
+      (message) => hasSeatOccupantSnapshot(message, "right", guestParticipantId),
     );
 
     const httpCommandResponse = await fetch(
@@ -610,7 +619,7 @@ describe("multiplayer room sidecar", () => {
       {
         body: JSON.stringify({
           participantId: guestParticipantId,
-          seatId: "left",
+          seatId: "right",
           matchId: 1,
           type: "room.claimSeat",
         }),
@@ -629,11 +638,11 @@ describe("multiplayer room sidecar", () => {
     expect(afterHttpCommandSnapshot.room.seats).toEqual([
       expect.objectContaining({
         id: "left",
-        occupiedByParticipantId: guestParticipantId,
+        occupiedByParticipantId: hostParticipantId,
       }),
       expect.objectContaining({
         id: "right",
-        occupiedByParticipantId: null,
+        occupiedByParticipantId: guestParticipantId,
       }),
     ]);
     expect(httpCommandBroadcast).toMatchObject({
@@ -643,11 +652,11 @@ describe("multiplayer room sidecar", () => {
           seats: [
             expect.objectContaining({
               id: "left",
-              occupiedByParticipantId: guestParticipantId,
+              occupiedByParticipantId: hostParticipantId,
             }),
             expect.objectContaining({
               id: "right",
-              occupiedByParticipantId: null,
+              occupiedByParticipantId: guestParticipantId,
             }),
           ],
         },
@@ -678,11 +687,11 @@ describe("multiplayer room sidecar", () => {
           seats: [
             expect.objectContaining({
               id: "left",
-              occupiedByParticipantId: guestParticipantId,
+              occupiedByParticipantId: hostParticipantId,
             }),
             expect.objectContaining({
               id: "right",
-              occupiedByParticipantId: null,
+              occupiedByParticipantId: guestParticipantId,
             }),
           ],
         },

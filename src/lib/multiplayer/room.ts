@@ -85,6 +85,11 @@ export type UpdatePrivateRoomSettingsOptions = PrivateRoomActorOptions & {
   settings: PrivateRoomSettings;
 };
 
+export type ReplacePrivateRoomMatchOptions = PrivateRoomActorOptions & {
+  seats: readonly PrivateRoomSeatInput[];
+  settings: PrivateRoomSettings;
+};
+
 export type PrivateRoomErrorCode =
   | "duplicate-participant"
   | "duplicate-seat"
@@ -246,6 +251,17 @@ function normalizePrivateRoomSeats(
   return normalizedSeats;
 }
 
+function getTwoPlayerSeatContractError(
+  seats: readonly PrivateRoomSeat[],
+): PrivateRoomOperationResult | null {
+  return seats.length === 2 && seats.every((seat) => seat.required)
+    ? null
+    : createPrivateRoomError(
+        "invalid-seat",
+        "Party games require exactly two required player seats.",
+      );
+}
+
 function findParticipant(room: PrivateRoom, participantId: string) {
   return room.participants.find((participant) => participant.id === participantId) ?? null;
 }
@@ -258,6 +274,19 @@ function findSeatOccupiedByParticipant(room: PrivateRoom, participantId: string)
   return (
     room.seats.find((seat) => seat.occupiedByParticipantId === participantId) ?? null
   );
+}
+
+function isPrivateRoomBetweenMatches(room: PrivateRoom) {
+  return room.status === "lobby" || room.status === "finished";
+}
+
+export function getPrivateRoomGuestPlayerAdmissionRole(
+  room: PrivateRoom,
+): "observer" | "player" {
+  return isPrivateRoomBetweenMatches(room) &&
+    room.seats.some((seat) => seat.occupiedByParticipantId === null)
+    ? "player"
+    : "observer";
 }
 
 function getHostGuard(room: PrivateRoom, participantId: unknown) {
@@ -379,6 +408,12 @@ export function createPrivateRoom({
     return normalizedSeats;
   }
 
+  const seatContractError = getTwoPlayerSeatContractError(normalizedSeats);
+
+  if (seatContractError !== null) {
+    return seatContractError;
+  }
+
   const normalizedSettings = normalizePrivateRoomSettings(settings);
 
   if (normalizedSettings === null) {
@@ -400,7 +435,14 @@ export function createPrivateRoom({
         userId: hostUserId,
       },
     ],
-    seats: normalizedSeats,
+    seats: normalizedSeats.map((seat, index) =>
+      index === 0
+        ? {
+            ...seat,
+            occupiedByParticipantId: hostParticipantId,
+          }
+        : seat,
+    ),
     settings: normalizedSettings,
     status: "lobby",
   });
@@ -459,6 +501,31 @@ export function addPrivateRoomGuestParticipantAsObserver(
   });
 }
 
+export function addPrivateRoomGuestParticipantAsPlayer(
+  room: PrivateRoom,
+  options: AddPrivateRoomGuestParticipantOptions,
+): PrivateRoomOperationResult {
+  const admissionRole = getPrivateRoomGuestPlayerAdmissionRole(room);
+  const observerResult = addPrivateRoomGuestParticipantAsObserver(room, options);
+
+  if (!observerResult.success || admissionRole === "observer") {
+    return observerResult;
+  }
+
+  const openSeat = observerResult.room.seats.find(
+    (seat) => seat.occupiedByParticipantId === null,
+  );
+
+  if (openSeat === undefined) {
+    return observerResult;
+  }
+
+  return claimPrivateRoomSeat(observerResult.room, {
+    participantId: options.participantId,
+    seatId: openSeat.id,
+  });
+}
+
 export function updatePrivateRoomSettings(
   room: PrivateRoom,
   { participantId, settings }: UpdatePrivateRoomSettingsOptions,
@@ -498,6 +565,87 @@ export function updatePrivateRoomSettings(
   });
 }
 
+export function replacePrivateRoomMatch(
+  room: PrivateRoom,
+  { participantId, seats, settings }: ReplacePrivateRoomMatchOptions,
+): PrivateRoomOperationResult {
+  const hostGuard = getHostGuard(room, participantId);
+
+  if (hostGuard.error !== null) {
+    return hostGuard.error;
+  }
+
+  if (!isPrivateRoomBetweenMatches(room)) {
+    return createPrivateRoomError(
+      "invalid-status",
+      "Finish the current match before choosing another game.",
+    );
+  }
+
+  const normalizedSettings = normalizePrivateRoomSettings(settings);
+
+  if (normalizedSettings === null) {
+    return createPrivateRoomError(
+      "invalid-room-settings",
+      "Room settings require a supported game id.",
+    );
+  }
+
+  const normalizedSeats = normalizePrivateRoomSeats(seats);
+
+  if (!Array.isArray(normalizedSeats)) {
+    return normalizedSeats;
+  }
+
+  const seatContractError = getTwoPlayerSeatContractError(normalizedSeats);
+
+  if (seatContractError !== null) {
+    return seatContractError;
+  }
+
+  const participantIds = new Set(
+    room.participants.map((participant) => participant.id),
+  );
+  const playersBySeatOrdinal = room.seats.map((seat) =>
+    seat.occupiedByParticipantId !== null &&
+    participantIds.has(seat.occupiedByParticipantId)
+      ? seat.occupiedByParticipantId
+      : null,
+  );
+  const nextSeats = normalizedSeats.map((seat, index) => ({
+    ...seat,
+    occupiedByParticipantId: playersBySeatOrdinal[index] ?? null,
+  }));
+  const seatedParticipantIds = new Set(
+    nextSeats.flatMap((seat) =>
+      seat.occupiedByParticipantId === null
+        ? []
+        : [seat.occupiedByParticipantId],
+    ),
+  );
+
+  return createPrivateRoomSuccess({
+    ...room,
+    matchId: getNextPrivateRoomMatchId(room.matchId),
+    participants: room.participants.map((participant) =>
+      participant.id === room.hostParticipantId
+        ? {
+            ...participant,
+            role: "host",
+          }
+        : {
+            ...participant,
+            role: seatedParticipantIds.has(participant.id)
+              ? "player"
+              : "observer",
+          },
+    ),
+    seats: nextSeats,
+    settings: normalizedSettings,
+    status: "lobby",
+  });
+}
+
 export function claimPrivateRoomSeat(
   room: PrivateRoom,
   { participantId, seatId }: PrivateRoomParticipantSeatOptions,
@@ -509,6 +657,13 @@ export function claimPrivateRoomSeat(
     return createPrivateRoomError(
       "participant-not-found",
       "Participant is not in the room.",
+    );
+  }
+
+  if (!isPrivateRoomBetweenMatches(room)) {
+    return createPrivateRoomError(
+      "invalid-status",
+      "Player seats can only change between matches.",
     );
   }
 
@@ -571,6 +726,13 @@ export function releasePrivateRoomSeat(
     return createPrivateRoomError(
       "participant-not-found",
       "Participant is not in the room.",
+    );
+  }
+
+  if (!isPrivateRoomBetweenMatches(room)) {
+    return createPrivateRoomError(
+      "invalid-status",
+      "Player seats can only change between matches.",
     );
   }
 

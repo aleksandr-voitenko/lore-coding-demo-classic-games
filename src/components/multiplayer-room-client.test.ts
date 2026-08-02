@@ -41,6 +41,12 @@ const ROOM: PrivateRoom = {
       occupiedByParticipantId: "host-1",
       required: true,
     },
+    {
+      id: "right",
+      label: "Right Paddle",
+      occupiedByParticipantId: null,
+      required: true,
+    },
   ],
   settings: {
     gameId: "pong",
@@ -88,8 +94,22 @@ describe("multiplayer room client command dispatch", () => {
     ).toBe(true);
     expect(
       shouldPostMultiplayerRoomCommandOverHttp({
+        participantId: "host-1",
+        settings: { gameId: "asteroids" },
+        matchId: 1,
+        type: "room.replaceMatch",
+      }),
+    ).toBe(true);
+    expect(
+      shouldPostMultiplayerRoomCommandOverHttp({
         displayName: "Katherine",
         type: "room.joinObserver",
+      }),
+    ).toBe(false);
+    expect(
+      shouldPostMultiplayerRoomCommandOverHttp({
+        displayName: "Katherine",
+        type: "room.joinPlayer",
       }),
     ).toBe(false);
     expect(
@@ -171,6 +191,13 @@ describe("multiplayer room client command dispatch", () => {
         displayName: "Katherine",
         type: "room.joinObserver",
         userId: null,
+      },
+    },
+    {
+      label: "player join",
+      message: {
+        displayName: "Katherine",
+        type: "room.joinPlayer",
       },
     },
     {
@@ -317,7 +344,7 @@ describe("multiplayer room HTTP client", () => {
     });
 
     expect(fetcher).toHaveBeenCalledWith(
-      `${MULTIPLAYER_ROOMS_API_PATH}/v3`,
+      `${MULTIPLAYER_ROOMS_API_PATH}/v4`,
       expect.objectContaining({ method: "POST" }),
     );
     expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({
@@ -394,7 +421,7 @@ describe("multiplayer room HTTP client", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(fetcher).toHaveBeenNthCalledWith(
       1,
-      `${MULTIPLAYER_ROOMS_API_PATH}/ROOM1/v3`,
+      `${MULTIPLAYER_ROOMS_API_PATH}/ROOM1/v4`,
       expect.objectContaining({ method: "POST" }),
     );
     expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({

@@ -374,6 +374,35 @@ describe("multiplayer protocol validation", () => {
       },
     },
     {
+      name: "only one player seat",
+      room: {
+        ...ROOM,
+        seats: [ROOM.seats[0]],
+      },
+    },
+    {
+      name: "three player seats",
+      room: {
+        ...ROOM,
+        seats: [
+          ...ROOM.seats,
+          {
+            id: "center",
+            label: "Center",
+            occupiedByParticipantId: null,
+            required: true,
+          },
+        ],
+      },
+    },
+    {
+      name: "an optional player seat",
+      room: {
+        ...ROOM,
+        seats: [ROOM.seats[0], { ...ROOM.seats[1], required: false }],
+      },
+    },
+    {
       name: "one participant occupying multiple seats",
       room: {
         ...ROOM,

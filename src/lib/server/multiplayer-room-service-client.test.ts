@@ -29,7 +29,20 @@ const ROOM_SNAPSHOT = {
         userId: "user-1",
       },
     ],
-    seats: [],
+    seats: [
+      {
+        id: "left",
+        label: "Left Paddle",
+        occupiedByParticipantId: "host-1",
+        required: true,
+      },
+      {
+        id: "right",
+        label: "Right Paddle",
+        occupiedByParticipantId: null,
+        required: true,
+      },
+    ],
     settings: {
       gameId: "pong",
     },
@@ -135,14 +148,14 @@ describe("multiplayer room service client", () => {
         init?.method === "GET"
       ) {
         return Response.json({
-          mutationPathSegment: "v3",
+          mutationPathSegment: "v4",
           participantCapabilities: true,
-          protocolVersion: 3,
+          protocolVersion: 4,
         });
       }
 
       if (
-        url.endsWith("/_internal/multiplayer/rooms/v3") &&
+        url.endsWith("/_internal/multiplayer/rooms/v4") &&
         init?.method === "POST"
       ) {
         return Response.json(
@@ -169,7 +182,7 @@ describe("multiplayer room service client", () => {
       }
 
       if (
-        url.endsWith("/_internal/multiplayer/rooms/v3/ROOM1") &&
+        url.endsWith("/_internal/multiplayer/rooms/v4/ROOM1") &&
         init?.method === "POST"
       ) {
         return Response.json({
@@ -230,10 +243,10 @@ describe("multiplayer room service client", () => {
 
     expect(requests.map((request) => request.url)).toEqual([
       "http://service.local/_internal/multiplayer/rooms",
-      "http://service.local/_internal/multiplayer/rooms/v3",
+      "http://service.local/_internal/multiplayer/rooms/v4",
       "http://service.local/_internal/multiplayer/rooms/ROOM1",
       "http://service.local/_internal/multiplayer/rooms",
-      "http://service.local/_internal/multiplayer/rooms/v3/ROOM1",
+      "http://service.local/_internal/multiplayer/rooms/v4/ROOM1",
     ]);
     expect(requests.map((request) => request.init?.method)).toEqual([
       "GET",
@@ -251,7 +264,7 @@ describe("multiplayer room service client", () => {
         accept: "application/json",
         authorization: "Bearer service-secret",
         "content-type": "application/json",
-        "x-multiplayer-room-protocol-version": "3",
+        "x-multiplayer-room-protocol-version": "4",
       },
       {
         accept: "application/json",
@@ -265,7 +278,7 @@ describe("multiplayer room service client", () => {
         accept: "application/json",
         authorization: "Bearer service-secret",
         "content-type": "application/json",
-        "x-multiplayer-room-protocol-version": "3",
+        "x-multiplayer-room-protocol-version": "4",
       },
     ]);
     expect(getRequestBody(requests[1]?.init)).toEqual({
@@ -381,9 +394,9 @@ describe("multiplayer room service client", () => {
           init?.method === "GET"
         ) {
           return Response.json({
-            mutationPathSegment: "v3",
+            mutationPathSegment: "v4",
             participantCapabilities: true,
-            protocolVersion: 3,
+            protocolVersion: 4,
           });
         }
 

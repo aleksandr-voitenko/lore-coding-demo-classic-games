@@ -16,8 +16,14 @@ folder.
   required `player-1` and `player-2` seats and no launcher parameters because
   private-room runs always begin at Stage 1.
 - `room.ts` owns the reusable private-room model: signed-in hosts, guest
-  observers, player seats, generic game settings, invite paths, host-only
-  lifecycle/settings commands, and immutable room transitions.
+  observers, automatic two-player admission, player seats, generic game
+  settings, invite paths, host-only lifecycle/settings and match-replacement
+  commands, and immutable room transitions. The room code and participants are
+  stable party identity; replacement advances the match generation and maps
+  current players by seat ordinal, including empty slots, onto the target
+  adapter's exactly two required seats. Creation and replacement reject any
+  other seat contract. Seat changes and replacement are restricted to
+  lobby/finished states.
 - `protocol.ts` owns the shared realtime envelope types. The envelope should
   stay stable across games: connection messages identify the room, room commands
   wrap the private-room command model, game input carries `gameId` plus a nested

@@ -58,8 +58,15 @@ This file covers Node-only server helpers and storage adapters under
   expected positive match id, which the store checks before runtime advancement
   or mutation. Restart increments the generation and creates a new adapter
   runtime with its game sequence reset; pause, resume, and finish preserve the
-  generation. Cross-game settings changes are rejected until the explicit
-  atomic match-replacement operation supplies new adapter-owned seats.
+  generation. Room creation places the host in the first adapter seat, while a
+  play-intent guest join atomically takes the first open seat between matches
+  and otherwise remains an observer. Cross-game settings changes are rejected;
+  the authenticated host instead uses atomic match replacement, which preserves
+  participant order, remaps current players by seat ordinal, advances the
+  generation, supplies the target adapter's seats, and clears the old runtime.
+  When an adapter reports its runtime terminal, the store synchronizes the room
+  to `finished` and advances room sequence once so replacement is available
+  without a separate host finish command.
   The store bounds that volatile authority to 256 rooms by default. Successful
   room/game commands refresh meaningful activity; passive reads, snapshot
   advancement, handshakes, and diagnostics do not. Unconnected lobbies expire
@@ -92,11 +99,12 @@ This file covers Node-only server helpers and storage adapters under
   cannot assert an account user id, and anonymous invite viewers remain
   read-only and do not protect retention. Its public
   factory defaults inbound client messages to 64 KiB through `ws` `maxPayload`
-  while preserving explicit caller overrides. Protocol v3 carries match ids in
+  while preserving explicit caller overrides. Protocol v4 carries match ids in
   game snapshots, reconnect cursors, command acknowledgements, and every
   match-scoped command. The gateway includes the generation in broadcast
   deduplication and relays stale-match failures without acknowledging or
-  broadcasting the rejected command.
+  broadcasting the rejected command. It also adds play-intent admission and
+  atomic host match replacement; older mutation routes fail closed with 426.
 - `multiplayer-room-sidecar.ts` owns the standalone Node HTTP/WebSocket process
   wrapper around the gateway. It parses `MULTIPLAYER_SIDECAR_HOST`,
   `MULTIPLAYER_SIDECAR_PORT`, `MULTIPLAYER_SIDECAR_WEBSOCKET_PATH`,
@@ -141,7 +149,9 @@ This file covers Node-only server helpers and storage adapters under
   server-ordered intents and ticks, authoritative snapshot projection, terminal
   result data, and game-specific match-summary fields. The room service owns
   room identity, membership, admission, host authorization, observer permissions,
-  sequencing, and dispatch to the selected adapter.
+  sequencing, and dispatch to the selected adapter. Every registered party game
+  currently exposes exactly two required seats so automatic Player 1/Player 2
+  admission and ordinal match replacement have one consistent contract.
 - The Space Invaders co-op adapter milestone should expose required `ship-a` and
   `ship-b` seats. It owns server-side random choices for simultaneous ambiguous
   outcomes: choosing the respawning ship when a double hit has only one shared

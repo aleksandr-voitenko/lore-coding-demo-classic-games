@@ -206,7 +206,6 @@ test("Tank Patrol private room synchronizes both players through the sidecar", a
   expect(roomCode).toMatch(/^[A-F0-9-]+$/);
   await expectRoomWebSocketBootstrapped(hostWebSockets, "host");
 
-  await page.getByTestId("multiplayer-room-claim-seat-player-1").click();
   await expect(page.getByTestId("multiplayer-room-seat-player-1")).toContainText(
     hostName,
   );
@@ -232,7 +231,6 @@ test("Tank Patrol private room synchronizes both players through the sidecar", a
       guestPage.getByTestId("multiplayer-room-current-participant"),
     ).toContainText(guestName);
 
-    await guestPage.getByTestId("multiplayer-room-claim-seat-player-2").click();
     await expect(
       guestPage.getByTestId("multiplayer-room-seat-player-2"),
     ).toContainText(guestName);

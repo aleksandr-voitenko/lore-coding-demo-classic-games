@@ -6,7 +6,7 @@ import type {
   PrivateRoomSettings,
 } from "./room";
 
-export const MULTIPLAYER_ROOM_PROTOCOL_VERSION = 3 as const;
+export const MULTIPLAYER_ROOM_PROTOCOL_VERSION = 4 as const;
 export const MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT =
   `v${MULTIPLAYER_ROOM_PROTOCOL_VERSION}`;
 export const MULTIPLAYER_ROOM_PROTOCOL_VERSION_HEADER =
@@ -105,6 +105,12 @@ export type PrivateRoomCommandMessage =
       type: "room.joinObserver";
     }
   | {
+      displayName: string;
+      participantId?: string;
+      requestId?: string;
+      type: "room.joinPlayer";
+    }
+  | {
       matchId: number;
       participantId: string;
       requestId?: string;
@@ -131,6 +137,13 @@ export type PrivateRoomCommandMessage =
       requestId?: string;
       settings: PrivateRoomSettings;
       type: "room.updateSettings";
+    }
+  | {
+      matchId: number;
+      participantId: string;
+      requestId?: string;
+      settings: PrivateRoomSettings;
+      type: "room.replaceMatch";
     };
 
 export type MultiplayerRealtimeConnectionCursor = {

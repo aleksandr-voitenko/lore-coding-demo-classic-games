@@ -134,7 +134,6 @@ test("Forward bootstraps authoritative room state with the cached host capabilit
     throw new Error("Initial host connection did not send its participant capability.");
   }
 
-  await page.getByTestId("multiplayer-room-claim-seat-left").click();
   await expect(page.getByTestId("multiplayer-room-seat-left")).toContainText(hostName);
 
   await page.goBack();

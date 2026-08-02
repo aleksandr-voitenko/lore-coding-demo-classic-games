@@ -417,7 +417,10 @@ export function createMultiplayerRoomWebSocketGateway({
       return;
     }
 
-    if (parsedCommand.command.type === "room.joinObserver") {
+    if (
+      parsedCommand.command.type === "room.joinObserver" ||
+      parsedCommand.command.type === "room.joinPlayer"
+    ) {
       if (participantIdBySocket.has(socket)) {
         sendRejection(socket, {
           code: "invalid-command",
@@ -929,7 +932,7 @@ function doesSubmittedParticipantMatch(
 function bindCommandParticipant(
   command: Exclude<
     MultiplayerRoomStoreCommand,
-    { type: "room.joinObserver" }
+    { type: "room.joinObserver" | "room.joinPlayer" }
   >,
   participantId: string,
 ): MultiplayerRoomStoreCommand {
@@ -942,7 +945,9 @@ function bindCommandParticipant(
 function isHostOnlyRoomCommand(value: unknown) {
   return (
     isObjectRecord(value) &&
-    (value.type === "room.lifecycle" || value.type === "room.updateSettings")
+    (value.type === "room.lifecycle" ||
+      value.type === "room.replaceMatch" ||
+      value.type === "room.updateSettings")
   );
 }
 
@@ -971,6 +976,16 @@ function parseRoomCommand(value: unknown): ParseRoomCommandResult {
       command: {
         displayName: value.displayName,
         type: "room.joinObserver",
+      },
+      success: true,
+    };
+  }
+
+  if (value.type === "room.joinPlayer") {
+    return {
+      command: {
+        displayName: value.displayName,
+        type: "room.joinPlayer",
       },
       success: true,
     };

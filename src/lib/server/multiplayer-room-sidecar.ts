@@ -539,6 +539,7 @@ function parseRoomServiceCommand(value: unknown):
 
   if (
     value.type === "room.joinObserver" ||
+    value.type === "room.joinPlayer" ||
     value.type === "room.claimSeat" ||
     value.type === "room.releaseSeat" ||
     value.type === "game.input"
@@ -563,7 +564,10 @@ function parseRoomServiceCommand(value: unknown):
     };
   }
 
-  if (value.type === "room.updateSettings") {
+  if (
+    value.type === "room.replaceMatch" ||
+    value.type === "room.updateSettings"
+  ) {
     if (!isRecord(value.settings)) {
       return {
         error: "Room settings must be a supported JSON object.",

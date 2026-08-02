@@ -22,6 +22,15 @@ describe("multiplayer server game adapter registry", () => {
     }
   });
 
+  it("defines exactly two required player seats for every party game", () => {
+    for (const gameId of MULTIPLAYER_GAME_IDS) {
+      const adapter = getMultiplayerServerGameAdapter(gameId);
+
+      expect(adapter?.defaultSeats).toHaveLength(2);
+      expect(adapter?.defaultSeats.every((seat) => seat.required)).toBe(true);
+    }
+  });
+
   it("derives its default and rejects catalog games without adapters", () => {
     expect(getDefaultMultiplayerServerGameAdapter().gameId).toBe(
       DEFAULT_MULTIPLAYER_GAME_ID,

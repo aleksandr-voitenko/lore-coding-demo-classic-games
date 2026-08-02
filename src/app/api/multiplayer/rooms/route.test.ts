@@ -125,7 +125,7 @@ describe("multiplayer rooms route", () => {
         seats: [
           {
             id: "left",
-            occupiedByParticipantId: null,
+            occupiedByParticipantId: "host-1",
             required: true,
           },
           {
@@ -168,7 +168,7 @@ describe("multiplayer rooms route", () => {
           {
             id: "ship-a",
             label: "Ship A",
-            occupiedByParticipantId: null,
+            occupiedByParticipantId: "host-1",
             required: true,
           },
           {
@@ -225,10 +225,10 @@ describe("multiplayer rooms route", () => {
       expect(defaultAdapter.gameId).toBe(alternateDefaultGameId);
       await expect(response.json()).resolves.toMatchObject({
         room: {
-          seats: defaultAdapter.defaultSeats.map((seat) => ({
+          seats: defaultAdapter.defaultSeats.map((seat, index) => ({
             id: seat.id,
             label: seat.label,
-            occupiedByParticipantId: null,
+            occupiedByParticipantId: index === 0 ? "host-1" : null,
             required: seat.required === true,
           })),
           settings: defaultAdapter.defaultSettings,

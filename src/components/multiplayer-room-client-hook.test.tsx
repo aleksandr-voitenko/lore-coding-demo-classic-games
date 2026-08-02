@@ -45,6 +45,12 @@ const ROOM: PrivateRoom = {
       occupiedByParticipantId: "host-1",
       required: true,
     },
+    {
+      id: "right",
+      label: "Right Paddle",
+      occupiedByParticipantId: null,
+      required: true,
+    },
   ],
   settings: {
     gameId: "pong",

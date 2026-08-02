@@ -14,7 +14,7 @@ test("private rooms follow browser Back and Forward navigation", async ({ page }
 
     if (
       request.method() === "POST" &&
-      url.pathname === "/api/multiplayer/rooms/v3"
+      url.pathname === "/api/multiplayer/rooms/v4"
     ) {
       roomCreateRequestCount += 1;
     }
@@ -62,7 +62,7 @@ test("a delayed stale room response cannot replace a newer create attempt", asyn
   const releaseRoomRequests: (() => void)[] = [];
   let roomResponseCount = 0;
 
-  await page.route("**/api/multiplayer/rooms/v3", async (route) => {
+  await page.route("**/api/multiplayer/rooms/v4", async (route) => {
     const request = route.request();
 
     if (request.method() !== "POST") {
@@ -81,7 +81,7 @@ test("a delayed stale room response cannot replace a newer create attempt", asyn
 
     if (
       request.method() === "POST" &&
-      url.pathname === "/api/multiplayer/rooms/v3"
+      url.pathname === "/api/multiplayer/rooms/v4"
     ) {
       roomResponseCount += 1;
     }

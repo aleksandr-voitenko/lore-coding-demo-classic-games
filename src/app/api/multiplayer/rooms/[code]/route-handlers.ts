@@ -39,12 +39,17 @@ function isLifecycleCommand(
 }
 
 function isHostOnlyCommand(command: MultiplayerRoomStoreCommand) {
-  return command.type === "room.lifecycle" || command.type === "room.updateSettings";
+  return (
+    command.type === "room.lifecycle" ||
+    command.type === "room.replaceMatch" ||
+    command.type === "room.updateSettings"
+  );
 }
 
 function isWebSocketOnlyCommandType(value: unknown) {
   return (
     value === "room.joinObserver" ||
+    value === "room.joinPlayer" ||
     value === "room.claimSeat" ||
     value === "room.releaseSeat" ||
     value === "game.input"
@@ -66,7 +71,10 @@ function parseRoomCommand(value: unknown): ParseRoomCommandResult {
     };
   }
 
-  if (value.type === "room.updateSettings") {
+  if (
+    value.type === "room.replaceMatch" ||
+    value.type === "room.updateSettings"
+  ) {
     const parsedSettings = parsePrivateRoomSettingsPayload(value.settings);
 
     if (!parsedSettings.success) {
@@ -78,7 +86,7 @@ function parseRoomCommand(value: unknown): ParseRoomCommandResult {
         matchId: value.matchId,
         participantId: value.participantId,
         settings: parsedSettings.settings,
-        type: "room.updateSettings",
+        type: value.type,
       },
       success: true,
     };

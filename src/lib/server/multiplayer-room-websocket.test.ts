@@ -1098,7 +1098,7 @@ describe("multiplayer room WebSocket gateway", () => {
     });
     expect(expectStoreSuccess(store.getRoom("ROOM1")).room.seats[0]).toMatchObject({
       id: "left",
-      occupiedByParticipantId: null,
+      occupiedByParticipantId: "host-1",
     });
   });
 
@@ -1247,6 +1247,60 @@ describe("multiplayer room WebSocket gateway", () => {
       requestId: "join-with-forged-user",
       roomCode: "ROOM1",
       type: "room.commandAck",
+    });
+  });
+
+  it("atomically seats a public player join and returns its capability privately", async () => {
+    const store = createTestRoomStore();
+    createLobbyRoom(store);
+    const { url } = await createGatewayFixture(store);
+    const sender = await connectClient(url);
+    const observer = await connectClient(url);
+
+    await bootstrapClient(sender);
+    await bootstrapClient(observer);
+
+    const ackPromise = waitForServerMessage(
+      sender,
+      (message) =>
+        message.type === "room.commandAck" &&
+        message.requestId === "join-as-player",
+    );
+    const snapshotPromise = waitForServerMessage(
+      observer,
+      (message) => message.type === "room.snapshot" && message.snapshot.seq === 2,
+    );
+
+    sendClientMessage(sender, {
+      command: {
+        displayName: "Grace Player",
+        type: "room.joinPlayer",
+      },
+      requestId: "join-as-player",
+      roomCode: "ROOM1",
+      type: "room.command",
+    });
+
+    await expect(ackPromise).resolves.toMatchObject({
+      participantCapability: "guest-capability",
+      participantId: "guest-1",
+      requestId: "join-as-player",
+      roomCode: "ROOM1",
+      type: "room.commandAck",
+    });
+    await expect(snapshotPromise).resolves.toMatchObject({
+      snapshot: {
+        room: {
+          participants: expect.arrayContaining([
+            expect.objectContaining({ id: "guest-1", role: "player" }),
+          ]),
+          seats: [
+            expect.objectContaining({ occupiedByParticipantId: "host-1" }),
+            expect.objectContaining({ occupiedByParticipantId: "guest-1" }),
+          ],
+        },
+      },
+      type: "room.snapshot",
     });
   });
 
@@ -1488,6 +1542,45 @@ describe("multiplayer room WebSocket gateway", () => {
       code: "not-host",
       error: HOST_ONLY_WEBSOCKET_COMMAND_ERROR,
       requestId: "host-settings",
+      roomCode: "ROOM1",
+      type: "room.commandRejected",
+    });
+    expect(applyCommand).not.toHaveBeenCalled();
+  });
+
+  it("rejects public match replacement before it reaches the room store", async () => {
+    const store = createTestRoomStore();
+    createLobbyRoom(store);
+    const applyCommand = vi.spyOn(store, "applyCommand");
+    const { url } = await createGatewayFixture(store);
+    const client = await connectClient(url);
+
+    await bootstrapClient(client);
+
+    const responsePromise = waitForServerMessage(
+      client,
+      (message) =>
+        "requestId" in message && message.requestId === "host-replace-match",
+    );
+
+    sendClientMessage(client, {
+      command: {
+        participantId: "host-1",
+        settings: {
+          gameId: "asteroids",
+        },
+        matchId: 1,
+        type: "room.replaceMatch",
+      },
+      requestId: "host-replace-match",
+      roomCode: "ROOM1",
+      type: "room.command",
+    });
+
+    await expect(responsePromise).resolves.toEqual({
+      code: "not-host",
+      error: HOST_ONLY_WEBSOCKET_COMMAND_ERROR,
+      requestId: "host-replace-match",
       roomCode: "ROOM1",
       type: "room.commandRejected",
     });

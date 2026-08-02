@@ -304,6 +304,12 @@ describe("in-process multiplayer room store", () => {
         matchId: 1,
         participantId: "host-1",
         settings: { gameId: "pong" as const },
+        type: "room.replaceMatch" as const,
+      },
+      {
+        matchId: 1,
+        participantId: "host-1",
+        settings: { gameId: "pong" as const },
         type: "room.updateSettings" as const,
       },
       {
@@ -412,9 +418,9 @@ describe("in-process multiplayer room store", () => {
             userId: "user-1",
           },
         ],
-        seats: DEFAULT_PONG_PRIVATE_ROOM_SEATS.map((seat) => ({
+        seats: DEFAULT_PONG_PRIVATE_ROOM_SEATS.map((seat, index) => ({
           ...seat,
-          occupiedByParticipantId: null,
+          occupiedByParticipantId: index === 0 ? "host-1" : null,
         })),
         settings: {
           gameId: "pong",
@@ -436,9 +442,9 @@ describe("in-process multiplayer room store", () => {
 
     expect(snapshot.room).toMatchObject({
       code: "ROOM1",
-      seats: DEFAULT_SPACE_INVADERS_PRIVATE_ROOM_SEATS.map((seat) => ({
+      seats: DEFAULT_SPACE_INVADERS_PRIVATE_ROOM_SEATS.map((seat, index) => ({
         ...seat,
-        occupiedByParticipantId: null,
+        occupiedByParticipantId: index === 0 ? "host-1" : null,
       })),
       settings: {
         gameId: "space-invaders",
@@ -458,14 +464,195 @@ describe("in-process multiplayer room store", () => {
 
     expect(snapshot.room).toMatchObject({
       code: "ROOM1",
-      seats: DEFAULT_ASTEROIDS_PRIVATE_ROOM_SEATS.map((seat) => ({
+      seats: DEFAULT_ASTEROIDS_PRIVATE_ROOM_SEATS.map((seat, index) => ({
         ...seat,
-        occupiedByParticipantId: null,
+        occupiedByParticipantId: index === 0 ? "host-1" : null,
       })),
       settings: {
         gameId: "asteroids",
       },
       status: "lobby",
+    });
+  });
+
+  it("admits a guest player into the open slot with one command", () => {
+    const store = createTestRoomStore();
+
+    expectStoreSuccess(store.createRoom({ host: HOST_USER }));
+    const result = store.applyCommand("ROOM1", {
+      displayName: "Guest Player",
+      type: "room.joinPlayer",
+    });
+    const snapshot = expectStoreSuccess(result);
+
+    expect(result).toMatchObject({
+      participantCapability: "guest-capability",
+      success: true,
+    });
+    expect(snapshot.participant).toMatchObject({
+      displayName: "Guest Player",
+      id: "guest-1",
+      role: "player",
+    });
+    expect(snapshot.room.seats.map((seat) => seat.occupiedByParticipantId)).toEqual([
+      "host-1",
+      "guest-1",
+    ]);
+  });
+
+  it("reports the accepted observer role when an active-match play join falls back", () => {
+    const participantRoles: string[] = [];
+    const capabilityRoles: string[] = [];
+    const participantIds = ["host-1", "guest-1", "guest-2"];
+    let participantIndex = 0;
+    const store = new InProcessMultiplayerRoomStore({
+      createParticipantCapability: ({ role }) => {
+        capabilityRoles.push(role);
+        return `capability-${capabilityRoles.length}`;
+      },
+      createParticipantId: ({ role }) => {
+        participantRoles.push(role);
+        return participantIds[participantIndex++] ?? `participant-${participantIndex}`;
+      },
+      createRoomCode: () => "ROOM1",
+    });
+
+    expectStoreSuccess(store.createRoom({ host: HOST_USER }));
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        displayName: "Guest Player",
+        type: "room.joinPlayer",
+      }),
+    );
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        command: "start",
+        matchId: 1,
+        participantId: "host-1",
+        type: "room.lifecycle",
+      }),
+    );
+    const fallback = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        displayName: "Late Guest",
+        type: "room.joinPlayer",
+      }),
+    );
+
+    expect(fallback.participant).toMatchObject({
+      id: "guest-2",
+      role: "observer",
+    });
+    expect(participantRoles).toEqual(["host", "player", "observer"]);
+    expect(capabilityRoles).toEqual(["host", "player", "observer"]);
+  });
+
+  it("atomically replaces a finished match while retaining players and rejecting stale input", () => {
+    const store = createTestRoomStore();
+
+    expectStoreSuccess(store.createRoom({ host: HOST_USER }));
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        displayName: "Guest Player",
+        type: "room.joinPlayer",
+      }),
+    );
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        command: "start",
+        matchId: 1,
+        participantId: "host-1",
+        type: "room.lifecycle",
+      }),
+    );
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        command: "finish",
+        matchId: 1,
+        participantId: "host-1",
+        type: "room.lifecycle",
+      }),
+    );
+
+    const replaced = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        matchId: 1,
+        participantId: "host-1",
+        settings: {
+          gameId: "asteroids",
+          parameters: { "asteroids-difficulty": "hard" },
+        },
+        type: "room.replaceMatch",
+      }),
+    );
+
+    expect(replaced).toMatchObject({
+      room: {
+        code: "ROOM1",
+        hostParticipantId: "host-1",
+        matchId: 2,
+        participants: [
+          expect.objectContaining({ id: "host-1", role: "host" }),
+          expect.objectContaining({ id: "guest-1", role: "player" }),
+        ],
+        seats: [
+          expect.objectContaining({
+            id: "ship-a",
+            occupiedByParticipantId: "host-1",
+          }),
+          expect.objectContaining({
+            id: "ship-b",
+            occupiedByParticipantId: "guest-1",
+          }),
+        ],
+        settings: {
+          gameId: "asteroids",
+          parameters: { "asteroids-difficulty": "hard" },
+        },
+        status: "lobby",
+      },
+      seq: 5,
+    });
+    expect(replaced.game).toBeUndefined();
+
+    expect(
+      store.applyCommand("ROOM1", {
+        gameId: "pong",
+        input: { direction: "up", type: "pong.setPaddleDirection" },
+        matchId: 1,
+        participantId: "host-1",
+        type: "game.input",
+      }),
+    ).toEqual({
+      code: "stale-match",
+      error: "Command belongs to an earlier match. Refresh the party and try again.",
+      success: false,
+    });
+    expect(expectStoreSuccess(store.getRoom("ROOM1"))).toEqual({
+      room: replaced.room,
+      seq: replaced.seq,
+    });
+  });
+
+  it("leaves the current match unchanged when replacement is unsupported", () => {
+    const store = createTestRoomStore();
+    const before = expectStoreSuccess(store.createRoom({ host: HOST_USER }));
+
+    expect(
+      store.applyCommand("ROOM1", {
+        matchId: 1,
+        participantId: "host-1",
+        settings: { gameId: "snake" },
+        type: "room.replaceMatch",
+      }),
+    ).toEqual({
+      code: "invalid-room-settings",
+      error: "Selected game does not support multiplayer.",
+      success: false,
+    });
+    expect(expectStoreSuccess(store.getRoom("ROOM1"))).toEqual({
+      room: before.room,
+      seq: before.seq,
     });
   });
 
@@ -504,23 +691,9 @@ describe("in-process multiplayer room store", () => {
         type: "room.joinObserver",
       }),
     );
-    expectStoreSuccess(
-      store.applyCommand("ROOM1", {
-        displayName: "Guest Two",
-        type: "room.joinObserver",
-      }),
-    );
-    expectStoreSuccess(
-      store.applyCommand("ROOM1", {
-        participantId: "guest-1",
-        seatId: "left",
-        matchId: 1,
-        type: "room.claimSeat",
-      }),
-    );
     const seatedRoom = expectStoreSuccess(
       store.applyCommand("ROOM1", {
-        participantId: "guest-2",
+        participantId: "guest-1",
         seatId: "right",
         matchId: 1,
         type: "room.claimSeat",
@@ -545,7 +718,7 @@ describe("in-process multiplayer room store", () => {
     expect(observedRoom.room.seats).toEqual(seatedRoom.room.seats);
     expect(observedRoom.participant).toEqual({
       displayName: "Late Observer",
-      id: "observer-1",
+      id: "guest-2",
       role: "observer",
       userId: null,
     });
@@ -564,7 +737,7 @@ describe("in-process multiplayer room store", () => {
     const seatedGuestSnapshot = expectStoreSuccess(
       store.applyCommand("ROOM1", {
         participantId: "guest-1",
-        seatId: "left",
+        seatId: "right",
         matchId: 1,
         type: "room.claimSeat",
       }),
@@ -572,7 +745,7 @@ describe("in-process multiplayer room store", () => {
     const releasedGuestSnapshot = expectStoreSuccess(
       store.applyCommand("ROOM1", {
         participantId: "guest-1",
-        seatId: "left",
+        seatId: "right",
         matchId: 1,
         type: "room.releaseSeat",
       }),
@@ -580,7 +753,7 @@ describe("in-process multiplayer room store", () => {
     const seatedHostSnapshot = expectStoreSuccess(
       store.applyCommand("ROOM1", {
         participantId: "host-1",
-        seatId: "right",
+        seatId: "left",
         matchId: 1,
         type: "room.claimSeat",
       }),
@@ -588,9 +761,9 @@ describe("in-process multiplayer room store", () => {
 
     expect(guestSnapshot.participant?.role).toBe("observer");
     expect(seatedGuestSnapshot.participant?.role).toBe("player");
-    expect(seatedGuestSnapshot.room.seats[0]?.occupiedByParticipantId).toBe("guest-1");
+    expect(seatedGuestSnapshot.room.seats[1]?.occupiedByParticipantId).toBe("guest-1");
     expect(releasedGuestSnapshot.participant?.role).toBe("observer");
-    expect(releasedGuestSnapshot.room.seats[0]?.occupiedByParticipantId).toBeNull();
+    expect(releasedGuestSnapshot.room.seats[1]?.occupiedByParticipantId).toBeNull();
     expect(seatedHostSnapshot.participant).toMatchObject({
       id: "host-1",
       role: "host",
@@ -1136,16 +1309,18 @@ describe("in-process multiplayer room store", () => {
     expect(firedGame.ships["ship-a"].playerShots).toHaveLength(0);
     expect(firedGame.ships["ship-b"].playerShots).toHaveLength(1);
 
-    const released = expectStoreSuccess(
+    expect(
       store.applyCommand("ROOM1", {
         participantId: "host-1",
         seatId: "ship-a",
         matchId: 1,
         type: "room.releaseSeat",
       }),
-    );
-
-    expect(released.game?.heldInputs).toEqual({});
+    ).toEqual({
+      code: "invalid-status",
+      error: "Player seats can only change between matches.",
+      success: false,
+    });
   });
 
   it("maps Asteroids input participants to ships and advances held controls", () => {
@@ -1211,16 +1386,18 @@ describe("in-process multiplayer room store", () => {
     expect(firedGame.ships["ship-a"].bullets).toHaveLength(0);
     expect(firedGame.ships["ship-b"].bullets).toHaveLength(1);
 
-    const released = expectStoreSuccess(
+    expect(
       store.applyCommand("ROOM1", {
         participantId: "host-1",
         seatId: "ship-a",
         matchId: 1,
         type: "room.releaseSeat",
       }),
-    );
-
-    expect(released.game?.heldInputs).toEqual({});
+    ).toEqual({
+      code: "invalid-status",
+      error: "Player seats can only change between matches.",
+      success: false,
+    });
   });
 
   it("adds a server-derived Pong terminal summary to terminal game snapshots", () => {
@@ -1321,6 +1498,25 @@ describe("in-process multiplayer room store", () => {
       },
       status: terminalStatus,
     });
+    expect(terminal.room.status).toBe("finished");
+
+    const replaced = expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        matchId: terminal.room.matchId,
+        participantId: "host-1",
+        settings: { gameId: "asteroids" },
+        type: "room.replaceMatch",
+      }),
+    );
+
+    expect(replaced).toMatchObject({
+      room: {
+        matchId: 2,
+        settings: { gameId: "asteroids" },
+        status: "lobby",
+      },
+    });
+    expect(replaced.game).toBeUndefined();
   });
 
   it("adds a server-derived Space Invaders terminal summary to terminal game snapshots", () => {

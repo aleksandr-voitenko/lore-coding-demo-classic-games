@@ -119,6 +119,10 @@ describe("multiplayer realtime protocol", () => {
       displayName: "Guest Hero",
       type: "room.joinObserver",
     } satisfies PrivateRoomCommandMessage;
+    const joinPlayerCommand = {
+      displayName: "Guest Player",
+      type: "room.joinPlayer",
+    } satisfies PrivateRoomCommandMessage;
     const claimSeatCommand = {
       participantId: "guest-1",
       seatId: "left",
@@ -142,14 +146,24 @@ describe("multiplayer realtime protocol", () => {
       matchId: 1,
       type: "room.updateSettings",
     } satisfies PrivateRoomClientMessage;
+    const replaceMatchCommand = {
+      participantId: HOST_ID,
+      settings: {
+        gameId: "space-invaders",
+      },
+      matchId: 1,
+      type: "room.replaceMatch",
+    } satisfies PrivateRoomClientMessage;
 
     expect(joinObserverCommand).toEqual({
       displayName: "Guest Hero",
       type: "room.joinObserver",
     });
     expect(realtimeCommand.command.type).toBe("room.claimSeat");
+    expect(joinPlayerCommand.type).toBe("room.joinPlayer");
     expect(httpCommand.type).toBe("room.updateSettings");
     expect(httpCommand.settings.gameId).toBe("asteroids");
+    expect(replaceMatchCommand.settings.gameId).toBe("space-invaders");
   });
 
   it("keys game input by game id while nesting game-specific payloads", () => {

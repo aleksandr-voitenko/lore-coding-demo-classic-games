@@ -138,7 +138,7 @@ describe("multiplayer room route", () => {
         },
         true,
       ),
-      { code: "v3" },
+      { code: "v4" },
     );
 
     expect(response.status).toBe(400);
@@ -240,6 +240,10 @@ describe("multiplayer room route", () => {
       {
         displayName: "Guest Hero",
         type: "room.joinObserver",
+      },
+      {
+        displayName: "Guest Hero",
+        type: "room.joinPlayer",
       },
       {
         participantId: "guest-1",
@@ -379,6 +383,41 @@ describe("multiplayer room route", () => {
         },
       },
       seq: 2,
+    });
+
+    const replaceResponse = await handlers.POST(
+      createCommandRequest(
+        {
+          matchId: 1,
+          participantId: "not-the-host",
+          settings: { gameId: "asteroids" },
+          type: "room.replaceMatch",
+        },
+        true,
+      ),
+      { code: "ROOM1" },
+    );
+
+    expect(replaceResponse.status).toBe(200);
+    await expect(replaceResponse.json()).resolves.toMatchObject({
+      room: {
+        code: "ROOM1",
+        hostParticipantId: "host-1",
+        matchId: 2,
+        seats: [
+          expect.objectContaining({
+            id: "ship-a",
+            occupiedByParticipantId: "host-1",
+          }),
+          expect.objectContaining({
+            id: "ship-b",
+            occupiedByParticipantId: null,
+          }),
+        ],
+        settings: { gameId: "asteroids" },
+        status: "lobby",
+      },
+      seq: 3,
     });
 
     const lifecycleRoomStore = createRoomStore();

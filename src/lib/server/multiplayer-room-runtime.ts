@@ -9,18 +9,21 @@ import type {
   PrivateRoomSettings,
 } from "../multiplayer/room";
 import {
+  addPrivateRoomGuestParticipantAsPlayer,
   addPrivateRoomGuestParticipantAsObserver,
   claimPrivateRoomSeat,
   createPrivateRoom,
   finishPrivateRoom,
+  getPrivateRoomGuestPlayerAdmissionRole,
+  isPrivateRoomMatchId,
   normalizePrivateRoomCode,
   pausePrivateRoom,
   releasePrivateRoomSeat,
+  replacePrivateRoomMatch,
   restartPrivateRoom,
   resumePrivateRoom,
   startPrivateRoom,
   updatePrivateRoomSettings,
-  isPrivateRoomMatchId,
 } from "../multiplayer/room";
 import {
   getDefaultMultiplayerServerGameAdapter,
@@ -41,6 +44,10 @@ export type MultiplayerRoomStoreCommand =
   | {
       displayName: unknown;
       type: "room.joinObserver";
+    }
+  | {
+      displayName: unknown;
+      type: "room.joinPlayer";
     }
   | {
       matchId: unknown;
@@ -67,6 +74,12 @@ export type MultiplayerRoomStoreCommand =
       type: "room.updateSettings";
     }
   | {
+      matchId: unknown;
+      participantId: unknown;
+      settings: PrivateRoomSettings;
+      type: "room.replaceMatch";
+    }
+  | {
       gameId?: unknown;
       input: unknown;
       matchId: unknown;
@@ -75,7 +88,7 @@ export type MultiplayerRoomStoreCommand =
     };
 
 export type MultiplayerRoomParticipantIdFactoryContext = {
-  role: "host" | "observer";
+  role: "host" | "observer" | "player";
   roomCode: string;
 };
 
@@ -511,6 +524,7 @@ function getCommandParticipantIdValue(
     | { type: "room.claimSeat" }
     | { type: "room.lifecycle" }
     | { type: "room.releaseSeat" }
+    | { type: "room.replaceMatch" }
     | { type: "room.updateSettings" }
   >,
 ) {
@@ -569,11 +583,7 @@ function advanceGameRuntimeTo(storedRoom: StoredMultiplayerRoom, nowMs: number) 
   });
 }
 
-function isStoredRoomTerminal(storedRoom: StoredMultiplayerRoom) {
-  if (storedRoom.room.status === "finished") {
-    return true;
-  }
-
+function isStoredGameTerminal(storedRoom: StoredMultiplayerRoom) {
   if (storedRoom.game === undefined) {
     return false;
   }
@@ -584,11 +594,33 @@ function isStoredRoomTerminal(storedRoom: StoredMultiplayerRoom) {
   });
 }
 
+function synchronizeStoredRoomTerminalStatus(
+  storedRoom: StoredMultiplayerRoom,
+  gameIsTerminal: boolean,
+) {
+  if (
+    !gameIsTerminal ||
+    (storedRoom.room.status !== "running" && storedRoom.room.status !== "paused")
+  ) {
+    return;
+  }
+
+  storedRoom.room = {
+    ...storedRoom.room,
+    status: "finished",
+  };
+  storedRoom.seq += 1;
+}
+
 function refreshStoredRoomTerminalAt(
   storedRoom: StoredMultiplayerRoom,
   nowMs: number,
 ) {
-  if (isStoredRoomTerminal(storedRoom)) {
+  const gameIsTerminal = isStoredGameTerminal(storedRoom);
+
+  synchronizeStoredRoomTerminalStatus(storedRoom, gameIsTerminal);
+
+  if (storedRoom.room.status === "finished" || gameIsTerminal) {
     storedRoom.terminalAtMs ??= nowMs;
   } else {
     storedRoom.terminalAtMs = undefined;
@@ -653,6 +685,7 @@ function isMatchTargetedCommand(
       | "room.claimSeat"
       | "room.lifecycle"
       | "room.releaseSeat"
+      | "room.replaceMatch"
       | "room.updateSettings";
   }
 > {
@@ -661,6 +694,7 @@ function isMatchTargetedCommand(
     command.type === "room.claimSeat" ||
     command.type === "room.lifecycle" ||
     command.type === "room.releaseSeat" ||
+    command.type === "room.replaceMatch" ||
     command.type === "room.updateSettings"
   );
 }
@@ -913,17 +947,32 @@ export class InProcessMultiplayerRoomStore
     let participantId: string | undefined;
     let result:
       | ReturnType<typeof addPrivateRoomGuestParticipantAsObserver>
+      | ReturnType<typeof addPrivateRoomGuestParticipantAsPlayer>
       | ReturnType<typeof claimPrivateRoomSeat>
       | ReturnType<typeof releasePrivateRoomSeat>
+      | ReturnType<typeof replacePrivateRoomMatch>
       | ReturnType<typeof updatePrivateRoomSettings>
       | ReturnType<typeof applyLifecycleCommand>;
 
-    if (command.type === "room.joinObserver") {
+    if (
+      command.type === "room.joinObserver" ||
+      command.type === "room.joinPlayer"
+    ) {
+      const admissionRole =
+        command.type === "room.joinPlayer"
+          ? getPrivateRoomGuestPlayerAdmissionRole(storedRoom.room)
+          : "observer";
+
       participantId = this.#createParticipantId({
-        role: "observer",
+        role: admissionRole,
         roomCode: storedRoom.room.code,
       });
-      result = addPrivateRoomGuestParticipantAsObserver(storedRoom.room, {
+      const addParticipant =
+        command.type === "room.joinPlayer"
+          ? addPrivateRoomGuestParticipantAsPlayer
+          : addPrivateRoomGuestParticipantAsObserver;
+
+      result = addParticipant(storedRoom.room, {
         displayName: command.displayName,
         participantId,
       });
@@ -936,6 +985,21 @@ export class InProcessMultiplayerRoomStore
     } else if (command.type === "room.updateSettings") {
       participantId = getCommandParticipantIdValue(command);
       result = updatePrivateRoomSettings(storedRoom.room, command);
+    } else if (command.type === "room.replaceMatch") {
+      participantId = getCommandParticipantIdValue(command);
+      const adapter = getMultiplayerServerGameAdapter(command.settings.gameId);
+
+      if (adapter === null) {
+        return createStoreFailure(
+          "invalid-room-settings",
+          "Selected game does not support multiplayer.",
+        );
+      }
+
+      result = replacePrivateRoomMatch(storedRoom.room, {
+        ...command,
+        seats: adapter.defaultSeats,
+      });
     } else {
       participantId = getCommandParticipantIdValue(command);
       result = applyLifecycleCommand(storedRoom.room, command);
@@ -945,12 +1009,20 @@ export class InProcessMultiplayerRoomStore
       return getPrivateRoomOperationFailure(result);
     }
 
-    if (command.type === "room.joinObserver" && participantId !== undefined) {
+    if (
+      (command.type === "room.joinObserver" ||
+        command.type === "room.joinPlayer") &&
+      participantId !== undefined
+    ) {
+      const acceptedParticipant = result.room.participants.find(
+        (participant) => participant.id === participantId,
+      );
+
       participantCapability = this.#mintParticipantCapability(
         storedRoom.participantCapabilityHashesByParticipantId,
         {
           participantId,
-          role: "observer",
+          role: acceptedParticipant?.role ?? "observer",
           roomCode: storedRoom.room.code,
         },
       );
@@ -973,6 +1045,8 @@ export class InProcessMultiplayerRoomStore
       nextGame = gameLifecycleResult ?? undefined;
     } else if (command.type === "room.releaseSeat") {
       clearReleasedSeatGameInput(storedRoom, command);
+    } else if (command.type === "room.replaceMatch") {
+      nextGame = undefined;
     }
 
     storedRoom.room = result.room;

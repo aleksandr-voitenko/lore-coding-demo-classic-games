@@ -152,7 +152,9 @@ function isPrivateRoom(value: unknown): value is PrivateRoom {
     !Array.isArray(value.participants) ||
     !value.participants.every(isPrivateRoomParticipant) ||
     !Array.isArray(value.seats) ||
+    value.seats.length !== 2 ||
     !value.seats.every(isPrivateRoomSeat) ||
+    !value.seats.every((seat) => seat.required === true) ||
     !isPrivateRoomSettings(value.settings) ||
     !isPrivateRoomStatus(value.status)
   ) {

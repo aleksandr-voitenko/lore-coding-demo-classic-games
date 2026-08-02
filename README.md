@@ -150,6 +150,21 @@ These multiplayer sessions remain separate from Tank Patrol's single-player
 replay and leaderboard paths. Private-room inputs and outcomes are not saved as
 profile replays or submitted to the solo campaign leaderboard.
 
+Private-room codes now identify a volatile party rather than one disposable
+match. The signed-in host automatically occupies Player 1, and a guest choosing
+`Join game` atomically receives Player 2 while it is available between matches;
+`Watch` joins without taking a seat, and a play join falls back to watching when
+both seats are occupied or a match is active. In the lobby or after a finished
+match, the host can choose any supported multiplayer game without creating or
+sharing another link. That atomic replacement keeps the party code and members,
+maps each occupied slot to the same ordinal seat in the next game, increments the
+match generation, and clears the previous game runtime. Seats and games cannot
+be changed during a running or paused match. When an adapter reaches its natural
+terminal state, the room becomes finished automatically so the host can choose
+the next game. Invite viewers can still choose Join game or Watch from the party
+panel beside an active board; a full or active play attempt explains that it
+joined them as a watcher.
+
 Volatile rooms also have bounded idle retention. An unconnected lobby expires
 after 60 minutes without a successful participant or host command; an
 unconnected running or paused room expires after two hours; and a completed
@@ -256,14 +271,14 @@ room creation and host authorization should still flow through the Next API
 routes. If the internal hop needs a bearer token, set the same secret in
 `MULTIPLAYER_ROOM_SERVICE_CLIENT_BEARER_TOKEN` for the Next process and
 `MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN` for the sidecar process.
-Generation-scoped room mutations require protocol version 3. The Next process
+Persistent-party mutations require protocol version 4. The Next process
 preflights the authenticated internal collection endpoint, then sends create and
-command POSTs through its advertised `/v3` mutation path with
-`x-multiplayer-room-protocol-version: 3`; the sidecar rejects legacy paths or a
+command POSTs through its advertised `/v4` mutation path with
+`x-multiplayer-room-protocol-version: 4`; the sidecar rejects legacy paths or a
 missing/mismatched header before reading a mutation body. Browser create and
-host-command POSTs likewise use `/api/multiplayer/rooms/v3` and
-`/api/multiplayer/rooms/<code>/v3`; the v2 and unversioned POST routes return
-426. Browser
+host-command POSTs likewise use `/api/multiplayer/rooms/v4` and
+`/api/multiplayer/rooms/<code>/v4`; the v3, v2, and unversioned POST routes
+return 426. Browser
 `connection.hello` and `connection.resume` messages and the corresponding
 bootstrap carry the same version, and a mismatched bootstrap closes without
 reconnecting. During a rolling mixed-version deployment, room mutations and

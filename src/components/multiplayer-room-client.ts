@@ -38,7 +38,7 @@ export type MultiplayerRoomClientSnapshot = {
 
 type HostOnlyRoomCommandMessage = Extract<
   PrivateRoomCommandMessage,
-  { type: "room.lifecycle" | "room.updateSettings" }
+  { type: "room.lifecycle" | "room.replaceMatch" | "room.updateSettings" }
 >;
 
 type CreateMultiplayerRoomOptions = {
@@ -175,7 +175,11 @@ export function shouldPostMultiplayerRoomCommandOverHttp<
 >(
   message: PrivateRoomClientMessage<Game, Input>,
 ): message is HostOnlyRoomCommandMessage {
-  return message.type === "room.lifecycle" || message.type === "room.updateSettings";
+  return (
+    message.type === "room.lifecycle" ||
+    message.type === "room.replaceMatch" ||
+    message.type === "room.updateSettings"
+  );
 }
 
 export function getMultiplayerRoomStreamUnavailableMessage(

@@ -4,6 +4,7 @@ import {
   addPrivateRoomGuestParticipantAsObserver,
   claimPrivateRoomSeat,
   createPrivateRoom,
+  releasePrivateRoomSeat,
   type PrivateRoom,
   type PrivateRoomOperationResult,
   type PrivateRoomSettings,
@@ -197,7 +198,18 @@ describe("pong multiplayer adapter", () => {
     const roomWithObserver = addObserver(createReadyRoom(), "observer-1");
     const roomWithUnseatedHost = claimSeat(
       claimSeat(
-        addObserver(addObserver(createLobbyRoom(), LEFT_GUEST_ID), RIGHT_GUEST_ID),
+        addObserver(
+          addObserver(
+            expectUpdatedRoom(
+              releasePrivateRoomSeat(createLobbyRoom(), {
+                participantId: HOST_ID,
+                seatId: "left",
+              }),
+            ),
+            LEFT_GUEST_ID,
+          ),
+          RIGHT_GUEST_ID,
+        ),
         LEFT_GUEST_ID,
         "left",
       ),

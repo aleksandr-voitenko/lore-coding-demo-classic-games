@@ -274,6 +274,42 @@ test("Multiplayer diagnostics reports sidecar WebSocket ping", async ({
   );
 });
 
+test("host replaces the match without replacing the party", async ({
+  page,
+}, testInfo) => {
+  const hostName = createPlayerName(
+    "Switch Host",
+    testInfo.workerIndex,
+    testInfo.retry,
+  );
+
+  await openLauncher(page);
+  await signUpFromLauncher(page, hostName);
+  await hostMultiplayerRoomFromLauncher(page, "pong");
+
+  const roomCode = (
+    await page.getByTestId("multiplayer-room-code").innerText()
+  ).trim();
+
+  await expect(page.getByTestId("multiplayer-room-game")).toHaveText("Pong");
+  await expect(page.getByTestId("multiplayer-room-seat-left")).toContainText(
+    hostName,
+  );
+
+  await page
+    .getByTestId("multiplayer-room-next-game-select")
+    .selectOption("asteroids");
+  await page.getByTestId("multiplayer-room-replace-match-button").click();
+
+  await expect(page.getByTestId("multiplayer-room-code")).toHaveText(roomCode);
+  await expect(page.getByTestId("multiplayer-room-game")).toHaveText("Asteroids");
+  await expect(page.getByTestId("multiplayer-room-status")).toHaveText("Lobby");
+  await expect(page.getByTestId("multiplayer-room-seat-ship-a")).toContainText(
+    hostName,
+  );
+  await expect(page).toHaveURL(new RegExp(`\\?room=${roomCode}$`));
+});
+
 test("Pong private room reaches guest over the sidecar WebSocket path", async ({
   baseURL,
   browser,
@@ -301,7 +337,6 @@ test("Pong private room reaches guest over the sidecar WebSocket path", async ({
   expect(roomCode).toMatch(/^[A-F0-9-]+$/);
   await expectRoomWebSocketBootstrapped(hostWebSockets, "host");
 
-  await page.getByTestId("multiplayer-room-claim-seat-left").click();
   await expect(page.getByTestId("multiplayer-room-seat-left")).toContainText(hostName);
 
   const guestContext = await browser.newContext();
@@ -322,11 +357,36 @@ test("Pong private room reaches guest over the sidecar WebSocket path", async ({
       guestName,
     );
 
-    await guestPage.getByTestId("multiplayer-room-claim-seat-right").click();
     await expect(guestPage.getByTestId("multiplayer-room-seat-right")).toContainText(
       guestName,
     );
     await expect(page.getByTestId("multiplayer-room-seat-right")).toContainText(guestName);
+
+    const fullLobbyContext = await browser.newContext();
+    const fullLobbyPage = await fullLobbyContext.newPage();
+    const fullLobbyName = createPlayerName(
+      "Lobby Watcher",
+      testInfo.workerIndex,
+      testInfo.retry,
+    );
+
+    try {
+      await fullLobbyPage.goto(
+        new URL(`/?room=${roomCode}`, appBaseURL).toString(),
+      );
+      await fullLobbyPage
+        .getByTestId("multiplayer-room-display-name-input")
+        .fill(fullLobbyName);
+      await fullLobbyPage.getByTestId("multiplayer-room-join-button").click();
+      await expect(
+        fullLobbyPage.getByTestId("multiplayer-room-current-participant"),
+      ).toHaveText(`${fullLobbyName} · Observer`);
+      await expect(
+        fullLobbyPage.getByTestId("multiplayer-room-join-outcome"),
+      ).toHaveText("The game is active or full, so you joined as a watcher.");
+    } finally {
+      await fullLobbyContext.close();
+    }
 
     await page.getByTestId("multiplayer-room-start-button").click();
 
@@ -340,6 +400,34 @@ test("Pong private room reaches guest over the sidecar WebSocket path", async ({
     await guestPage.keyboard.press("Enter");
 
     await expect(guestPage.getByTestId("pong-multiplayer-status")).toHaveText("Running");
+
+    const lateContext = await browser.newContext();
+    const latePage = await lateContext.newPage();
+    const lateName = createPlayerName(
+      "Late Watcher",
+      testInfo.workerIndex,
+      testInfo.retry,
+    );
+
+    try {
+      await latePage.goto(new URL(`/?room=${roomCode}`, appBaseURL).toString());
+      await expect(latePage.getByTestId("pong-multiplayer-room")).toBeVisible();
+      await expect(
+        latePage.getByTestId("multiplayer-room-active-party-panel"),
+      ).toBeVisible();
+      await latePage
+        .getByTestId("multiplayer-room-display-name-input")
+        .fill(lateName);
+      await latePage.getByTestId("multiplayer-room-join-button").click();
+      await expect(
+        latePage.getByTestId("multiplayer-room-current-participant"),
+      ).toHaveText(`${lateName} · Observer`);
+      await expect(latePage.getByTestId("multiplayer-room-join-outcome")).toHaveText(
+        "The game is active or full, so you joined as a watcher.",
+      );
+    } finally {
+      await lateContext.close();
+    }
 
     await expectNoRepeatedRoomGetPolling({
       guestHttpGets,
@@ -390,7 +478,6 @@ test("Space Invaders private room reaches guest over the sidecar WebSocket path"
   expect(roomCode).toMatch(/^[A-F0-9-]+$/);
   await expectRoomWebSocketBootstrapped(hostWebSockets, "host");
 
-  await page.getByTestId("multiplayer-room-claim-seat-ship-a").click();
   await expect(page.getByTestId("multiplayer-room-seat-ship-a")).toContainText(
     hostName,
   );
@@ -415,7 +502,6 @@ test("Space Invaders private room reaches guest over the sidecar WebSocket path"
       guestName,
     );
 
-    await guestPage.getByTestId("multiplayer-room-claim-seat-ship-b").click();
     await expect(guestPage.getByTestId("multiplayer-room-seat-ship-b")).toContainText(
       guestName,
     );

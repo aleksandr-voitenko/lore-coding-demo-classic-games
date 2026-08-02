@@ -133,6 +133,9 @@ describe("multiplayer room lobby", () => {
     expect(markup).toContain('data-testid="multiplayer-room-participant-host-participant"');
     expect(markup).toContain('data-testid="multiplayer-room-host-controls"');
     expect(markup).toContain('data-testid="multiplayer-room-start-button"');
+    expect(markup).toContain('data-testid="multiplayer-room-next-game-select"');
+    expect(markup).toContain('data-testid="multiplayer-room-replace-match-button"');
+    expect(markup).toContain("Private Party");
   });
 
   it("uses the requested room code for invite copy even before matching room data arrives", () => {
@@ -167,6 +170,8 @@ describe("multiplayer room lobby", () => {
     expect(markup).toContain('data-testid="multiplayer-room-join-form"');
     expect(markup).toContain('data-testid="multiplayer-room-display-name-input"');
     expect(markup).toContain('data-testid="multiplayer-room-join-button"');
+    expect(markup).toContain('data-testid="multiplayer-room-watch-button"');
+    expect(markup).toContain("Join game");
     expect(markup).toContain('data-testid="multiplayer-room-claim-seat-right"');
     expect(markup).not.toContain('data-testid="multiplayer-room-host-controls"');
   });
@@ -205,6 +210,25 @@ describe("multiplayer room lobby", () => {
     expect(markup).toContain("Ada · Left Paddle");
     expect(markup).toContain('data-testid="multiplayer-room-host-controls"');
     expect(markup).not.toContain('data-testid="multiplayer-room-seats"');
+  });
+
+  it("keeps Join game and Watch available beside an active match", () => {
+    const markup = renderToStaticMarkup(
+      <MultiplayerRoomLobby
+        initialGame={RUNNING_PONG_GAME}
+        initialRoom={ACTIVE_PONG_ROOM}
+        initialRoomCode="PONG-1"
+        initialSeq={4}
+        onBackToLibrary={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain('data-testid="pong-multiplayer-room"');
+    expect(markup).toContain('data-testid="multiplayer-room-active-party-panel"');
+    expect(markup).toContain('data-testid="multiplayer-room-join-form"');
+    expect(markup).toContain('data-testid="multiplayer-room-join-button"');
+    expect(markup).toContain('data-testid="multiplayer-room-watch-button"');
+    expect(markup).toContain("Players and watchers");
   });
 
   it("selects registered active game renderers only when room and snapshot game ids match", () => {

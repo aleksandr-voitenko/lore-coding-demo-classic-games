@@ -23,6 +23,10 @@ const HOST_USER = {
   displayName: "Ada Host",
   id: "user-1",
 };
+const PARTY_SEATS = [
+  { id: "left", label: "Left", required: true },
+  { id: "right", label: "Right", required: true },
+] as const;
 
 function createRetentionStore({
   maxRooms = 256,
@@ -80,7 +84,7 @@ function createRoom(
   return expectStoreSuccess(
     store.createRoom({
       host: HOST_USER,
-      seats: [],
+      seats: PARTY_SEATS,
       settings,
     }),
   );
@@ -88,6 +92,13 @@ function createRoom(
 
 function createStartedRoom(store: InProcessMultiplayerRoomStore) {
   const created = createRoom(store);
+
+  expectStoreSuccess(
+    store.applyCommand(created.room.code, {
+      displayName: "Grace Guest",
+      type: "room.joinPlayer",
+    }),
+  );
 
   return expectStoreSuccess(
     store.applyCommand(created.room.code, {
@@ -413,7 +424,7 @@ describe("in-process multiplayer room retention", () => {
     }
 
     expect(["lost", "won"]).toContain(expectPongGame(terminal).snapshot.status);
-    expect(terminal.room.status).toBe("running");
+    expect(terminal.room.status).toBe("finished");
     terminalFixture.advanceBy(30 * MINUTE_MS - 1);
     expectStoreSuccess(terminalFixture.store.getRoom("ROOM1"));
     terminalFixture.advanceBy(1);
@@ -491,7 +502,7 @@ describe("in-process multiplayer room retention", () => {
     expectStoreFailure(
       runningFixture.store.createRoom({
         host: HOST_USER,
-        seats: [],
+        seats: PARTY_SEATS,
         settings: { gameId: "snake" },
       }),
       "room-capacity-reached",
@@ -512,7 +523,7 @@ describe("in-process multiplayer room retention", () => {
     expectStoreFailure(
       pausedFixture.store.createRoom({
         host: HOST_USER,
-        seats: [],
+        seats: PARTY_SEATS,
         settings: { gameId: "snake" },
       }),
       "room-capacity-reached",
@@ -528,7 +539,7 @@ describe("in-process multiplayer room retention", () => {
     expectStoreFailure(
       connectedFixture.store.createRoom({
         host: HOST_USER,
-        seats: [],
+        seats: PARTY_SEATS,
         settings: { gameId: "snake" },
       }),
       "room-capacity-reached",
@@ -558,7 +569,7 @@ describe("in-process multiplayer room retention", () => {
           displayName: "",
           id: "invalid-user",
         },
-        seats: [],
+        seats: PARTY_SEATS,
         settings: { gameId: "snake" },
       }),
       "invalid-host",
@@ -577,7 +588,7 @@ describe("in-process multiplayer room retention", () => {
     expectStoreFailure(
       fixture.store.createRoom({
         host: HOST_USER,
-        seats: [],
+        seats: PARTY_SEATS,
         settings: { gameId: "snake" },
       }),
       "duplicate-room",

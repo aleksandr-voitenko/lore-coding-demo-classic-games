@@ -13,6 +13,7 @@ import {
   type FormEvent,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -44,6 +45,12 @@ import { Button } from "@/components/ui/button";
 import { UserAccountControls } from "@/components/user-account-controls";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { formatGameCatalogLabel, type GameId } from "@/lib/game-catalog";
+import {
+  DEFAULT_MULTIPLAYER_GAME_ID,
+  MULTIPLAYER_GAME_IDS,
+  isMultiplayerGameId,
+  type MultiplayerGameId,
+} from "@/lib/multiplayer/game-registry";
 import {
   getPrivateRoomInvitePath,
   normalizePrivateRoomCode,
@@ -85,11 +92,14 @@ type GuestJoinFormProps = {
   disabled: boolean;
   error: string | null;
   onDisplayNameChange: (value: string) => void;
-  onJoin: (event: FormEvent<HTMLFormElement>) => void;
+  onJoinGame: (event: FormEvent<HTMLFormElement>) => void;
+  onWatch: () => void;
 };
 
 type HostLifecycleControlsProps = {
+  gameId: GameId;
   onLifecycleCommand: (command: PrivateRoomLifecycleCommand) => void;
+  onReplaceMatch: (gameId: MultiplayerGameId) => void;
   pendingAction: string | null;
   status: PrivateRoomStatus;
 };
@@ -286,6 +296,7 @@ export function MultiplayerRoomLobby({
   const [displayNameInput, setDisplayNameInput] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isJoining, setIsJoining] = useState(false);
+  const [joinIntent, setJoinIntent] = useState<"play" | "watch" | null>(null);
   const [loadError, setLoadError] = useState<string | null>(
     normalizedRoomCode === null ? "Room code is not supported." : null,
   );
@@ -440,10 +451,8 @@ export function MultiplayerRoomLobby({
       });
   }, [browserOrigin, normalizedRoomCode, setCopyStatus]);
 
-  const handleJoinRoom = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-
+  const joinRoom = useCallback(
+    async (type: "room.joinObserver" | "room.joinPlayer") => {
       if (normalizedRoomCode === null || isJoining) {
         return;
       }
@@ -461,7 +470,7 @@ export function MultiplayerRoomLobby({
       try {
         const result = await sendRoomClientMessage({
           displayName: normalizedDisplayName,
-          type: "room.joinObserver",
+          type,
         });
 
         if (
@@ -476,6 +485,7 @@ export function MultiplayerRoomLobby({
 
         setParticipantCapability(result.participantCapability);
         setParticipantId(result.participantId);
+        setJoinIntent(type === "room.joinPlayer" ? "play" : "watch");
         writeMultiplayerRoomParticipantCredentials(normalizedRoomCode, {
           participantCapability: result.participantCapability,
           participantId: result.participantId,
@@ -496,9 +506,22 @@ export function MultiplayerRoomLobby({
       setIsJoining,
       setParticipantCapability,
       setParticipantId,
+      setJoinIntent,
       userId,
     ],
   );
+
+  const handleJoinRoom = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      void joinRoom("room.joinPlayer");
+    },
+    [joinRoom],
+  );
+
+  const handleWatchRoom = useCallback(() => {
+    void joinRoom("room.joinObserver");
+  }, [joinRoom]);
 
   async function handleSeatCommand(
     type: "room.claimSeat" | "room.releaseSeat",
@@ -569,6 +592,35 @@ export function MultiplayerRoomLobby({
     }
   }
 
+  async function handleReplaceMatch(gameId: MultiplayerGameId) {
+    if (
+      normalizedRoomCode === null ||
+      activeParticipantId === null ||
+      !isHost ||
+      room === null
+    ) {
+      return;
+    }
+
+    const actionKey = "room.replaceMatch";
+
+    setPendingAction(actionKey);
+    setFormError(null);
+
+    try {
+      await sendRoomClientMessage({
+        matchId: room.matchId,
+        participantId: activeParticipantId,
+        settings: { gameId },
+        type: "room.replaceMatch",
+      });
+    } catch (error) {
+      setFormError(getMultiplayerRoomRequestErrorMessage(error));
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
   async function handleGameInput<
     Game extends GameId = GameId,
     Input = MultiplayerGameInputPayload<Game>,
@@ -616,7 +668,10 @@ export function MultiplayerRoomLobby({
         lifecycleControls={
           isHost ? (
             <HostLifecycleControls
+              gameId={room.settings.gameId}
+              key={`${room.matchId}:${room.settings.gameId}`}
               onLifecycleCommand={handleLifecycleCommand}
+              onReplaceMatch={handleReplaceMatch}
               pendingAction={pendingAction}
               status={room.status}
             />
@@ -628,6 +683,14 @@ export function MultiplayerRoomLobby({
         sendGameInput={handleGameInput}
       />
     ) : null;
+  const joinOutcomeMessage =
+    activeParticipant === null || joinIntent === null
+      ? null
+      : joinIntent === "play" && activeParticipant.role === "observer"
+        ? "The game is active or full, so you joined as a watcher."
+        : joinIntent === "watch"
+          ? "You joined as a watcher."
+          : null;
 
   return (
     <main
@@ -649,7 +712,7 @@ export function MultiplayerRoomLobby({
             </Button>
             <div className="min-w-0">
               <h1 className="text-3xl font-semibold tracking-normal text-[var(--chrome-ink)]">
-                Private Room
+                Private Party
               </h1>
               <p
                 className="mt-1 truncate text-sm font-medium text-[var(--chrome-muted)]"
@@ -683,8 +746,106 @@ export function MultiplayerRoomLobby({
 
         {activeRoomGame !== null ? (
           <>
-            {activeRoomGame}
-            {formError !== null ? (
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
+              <div className="min-w-0">{activeRoomGame}</div>
+              <aside
+                className="flex flex-col gap-4 rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] p-4 shadow-sm"
+                data-testid="multiplayer-room-active-party-panel"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold tracking-normal">Party</h2>
+                    <p className="mt-1 text-sm font-medium text-[var(--chrome-muted)]">
+                      {room === null ? "" : formatGameCatalogLabel(room.settings.gameId)}
+                    </p>
+                  </div>
+                  {room !== null ? (
+                    <span className="rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-accent-faint)] px-2 py-1 text-xs font-semibold uppercase tracking-normal">
+                      {getStatusLabel(room.status)}
+                    </span>
+                  ) : null}
+                </div>
+
+                {activeParticipant === null ? (
+                  <GuestJoinForm
+                    disabled={isJoining}
+                    displayName={displayName}
+                    error={formError}
+                    onDisplayNameChange={setDisplayNameInput}
+                    onJoinGame={handleJoinRoom}
+                    onWatch={handleWatchRoom}
+                  />
+                ) : room !== null ? (
+                  <div>
+                    <h3 className="text-sm font-semibold uppercase tracking-normal text-[var(--chrome-muted)]">
+                      Your role
+                    </h3>
+                    <p
+                      className="mt-1 font-semibold"
+                      data-testid="multiplayer-room-current-participant"
+                    >
+                      {activeParticipant.displayName} ·{" "}
+                      {getParticipantRoleLabel(
+                        activeParticipant,
+                        room.hostParticipantId,
+                      )}
+                    </p>
+                    {joinOutcomeMessage !== null ? (
+                      <p
+                        className="mt-2 text-sm font-medium text-[var(--chrome-muted)]"
+                        data-testid="multiplayer-room-join-outcome"
+                        role="status"
+                      >
+                        {joinOutcomeMessage}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <div>
+                  <h3 className="text-sm font-semibold uppercase tracking-normal text-[var(--chrome-muted)]">
+                    Players and watchers
+                  </h3>
+                  <ul className="mt-2 grid gap-2">
+                    {room?.participants.map((participant) => (
+                      <li
+                        className="flex items-center justify-between gap-2 rounded-md border border-[var(--chrome-border)] px-3 py-2"
+                        key={participant.id}
+                      >
+                        <span className="min-w-0 truncate font-semibold">
+                          {participant.displayName}
+                        </span>
+                        <span className="shrink-0 text-xs font-semibold uppercase tracking-normal text-[var(--chrome-muted)]">
+                          {getParticipantRoleLabel(
+                            participant,
+                            room.hostParticipantId,
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <Button
+                  data-testid="multiplayer-room-active-copy-invite-button"
+                  onClick={handleCopyInviteLink}
+                  type="button"
+                  variant="outline"
+                >
+                  <CopyIcon data-icon="inline-start" />
+                  Copy invite link
+                </Button>
+                {copyStatus !== null ? (
+                  <p
+                    className="text-sm font-medium text-[var(--chrome-muted)]"
+                    role="status"
+                  >
+                    {copyStatus}
+                  </p>
+                ) : null}
+              </aside>
+            </div>
+            {formError !== null && activeParticipant !== null ? (
               <RoomMessage
                 message={formError}
                 testId="multiplayer-room-form-error"
@@ -708,7 +869,8 @@ export function MultiplayerRoomLobby({
                   displayName={displayName}
                   error={formError}
                   onDisplayNameChange={setDisplayNameInput}
-                  onJoin={handleJoinRoom}
+                  onJoinGame={handleJoinRoom}
+                  onWatch={handleWatchRoom}
                 />
               ) : (
                 <div className="flex flex-col gap-3">
@@ -721,11 +883,23 @@ export function MultiplayerRoomLobby({
                       {activeParticipant.displayName} ·{" "}
                       {getParticipantRoleLabel(activeParticipant, room.hostParticipantId)}
                     </p>
+                    {joinOutcomeMessage !== null ? (
+                      <p
+                        className="mt-2 text-sm font-medium text-[var(--chrome-muted)]"
+                        data-testid="multiplayer-room-join-outcome"
+                        role="status"
+                      >
+                        {joinOutcomeMessage}
+                      </p>
+                    ) : null}
                   </div>
 
                   {isHost ? (
                     <HostLifecycleControls
+                      gameId={room.settings.gameId}
+                      key={`${room.matchId}:${room.settings.gameId}`}
                       onLifecycleCommand={handleLifecycleCommand}
+                      onReplaceMatch={handleReplaceMatch}
                       pendingAction={pendingAction}
                       status={room.status}
                     />
@@ -871,15 +1045,20 @@ function GuestJoinForm({
   displayName,
   error,
   onDisplayNameChange,
-  onJoin,
+  onJoinGame,
+  onWatch,
 }: GuestJoinFormProps) {
   const hasError = error !== null;
 
   return (
-    <form className="flex flex-col gap-3" data-testid="multiplayer-room-join-form" onSubmit={onJoin}>
+    <form
+      className="flex flex-col gap-3"
+      data-testid="multiplayer-room-join-form"
+      onSubmit={onJoinGame}
+    >
       <div className="flex items-center gap-2">
         <UsersIcon className="size-5 text-[var(--chrome-muted)]" aria-hidden="true" />
-        <h2 className="text-lg font-semibold tracking-normal">Join Room</h2>
+        <h2 className="text-lg font-semibold tracking-normal">Join Party</h2>
       </div>
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-semibold" htmlFor="room-display-name">
@@ -908,24 +1087,45 @@ function GuestJoinForm({
           {error}
         </p>
       ) : null}
-      <Button
-        data-testid="multiplayer-room-join-button"
-        disabled={disabled}
-        size="lg"
-        type="submit"
-      >
-        <UserPlusIcon data-icon="inline-start" />
-        {disabled ? "Joining" : "Join"}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          data-testid="multiplayer-room-join-button"
+          disabled={disabled}
+          size="lg"
+          type="submit"
+        >
+          <UserPlusIcon data-icon="inline-start" />
+          {disabled ? "Joining" : "Join game"}
+        </Button>
+        <Button
+          data-testid="multiplayer-room-watch-button"
+          disabled={disabled}
+          onClick={onWatch}
+          size="lg"
+          type="button"
+          variant="outline"
+        >
+          Watch
+        </Button>
+      </div>
     </form>
   );
 }
 
 function HostLifecycleControls({
+  gameId,
   onLifecycleCommand,
+  onReplaceMatch,
   pendingAction,
   status,
 }: HostLifecycleControlsProps) {
+  const initialGameId = isMultiplayerGameId(gameId)
+    ? gameId
+    : DEFAULT_MULTIPLAYER_GAME_ID;
+  const nextGameSelectId = useId();
+  const [selectedGameId, setSelectedGameId] = useState(initialGameId);
+  const canReplaceMatch = status === "finished" || status === "lobby";
+
   return (
     <div className="flex flex-col gap-2" data-testid="multiplayer-room-host-controls">
       <h3 className="text-sm font-semibold uppercase tracking-normal text-[var(--chrome-muted)]">
@@ -950,6 +1150,46 @@ function HostLifecycleControls({
           );
         })}
       </div>
+      <div className="mt-1 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+        <label
+          className="flex flex-col gap-1 text-sm font-semibold"
+          htmlFor={nextGameSelectId}
+        >
+          Next game
+          <select
+            className="h-10 rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] px-3 text-sm font-semibold text-[var(--chrome-ink)] outline-none transition focus-visible:border-[var(--chrome-accent)] focus-visible:ring-3 focus-visible:ring-[var(--chrome-focus-ring)]"
+            data-testid="multiplayer-room-next-game-select"
+            disabled={pendingAction !== null || !canReplaceMatch}
+            id={nextGameSelectId}
+            onChange={(event) => {
+              if (isMultiplayerGameId(event.target.value)) {
+                setSelectedGameId(event.target.value);
+              }
+            }}
+            value={selectedGameId}
+          >
+            {MULTIPLAYER_GAME_IDS.map((nextGameId) => (
+              <option key={nextGameId} value={nextGameId}>
+                {formatGameCatalogLabel(nextGameId)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Button
+          data-testid="multiplayer-room-replace-match-button"
+          disabled={pendingAction !== null || !canReplaceMatch}
+          onClick={() => onReplaceMatch(selectedGameId)}
+          type="button"
+          variant="outline"
+        >
+          {pendingAction === "room.replaceMatch" ? "Choosing..." : "Choose game"}
+        </Button>
+      </div>
+      {!canReplaceMatch ? (
+        <p className="text-sm font-medium text-[var(--chrome-muted)]">
+          Finish the current match before choosing another game.
+        </p>
+      ) : null}
     </div>
   );
 }
