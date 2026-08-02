@@ -274,7 +274,7 @@ test("Multiplayer diagnostics reports sidecar WebSocket ping", async ({
   );
 });
 
-test("friends manage and accept a Watch invitation without sharing a link", async ({
+test("friends accept Watch and switch games without sharing links", async ({
   browser,
   page,
 }, testInfo) => {
@@ -633,7 +633,7 @@ test("friends manage and accept a Watch invitation without sharing a link", asyn
     friendPage.getByTestId("multiplayer-room-current-participant"),
   ).toHaveText(`${friendName} · Watching`);
   await expect(friendPage.getByTestId("multiplayer-room-join-outcome")).toContainText(
-    `accepted ${hostName}'s Watch invitation and joined as Watching`,
+    `accepted ${hostName}'s Watch invitation and initially joined as Watching`,
   );
   expect(acceptancePatchCount).toBe(2);
 
@@ -642,6 +642,179 @@ test("friends manage and accept a Watch invitation without sharing a link", asyn
     friendPage.getByTestId("multiplayer-room-current-participant"),
   ).toHaveText(`${friendName} · Watching`);
   await expect(friendPage).toHaveURL(new RegExp(`\\?room=${roomCode}$`));
+
+  await page
+    .getByTestId("multiplayer-room-next-game-select")
+    .selectOption("asteroids");
+  await page.getByTestId("multiplayer-room-replace-match-button").click();
+
+  for (const partyPage of [page, friendPage]) {
+    await expect(partyPage.getByTestId("multiplayer-room-code")).toHaveText(
+      roomCode,
+    );
+    await expect(partyPage.getByTestId("multiplayer-room-game")).toHaveText(
+      "Asteroids",
+    );
+    await expect(partyPage.getByTestId("multiplayer-room-status")).toHaveText(
+      "Lobby",
+    );
+    await expect(partyPage).toHaveURL(new RegExp(`\\?room=${roomCode}$`));
+  }
+  const replacementGameHeading = page.getByTestId("multiplayer-room-game");
+
+  await expect(replacementGameHeading).toBeFocused();
+  await expect(replacementGameHeading).not.toHaveCSS("box-shadow", "none");
+  await expect(
+    friendPage.getByTestId("multiplayer-room-transition-announcement"),
+  ).toHaveText(
+    "Asteroids is now the party game. You are still in the same party.",
+  );
+  await expect(page.getByTestId("multiplayer-room-seat-ship-a")).toContainText(
+    hostName,
+  );
+  await expect(
+    friendPage.getByTestId("multiplayer-room-current-participant"),
+  ).toHaveText(`${friendName} · Watching`);
+
+  await friendPage.getByTestId("multiplayer-party-join-game-button").click();
+  await expect(
+    friendPage.getByTestId("multiplayer-room-seat-ship-b"),
+  ).toContainText(friendName);
+  await expect(
+    friendPage.getByTestId("multiplayer-room-current-participant"),
+  ).toHaveText(`${friendName} · Player`);
+  await expect(
+    friendPage.getByTestId("multiplayer-party-watch-instead-button"),
+  ).toBeFocused();
+
+  await page
+    .getByTestId("multiplayer-room-next-game-select")
+    .selectOption("pong");
+  await page.getByTestId("multiplayer-room-replace-match-button").click();
+
+  for (const partyPage of [page, friendPage]) {
+    await expect(partyPage.getByTestId("multiplayer-room-code")).toHaveText(
+      roomCode,
+    );
+    await expect(partyPage.getByTestId("multiplayer-room-game")).toHaveText(
+      "Pong",
+    );
+    await expect(partyPage.getByTestId("multiplayer-room-status")).toHaveText(
+      "Lobby",
+    );
+    await expect(partyPage).toHaveURL(new RegExp(`\\?room=${roomCode}$`));
+  }
+  await expect(page.getByTestId("multiplayer-room-game")).toBeFocused();
+  await expect(page.getByTestId("multiplayer-room-seat-left")).toContainText(
+    hostName,
+  );
+  await expect(
+    friendPage.getByTestId("multiplayer-room-seat-right"),
+  ).toContainText(friendName);
+  await expect(
+    friendPage.getByTestId("multiplayer-room-current-participant"),
+  ).toHaveText(`${friendName} · Player`);
+  await expect(
+    friendPage.getByTestId("multiplayer-party-watch-instead-button"),
+  ).toBeFocused();
+  await expect(
+    friendPage.getByTestId("multiplayer-room-transition-announcement"),
+  ).toHaveText("Pong is now the party game. You are still in the same party.");
+
+  await page
+    .getByTestId("multiplayer-room-next-game-select")
+    .selectOption("asteroids");
+  await page.getByTestId("multiplayer-room-replace-match-button").click();
+
+  for (const partyPage of [page, friendPage]) {
+    await expect(partyPage.getByTestId("multiplayer-room-code")).toHaveText(
+      roomCode,
+    );
+    await expect(partyPage.getByTestId("multiplayer-room-game")).toHaveText(
+      "Asteroids",
+    );
+    await expect(partyPage.getByTestId("multiplayer-room-status")).toHaveText(
+      "Lobby",
+    );
+    await expect(partyPage).toHaveURL(new RegExp(`\\?room=${roomCode}$`));
+  }
+  await expect(page.getByTestId("multiplayer-room-game")).toBeFocused();
+  await expect(page.getByTestId("multiplayer-room-seat-ship-a")).toContainText(
+    hostName,
+  );
+  await expect(
+    friendPage.getByTestId("multiplayer-room-seat-ship-b"),
+  ).toContainText(friendName);
+  await expect(
+    friendPage.getByTestId("multiplayer-room-current-participant"),
+  ).toHaveText(`${friendName} · Player`);
+  await expect(
+    friendPage.getByTestId("multiplayer-party-watch-instead-button"),
+  ).toBeFocused();
+  await expect(
+    friendPage.getByTestId("multiplayer-room-transition-announcement"),
+  ).toHaveText(
+    "Asteroids is now the party game. You are still in the same party.",
+  );
+
+  await page.getByTestId("multiplayer-room-start-button").click();
+  await expect(page.getByTestId("asteroids-multiplayer-room")).toBeVisible();
+  await expect(
+    friendPage.getByTestId("asteroids-multiplayer-room"),
+  ).toBeVisible();
+  const startedPartyHeading = page.getByTestId("multiplayer-room-heading");
+
+  await expect(startedPartyHeading).toBeFocused();
+  await expect(startedPartyHeading).not.toHaveCSS("box-shadow", "none");
+  await expect(
+    friendPage.getByTestId("multiplayer-room-transition-announcement"),
+  ).toHaveText("Asteroids started.");
+  const friendStartedPartyHeading = friendPage.getByTestId(
+    "multiplayer-room-heading",
+  );
+
+  await expect(friendStartedPartyHeading).toBeFocused();
+  await expect(friendStartedPartyHeading).not.toHaveCSS("box-shadow", "none");
+  await expect(friendPage.getByTestId("asteroids-multiplayer-role")).toHaveText(
+    `${friendName} · Ship B`,
+  );
+
+  const friendTransitionSlots = friendPage
+    .getByTestId("multiplayer-room-transition-announcement")
+    .locator('[role="status"]');
+  const startedSlotIndex = await friendTransitionSlots.evaluateAll((slots) =>
+    slots.findIndex((slot) => (slot.textContent ?? "").trim().length > 0),
+  );
+  const firstRestartSlotIndex = startedSlotIndex === 0 ? 1 : 0;
+  const restartAnnouncement =
+    "A new Asteroids match started. You are still in the same party.";
+
+  expect(startedSlotIndex).toBeGreaterThanOrEqual(0);
+  await page.getByTestId("multiplayer-room-restart-button").click();
+  await expect(friendTransitionSlots.nth(firstRestartSlotIndex)).toHaveText(
+    restartAnnouncement,
+  );
+  await expect(friendTransitionSlots.nth(startedSlotIndex)).toBeEmpty();
+
+  await page.getByTestId("multiplayer-room-restart-button").click();
+  await expect(friendTransitionSlots.nth(startedSlotIndex)).toHaveText(
+    restartAnnouncement,
+  );
+  await expect(friendTransitionSlots.nth(firstRestartSlotIndex)).toBeEmpty();
+  await expect(friendStartedPartyHeading).toBeFocused();
+
+  await friendPage.reload();
+  await expect(
+    friendPage.getByTestId("asteroids-multiplayer-room"),
+  ).toBeVisible();
+  await expect(
+    friendPage.getByTestId("multiplayer-room-current-participant"),
+  ).toHaveText(`${friendName} · Player`);
+  await expect(friendPage.getByTestId("asteroids-multiplayer-role")).toHaveText(
+    `${friendName} · Ship B`,
+  );
+  await expect(friendPage).toHaveURL(new RegExp(`\\?room=${roomCode}$`));
+  expect(acceptancePatchCount).toBe(2);
   expect(hostBrowserIssues).toEqual([]);
   expect(friendBrowserIssues).toEqual([]);
 
@@ -748,6 +921,9 @@ test("watcher queues for the next match and party leave closes cleanly", async (
     await expect(
       watcherPage.getByTestId("multiplayer-party-queue-position"),
     ).toHaveText("Waiting for next match · Position 1");
+    await expect(
+      watcherPage.getByTestId("multiplayer-party-cancel-next-button"),
+    ).toBeFocused();
     await watcherPage
       .getByTestId("multiplayer-party-cancel-next-button")
       .click();
@@ -793,6 +969,12 @@ test("watcher queues for the next match and party leave closes cleanly", async (
     await expect(
       watcherPage.getByTestId("multiplayer-room-join-outcome"),
     ).toHaveCount(0);
+    const promotedWatcherHeading = watcherPage.getByTestId(
+      "multiplayer-room-heading",
+    );
+
+    await expect(promotedWatcherHeading).toBeFocused();
+    await expect(promotedWatcherHeading).not.toHaveCSS("box-shadow", "none");
 
     await page.getByTestId("multiplayer-party-leave-button").click();
     await expect(

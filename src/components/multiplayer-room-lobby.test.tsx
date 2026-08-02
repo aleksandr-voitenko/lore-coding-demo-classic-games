@@ -14,7 +14,9 @@ import type { PongMultiplayerGameSnapshot } from "@/lib/pong-multiplayer";
 import { getMultiplayerRoomGameRenderer } from "./multiplayer-room-game-registry";
 import {
   MultiplayerRoomLobby,
+  advanceMultiplayerRoomTransitionAnnouncement,
   getMultiplayerRoomConnectionErrorState,
+  getMultiplayerRoomTransitionAnnouncement,
   getPrivateRoomShareLink,
   selectFreshMultiplayerRoomSnapshot,
 } from "./multiplayer-room-lobby";
@@ -167,7 +169,13 @@ describe("multiplayer room lobby", () => {
 
     expect(roomHeading).toContain('tabindex="-1"');
     expect(roomHeading).toContain("focus:ring-3");
-    expect(markup).toContain('data-testid="multiplayer-room-game"');
+    const gameHeading = getTestElementOpeningTag(
+      markup,
+      "multiplayer-room-game",
+    );
+
+    expect(gameHeading).toContain('tabindex="-1"');
+    expect(gameHeading).toContain("focus:ring-3");
     expect(markup).toContain("Pong");
     expect(markup).toContain('data-testid="multiplayer-room-status"');
     expect(markup).toContain("Lobby");
@@ -432,7 +440,7 @@ describe("multiplayer room lobby", () => {
         initialUser={{ displayName: "Grace", id: "user-2" }}
       >
         <MultiplayerRoomLobby
-          initialJoinOutcomeMessage="You accepted Ada's Watch invitation and joined as Watching."
+          initialJoinOutcomeMessage="You accepted Ada's Watch invitation and initially joined as Watching."
           initialParticipantId="guest-participant"
           initialRoom={PONG_ROOM}
           initialRoomCode="PONG-1"
@@ -443,7 +451,7 @@ describe("multiplayer room lobby", () => {
 
     expect(markup).toContain('data-testid="multiplayer-room-join-outcome"');
     expect(markup).toContain(
-      "You accepted Ada&#x27;s Watch invitation and joined as Watching.",
+      "You accepted Ada&#x27;s Watch invitation and initially joined as Watching.",
     );
   });
 
@@ -618,6 +626,74 @@ describe("multiplayer room lobby", () => {
     expect(
       selectFreshMultiplayerRoomSnapshot(current, conflictingGeneration),
     ).toBe(current);
+  });
+
+  it("announces party game and lifecycle transitions without implying membership changed", () => {
+    const lobby = {
+      gameId: "pong",
+      matchId: 1,
+      status: "lobby",
+    } as const;
+
+    expect(
+      getMultiplayerRoomTransitionAnnouncement(lobby, {
+        gameId: "asteroids",
+        matchId: 2,
+        status: "lobby",
+      }),
+    ).toBe(
+      "Asteroids is now the party game. You are still in the same party.",
+    );
+    expect(
+      getMultiplayerRoomTransitionAnnouncement(lobby, {
+        ...lobby,
+        matchId: 2,
+      }),
+    ).toBe("A new Pong match is ready. You are still in the same party.");
+    expect(
+      getMultiplayerRoomTransitionAnnouncement(
+        { ...lobby, status: "finished" },
+        { ...lobby, matchId: 2, status: "running" },
+      ),
+    ).toBe("A new Pong match started. You are still in the same party.");
+    expect(
+      getMultiplayerRoomTransitionAnnouncement(lobby, {
+        ...lobby,
+        status: "running",
+      }),
+    ).toBe("Pong started.");
+    expect(
+      getMultiplayerRoomTransitionAnnouncement(
+        { ...lobby, status: "paused" },
+        { ...lobby, status: "running" },
+      ),
+    ).toBe("Pong resumed.");
+    expect(
+      getMultiplayerRoomTransitionAnnouncement(
+        { ...lobby, status: "running" },
+        { ...lobby, status: "paused" },
+      ),
+    ).toBe("Pong paused.");
+    expect(
+      getMultiplayerRoomTransitionAnnouncement(
+        { ...lobby, status: "running" },
+        { ...lobby, status: "finished" },
+      ),
+    ).toBe("Pong finished. The party can choose another game.");
+    expect(getMultiplayerRoomTransitionAnnouncement(lobby, lobby)).toBeNull();
+  });
+
+  it("moves repeated transition messages between persistent live-region slots", () => {
+    const message =
+      "A new Pong match started. You are still in the same party.";
+    const first = advanceMultiplayerRoomTransitionAnnouncement(
+      { activeSlot: 1, message: null },
+      message,
+    );
+    const second = advanceMultiplayerRoomTransitionAnnouncement(first, message);
+
+    expect(first).toEqual({ activeSlot: 0, message });
+    expect(second).toEqual({ activeSlot: 1, message });
   });
 
 });

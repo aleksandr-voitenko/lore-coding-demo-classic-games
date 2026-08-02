@@ -113,6 +113,15 @@ This file covers React component ownership and shared game UI conventions under
 - `multiplayer-room-lobby.tsx` owns the generic private-room lobby/shell UI and
   browser session state: participant resolution, fresh snapshot selection,
   host derivation, diagnostics presentation, and pending form/action state.
+  After a successful local lifecycle action, focus the persistent party heading;
+  after local match replacement, focus the newly rendered game heading. Announce
+  game, match, and lifecycle transitions through a polite live region for every
+  member, alternating persistent live slots so identical consecutive transitions
+  are announced. Remote changes keep surviving focus in place; if a layout change
+  or same-layout membership update removes the focused control, restore focus to
+  the persistent party heading.
+  Invitation arrival copy describes the initially admitted role because observers
+  may later claim a player seat without changing that historical message.
   `multiplayer-room-client.ts` owns validated browser HTTP room creation and
   authenticated host-command helpers plus the game-agnostic HTTP/WebSocket
   dispatch boundary consumed by the shell. `multiplayer-room-transport.ts` is

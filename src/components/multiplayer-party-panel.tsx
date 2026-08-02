@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { type Ref, useId } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,7 @@ export type MultiplayerPartyPanelProps = {
   activeParticipantId: string | null;
   actionsDisabled?: boolean;
   actionsDisabledDescriptionId?: string;
+  membershipActionButtonRef?: Ref<HTMLButtonElement>;
   onCancelNextMatch: () => void;
   onJoinGame: (seatId: string) => void;
   onJoinNextMatch: () => void;
@@ -216,6 +217,7 @@ export function MultiplayerPartyPanel({
   activeParticipantId,
   actionsDisabled = false,
   actionsDisabledDescriptionId,
+  membershipActionButtonRef,
   onCancelNextMatch,
   onJoinGame,
   onJoinNextMatch,
@@ -412,6 +414,7 @@ export function MultiplayerPartyPanel({
                 actionsDisabled={actionsDisabled}
                 actionsDisabledDescriptionId={actionsDisabledDescriptionId}
                 descriptionId={actionDescriptionId}
+                membershipActionButtonRef={membershipActionButtonRef}
                 onCancelNextMatch={onCancelNextMatch}
                 onJoinGame={onJoinGame}
                 onJoinNextMatch={onJoinNextMatch}
@@ -474,6 +477,7 @@ type MembershipActionButtonProps = Pick<
   actionsDisabled: boolean;
   actionsDisabledDescriptionId?: string;
   descriptionId: string;
+  membershipActionButtonRef?: Ref<HTMLButtonElement>;
   pendingAction: string | null;
 };
 
@@ -482,6 +486,7 @@ function MembershipActionButton({
   actionsDisabled,
   actionsDisabledDescriptionId,
   descriptionId,
+  membershipActionButtonRef,
   onCancelNextMatch,
   onJoinGame,
   onJoinNextMatch,
@@ -516,6 +521,7 @@ function MembershipActionButton({
           onWatchInstead(action.seatId);
         }
       }}
+      ref={membershipActionButtonRef}
       size="lg"
       type="button"
       variant={action.type === "cancel-next" ? "outline" : "default"}

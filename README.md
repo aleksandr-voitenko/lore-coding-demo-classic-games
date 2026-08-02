@@ -175,6 +175,11 @@ queue while play is active; queued players are promoted only at a restart or
 game-replacement boundary, never into a running game. `Watch instead` releases a
 seat only between matches and cannot exceed the watcher limit. A full or active
 play attempt falls back to watching only while watcher capacity remains.
+Successful host lifecycle actions return focus to the persistent party heading,
+while choosing another game focuses its new heading. Every connected member,
+including observers, receives a polite game/lifecycle announcement without a
+remote action stealing focus. If a remote update removes the focused
+control, focus returns to the persistent party heading instead of the document.
 
 Leaving the party is distinct from navigating back to the library. A seated
 player who leaves has held input cleared and frees the slot without changing the
@@ -408,7 +413,8 @@ bound to the current sign-in epoch, so switching away and back cannot revive an
 older account's handoff. Busy and in-party rows explain what must finish or be
 left before acceptance, while Decline remains available. Watch explicitly joins
 Watching; Play may join a player spot or fall back to Watching, and the
-destination announces the role the server actually admitted. An interrupted
+destination records the role the server initially admitted so the message stays
+accurate if an observer later claims a player spot. An interrupted
 acceptance retries the idempotent server endpoint, while a completed acceptance
 whose local launcher handoff fails retries only that in-memory handoff.
 

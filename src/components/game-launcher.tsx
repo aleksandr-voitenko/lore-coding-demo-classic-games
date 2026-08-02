@@ -985,8 +985,8 @@ export function createLauncherPartyInvitationHandoff(
   const joinOutcomeMessage =
     participant.role === "observer"
       ? acceptance.invitation.intent === "play"
-        ? `You accepted ${acceptance.invitation.inviter.displayName}'s Play invitation and joined as Watching because no player spot was available. You can request the next match.`
-        : `You accepted ${acceptance.invitation.inviter.displayName}'s Watch invitation and joined as Watching.`
+        ? `You accepted ${acceptance.invitation.inviter.displayName}'s Play invitation and initially joined as Watching because no player spot was available. You can request the next match.`
+        : `You accepted ${acceptance.invitation.inviter.displayName}'s Watch invitation and initially joined as Watching.`
       : participant.role === "host"
         ? `You accepted ${acceptance.invitation.inviter.displayName}'s ${intentLabel} invitation and are now the party host.`
         : `You accepted ${acceptance.invitation.inviter.displayName}'s ${intentLabel} invitation and joined as a player.`;

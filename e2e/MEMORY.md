@@ -51,7 +51,18 @@ This file covers Playwright browser-flow coverage under `e2e/`.
   transient acceptance-in-progress response on both the initial attempt and its
   first retry, membership-only reacquisition, an injected one-time local history
   failure, local-only handoff retry without an additional acceptance request,
-  visible destination focus, and same-account credential recovery after reload.
+  visible destination focus, and a two-friend Pong-to-Asteroids replacement
+  that keeps the room code and observer membership before the friend claims
+  Asteroids Player 2. A subsequent Asteroids-to-Pong-to-Asteroids round trip
+  proves both occupied seats map by ordinal across games. The journey verifies
+  local transition focus, remote polite status announcements without focus
+  theft, focus continuity when Join game becomes Watch instead, a party-heading
+  fallback when Start removes that control, alternating live slots across two
+  identical Restart announcements, live game delivery to both clients, and
+  same-account recovery after reload.
+- The same sidecar queue journey verifies that remote Restart promotion moves a
+  watcher from a focused Cancel request action to the persistent party heading
+  when that action is removed without changing the active-game layout.
 - `sidecar/tank-patrol-private-room.e2e.ts` covers Tank Patrol's required
   Player 1/Player 2 seat claims, authoritative Stage 1 start, both rendered
   tanks, and bidirectional held-movement delivery across two browser contexts.

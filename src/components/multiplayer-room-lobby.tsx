@@ -13,6 +13,7 @@ import {
 import {
   type ComponentType,
   type FormEvent,
+  type Ref,
   type ReactNode,
   useCallback,
   useEffect,
@@ -129,10 +130,27 @@ type HostLifecycleControlsProps = {
 
 type RoomSummaryProps = {
   copyStatus: string | null;
+  gameHeadingRef: Ref<HTMLHeadingElement>;
   inviteLink: string;
   onCopyInviteLink: () => void;
   room: PrivateRoom;
 };
+
+type MultiplayerRoomTransitionState = {
+  gameId: GameId;
+  matchId: number;
+  status: PrivateRoomStatus;
+};
+
+type MultiplayerRoomTransitionAnnouncementState = {
+  activeSlot: 0 | 1;
+  message: string | null;
+};
+
+const INITIAL_MULTIPLAYER_ROOM_TRANSITION_ANNOUNCEMENT = {
+  activeSlot: 1,
+  message: null,
+} satisfies MultiplayerRoomTransitionAnnouncementState;
 
 export function getMultiplayerRoomConnectionErrorState(error: unknown) {
   const expiredRoom =
@@ -189,6 +207,63 @@ function formatRoomSettingValue(value: unknown): string {
 
 function getStatusLabel(status: PrivateRoomStatus) {
   return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function getMultiplayerRoomTransitionState(
+  room: PrivateRoom,
+): MultiplayerRoomTransitionState {
+  return {
+    gameId: room.settings.gameId,
+    matchId: room.matchId,
+    status: room.status,
+  };
+}
+
+export function getMultiplayerRoomTransitionAnnouncement(
+  previous: MultiplayerRoomTransitionState,
+  next: MultiplayerRoomTransitionState,
+) {
+  const gameLabel = formatGameCatalogLabel(next.gameId);
+
+  if (next.matchId !== previous.matchId) {
+    if (next.gameId !== previous.gameId) {
+      return `${gameLabel} is now the party game. You are still in the same party.`;
+    }
+
+    return next.status === "running"
+      ? `A new ${gameLabel} match started. You are still in the same party.`
+      : `A new ${gameLabel} match is ready. You are still in the same party.`;
+  }
+
+  if (next.status === previous.status) {
+    return null;
+  }
+
+  if (next.status === "running") {
+    return previous.status === "paused"
+      ? `${gameLabel} resumed.`
+      : `${gameLabel} started.`;
+  }
+
+  if (next.status === "paused") {
+    return `${gameLabel} paused.`;
+  }
+
+  if (next.status === "finished") {
+    return `${gameLabel} finished. The party can choose another game.`;
+  }
+
+  return null;
+}
+
+export function advanceMultiplayerRoomTransitionAnnouncement(
+  current: MultiplayerRoomTransitionAnnouncementState,
+  message: string,
+): MultiplayerRoomTransitionAnnouncementState {
+  return {
+    activeSlot: current.activeSlot === 0 ? 1 : 0,
+    message,
+  };
 }
 
 function getLifecycleActions(status: PrivateRoomStatus) {
@@ -308,6 +383,10 @@ export function MultiplayerRoomLobby({
     MultiplayerRoomMembershipEnded["reason"] | null
   >(null);
   const [hostAnnouncement, setHostAnnouncement] = useState<string | null>(null);
+  const [roomTransitionAnnouncement, setRoomTransitionAnnouncement] =
+    useState<MultiplayerRoomTransitionAnnouncementState>(
+      INITIAL_MULTIPLAYER_ROOM_TRANSITION_ANNOUNCEMENT,
+    );
   const [leaveConfirmationOpen, setLeaveConfirmationOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [participantCapability, setParticipantCapability] = useState<
@@ -324,10 +403,19 @@ export function MultiplayerRoomLobby({
         },
   );
   const roomSnapshotRef = useRef(roomSnapshot);
+  const focusMembershipActionAfterCommandRef = useRef(false);
+  const focusRoomGameAfterReplacementRef = useRef(false);
+  const focusedRoomElementBeforeSnapshotRef = useRef<Element | null>(null);
   const membershipEndedHeadingRef = useRef<HTMLHeadingElement>(null);
+  const membershipActionButtonRef = useRef<HTMLButtonElement>(null);
+  const roomContentRef = useRef<HTMLDivElement>(null);
+  const roomGameHeadingRef = useRef<HTMLHeadingElement>(null);
   const roomHeadingRef = useRef<HTMLHeadingElement>(null);
   const previousHostParticipantIdRef = useRef(
     initialRoom?.hostParticipantId ?? null,
+  );
+  const previousRoomTransitionRef = useRef<MultiplayerRoomTransitionState | null>(
+    initialRoom === null ? null : getMultiplayerRoomTransitionState(initialRoom),
   );
   const room = roomSnapshot?.room ?? null;
   const game = roomSnapshot?.game;
@@ -376,12 +464,22 @@ export function MultiplayerRoomLobby({
     (activeSeat !== null &&
       (room?.status === "running" || room?.status === "paused"));
   const applyRoomSnapshot = useCallback((nextSnapshot: MultiplayerRoomClientSnapshot) => {
+    const currentSnapshot = roomSnapshotRef.current;
     const selectedSnapshot = selectFreshMultiplayerRoomSnapshot(
-      roomSnapshotRef.current,
+      currentSnapshot,
       nextSnapshot,
     );
 
-    if (selectedSnapshot !== roomSnapshotRef.current) {
+    if (selectedSnapshot !== currentSnapshot) {
+      const activeElement =
+        typeof document === "undefined" ? null : document.activeElement;
+
+      focusedRoomElementBeforeSnapshotRef.current =
+        activeElement !== null &&
+        roomContentRef.current?.contains(activeElement) === true
+          ? activeElement
+          : null;
+
       roomSnapshotRef.current = selectedSnapshot;
       setRoomSnapshot(selectedSnapshot);
     }
@@ -544,6 +642,71 @@ export function MultiplayerRoomLobby({
     previousHostParticipantIdRef.current = room.hostParticipantId;
   }, [activeParticipantId, room]);
 
+  useEffect(() => {
+    if (room === null) {
+      previousRoomTransitionRef.current = null;
+      return;
+    }
+
+    const nextTransition = getMultiplayerRoomTransitionState(room);
+    const previousTransition = previousRoomTransitionRef.current;
+
+    if (previousTransition !== null) {
+      const announcement = getMultiplayerRoomTransitionAnnouncement(
+        previousTransition,
+        nextTransition,
+      );
+
+      if (announcement !== null) {
+        setRoomTransitionAnnouncement((current) =>
+          advanceMultiplayerRoomTransitionAnnouncement(current, announcement),
+        );
+      }
+    }
+
+    previousRoomTransitionRef.current = nextTransition;
+  }, [room]);
+
+  useEffect(() => {
+    if (
+      !focusMembershipActionAfterCommandRef.current ||
+      pendingAction !== null
+    ) {
+      return;
+    }
+
+    // Membership commands can replace the initiating button with its inverse.
+    focusMembershipActionAfterCommandRef.current = false;
+    membershipActionButtonRef.current?.focus();
+  }, [pendingAction, room]);
+
+  useEffect(() => {
+    const previouslyFocusedElement = focusedRoomElementBeforeSnapshotRef.current;
+
+    if (previouslyFocusedElement === null) {
+      return;
+    }
+
+    focusedRoomElementBeforeSnapshotRef.current = null;
+
+    if (!previouslyFocusedElement.isConnected) {
+      roomHeadingRef.current?.focus();
+    }
+  }, [roomSnapshot]);
+
+  useEffect(() => {
+    if (
+      !focusRoomGameAfterReplacementRef.current ||
+      pendingAction !== null ||
+      roomGameHeadingRef.current === null
+    ) {
+      return;
+    }
+
+    focusRoomGameAfterReplacementRef.current = false;
+    roomGameHeadingRef.current.focus();
+  }, [pendingAction, room]);
+
   const handleCopyInviteLink = useCallback(() => {
     const currentInviteLink = getPrivateRoomShareLink(
       normalizedRoomCode,
@@ -662,6 +825,7 @@ export function MultiplayerRoomLobby({
         seatId,
         type,
       });
+      focusMembershipActionAfterCommandRef.current = true;
     } catch (error) {
       setFormError(getMultiplayerRoomRequestErrorMessage(error));
     } finally {
@@ -694,6 +858,7 @@ export function MultiplayerRoomLobby({
         participantId: activeParticipantId,
         type,
       });
+      focusMembershipActionAfterCommandRef.current = true;
     } catch (error) {
       setFormError(getMultiplayerRoomRequestErrorMessage(error));
     } finally {
@@ -764,6 +929,7 @@ export function MultiplayerRoomLobby({
         participantId: activeParticipantId,
         type: "room.lifecycle",
       });
+      queueMicrotask(() => roomHeadingRef.current?.focus());
     } catch (error) {
       setFormError(getMultiplayerRoomRequestErrorMessage(error));
     } finally {
@@ -793,6 +959,7 @@ export function MultiplayerRoomLobby({
         settings: { gameId },
         type: "room.replaceMatch",
       });
+      focusRoomGameAfterReplacementRef.current = true;
     } catch (error) {
       setFormError(getMultiplayerRoomRequestErrorMessage(error));
     } finally {
@@ -967,6 +1134,22 @@ export function MultiplayerRoomLobby({
           {hostAnnouncement}
         </p>
 
+        <div
+          className="sr-only"
+          data-testid="multiplayer-room-transition-announcement"
+        >
+          <p aria-atomic="true" role="status">
+            {roomTransitionAnnouncement.activeSlot === 0
+              ? roomTransitionAnnouncement.message
+              : null}
+          </p>
+          <p aria-atomic="true" role="status">
+            {roomTransitionAnnouncement.activeSlot === 1
+              ? roomTransitionAnnouncement.message
+              : null}
+          </p>
+        </div>
+
         {room === null &&
         loadError === null &&
         membershipEndedMessage === null ? (
@@ -979,7 +1162,10 @@ export function MultiplayerRoomLobby({
 
         {activeRoomGame !== null && room !== null ? (
           <>
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
+            <div
+              className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start"
+              ref={roomContentRef}
+            >
               <div className="min-w-0">{activeRoomGame}</div>
               <aside
                 className="flex flex-col gap-4"
@@ -1020,6 +1206,7 @@ export function MultiplayerRoomLobby({
                       ? MULTIPLAYER_ROOM_CONNECTION_STATUS_ID
                       : undefined
                   }
+                  membershipActionButtonRef={membershipActionButtonRef}
                   onCancelNextMatch={handleCancelNextMatch}
                   onJoinGame={handleClaimSeat}
                   onJoinNextMatch={handleJoinNextMatch}
@@ -1079,10 +1266,14 @@ export function MultiplayerRoomLobby({
             ) : null}
           </>
         ) : room !== null ? (
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.8fr)]">
+          <div
+            className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.8fr)]"
+            ref={roomContentRef}
+          >
             <div className="flex min-w-0 flex-col gap-4">
               <RoomSummary
                 copyStatus={copyStatus}
+                gameHeadingRef={roomGameHeadingRef}
                 inviteLink={inviteLink}
                 onCopyInviteLink={handleCopyInviteLink}
                 room={room}
@@ -1163,6 +1354,7 @@ export function MultiplayerRoomLobby({
                     ? MULTIPLAYER_ROOM_CONNECTION_STATUS_ID
                     : undefined
                 }
+                membershipActionButtonRef={membershipActionButtonRef}
                 onCancelNextMatch={handleCancelNextMatch}
                 onJoinGame={handleClaimSeat}
                 onJoinNextMatch={handleJoinNextMatch}
@@ -1226,6 +1418,7 @@ function RoomMessage({
 
 function RoomSummary({
   copyStatus,
+  gameHeadingRef,
   inviteLink,
   onCopyInviteLink,
   room,
@@ -1238,8 +1431,10 @@ function RoomSummary({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2
-              className="text-2xl font-semibold tracking-normal"
+              className="rounded-sm text-2xl font-semibold tracking-normal outline-none focus:ring-3 focus:ring-[var(--chrome-focus-ring)]"
               data-testid="multiplayer-room-game"
+              ref={gameHeadingRef}
+              tabIndex={-1}
             >
               {formatGameCatalogLabel(room.settings.gameId)}
             </h2>

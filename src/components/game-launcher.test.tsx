@@ -390,7 +390,7 @@ describe("game launcher", () => {
         focusHeadingOnMount: true,
         game: null,
         joinOutcomeMessage:
-          "You accepted Host's Watch invitation and joined as Watching.",
+          "You accepted Host's Watch invitation and initially joined as Watching.",
         participantCapability: "friend-capability",
         participantId: "friend-participant",
         room: ACCEPTED_PARTY_ROOM,
@@ -464,7 +464,7 @@ describe("game launcher", () => {
       createLauncherPartyInvitationHandoff(acceptance, "user-friend", 7)
         .activeRoomSession.joinOutcomeMessage,
     ).toBe(
-      "You accepted Host's Play invitation and joined as Watching because no player spot was available. You can request the next match.",
+      "You accepted Host's Play invitation and initially joined as Watching because no player spot was available. You can request the next match.",
     );
     expect(() =>
       createLauncherPartyInvitationHandoff(acceptance, "user-other", 8),
