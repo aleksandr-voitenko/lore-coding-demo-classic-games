@@ -83,7 +83,6 @@ describe("multiplayer room client command dispatch", () => {
       shouldPostMultiplayerRoomCommandOverHttp({
         displayName: "Katherine",
         type: "room.joinObserver",
-        userId: null,
       }),
     ).toBe(false);
     expect(
@@ -280,6 +279,7 @@ describe("multiplayer room HTTP client", () => {
   it("creates a signed-in host room and derives the participant from the snapshot", async () => {
     const fetcher = vi.fn<RoomFetch>(async () =>
       jsonResponse({
+        participantCapability: "host-capability",
         participant: ROOM.participants[0],
         room: ROOM,
         seq: 1,
@@ -293,13 +293,14 @@ describe("multiplayer room HTTP client", () => {
         settings: ROOM.settings,
       }),
     ).resolves.toEqual({
+      participantCapability: "host-capability",
       participantId: "host-1",
       room: ROOM,
       seq: 1,
     });
 
     expect(fetcher).toHaveBeenCalledWith(
-      MULTIPLAYER_ROOMS_API_PATH,
+      `${MULTIPLAYER_ROOMS_API_PATH}/v2`,
       expect.objectContaining({ method: "POST" }),
     );
     expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({
@@ -374,7 +375,7 @@ describe("multiplayer room HTTP client", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(fetcher).toHaveBeenNthCalledWith(
       1,
-      `${MULTIPLAYER_ROOMS_API_PATH}/ROOM1`,
+      `${MULTIPLAYER_ROOMS_API_PATH}/ROOM1/v2`,
       expect.objectContaining({ method: "POST" }),
     );
     expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({

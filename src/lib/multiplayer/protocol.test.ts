@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { MULTIPLAYER_ROOM_PROTOCOL_VERSION } from "./protocol";
 import type {
   MultiplayerRealtimeClientMessage,
   MultiplayerRealtimeGameInputMessage,
@@ -61,6 +62,7 @@ describe("multiplayer realtime protocol", () => {
   it("carries connection hello, resume, diagnostics ping, and bootstrap messages for a room", () => {
     const hello = {
       displayName: "Guest Hero",
+      protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
       roomCode: ROOM_CODE,
       type: "connection.hello",
     } satisfies MultiplayerRealtimeClientMessage;
@@ -69,7 +71,9 @@ describe("multiplayer realtime protocol", () => {
         game: 12,
         room: 7,
       },
+      participantCapability: "guest-capability",
       participantId: "guest-1",
+      protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
       roomCode: ROOM_CODE,
       type: "connection.resume",
     } satisfies MultiplayerRealtimeClientMessage;
@@ -82,6 +86,7 @@ describe("multiplayer realtime protocol", () => {
     const bootstrap = {
       displayName: "Guest Hero",
       participantId: "guest-1",
+      protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
       roomCode: ROOM_CODE,
       snapshot: {
         room: createProtocolRoom({ gameId: "space-invaders" }),
@@ -98,6 +103,7 @@ describe("multiplayer realtime protocol", () => {
       game: 12,
       room: 7,
     });
+    expect(resume.participantCapability).toBe("guest-capability");
     expect(ping.clientTimeMs).toBe(1_000);
     expect(bootstrap.snapshot.room.settings.gameId).toBe("space-invaders");
   });

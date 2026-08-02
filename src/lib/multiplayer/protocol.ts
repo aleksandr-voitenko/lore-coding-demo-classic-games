@@ -6,6 +6,12 @@ import type {
   PrivateRoomSettings,
 } from "./room";
 
+export const MULTIPLAYER_ROOM_PROTOCOL_VERSION = 2 as const;
+export const MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT =
+  `v${MULTIPLAYER_ROOM_PROTOCOL_VERSION}`;
+export const MULTIPLAYER_ROOM_PROTOCOL_VERSION_HEADER =
+  "x-multiplayer-room-protocol-version";
+
 export type PrivateRoomLifecycleCommand =
   | "finish"
   | "pause"
@@ -95,7 +101,6 @@ export type PrivateRoomCommandMessage =
       participantId?: string;
       requestId?: string;
       type: "room.joinObserver";
-      userId?: string | null;
     }
   | {
       participantId: string;
@@ -130,7 +135,9 @@ export type MultiplayerRealtimeConnectionCursor = {
 export type MultiplayerRealtimeConnectionMessage =
   | {
       displayName?: string;
+      participantCapability?: string;
       participantId?: string;
+      protocolVersion: typeof MULTIPLAYER_ROOM_PROTOCOL_VERSION;
       requestId?: string;
       roomCode: string;
       type: "connection.hello";
@@ -144,7 +151,9 @@ export type MultiplayerRealtimeConnectionMessage =
   | {
       displayName?: string;
       lastSeq?: MultiplayerRealtimeConnectionCursor;
+      participantCapability?: string;
       participantId?: string;
+      protocolVersion: typeof MULTIPLAYER_ROOM_PROTOCOL_VERSION;
       requestId?: string;
       roomCode: string;
       type: "connection.resume";
@@ -181,6 +190,8 @@ export type MultiplayerRealtimeRejectionCode =
   | "duplicate-room"
   | "invalid-command"
   | "invalid-message"
+  | "participant-unauthorized"
+  | "protocol-version-mismatch"
   | "room-expired"
   | "room-not-found"
   | "unsupported-game";
@@ -202,6 +213,7 @@ export type MultiplayerRealtimeServerMessage<
   | {
       displayName?: string;
       participantId?: string;
+      protocolVersion: typeof MULTIPLAYER_ROOM_PROTOCOL_VERSION;
       requestId?: string;
       roomCode: string;
       snapshot: MultiplayerRealtimeRoomSnapshot<GameSnapshot>;
@@ -220,6 +232,7 @@ export type MultiplayerRealtimeServerMessage<
     }
   | {
       gameSeq?: number;
+      participantCapability?: string;
       participantId?: string;
       requestId?: string;
       roomCode: string;

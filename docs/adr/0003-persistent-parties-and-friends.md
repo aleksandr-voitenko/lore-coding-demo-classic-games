@@ -223,6 +223,18 @@ gates until the party snapshot, protocol, and UI land together.
 - Old clients must fail clearly on unsupported party protocol versions rather
   than sending commands without a match generation or participant capability.
 
+Participant authority hardening introduces capability-aware protocol version 2.
+The internal room-service collection advertises the version and capability
+support plus a versioned mutation path, and every mutating internal POST uses
+that path and carries the version in a required header. The app preflights before
+posting while the sidecar validates the path and header before parsing the
+mutation. An old sidecar cannot route the versioned path if a rolling-deployment
+preflight and POST reach different instances. Browser-to-app mutations use
+parallel versioned public paths while legacy POST routes return 426. WebSocket
+hello/resume and bootstrap messages negotiate the same version before the
+gateway reads room state or activates a socket; a mismatched bootstrap is a
+terminal connection failure rather than a reconnect loop.
+
 The rollout order is: participant authority hardening; party/match separation;
 automatic player and observer flows; social persistence and APIs; friends UI;
 availability-gated invitations; reconnect and ownership polish; full browser and

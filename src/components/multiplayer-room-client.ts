@@ -9,6 +9,7 @@ import {
   useMultiplayerRoomWebSocketTransport,
 } from "@/components/multiplayer-room-transport";
 import type { GameId } from "@/lib/game-catalog";
+import { MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT } from "@/lib/multiplayer/protocol";
 import type {
   MultiplayerGameInputPayload,
   MultiplayerRealtimeConnectionCursor,
@@ -29,6 +30,7 @@ type RoomFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Respo
 
 export type MultiplayerRoomClientSnapshot = {
   game?: MultiplayerRoomGameSnapshot;
+  participantCapability?: string;
   participantId?: string;
   room: PrivateRoom;
   seq: number;
@@ -79,11 +81,13 @@ type UseMultiplayerRoomClientOptions = {
   lastSeq?: MultiplayerRealtimeConnectionCursor | null;
   onConnectionError?: (error: Error) => void;
   onDiagnosticsPingSample?: (sample: MultiplayerRoomTransportPingSample) => void;
+  onParticipantCapability?: (participantCapability: string) => void;
   onParticipantId?: (participantId: string) => void;
   onSnapshot: (
     snapshot: MultiplayerRoomClientSnapshot,
     source: "http" | "websocket",
   ) => void;
+  participantCapability?: string | null;
   participantId?: string | null;
   roomCode: string | null;
 };
@@ -110,24 +114,31 @@ export async function createMultiplayerRoom({
   gameId,
   settings,
 }: CreateMultiplayerRoomOptions) {
-  const response = await getDefaultFetcher(fetcher)(MULTIPLAYER_ROOMS_API_PATH, {
-    body: JSON.stringify({ gameId, settings }),
-    headers: {
-      "Content-Type": "application/json",
+  const response = await getDefaultFetcher(fetcher)(
+    `${MULTIPLAYER_ROOMS_API_PATH}/${MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT}`,
+    {
+      body: JSON.stringify({ gameId, settings }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
     },
-    method: "POST",
-  });
+  );
   const payload = await readRoomApiPayload(response, "Create room");
 
-  if (payload.participantId === undefined) {
+  if (
+    payload.participantId === undefined ||
+    payload.participantCapability === undefined
+  ) {
     throw new MultiplayerRoomRequestError(
-      "Create room response did not include a participant.",
+      "Create room response did not include participant credentials.",
       response.status,
     );
   }
 
   return {
     ...(payload.game === undefined ? {} : { game: payload.game }),
+    participantCapability: payload.participantCapability,
     participantId: payload.participantId,
     room: payload.room,
     seq: payload.seq,
@@ -139,13 +150,16 @@ export async function postMultiplayerRoomCommand(
   message: HostOnlyRoomCommandMessage,
   fetcher?: RoomFetch,
 ) {
-  const response = await getDefaultFetcher(fetcher)(getRoomApiPath(roomCode), {
-    body: JSON.stringify(message),
-    headers: {
-      "Content-Type": "application/json",
+  const response = await getDefaultFetcher(fetcher)(
+    getRoomMutationApiPath(roomCode),
+    {
+      body: JSON.stringify(message),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
     },
-    method: "POST",
-  });
+  );
 
   return readRoomApiPayload(response, "Room command");
 }
@@ -227,8 +241,10 @@ export function useMultiplayerRoomClient({
   lastSeq,
   onConnectionError,
   onDiagnosticsPingSample,
+  onParticipantCapability,
   onParticipantId,
   onSnapshot,
+  participantCapability,
   participantId,
   roomCode,
 }: UseMultiplayerRoomClientOptions): UseMultiplayerRoomClientResult {
@@ -239,10 +255,12 @@ export function useMultiplayerRoomClient({
     lastSeq,
     onConnectionError,
     onDiagnosticsPingSample,
+    onParticipantCapability,
     onParticipantId,
     onSnapshot: (snapshot) => {
       onSnapshot(snapshot, "websocket");
     },
+    participantCapability,
     participantId,
     roomCode,
   });
@@ -265,6 +283,10 @@ export function useMultiplayerRoomClient({
         },
       });
 
+      if (result.participantCapability !== undefined) {
+        onParticipantCapability?.(result.participantCapability);
+      }
+
       if (result.participantId !== undefined) {
         onParticipantId?.(result.participantId);
       }
@@ -277,6 +299,7 @@ export function useMultiplayerRoomClient({
     },
     [
       onParticipantId,
+      onParticipantCapability,
       onSnapshot,
       roomCode,
       sendGameInput,
@@ -299,14 +322,16 @@ function getDefaultFetcher(fetcher: RoomFetch | undefined) {
   return fetcher ?? fetch;
 }
 
-function getRoomApiPath(roomCode: string) {
+function getRoomMutationApiPath(roomCode: string) {
   const normalizedRoomCode = normalizePrivateRoomCode(roomCode);
 
   if (normalizedRoomCode === null) {
     throw new MultiplayerRoomRequestError("Room code is not supported.", 400);
   }
 
-  return `${MULTIPLAYER_ROOMS_API_PATH}/${encodeURIComponent(normalizedRoomCode)}`;
+  return `${MULTIPLAYER_ROOMS_API_PATH}/${encodeURIComponent(
+    normalizedRoomCode,
+  )}/${MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT}`;
 }
 
 async function readRoomApiPayload(
@@ -344,6 +369,8 @@ async function readRoomApiPayload(
     );
   }
 
+  const participantCapabilityValue = payload.participantCapability;
+
   if (!isMultiplayerRoomSnapshot(payload)) {
     throw new MultiplayerRoomRequestError(
       `${context} response included an invalid room snapshot.`,
@@ -352,16 +379,29 @@ async function readRoomApiPayload(
   }
 
   const participantId = payload.participant?.id;
+  const participantCapability =
+    typeof participantCapabilityValue === "string" &&
+    participantCapabilityValue.length > 0 &&
+    participantCapabilityValue.length <= 512 &&
+    participantCapabilityValue.trim() === participantCapabilityValue
+      ? participantCapabilityValue
+      : undefined;
   const game = payload.game;
 
   return participantId === undefined
     ? ({
         ...(game === undefined ? {} : { game }),
+        ...(participantCapability === undefined
+          ? {}
+          : { participantCapability }),
         room: payload.room,
         seq: payload.seq,
       } satisfies MultiplayerRoomClientSnapshot)
     : ({
         ...(game === undefined ? {} : { game }),
+        ...(participantCapability === undefined
+          ? {}
+          : { participantCapability }),
         participantId,
         room: payload.room,
         seq: payload.seq,

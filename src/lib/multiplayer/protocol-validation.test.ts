@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { MULTIPLAYER_ROOM_PROTOCOL_VERSION } from "./protocol";
 import type {
   MultiplayerRealtimeServerMessage,
   MultiplayerRoomSnapshot,
@@ -75,6 +76,7 @@ describe("multiplayer protocol validation", () => {
   it("accepts every known server discriminant and preserves forward-compatible fields", () => {
     const bootstrap = {
       participantId: "guest-1",
+      protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
       requestId: "bootstrap-1",
       roomCode: "ROOM1",
       snapshot: SNAPSHOT,
@@ -106,6 +108,7 @@ describe("multiplayer protocol validation", () => {
       },
       {
         gameSeq: 4,
+        participantCapability: "guest-capability",
         participantId: "guest-1",
         requestId: "command-1",
         roomCode: "ROOM1",
@@ -123,6 +126,20 @@ describe("multiplayer protocol validation", () => {
         code: "room-expired",
         error: "Room has expired.",
         requestId: "connection-2",
+        roomCode: "ROOM1",
+        type: "room.commandRejected",
+      },
+      {
+        code: "participant-unauthorized",
+        error: "Participant credentials are invalid.",
+        requestId: "connection-3",
+        roomCode: "ROOM1",
+        type: "room.commandRejected",
+      },
+      {
+        code: "protocol-version-mismatch",
+        error: "Refresh the page.",
+        requestId: "connection-4",
         roomCode: "ROOM1",
         type: "room.commandRejected",
       },
@@ -161,6 +178,15 @@ describe("multiplayer protocol validation", () => {
     [
       "fractional acknowledgement sequence",
       { roomCode: "ROOM1", seq: 1.5, type: "room.commandAck" },
+    ],
+    [
+      "participant capability without a participant id",
+      {
+        participantCapability: "guest-capability",
+        roomCode: "ROOM1",
+        seq: 2,
+        type: "room.commandAck",
+      },
     ],
     [
       "mismatched nested room code",

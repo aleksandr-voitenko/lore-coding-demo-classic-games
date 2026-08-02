@@ -1,5 +1,10 @@
 import "server-only";
 
+import {
+  MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT,
+  MULTIPLAYER_ROOM_PROTOCOL_VERSION,
+  MULTIPLAYER_ROOM_PROTOCOL_VERSION_HEADER,
+} from "../multiplayer/protocol";
 import { isMultiplayerRoomSnapshot } from "../multiplayer/protocol-validation";
 import { normalizePrivateRoomCode } from "../multiplayer/room";
 
@@ -42,6 +47,12 @@ export class MultiplayerRoomServiceClient implements MultiplayerRoomStore {
   async createRoom(
     options: CreateMultiplayerRoomOptions,
   ): Promise<MultiplayerRoomStoreResult> {
+    const protocolFailure = await this.#verifyMutationProtocol();
+
+    if (protocolFailure !== null) {
+      return protocolFailure;
+    }
+
     return this.#request("POST", undefined, options);
   }
 
@@ -71,7 +82,59 @@ export class MultiplayerRoomServiceClient implements MultiplayerRoomStore {
       );
     }
 
+    const protocolFailure = await this.#verifyMutationProtocol();
+
+    if (protocolFailure !== null) {
+      return protocolFailure;
+    }
+
     return this.#request("POST", normalizedRoomCode, command);
+  }
+
+  async #verifyMutationProtocol(): Promise<
+    Extract<MultiplayerRoomStoreResult, { success: false }> | null
+  > {
+    let response: Response;
+
+    try {
+      response = await this.#fetcher(this.#baseUrl, {
+        headers: this.#getHeaders(false, false),
+        method: "GET",
+      });
+    } catch (error) {
+      return createServiceFailure(
+        "room-service-unavailable",
+        `Room service protocol check failed for GET ${this.#baseUrl}: ${getErrorMessage(
+          error,
+        )}`,
+      );
+    }
+
+    let payload: unknown;
+
+    try {
+      payload = await response.json();
+    } catch {
+      return createServiceFailure(
+        "room-service-invalid-response",
+        `Room service protocol check returned ${response.status} without valid JSON.`,
+      );
+    }
+
+    if (
+      !isRecord(payload) ||
+      payload.mutationPathSegment !==
+        MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT ||
+      payload.protocolVersion !== MULTIPLAYER_ROOM_PROTOCOL_VERSION ||
+      payload.participantCapabilities !== true
+    ) {
+      return createServiceFailure(
+        "room-service-invalid-response",
+        `Room service protocol check returned ${response.status} without capability protocol version ${MULTIPLAYER_ROOM_PROTOCOL_VERSION}.`,
+      );
+    }
+
+    return null;
   }
 
   async #request(
@@ -79,13 +142,13 @@ export class MultiplayerRoomServiceClient implements MultiplayerRoomStore {
     roomCode: string | undefined,
     body?: unknown,
   ): Promise<MultiplayerRoomStoreResult> {
-    const url = this.#getRequestUrl(roomCode);
+    const url = this.#getRequestUrl(roomCode, method === "POST");
     let response: Response;
 
     try {
       response = await this.#fetcher(url, {
         body: body === undefined ? undefined : JSON.stringify(body),
-        headers: this.#getHeaders(body !== undefined),
+        headers: this.#getHeaders(body !== undefined, method === "POST"),
         method,
       });
     } catch (error) {
@@ -120,19 +183,29 @@ export class MultiplayerRoomServiceClient implements MultiplayerRoomStore {
     return result;
   }
 
-  #getRequestUrl(roomCode: string | undefined) {
+  #getRequestUrl(roomCode: string | undefined, mutation: boolean) {
+    const baseUrl = mutation
+      ? `${this.#baseUrl}/${MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT}`
+      : this.#baseUrl;
+
     return roomCode === undefined
-      ? this.#baseUrl
-      : `${this.#baseUrl}/${encodeURIComponent(roomCode)}`;
+      ? baseUrl
+      : `${baseUrl}/${encodeURIComponent(roomCode)}`;
   }
 
-  #getHeaders(hasBody: boolean) {
+  #getHeaders(hasBody: boolean, includeProtocolVersion: boolean) {
     const headers: Record<string, string> = {
       accept: "application/json",
     };
 
     if (hasBody) {
       headers["content-type"] = "application/json";
+    }
+
+    if (includeProtocolVersion) {
+      headers[MULTIPLAYER_ROOM_PROTOCOL_VERSION_HEADER] = String(
+        MULTIPLAYER_ROOM_PROTOCOL_VERSION,
+      );
     }
 
     if (this.#bearerToken !== undefined) {
@@ -197,11 +270,19 @@ function parseMultiplayerRoomServiceResult(
   }
 
   if (value.success) {
-    if (!isMultiplayerRoomSnapshot(value.snapshot)) {
+    if (
+      !isMultiplayerRoomSnapshot(value.snapshot) ||
+      !isOptionalParticipantCapability(value.participantCapability) ||
+      (value.participantCapability !== undefined &&
+        value.snapshot.participant === undefined)
+    ) {
       return null;
     }
 
     return {
+      ...(value.participantCapability === undefined
+        ? {}
+        : { participantCapability: value.participantCapability }),
       snapshot: value.snapshot as MultiplayerRoomSnapshot,
       success: true,
     };
@@ -221,10 +302,22 @@ function parseMultiplayerRoomServiceResult(
   return null;
 }
 
+function isOptionalParticipantCapability(
+  value: unknown,
+): value is string | undefined {
+  return (
+    value === undefined ||
+    (typeof value === "string" &&
+      value.length > 0 &&
+      value.length <= 512 &&
+      value.trim() === value)
+  );
+}
+
 function createServiceFailure(
   code: Extract<MultiplayerRoomStoreResult, { success: false }>["code"],
   error: string,
-): MultiplayerRoomStoreResult {
+): Extract<MultiplayerRoomStoreResult, { success: false }> {
   return {
     code,
     error,

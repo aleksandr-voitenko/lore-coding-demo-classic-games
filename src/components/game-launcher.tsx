@@ -26,6 +26,11 @@ import { PLAYABLE_GAME_COMPONENTS } from "@/components/game-launcher-playables";
 import { GlobalLeaderboardScreen } from "@/components/global-leaderboard";
 import { createMultiplayerRoom } from "@/components/multiplayer-room-client";
 import { MultiplayerRoomLobby } from "@/components/multiplayer-room-lobby";
+import {
+  readMultiplayerRoomParticipantCredentials,
+  removeMultiplayerRoomParticipantCredentials,
+  writeMultiplayerRoomParticipantCredentials,
+} from "@/components/multiplayer-room-participant-credentials";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserAccountControls } from "@/components/user-account-controls";
 import { useCurrentUser } from "@/hooks/use-current-user";
@@ -54,9 +59,11 @@ type GameLauncherProps = {
 };
 
 type ActiveRoomSession = {
+  participantCapability: string | null;
   participantId: string | null;
   room: PrivateRoom | null;
   roomCode: string;
+  userId: string | null;
 };
 
 type PrivateRoomCreateRequest = {
@@ -66,8 +73,9 @@ type PrivateRoomCreateRequest = {
 };
 
 type RoomParticipantCapability = {
+  participantCapability: string;
   participantId: string;
-  userId: string;
+  userId: string | null;
 };
 
 type GameCardAction = "host-room" | "play";
@@ -106,13 +114,29 @@ export function GameLauncher({
 }: GameLauncherProps) {
   const { user } = useCurrentUser();
   const currentUserId = user?.id ?? null;
-  const [activeRoomSession, setActiveRoomSession] = useState<ActiveRoomSession | null>(() =>
-    initialRoomCode === null ? null : createUnloadedActiveRoomSession(initialRoomCode),
-  );
-  // Participant ids are capabilities, so only retain their creating account alongside them.
+  // Public participant ids are paired with private, account-scoped capabilities.
   const roomParticipantCapabilityHistoryRef = useRef<
     Map<string, RoomParticipantCapability>
   >(new Map());
+  const [activeRoomSession, setActiveRoomSession] = useState<ActiveRoomSession | null>(
+    () => {
+      if (initialRoomCode === null) {
+        return null;
+      }
+
+      const credentials = readMultiplayerRoomParticipantCredentials(
+        initialRoomCode,
+        currentUserId,
+      );
+
+      return createUnloadedActiveRoomSession(
+        initialRoomCode,
+        credentials?.participantId ?? null,
+        credentials?.participantCapability ?? null,
+        credentials?.userId ?? currentUserId,
+      );
+    },
+  );
   const roomCreateRequestGenerationRef = useRef(0);
   const [selectedGameId, setSelectedGameId] = useState<GameId | null>(initialReplayGameId);
   const [selectedReplayMode, setSelectedReplayMode] = useState<"latest" | null>(
@@ -160,6 +184,7 @@ export function GameLauncher({
     for (const [roomCode, capability] of roomParticipantCapabilityHistoryRef.current) {
       if (capability.userId !== currentUserId) {
         roomParticipantCapabilityHistoryRef.current.delete(roomCode);
+        removeMultiplayerRoomParticipantCredentials(roomCode);
       }
     }
 
@@ -173,14 +198,35 @@ export function GameLauncher({
         }
 
         const capability = roomParticipantCapabilityHistoryRef.current.get(roomCode);
+        const storedCredentials = readMultiplayerRoomParticipantCredentials(
+          roomCode,
+          currentUserId,
+        );
 
         if (capability !== undefined && capability.userId !== currentUserId) {
           roomParticipantCapabilityHistoryRef.current.delete(roomCode);
         }
 
+        if (
+          capability?.userId !== currentUserId &&
+          storedCredentials !== null
+        ) {
+          roomParticipantCapabilityHistoryRef.current.set(
+            roomCode,
+            storedCredentials,
+          );
+        }
+
+        const selectedCredentials =
+          capability?.userId === currentUserId
+            ? capability
+            : storedCredentials;
+
         return createUnloadedActiveRoomSession(
           roomCode,
-          capability?.userId === currentUserId ? capability.participantId : null,
+          selectedCredentials?.participantId ?? null,
+          selectedCredentials?.participantCapability ?? null,
+          selectedCredentials?.userId ?? currentUserId,
         );
       });
       setPrivateRoomCreateError(null);
@@ -327,12 +373,20 @@ export function GameLauncher({
         }
 
         const activeRoom = {
+          participantCapability: result.participantCapability,
           participantId: result.participantId,
           room: result.room,
           roomCode: result.room.code,
+          userId: currentUserId,
         } satisfies ActiveRoomSession;
 
         roomParticipantCapabilityHistoryRef.current.set(activeRoom.roomCode, {
+          participantCapability: result.participantCapability,
+          participantId: result.participantId,
+          userId: currentUserId,
+        });
+        writeMultiplayerRoomParticipantCredentials(activeRoom.roomCode, {
+          participantCapability: result.participantCapability,
           participantId: result.participantId,
           userId: currentUserId,
         });
@@ -357,13 +411,25 @@ export function GameLauncher({
   );
 
   if (activeRoomSession !== null) {
+    const credentialsBelongToCurrentUser =
+      activeRoomSession.userId === currentUserId;
+
     return (
       <MultiplayerRoomLobby
         initialAuthMode={initialAuthMode}
-        initialParticipantId={activeRoomSession.participantId}
+        initialParticipantCapability={
+          credentialsBelongToCurrentUser
+            ? activeRoomSession.participantCapability
+            : null
+        }
+        initialParticipantId={
+          credentialsBelongToCurrentUser
+            ? activeRoomSession.participantId
+            : null
+        }
         initialRoom={activeRoomSession.room}
         initialRoomCode={activeRoomSession.roomCode}
-        key={activeRoomSession.roomCode}
+        key={`${activeRoomSession.roomCode}:${currentUserId ?? "guest"}`}
         onBackToLibrary={returnToLibraryFromRoom}
       />
     );
@@ -699,11 +765,15 @@ export function getLauncherPrivateRoomCodeFromSearch(search: string) {
 function createUnloadedActiveRoomSession(
   roomCode: string,
   participantId: string | null = null,
+  participantCapability: string | null = null,
+  userId: string | null = null,
 ): ActiveRoomSession {
   return {
+    participantCapability,
     participantId,
     room: null,
     roomCode,
+    userId,
   };
 }
 

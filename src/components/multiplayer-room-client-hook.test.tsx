@@ -60,7 +60,11 @@ const SNAPSHOT = {
 function createRoomTransport() {
   return {
     sendGameInput: vi.fn(async () => ({ gameSeq: 4, seq: 3 })),
-    sendRoomCommand: vi.fn(async () => ({ participantId: "guest-1", seq: 3 })),
+    sendRoomCommand: vi.fn(async () => ({
+      participantCapability: "guest-capability",
+      participantId: "guest-1",
+      seq: 3,
+    })),
     status: "active" as const,
   };
 }
@@ -75,8 +79,10 @@ function createRoomClientOptions(
     lastSeq: { game: 4, room: 3 },
     onConnectionError: vi.fn(),
     onDiagnosticsPingSample: vi.fn(),
+    onParticipantCapability: vi.fn(),
     onParticipantId: vi.fn(),
     onSnapshot: vi.fn(),
+    participantCapability: "guest-capability",
     participantId: "guest-1",
     roomCode: "ROOM1",
     ...overrides,
@@ -127,7 +133,9 @@ describe("useMultiplayerRoomClient", () => {
       lastSeq: options.lastSeq,
       onConnectionError: options.onConnectionError,
       onDiagnosticsPingSample: options.onDiagnosticsPingSample,
+      onParticipantCapability: options.onParticipantCapability,
       onParticipantId: options.onParticipantId,
+      participantCapability: options.participantCapability,
       participantId: options.participantId,
       roomCode: options.roomCode,
     });
@@ -183,6 +191,9 @@ describe("useMultiplayerRoomClient", () => {
       type: "room.claimSeat",
     });
     expect(options.onParticipantId).toHaveBeenCalledWith("guest-1");
+    expect(options.onParticipantCapability).toHaveBeenCalledWith(
+      "guest-capability",
+    );
     expect(options.onSnapshot).not.toHaveBeenCalled();
   });
 });

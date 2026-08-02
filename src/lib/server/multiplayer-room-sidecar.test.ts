@@ -4,6 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket, type RawData } from "ws";
 
 import {
+  MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT,
+  MULTIPLAYER_ROOM_PROTOCOL_VERSION,
+  MULTIPLAYER_ROOM_PROTOCOL_VERSION_HEADER,
+} from "@/lib/multiplayer/protocol";
+import {
   DEFAULT_MULTIPLAYER_ROOM_RETENTION_POLICY,
   type MultiplayerRoomStoreResult,
 } from "./multiplayer-room-runtime";
@@ -23,6 +28,12 @@ import {
 } from "./multiplayer-room-sidecar";
 
 const cleanupCallbacks: Array<() => Promise<void> | void> = [];
+const ROOM_SERVICE_MUTATION_HEADERS = {
+  "content-type": "application/json",
+  [MULTIPLAYER_ROOM_PROTOCOL_VERSION_HEADER]: String(
+    MULTIPLAYER_ROOM_PROTOCOL_VERSION,
+  ),
+};
 
 afterEach(async () => {
   const callbacks = cleanupCallbacks.splice(0).reverse();
@@ -152,7 +163,16 @@ function rawDataToText(data: RawData) {
 }
 
 function sendClientMessage(client: WebSocket, message: unknown) {
-  client.send(JSON.stringify(message));
+  const versionedMessage =
+    isRecord(message) &&
+    (message.type === "connection.hello" || message.type === "connection.resume")
+      ? {
+          protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
+          ...message,
+        }
+      : message;
+
+  client.send(JSON.stringify(versionedMessage));
 }
 
 async function readStoreResult(response: Response) {
@@ -352,6 +372,37 @@ describe("multiplayer room sidecar", () => {
     expect(client.readyState).toBe(WebSocket.OPEN);
   });
 
+  it("advertises its capability protocol and rejects an unversioned mutation path before room creation", async () => {
+    const sidecar = await createStartedSidecar();
+    const origin = getOrigin(sidecar);
+    const serviceBaseUrl = `${origin}/_internal/rooms`;
+
+    const handshakeResponse = await fetch(serviceBaseUrl);
+    const mutationResponse = await fetch(serviceBaseUrl, {
+      body: JSON.stringify({
+        host: {
+          displayName: "Ada Host",
+          id: "user-1",
+        },
+      }),
+      headers: ROOM_SERVICE_MUTATION_HEADERS,
+      method: "POST",
+    });
+    const roomResponse = await fetch(`${serviceBaseUrl}/ROOM1`);
+
+    expect(handshakeResponse.status).toBe(200);
+    await expect(handshakeResponse.json()).resolves.toEqual({
+      mutationPathSegment: "v2",
+      participantCapabilities: true,
+      protocolVersion: 2,
+    });
+    expect(mutationResponse.status).toBe(426);
+    await expect(mutationResponse.json()).resolves.toEqual({
+      error: "Room service protocol version is not supported.",
+    });
+    expect(roomResponse.status).toBe(404);
+  });
+
   it("rejects room creation at configured capacity while a participant is connected", async () => {
     const sidecar = await createStartedSidecar(
       createTestConfig({ maxRooms: 1 }),
@@ -359,7 +410,7 @@ describe("multiplayer room sidecar", () => {
     const origin = getOrigin(sidecar);
     const serviceBaseUrl = `${origin}/_internal/rooms`;
     const createRoomRequest = () =>
-      fetch(serviceBaseUrl, {
+      fetch(`${serviceBaseUrl}/${MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT}`, {
         body: JSON.stringify({
           host: {
             displayName: "Ada Host",
@@ -369,13 +420,16 @@ describe("multiplayer room sidecar", () => {
             gameId: "pong",
           },
         }),
-        headers: {
-          "content-type": "application/json",
-        },
+        headers: ROOM_SERVICE_MUTATION_HEADERS,
         method: "POST",
       });
     const firstResponse = await createRoomRequest();
-    const firstSnapshot = expectStoreSuccess(await readStoreResult(firstResponse));
+    const firstResult = await readStoreResult(firstResponse);
+    const firstSnapshot = expectStoreSuccess(firstResult);
+
+    if (!firstResult.success || firstResult.participantCapability === undefined) {
+      throw new Error("Expected room creation to include a host capability.");
+    }
     const client = await connectClient(
       origin.replace("http://", "ws://") + "/rooms",
     );
@@ -385,6 +439,7 @@ describe("multiplayer room sidecar", () => {
     );
 
     sendClientMessage(client, {
+      participantCapability: firstResult.participantCapability,
       participantId: firstSnapshot.room.hostParticipantId,
       requestId: "capacity-bootstrap",
       roomCode: firstSnapshot.room.code,
@@ -412,27 +467,26 @@ describe("multiplayer room sidecar", () => {
           id: "user-1",
         },
       }),
-      headers: {
-        "content-type": "application/json",
-      },
+      headers: ROOM_SERVICE_MUTATION_HEADERS,
       method: "POST",
     });
     const serviceBaseUrl = `${origin}/_internal/rooms`;
-    const createResponse = await fetch(serviceBaseUrl, {
-      body: JSON.stringify({
-        host: {
-          displayName: "Ada Host",
-          id: "user-1",
-        },
-        settings: {
-          gameId: "pong",
-        },
-      }),
-      headers: {
-        "content-type": "application/json",
+    const createResponse = await fetch(
+      `${serviceBaseUrl}/${MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT}`,
+      {
+        body: JSON.stringify({
+          host: {
+            displayName: "Ada Host",
+            id: "user-1",
+          },
+          settings: {
+            gameId: "pong",
+          },
+        }),
+        headers: ROOM_SERVICE_MUTATION_HEADERS,
+        method: "POST",
       },
-      method: "POST",
-    });
+    );
 
     expect(publicPathCreateResponse.status).toBe(404);
     await expect(publicPathCreateResponse.json()).resolves.toEqual({
@@ -494,11 +548,6 @@ describe("multiplayer room sidecar", () => {
       throw new Error("Expected the join ack to include a participant id.");
     }
 
-    const httpCommandBroadcastPromise = waitForServerMessage(
-      client,
-      (message) => hasSeatOccupantSnapshot(message, "left", guestParticipantId),
-    );
-
     const afterWebSocketCommandResponse = await fetch(
       `${serviceBaseUrl}/${roomCode}`,
     );
@@ -517,17 +566,56 @@ describe("multiplayer room sidecar", () => {
       }),
     ]);
 
-    const httpCommandResponse = await fetch(`${serviceBaseUrl}/${roomCode}`, {
-      body: JSON.stringify({
-        participantId: guestParticipantId,
-        seatId: "left",
-        type: "room.claimSeat",
-      }),
-      headers: {
-        "content-type": "application/json",
+    const unversionedCommandResponse = await fetch(
+      `${serviceBaseUrl}/${roomCode}`,
+      {
+        body: JSON.stringify({
+          participantId: guestParticipantId,
+          seatId: "left",
+          type: "room.claimSeat",
+        }),
+        headers: ROOM_SERVICE_MUTATION_HEADERS,
+        method: "POST",
       },
-      method: "POST",
+    );
+
+    expect(unversionedCommandResponse.status).toBe(426);
+    await expect(unversionedCommandResponse.json()).resolves.toEqual({
+      error: "Room service protocol version is not supported.",
     });
+
+    const afterRejectedCommandSnapshot = expectStoreSuccess(
+      await readStoreResult(await fetch(`${serviceBaseUrl}/${roomCode}`)),
+    );
+
+    expect(afterRejectedCommandSnapshot.room.seats).toEqual([
+      expect.objectContaining({
+        id: "left",
+        occupiedByParticipantId: null,
+      }),
+      expect.objectContaining({
+        id: "right",
+        occupiedByParticipantId: null,
+      }),
+    ]);
+
+    const httpCommandBroadcastPromise = waitForServerMessage(
+      client,
+      (message) => hasSeatOccupantSnapshot(message, "left", guestParticipantId),
+    );
+
+    const httpCommandResponse = await fetch(
+      `${serviceBaseUrl}/${MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT}/${roomCode}`,
+      {
+        body: JSON.stringify({
+          participantId: guestParticipantId,
+          seatId: "left",
+          type: "room.claimSeat",
+        }),
+        headers: ROOM_SERVICE_MUTATION_HEADERS,
+        method: "POST",
+      },
+    );
 
     expect(httpCommandResponse.status).toBe(200);
 
@@ -609,11 +697,12 @@ describe("multiplayer room sidecar", () => {
       }),
     );
     const origin = getOrigin(sidecar);
-    const unauthorizedResponse = await fetch(`${origin}/_internal/rooms`, {
+    const mutationUrl = `${origin}/_internal/rooms/${MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT}`;
+    const unauthorizedResponse = await fetch(mutationUrl, {
       body: "{}",
       method: "POST",
     });
-    const authorizedResponse = await fetch(`${origin}/_internal/rooms`, {
+    const authorizedResponse = await fetch(mutationUrl, {
       body: JSON.stringify({
         host: {
           displayName: "Ada Host",
@@ -621,8 +710,8 @@ describe("multiplayer room sidecar", () => {
         },
       }),
       headers: {
+        ...ROOM_SERVICE_MUTATION_HEADERS,
         authorization: "Bearer service-secret",
-        "content-type": "application/json",
       },
       method: "POST",
     });

@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 
 import type { PrivateRoomLifecycleCommand } from "../multiplayer/protocol";
 import type {
@@ -40,7 +40,6 @@ export type MultiplayerRoomStoreCommand =
   | {
       displayName: unknown;
       type: "room.joinObserver";
-      userId?: unknown;
     }
   | {
       participantId: unknown;
@@ -74,6 +73,11 @@ export type MultiplayerRoomParticipantIdFactoryContext = {
   roomCode: string;
 };
 
+export type MultiplayerRoomParticipantCapabilityFactoryContext =
+  MultiplayerRoomParticipantIdFactoryContext & {
+    participantId: string;
+  };
+
 export type CreateMultiplayerRoomOptions = {
   host: MultiplayerRoomHostUser;
   seats?: readonly PrivateRoomSeatInput[];
@@ -105,6 +109,7 @@ export type MultiplayerRoomStoreErrorCode =
 
 export type MultiplayerRoomStoreResult =
   | {
+      participantCapability?: string;
       snapshot: MultiplayerRoomSnapshot;
       success: true;
     }
@@ -141,6 +146,10 @@ export type MultiplayerRoomStore = {
  * room authority. Remote room-service clients intentionally do not implement it.
  */
 export type MultiplayerRoomParticipantConnectionStore = {
+  resolveParticipantCapability: (
+    roomCode: unknown,
+    participantCapability: unknown,
+  ) => string | null;
   registerParticipantConnection: (
     roomCode: unknown,
     participantId: unknown,
@@ -169,6 +178,9 @@ export const DEFAULT_MULTIPLAYER_ROOM_RETENTION_POLICY = {
 } as const satisfies MultiplayerRoomRetentionPolicy;
 
 type CreateInProcessMultiplayerRoomStoreOptions = {
+  createParticipantCapability?: (
+    context: MultiplayerRoomParticipantCapabilityFactoryContext,
+  ) => string;
   createParticipantId?: (
     context: MultiplayerRoomParticipantIdFactoryContext,
   ) => string;
@@ -184,6 +196,7 @@ type StoredMultiplayerRoom = {
   game?: StoredMultiplayerGameRuntime;
   lastDisconnectedAtMs?: number;
   lastMeaningfulActivityAtMs: number;
+  participantCapabilityHashesByParticipantId: Map<string, Buffer>;
   room: PrivateRoom;
   seq: number;
   terminalAtMs?: number;
@@ -208,6 +221,10 @@ function createDefaultParticipantId() {
   return randomUUID();
 }
 
+function createDefaultParticipantCapability() {
+  return randomBytes(32).toString("base64url");
+}
+
 function createDefaultNowMs() {
   return Date.now();
 }
@@ -219,6 +236,7 @@ export function isMultiplayerRoomParticipantConnectionStore(
     Partial<MultiplayerRoomParticipantConnectionStore>;
 
   return (
+    typeof candidate.resolveParticipantCapability === "function" &&
     typeof candidate.registerParticipantConnection === "function" &&
     typeof candidate.unregisterParticipantConnection === "function"
   );
@@ -419,6 +437,7 @@ function createStoredRoomSnapshot(
   storedRoom: StoredMultiplayerRoom,
   serverTimeMs: number,
   participantId?: string,
+  participantCapability?: string,
 ): MultiplayerRoomStoreSuccess {
   const room = clonePrivateRoom(storedRoom.room);
   const participant =
@@ -435,6 +454,7 @@ function createStoredRoomSnapshot(
         });
 
   return {
+    ...(participantCapability === undefined ? {} : { participantCapability }),
     snapshot: {
       ...(game === undefined ? {} : { game }),
       ...(participant === undefined ? {} : { participant }),
@@ -443,6 +463,22 @@ function createStoredRoomSnapshot(
     },
     success: true,
   };
+}
+
+function normalizeParticipantCapability(value: unknown) {
+  if (typeof value !== "string" || value.length === 0 || value.length > 512) {
+    return null;
+  }
+
+  return value.trim() === value ? value : null;
+}
+
+function hashParticipantCapability(participantCapability: string) {
+  return createHash("sha256").update(participantCapability, "utf8").digest();
+}
+
+function participantCapabilityHashesMatch(left: Buffer, right: Buffer) {
+  return left.byteLength === right.byteLength && timingSafeEqual(left, right);
 }
 
 function getCommandParticipantIdValue(
@@ -626,6 +662,9 @@ function getCreateRoomSeats(
 export class InProcessMultiplayerRoomStore
   implements MultiplayerRoomStore, MultiplayerRoomParticipantConnectionStore
 {
+  readonly #createParticipantCapability: (
+    context: MultiplayerRoomParticipantCapabilityFactoryContext,
+  ) => string;
   readonly #createParticipantId: (
     context: MultiplayerRoomParticipantIdFactoryContext,
   ) => string;
@@ -638,12 +677,14 @@ export class InProcessMultiplayerRoomStore
   #lastSweepAtMs: number;
 
   constructor({
+    createParticipantCapability = createDefaultParticipantCapability,
     createParticipantId = createDefaultParticipantId,
     createRoomCode = createDefaultRoomCode,
     getNowMs = createDefaultNowMs,
     maxRooms = DEFAULT_MULTIPLAYER_ROOM_MAX_ROOMS,
     retentionPolicy,
   }: CreateInProcessMultiplayerRoomStoreOptions = {}) {
+    this.#createParticipantCapability = createParticipantCapability;
     this.#createParticipantId = createParticipantId;
     this.#createRoomCode = createRoomCode;
     this.#getNowMs = getNowMs;
@@ -699,10 +740,21 @@ export class InProcessMultiplayerRoomStore
       );
     }
 
+    const participantCapabilityHashesByParticipantId = new Map<string, Buffer>();
+    const hostParticipantCapability = this.#mintParticipantCapability(
+      participantCapabilityHashesByParticipantId,
+      {
+        participantId: result.room.hostParticipantId,
+        role: "host",
+        roomCode: result.room.code,
+      },
+    );
+
     const storedRoom: StoredMultiplayerRoom = {
       connectedParticipantCount: 0,
       connectionCountsByParticipantId: new Map(),
       lastMeaningfulActivityAtMs: nowMs,
+      participantCapabilityHashesByParticipantId,
       room: result.room,
       seq: INITIAL_ROOM_SEQUENCE,
     };
@@ -713,6 +765,7 @@ export class InProcessMultiplayerRoomStore
       storedRoom,
       nowMs,
       result.room.hostParticipantId,
+      hostParticipantCapability,
     );
   }
 
@@ -767,6 +820,7 @@ export class InProcessMultiplayerRoomStore
       );
     }
 
+    let participantCapability: string | undefined;
     let participantId: string | undefined;
     let result:
       | ReturnType<typeof addPrivateRoomGuestParticipantAsObserver>
@@ -783,7 +837,6 @@ export class InProcessMultiplayerRoomStore
       result = addPrivateRoomGuestParticipantAsObserver(storedRoom.room, {
         displayName: command.displayName,
         participantId,
-        userId: command.userId,
       });
     } else if (command.type === "room.claimSeat") {
       participantId = getCommandParticipantIdValue(command);
@@ -803,6 +856,17 @@ export class InProcessMultiplayerRoomStore
       return getPrivateRoomOperationFailure(result);
     }
 
+    if (command.type === "room.joinObserver" && participantId !== undefined) {
+      participantCapability = this.#mintParticipantCapability(
+        storedRoom.participantCapabilityHashesByParticipantId,
+        {
+          participantId,
+          role: "observer",
+          roomCode: storedRoom.room.code,
+        },
+      );
+    }
+
     storedRoom.room = result.room;
     if (command.type === "room.lifecycle") {
       const gameLifecycleResult = applyGameLifecycleCommand(storedRoom, command, nowMs);
@@ -818,7 +882,45 @@ export class InProcessMultiplayerRoomStore
     storedRoom.lastMeaningfulActivityAtMs = nowMs;
     refreshStoredRoomTerminalAt(storedRoom, nowMs);
 
-    return createStoredRoomSnapshot(storedRoom, nowMs, participantId);
+    return createStoredRoomSnapshot(
+      storedRoom,
+      nowMs,
+      participantId,
+      participantCapability,
+    );
+  }
+
+  resolveParticipantCapability(
+    roomCode: unknown,
+    participantCapability: unknown,
+  ) {
+    const nowMs = this.#getNowMs();
+
+    this.#sweepIfDue(nowMs);
+
+    const storedRoom = this.#getStoredRoom(roomCode, nowMs);
+    const normalizedCapability = normalizeParticipantCapability(
+      participantCapability,
+    );
+
+    if (!("room" in storedRoom) || normalizedCapability === null) {
+      return null;
+    }
+
+    const candidateHash = hashParticipantCapability(normalizedCapability);
+
+    for (const [participantId, storedHash] of storedRoom.participantCapabilityHashesByParticipantId) {
+      if (
+        participantCapabilityHashesMatch(candidateHash, storedHash) &&
+        storedRoom.room.participants.some(
+          (participant) => participant.id === participantId,
+        )
+      ) {
+        return participantId;
+      }
+    }
+
+    return null;
   }
 
   registerParticipantConnection(roomCode: unknown, participantId: unknown) {
@@ -888,6 +990,38 @@ export class InProcessMultiplayerRoomStore
 
   sweepExpiredRooms() {
     return this.#sweepExpiredRooms(this.#getNowMs());
+  }
+
+  #mintParticipantCapability(
+    capabilityHashesByParticipantId: Map<string, Buffer>,
+    context: MultiplayerRoomParticipantCapabilityFactoryContext,
+  ) {
+    const participantCapability = normalizeParticipantCapability(
+      this.#createParticipantCapability(context),
+    );
+
+    if (participantCapability === null) {
+      throw new Error("Participant capability factory must return a non-empty string.");
+    }
+
+    const participantCapabilityHash = hashParticipantCapability(
+      participantCapability,
+    );
+
+    if (
+      Array.from(capabilityHashesByParticipantId.values()).some((storedHash) =>
+        participantCapabilityHashesMatch(storedHash, participantCapabilityHash),
+      )
+    ) {
+      throw new Error("Participant capability factory must return unique values.");
+    }
+
+    capabilityHashesByParticipantId.set(
+      context.participantId,
+      participantCapabilityHash,
+    );
+
+    return participantCapability;
   }
 
   #getStoredRoom(

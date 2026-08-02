@@ -155,9 +155,13 @@ after 60 minutes without a successful participant or host command; an
 unconnected running or paused room expires after two hours; and a completed
 game or explicitly finished room expires after 30 minutes. Passive invite
 reads, connection handshakes, diagnostics pings, snapshot delivery, and
-server-owned game ticks do not refresh those clocks. A WebSocket carrying a
-participant capability that still belongs to the room protects it from expiry,
-and the final recognized disconnect grants the room its full state-specific
+server-owned game ticks do not refresh those clocks. Public participant ids in
+room snapshots are not credentials. Room creation and guest admission return a
+separate opaque participant capability only to that participant, and the browser
+keeps it in account-scoped session storage for same-tab navigation and reloads.
+A WebSocket authenticated with a capability that still belongs to the room
+protects it from expiry, and the final recognized disconnect grants the room its
+full state-specific
 grace period again.
 
 The sidecar sweeps expired rooms about once a minute and also checks retention
@@ -242,12 +246,28 @@ or unavailable, the room UI surfaces a stream connection error instead of using
 browser HTTP polling. Host lifecycle and settings commands continue to use the
 Next HTTP API so signed-in-host authorization stays on the authenticated route
 until the WebSocket sidecar has its own authenticated host session model.
+The gateway resolves participant capabilities during resume and derives seat and
+game-input actors from the bound socket. Participant ids submitted without a
+valid capability cannot resume or authorize commands, and public observer joins
+cannot attach an account identity.
 
 The sidecar room service endpoints are internal service endpoints; public HTTP
 room creation and host authorization should still flow through the Next API
 routes. If the internal hop needs a bearer token, set the same secret in
 `MULTIPLAYER_ROOM_SERVICE_CLIENT_BEARER_TOKEN` for the Next process and
 `MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN` for the sidecar process.
+Capability-aware room mutations require protocol version 2. The Next process
+preflights the authenticated internal collection endpoint, then sends create and
+command POSTs through its advertised `/v2` mutation path with
+`x-multiplayer-room-protocol-version: 2`; the sidecar rejects legacy paths or a
+missing/mismatched header before reading a mutation body. Browser create and
+host-command POSTs likewise use `/api/multiplayer/rooms/v2` and
+`/api/multiplayer/rooms/<code>/v2`; the legacy POST routes return 426. Browser
+`connection.hello` and `connection.resume` messages and the corresponding
+bootstrap carry the same version, and a mismatched bootstrap closes without
+reconnecting. During a rolling mixed-version deployment, room mutations and
+stream activation therefore fail closed until the selected processes and the
+browser bundle are compatible.
 
 ## Stack
 

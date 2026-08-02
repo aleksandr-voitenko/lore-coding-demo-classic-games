@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { MultiplayerRealtimeServerMessage } from "@/lib/multiplayer/protocol";
+import {
+  MULTIPLAYER_ROOM_PROTOCOL_VERSION,
+  type MultiplayerRealtimeServerMessage,
+} from "@/lib/multiplayer/protocol";
 import type { PrivateRoom } from "@/lib/multiplayer/room";
 
 import {
@@ -176,6 +179,7 @@ describe("multiplayer room WebSocket message shapes", () => {
       }),
     ).toEqual({
       displayName: "Grace",
+      protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
       requestId: "hello-1",
       roomCode: "ROOM1",
       type: "connection.hello",
@@ -186,6 +190,7 @@ describe("multiplayer room WebSocket message shapes", () => {
           game: 4,
           room: 3,
         },
+        participantCapability: "guest-capability",
         participantId: "guest-1",
         requestId: "resume-1",
         roomCode: "ROOM1",
@@ -195,7 +200,9 @@ describe("multiplayer room WebSocket message shapes", () => {
         game: 4,
         room: 3,
       },
+      participantCapability: "guest-capability",
       participantId: "guest-1",
+      protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
       requestId: "resume-1",
       roomCode: "ROOM1",
       type: "connection.resume",
@@ -255,11 +262,14 @@ describe("multiplayer room WebSocket message shapes", () => {
   });
 
   it("sends room commands and Pong input through the generic WebSocket envelopes", async () => {
+    const participantCapabilities: string[] = [];
     const participantIds: string[] = [];
     const snapshots: MultiplayerRoomTransportSnapshot[] = [];
     const transport = createMultiplayerRoomWebSocketTransport({
       displayName: "Grace",
       onBootstrap: (snapshot) => snapshots.push(snapshot),
+      onParticipantCapability: (participantCapability) =>
+        participantCapabilities.push(participantCapability),
       onParticipantId: (participantId) => participantIds.push(participantId),
       onSnapshot: (snapshot) => snapshots.push(snapshot),
       roomCode: "ROOM1",
@@ -279,6 +289,7 @@ describe("multiplayer room WebSocket message shapes", () => {
     });
 
     socket.emitMessage({
+      protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
       requestId: JSON.parse(socket.sentMessages[0]!).requestId,
       roomCode: "ROOM1",
       snapshot: {
@@ -304,6 +315,7 @@ describe("multiplayer room WebSocket message shapes", () => {
     });
 
     socket.emitMessage({
+      participantCapability: "guest-capability",
       participantId: "guest-1",
       requestId: joinMessage.requestId,
       roomCode: "ROOM1",
@@ -312,6 +324,7 @@ describe("multiplayer room WebSocket message shapes", () => {
     });
 
     await expect(joinAck).resolves.toEqual({
+      participantCapability: "guest-capability",
       participantId: "guest-1",
       seq: 2,
     });
@@ -408,6 +421,7 @@ describe("multiplayer room WebSocket message shapes", () => {
       seq: 4,
     });
     expect(participantIds).toEqual(["guest-1", "guest-1"]);
+    expect(participantCapabilities).toEqual(["guest-capability"]);
     expect(snapshots).toEqual([
       {
         room: ROOM,
@@ -490,6 +504,7 @@ describe("multiplayer room WebSocket message shapes", () => {
     expect(connectionMessage.roomCode).toBe("ROOM1");
 
     socket.emitMessage({
+      protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
       requestId: connectionMessage.requestId,
       roomCode: "ROOM1",
       snapshot: {
@@ -507,9 +522,69 @@ describe("multiplayer room WebSocket message shapes", () => {
     transport.close();
   });
 
+  it("terminates an unversioned bootstrap without accepting pre-bootstrap snapshots or reconnecting", () => {
+    vi.useFakeTimers();
+
+    try {
+      const bootstrapRejections: MultiplayerRoomTransportError[] = [];
+      const errors: MultiplayerRoomTransportError[] = [];
+      const onBootstrap = vi.fn();
+      const onClose = vi.fn();
+      const onSnapshot = vi.fn();
+      const transport = createMultiplayerRoomWebSocketTransport({
+        onBootstrap,
+        onBootstrapRejected: (error) => bootstrapRejections.push(error),
+        onClose,
+        onError: (error) => errors.push(error),
+        onSnapshot,
+        roomCode: "ROOM1",
+        url: "ws://127.0.0.1:3001/multiplayer/rooms",
+        webSocketConstructor: FakeWebSocket,
+      });
+      const socket = FakeWebSocket.instances[0]!;
+
+      socket.emitOpen();
+      socket.emitMessage({
+        roomCode: "ROOM1",
+        snapshot: {
+          room: ROOM,
+          seq: 1,
+        },
+        type: "room.snapshot",
+      });
+      socket.emitRawMessage({
+        requestId: JSON.parse(socket.sentMessages[0]!).requestId,
+        roomCode: "ROOM1",
+        snapshot: {
+          room: ROOM,
+          seq: 1,
+        },
+        type: "connection.bootstrap",
+      });
+
+      expect(bootstrapRejections).toEqual([
+        expect.objectContaining({
+          code: "protocol-version-mismatch",
+          message: "Room stream protocol version is not supported. Refresh the page.",
+        }),
+      ]);
+      expect(onBootstrap).not.toHaveBeenCalled();
+      expect(onSnapshot).not.toHaveBeenCalled();
+      expect(errors).toEqual([]);
+      expect(onClose).not.toHaveBeenCalled();
+      expect(socket.readyState).toBe(3);
+      expect(vi.getTimerCount()).toBe(0);
+
+      transport.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it.each([
     {
       message: {
+        protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
         roomCode: "ROOM1",
         type: "connection.bootstrap",
       },
@@ -707,6 +782,7 @@ describe("multiplayer room WebSocket message shapes", () => {
 
       socket.emitOpen();
       socket.emitMessage({
+        protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
         requestId: JSON.parse(socket.sentMessages[0]!).requestId,
         roomCode: "ROOM1",
         snapshot: {
@@ -766,6 +842,7 @@ describe("multiplayer room WebSocket message shapes", () => {
 
       socket.emitOpen();
       socket.emitMessage({
+        protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
         requestId: JSON.parse(socket.sentMessages[0]!).requestId,
         roomCode: "ROOM1",
         snapshot: {

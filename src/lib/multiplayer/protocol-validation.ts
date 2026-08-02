@@ -1,4 +1,5 @@
 import { isGameId } from "../game-catalog";
+import { MULTIPLAYER_ROOM_PROTOCOL_VERSION } from "./protocol";
 import type {
   MultiplayerRealtimeGameSnapshot,
   MultiplayerRealtimeRejectionCode,
@@ -84,6 +85,7 @@ function isMultiplayerRealtimeServerMessageUnchecked(
         isRoomCode(value.roomCode, expectedRoomCode) &&
         isOptionalString(value.displayName) &&
         isOptionalEntityId(value.participantId) &&
+        value.protocolVersion === MULTIPLAYER_ROOM_PROTOCOL_VERSION &&
         isOptionalString(value.requestId) &&
         isMultiplayerRoomSnapshot(value.snapshot) &&
         value.snapshot.room.code === value.roomCode
@@ -104,7 +106,10 @@ function isMultiplayerRealtimeServerMessageUnchecked(
       return (
         isRoomCode(value.roomCode, expectedRoomCode) &&
         isOptionalSequence(value.gameSeq) &&
+        isOptionalParticipantCapability(value.participantCapability) &&
         isOptionalEntityId(value.participantId) &&
+        (value.participantCapability === undefined ||
+          value.participantId !== undefined) &&
         isOptionalString(value.requestId) &&
         isSequence(value.seq)
       );
@@ -363,6 +368,8 @@ function isMultiplayerRealtimeRejectionCode(
     case "participant-already-seated":
     case "participant-not-found":
     case "participant-not-seated":
+    case "participant-unauthorized":
+    case "protocol-version-mismatch":
     case "required-seats-empty":
     case "room-expired":
     case "room-not-found":
@@ -413,6 +420,13 @@ function isOptionalString(value: unknown) {
 
 function isOptionalEntityId(value: unknown) {
   return value === undefined || isEntityId(value);
+}
+
+function isOptionalParticipantCapability(value: unknown) {
+  return (
+    value === undefined ||
+    (isTrimmedString(value) && value.length <= 512)
+  );
 }
 
 function isEntityId(value: unknown) {

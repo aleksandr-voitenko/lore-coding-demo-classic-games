@@ -2,6 +2,11 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo, Server as HttpServer } from "node:net";
 
 import {
+  MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT,
+  MULTIPLAYER_ROOM_PROTOCOL_VERSION,
+  MULTIPLAYER_ROOM_PROTOCOL_VERSION_HEADER,
+} from "../multiplayer/protocol";
+import {
   DEFAULT_MULTIPLAYER_ROOM_SNAPSHOT_INTERVAL_MS,
   createMultiplayerRoomWebSocketGateway,
   type MultiplayerRoomWebSocketGateway,
@@ -255,7 +260,14 @@ type RoomServiceRoute =
       kind: "collection";
     }
   | {
+      kind: "mutation-collection";
+    }
+  | {
       kind: "room";
+      roomCode: string;
+    }
+  | {
+      kind: "mutation-room";
       roomCode: string;
     };
 
@@ -286,23 +298,62 @@ async function handleRoomServiceRequest(
   }
 
   if (route.kind === "collection") {
-    if (request.method !== "POST") {
-      sendMethodNotAllowed(request, response, ["POST"]);
+    if (request.method === "GET") {
+      sendJson(request, response, 200, {
+        mutationPathSegment: MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT,
+        participantCapabilities: true,
+        protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
+      });
       return;
     }
 
-    const body = await readJsonRequestBody(request);
-
-    if (!body.success) {
-      sendRoomServiceFailure(
-        request,
-        response,
-        body.statusCode,
-        body.error,
-      );
+    if (request.method === "POST") {
+      sendRoomServiceProtocolMismatch(request, response);
       return;
     }
 
+    sendMethodNotAllowed(request, response, ["GET"]);
+    return;
+  }
+
+  if (route.kind === "room") {
+    if (request.method === "GET") {
+      sendStoreResult(request, response, await roomStore.getRoom(route.roomCode));
+      return;
+    }
+
+    if (request.method === "POST") {
+      sendRoomServiceProtocolMismatch(request, response);
+      return;
+    }
+
+    sendMethodNotAllowed(request, response, ["GET"]);
+    return;
+  }
+
+  if (request.method !== "POST") {
+    sendMethodNotAllowed(request, response, ["POST"]);
+    return;
+  }
+
+  if (!hasSupportedRoomServiceProtocol(request)) {
+    sendRoomServiceProtocolMismatch(request, response);
+    return;
+  }
+
+  const body = await readJsonRequestBody(request);
+
+  if (!body.success) {
+    sendRoomServiceFailure(
+      request,
+      response,
+      body.statusCode,
+      body.error,
+    );
+    return;
+  }
+
+  if (route.kind === "mutation-collection") {
     const createOptions = parseCreateRoomOptions(body.value);
 
     if (!createOptions.success) {
@@ -319,42 +370,20 @@ async function handleRoomServiceRequest(
     return;
   }
 
-  if (request.method === "GET") {
-    sendStoreResult(request, response, await roomStore.getRoom(route.roomCode));
+  const command = parseRoomServiceCommand(body.value);
+
+  if (!command.success) {
+    sendRoomServiceFailure(request, response, 400, command.error);
     return;
   }
 
-  if (request.method === "POST") {
-    const body = await readJsonRequestBody(request);
+  const result = await roomStore.applyCommand(route.roomCode, command.command);
 
-    if (!body.success) {
-      sendRoomServiceFailure(
-        request,
-        response,
-        body.statusCode,
-        body.error,
-      );
-      return;
-    }
-
-    const command = parseRoomServiceCommand(body.value);
-
-    if (!command.success) {
-      sendRoomServiceFailure(request, response, 400, command.error);
-      return;
-    }
-
-    const result = await roomStore.applyCommand(route.roomCode, command.command);
-
-    if (result.success) {
-      gateway.broadcastSnapshot(result.snapshot);
-    }
-
-    sendStoreResult(request, response, result);
-    return;
+  if (result.success) {
+    gateway.broadcastSnapshot(result.snapshot);
   }
 
-  sendMethodNotAllowed(request, response, ["GET", "POST"]);
+  sendStoreResult(request, response, result);
 }
 
 function getRoomServiceRoute(
@@ -367,6 +396,33 @@ function getRoomServiceRoute(
     return {
       kind: "collection",
     };
+  }
+
+  const mutationBasePath = `${basePath}/${MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT}`;
+
+  if (pathname === mutationBasePath) {
+    return {
+      kind: "mutation-collection",
+    };
+  }
+
+  const mutationRoomPathPrefix = `${mutationBasePath}/`;
+
+  if (pathname.startsWith(mutationRoomPathPrefix)) {
+    const encodedRoomCode = pathname.slice(mutationRoomPathPrefix.length);
+
+    if (encodedRoomCode.length === 0 || encodedRoomCode.includes("/")) {
+      return null;
+    }
+
+    try {
+      return {
+        kind: "mutation-room",
+        roomCode: decodeURIComponent(encodedRoomCode),
+      };
+    } catch {
+      return null;
+    }
   }
 
   const roomPathPrefix = basePath.endsWith("/") ? basePath : `${basePath}/`;
@@ -596,6 +652,22 @@ function isAuthorizedRoomServiceRequest(
     request.headers.authorization ===
     `Bearer ${config.roomServiceBearerToken}`
   );
+}
+
+function hasSupportedRoomServiceProtocol(request: IncomingMessage) {
+  return (
+    request.headers[MULTIPLAYER_ROOM_PROTOCOL_VERSION_HEADER] ===
+    String(MULTIPLAYER_ROOM_PROTOCOL_VERSION)
+  );
+}
+
+function sendRoomServiceProtocolMismatch(
+  request: IncomingMessage,
+  response: ServerResponse,
+) {
+  sendJson(request, response, 426, {
+    error: "Room service protocol version is not supported.",
+  });
 }
 
 function getRequestPathname(url: string | undefined) {

@@ -34,17 +34,31 @@ const HOST_USER = {
 
 function createTestRoomStore({
   getNowMs,
+  participantCapabilities = [
+    "host-capability",
+    "guest-capability",
+    "guest-two-capability",
+    "observer-capability",
+  ],
   participantIds = ["host-1", "guest-1", "guest-2", "observer-1"],
   roomCodes = ["ROOM1"],
 }: {
   getNowMs?: () => number;
+  participantCapabilities?: string[];
   participantIds?: string[];
   roomCodes?: string[];
 } = {}) {
+  let participantCapabilityIndex = 0;
   let participantIdIndex = 0;
   let roomCodeIndex = 0;
+  const capabilityOptions = {
+    createParticipantCapability: () =>
+      participantCapabilities[participantCapabilityIndex++] ??
+      `participant-capability-${participantCapabilityIndex}`,
+  };
 
   return new InProcessMultiplayerRoomStore({
+    ...capabilityOptions,
     createParticipantId: ({ role }) =>
       participantIds[participantIdIndex++] ?? `${role}-${participantIdIndex}`,
     createRoomCode: () => roomCodes[roomCodeIndex++] ?? "ROOM-FALLBACK",
@@ -219,6 +233,61 @@ function getTerminalPongStatusForServeSide(serveSide: "left" | "right") {
 }
 
 describe("in-process multiplayer room store", () => {
+  it("mints opaque participant capabilities without publishing them in snapshots", () => {
+    const store = createTestRoomStore();
+    const created = store.createRoom({ host: HOST_USER });
+
+    expect(created).toMatchObject({
+      participantCapability: "host-capability",
+      success: true,
+    });
+
+    if (!created.success) {
+      throw new Error(created.error);
+    }
+
+    expect(created.snapshot).not.toHaveProperty("participantCapability");
+
+    const joined = store.applyCommand("ROOM1", {
+      displayName: "Guest One",
+      type: "room.joinObserver",
+    });
+
+    expect(joined).toMatchObject({
+      participantCapability: "guest-capability",
+      success: true,
+    });
+
+    if (!joined.success) {
+      throw new Error(joined.error);
+    }
+
+    expect(joined.snapshot).not.toHaveProperty("participantCapability");
+    expect(expectStoreSuccess(store.getRoom("ROOM1"))).not.toHaveProperty(
+      "participantCapability",
+    );
+
+    const capabilityStore = store as InProcessMultiplayerRoomStore & {
+      resolveParticipantCapability: (
+        roomCode: unknown,
+        participantCapability: unknown,
+      ) => string | null;
+    };
+
+    expect(capabilityStore.resolveParticipantCapability).toEqual(
+      expect.any(Function),
+    );
+    expect(
+      capabilityStore.resolveParticipantCapability("ROOM1", "host-capability"),
+    ).toBe("host-1");
+    expect(
+      capabilityStore.resolveParticipantCapability("ROOM1", "guest-capability"),
+    ).toBe("guest-1");
+    expect(
+      capabilityStore.resolveParticipantCapability("ROOM1", "wrong-capability"),
+    ).toBeNull();
+  });
+
   it("creates signed-in host rooms with deterministic ids and default Pong seats", () => {
     const store = createTestRoomStore();
     const snapshot = expectStoreSuccess(store.createRoom({ host: HOST_USER }));

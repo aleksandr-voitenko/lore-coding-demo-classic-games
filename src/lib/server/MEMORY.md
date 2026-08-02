@@ -62,6 +62,11 @@ This file covers Node-only server helpers and storage adapters under
   rooms, then lobbies, and never removes connected or nonterminal
   running/paused rooms. Up-to-five-minute, capacity-bounded tombstones
   distinguish recent expiry from an unknown room code.
+  Public participant ids are labels, not credentials. Room creation and public
+  guest admission mint separate 256-bit participant capabilities, retain only
+  SHA-256 hashes beside the volatile room, and return the raw value only in the
+  creating HTTP response or joining socket acknowledgement. `getRoom` and room
+  snapshots must never contain a capability.
 - `multiplayer-room-websocket.ts` owns the reusable Node WebSocket gateway for
   the realtime sidecar. It adapts the generic protocol envelopes to the room
   runtime, accepts an injectable `MultiplayerRoomStore`, rejects public
@@ -72,9 +77,12 @@ This file covers Node-only server helpers and storage adapters under
   exposes a narrow snapshot fanout method for sidecar-owned mutations, and keeps
   game-specific payloads nested behind `game.input` dispatch. When the injected
   store exposes the co-located participant-connection capability, the gateway
-  counts only sockets whose participant id matches room membership, promotes a
-  socket after a successful guest join, and releases presence on close, error,
-  or room change; anonymous invite viewers do not protect retention. Its public
+  resolves an opaque participant capability before binding a socket, derives
+  seat and game-input actors from that binding, promotes a socket only after a
+  successful guest join, and releases presence on close, error, or room change.
+  Client-submitted participant ids never establish authority, public joins
+  cannot assert an account user id, and anonymous invite viewers remain
+  read-only and do not protect retention. Its public
   factory defaults inbound client messages to 64 KiB through `ws` `maxPayload`
   while preserving explicit caller overrides.
 - `multiplayer-room-sidecar.ts` owns the standalone Node HTTP/WebSocket process
@@ -91,7 +99,15 @@ This file covers Node-only server helpers and storage adapters under
   default, passes one in-process room store to both those HTTP endpoints and the
   WebSocket gateway, and fans successful internal room command POST results back
   to already-subscribed WebSocket clients as authoritative `room.snapshot`
-  messages. It is emitted through `tsconfig.sidecar.json` because the main app
+  messages. The authenticated collection GET advertises the capability-aware
+  room protocol and versioned mutation path; mutating POSTs require both that
+  path and its version header before their bodies are parsed, and WebSocket
+  bootstrap requires the same version before room lookup. A legacy sidecar
+  cannot route the versioned mutation path even if a rolling-deployment
+  preflight reaches a newer instance. This deliberately makes mixed app,
+  sidecar, or browser deployments fail before room state changes. It is emitted
+  through `tsconfig.sidecar.json`
+  because the main app
   TypeScript config typechecks only and does not emit runtime JavaScript. Keep
   sidecar-emitted runtime imports resolvable by plain Node after TypeScript emits
   CommonJS; TypeScript path aliases are not rewritten in emitted output.

@@ -8,6 +8,7 @@ import { InProcessMultiplayerRoomStore } from "@/lib/server/multiplayer-room-run
 import type { AuthenticatedUser } from "@/lib/user-profile";
 
 import {
+  POST,
   createMultiplayerRoomsRouteHandlers,
   type MultiplayerRoomUserSessionLookup,
 } from "./route";
@@ -36,6 +37,16 @@ function createCreateRoomRequest(body: unknown, signedIn = true) {
 }
 
 describe("multiplayer rooms route", () => {
+  it("rejects the legacy mutation path before authentication or room creation", async () => {
+    const response = await POST(createCreateRoomRequest({}, false));
+
+    expect(response.status).toBe(426);
+    await expect(response.json()).resolves.toEqual({
+      code: "protocol-version-mismatch",
+      error: "Multiplayer protocol version is not supported. Refresh the page.",
+    });
+  });
+
   it("requires a signed-in host before creating rooms", async () => {
     const roomStore = {
       createRoom: vi.fn(),
@@ -82,6 +93,7 @@ describe("multiplayer rooms route", () => {
 
   it("creates private Pong rooms for signed-in hosts", async () => {
     const roomStore = new InProcessMultiplayerRoomStore({
+      createParticipantCapability: () => "host-capability",
       createParticipantId: () => "host-1",
       createRoomCode: () => "ROOM1",
     });
@@ -97,8 +109,10 @@ describe("multiplayer rooms route", () => {
     );
 
     expect(response.status).toBe(201);
+    expect(response.headers.get("cache-control")).toBe("no-store");
     expect(userStore.getUserBySessionToken).toHaveBeenCalledWith("session-token");
     await expect(response.json()).resolves.toMatchObject({
+      participantCapability: "host-capability",
       participant: {
         id: "host-1",
         role: "host",

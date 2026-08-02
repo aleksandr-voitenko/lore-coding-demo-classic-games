@@ -115,7 +115,7 @@ async function isAuthorizedHostCommand(
   command: MultiplayerRoomStoreCommand,
 ) {
   if (!isHostOnlyCommand(command)) {
-    return true;
+    return { command };
   }
 
   const roomResult = await roomStore.getRoom(roomCode);
@@ -136,13 +136,17 @@ async function isAuthorizedHostCommand(
   );
 
   if (
-    hostParticipant?.userId !== user.id ||
-    command.participantId !== room.hostParticipantId
+    hostParticipant?.userId !== user.id
   ) {
     return createHostOnlyCommandAuthErrorResponse(403);
   }
 
-  return true;
+  return {
+    command: {
+      ...command,
+      participantId: room.hostParticipantId,
+    },
+  };
 }
 
 export function createMultiplayerRoomRouteHandlers(
@@ -186,11 +190,14 @@ export function createMultiplayerRoomRouteHandlers(
         parsedCommand.command,
       );
 
-      if (hostAuthorization !== true) {
+      if (hostAuthorization instanceof Response) {
         return hostAuthorization;
       }
 
-      const result = await roomStore.applyCommand(code, parsedCommand.command);
+      const result = await roomStore.applyCommand(
+        code,
+        hostAuthorization.command,
+      );
 
       if (!result.success) {
         return createMultiplayerRoomErrorResponse(result);

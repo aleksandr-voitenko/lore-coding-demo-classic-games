@@ -104,6 +104,45 @@ describe("multiplayer room route", () => {
     ]);
   });
 
+  it("rejects the legacy host-command path before reading room state", async () => {
+    const response = await multiplayerRoomRoute.POST(
+      createCommandRequest({}, false),
+      { params: Promise.resolve({ code: "ROOM1" }) },
+    );
+
+    expect(response.status).toBe(426);
+    await expect(response.json()).resolves.toEqual({
+      code: "protocol-version-mismatch",
+      error: "Multiplayer protocol version is not supported. Refresh the page.",
+    });
+  });
+
+  it("rejects a versioned create payload routed to a legacy dynamic room path", async () => {
+    const roomStore = {
+      applyCommand: vi.fn(),
+      createRoom: vi.fn(),
+      getRoom: vi.fn(),
+    };
+    const handlers = createMultiplayerRoomRouteHandlers(
+      roomStore,
+      createUserStore(SIGNED_IN_USER),
+    );
+    const response = await handlers.POST(
+      createCommandRequest(
+        {
+          gameId: "pong",
+          settings: { gameId: "pong" },
+        },
+        true,
+      ),
+      { code: "v2" },
+    );
+
+    expect(response.status).toBe(400);
+    expect(roomStore.getRoom).not.toHaveBeenCalled();
+    expect(roomStore.applyCommand).not.toHaveBeenCalled();
+  });
+
   it("returns room snapshots by normalized code", async () => {
     const roomStore = createRoomStore();
     const userStore = createUserStore(null);
@@ -230,7 +269,7 @@ describe("multiplayer room route", () => {
     expect(userStore.getUserBySessionToken).not.toHaveBeenCalled();
   });
 
-  it("rejects host-only commands without matching host authority", async () => {
+  it("derives host command authority instead of trusting the submitted participant id", async () => {
     const roomStore = createRoomStore();
     const userStore = createUserStore(SIGNED_IN_USER);
     const handlers = createMultiplayerRoomRouteHandlers(roomStore, userStore);
@@ -240,8 +279,48 @@ describe("multiplayer room route", () => {
     const response = await handlers.POST(
       createCommandRequest(
         {
-          command: "start",
+          settings: {
+            gameId: "pong",
+            parameters: {
+              targetScore: 9,
+            },
+          },
           participantId: "guest-1",
+          type: "room.updateSettings",
+        },
+        true,
+      ),
+      { code: "ROOM1" },
+    );
+
+    expect(response.status).toBe(200);
+    expect(userStore.getUserBySessionToken).toHaveBeenCalledWith("session-token");
+    await expect(response.json()).resolves.toMatchObject({
+      room: {
+        settings: {
+          parameters: {
+            targetScore: 9,
+          },
+        },
+      },
+    });
+  });
+
+  it("rejects host-only commands from a different authenticated account", async () => {
+    const roomStore = createRoomStore();
+    const userStore = createUserStore({
+      displayName: "Grace Guest",
+      id: "user-2",
+    });
+    const handlers = createMultiplayerRoomRouteHandlers(roomStore, userStore);
+
+    expectRoomCreated(roomStore);
+
+    const response = await handlers.POST(
+      createCommandRequest(
+        {
+          command: "start",
+          participantId: "host-1",
           type: "room.lifecycle",
         },
         true,
@@ -250,7 +329,6 @@ describe("multiplayer room route", () => {
     );
 
     expect(response.status).toBe(403);
-    expect(userStore.getUserBySessionToken).toHaveBeenCalledWith("session-token");
     await expect(response.json()).resolves.toEqual({
       code: "not-host",
       error: "Sign in as the room host before changing room settings or lifecycle.",

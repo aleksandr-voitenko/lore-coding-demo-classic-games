@@ -1,5 +1,6 @@
 import { WebSocket, WebSocketServer, type RawData, type ServerOptions } from "ws";
 
+import { MULTIPLAYER_ROOM_PROTOCOL_VERSION } from "../multiplayer/protocol";
 import type {
   MultiplayerRealtimeRejectionCode,
   MultiplayerRealtimeRoomSnapshot,
@@ -63,7 +64,9 @@ type GameInputMessage = Record<string, unknown> & {
 type ConnectionMessage = Record<string, unknown> & {
   clientTimeMs?: unknown;
   displayName?: unknown;
+  participantCapability?: unknown;
   participantId?: unknown;
+  protocolVersion?: unknown;
   requestId?: unknown;
   roomCode?: unknown;
 };
@@ -80,6 +83,10 @@ type SocketRoomAssignmentResult =
 
 const HOST_ONLY_WEBSOCKET_COMMAND_ERROR =
   "Host-only room commands require the authenticated HTTP room route.";
+const PARTICIPANT_UNAUTHORIZED_ERROR =
+  "Participant credentials are invalid or no longer active.";
+const PROTOCOL_VERSION_MISMATCH_ERROR =
+  "Room stream protocol version is not supported. Refresh the page.";
 const DEFAULT_MULTIPLAYER_ROOM_MAX_PAYLOAD_BYTES = 64 * 1024;
 export const DEFAULT_MULTIPLAYER_ROOM_SNAPSHOT_INTERVAL_MS = 33;
 
@@ -157,14 +164,36 @@ export function createMultiplayerRoomWebSocketGateway({
     socket: WebSocket,
     roomCode: string,
     participantId?: string,
+    participantCapability?: string,
   ): SocketRoomAssignmentResult {
     if (socket.readyState !== WebSocket.OPEN) {
       return "socket-closed";
     }
 
+    let resolvedParticipantId: string | undefined;
+
+    if (participantCapability !== undefined) {
+      const resolvedParticipant =
+        participantConnectionStore?.resolveParticipantCapability(
+          roomCode,
+          participantCapability,
+        ) ?? null;
+
+      if (
+        resolvedParticipant === null ||
+        (participantId !== undefined && participantId !== resolvedParticipant)
+      ) {
+        return "participant-rejected";
+      }
+
+      resolvedParticipantId = resolvedParticipant;
+    } else if (participantId !== undefined) {
+      return "participant-rejected";
+    }
+
     if (
       roomCodeBySocket.get(socket) === roomCode &&
-      participantIdBySocket.get(socket) === participantId
+      participantIdBySocket.get(socket) === resolvedParticipantId
     ) {
       return "assigned";
     }
@@ -172,11 +201,11 @@ export function createMultiplayerRoomWebSocketGateway({
     removeSocketFromRoom(socket);
 
     if (
-      participantId !== undefined &&
+      resolvedParticipantId !== undefined &&
       participantConnectionStore !== null &&
       !participantConnectionStore.registerParticipantConnection(
         roomCode,
-        participantId,
+        resolvedParticipantId,
       )
     ) {
       return "participant-rejected";
@@ -189,8 +218,8 @@ export function createMultiplayerRoomWebSocketGateway({
     sockets.add(socket);
     socketsByRoomCode.set(roomCode, sockets);
 
-    if (participantId !== undefined) {
-      participantIdBySocket.set(socket, participantId);
+    if (resolvedParticipantId !== undefined) {
+      participantIdBySocket.set(socket, resolvedParticipantId);
     }
 
     return "assigned";
@@ -226,6 +255,7 @@ export function createMultiplayerRoomWebSocketGateway({
     requestId: string | undefined,
     roomCode: string | undefined,
     command: MultiplayerRoomStoreCommand,
+    promoteParticipant = false,
   ) {
     if (!result.success) {
       sendRejection(socket, {
@@ -237,11 +267,14 @@ export function createMultiplayerRoomWebSocketGateway({
       return;
     }
 
-    const assignmentResult = assignSocketToRoom(
-      socket,
-      result.snapshot.room.code,
-      result.snapshot.participant?.id,
-    );
+    const assignmentResult = promoteParticipant
+      ? assignSocketToRoom(
+          socket,
+          result.snapshot.room.code,
+          result.snapshot.participant?.id,
+          result.participantCapability,
+        )
+      : "assigned";
 
     if (assignmentResult === "participant-rejected") {
       await rejectFailedParticipantAssignment(
@@ -257,7 +290,10 @@ export function createMultiplayerRoomWebSocketGateway({
         socket,
         result.snapshot,
         requestId,
-        result.snapshot.participant?.id ?? getCommandParticipantId(command),
+        result.snapshot.participant?.id ??
+          participantIdBySocket.get(socket) ??
+          getCommandParticipantId(command),
+        result.participantCapability,
       );
     }
 
@@ -270,6 +306,16 @@ export function createMultiplayerRoomWebSocketGateway({
   ) {
     const requestId = getOptionalString(message.requestId);
     const roomCode = getOptionalString(message.roomCode);
+
+    if (message.protocolVersion !== MULTIPLAYER_ROOM_PROTOCOL_VERSION) {
+      sendRejection(socket, {
+        code: "protocol-version-mismatch",
+        error: PROTOCOL_VERSION_MISMATCH_ERROR,
+        requestId,
+        ...(roomCode === undefined ? {} : { roomCode }),
+      });
+      return;
+    }
 
     if (roomCode === undefined) {
       sendRejection(socket, {
@@ -292,16 +338,16 @@ export function createMultiplayerRoomWebSocketGateway({
       return;
     }
 
-    const snapshot = createConnectionSnapshot(
-      result.snapshot,
-      getOptionalString(message.participantId),
+    const requestedParticipantId = getOptionalString(message.participantId);
+    const participantCapability = getOptionalString(
+      message.participantCapability,
     );
-    const recognizedParticipantId = snapshot.participant?.id;
 
     const assignmentResult = assignSocketToRoom(
       socket,
       result.snapshot.room.code,
-      recognizedParticipantId,
+      requestedParticipantId,
+      participantCapability,
     );
 
     if (assignmentResult === "socket-closed") {
@@ -317,15 +363,16 @@ export function createMultiplayerRoomWebSocketGateway({
       return;
     }
 
+    const recognizedParticipantId = participantIdBySocket.get(socket);
+    const snapshot = createConnectionSnapshot(
+      result.snapshot,
+      recognizedParticipantId,
+    );
+
     rememberBroadcastSnapshot(result.snapshot);
     sendServerMessage(socket, {
-      ...(getOptionalString(message.displayName) === undefined
-        ? {}
-        : { displayName: getOptionalString(message.displayName) }),
-      ...(getOptionalString(message.participantId) === undefined
-        ? {}
-        : { participantId: getOptionalString(message.participantId) }),
       ...(requestId === undefined ? {} : { requestId }),
+      protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
       roomCode: result.snapshot.room.code,
       snapshot,
       type: "connection.bootstrap",
@@ -335,6 +382,17 @@ export function createMultiplayerRoomWebSocketGateway({
   async function handleRoomCommand(socket: WebSocket, message: RoomCommandMessage) {
     const requestId = getRoomCommandRequestId(message);
     const roomCode = getOptionalString(message.roomCode);
+    const assignedRoomCode = roomCodeBySocket.get(socket);
+
+    if (assignedRoomCode === undefined || roomCode !== assignedRoomCode) {
+      sendRejection(socket, {
+        code: "invalid-message",
+        error: "Room command must target the bootstrapped room.",
+        requestId,
+        roomCode,
+      });
+      return;
+    }
 
     if (isHostOnlyRoomCommand(message.command)) {
       sendRejection(socket, {
@@ -358,18 +416,91 @@ export function createMultiplayerRoomWebSocketGateway({
       return;
     }
 
+    if (parsedCommand.command.type === "room.joinObserver") {
+      if (participantIdBySocket.has(socket)) {
+        sendRejection(socket, {
+          code: "invalid-command",
+          error: "This connection has already joined the room.",
+          requestId,
+          roomCode: assignedRoomCode,
+        });
+        return;
+      }
+
+      await handleStoreResult(
+        socket,
+        await store.applyCommand(assignedRoomCode, parsedCommand.command),
+        requestId,
+        assignedRoomCode,
+        parsedCommand.command,
+        true,
+      );
+      return;
+    }
+
+    const boundParticipantId = participantIdBySocket.get(socket);
+
+    if (
+      boundParticipantId === undefined ||
+      !doesSubmittedParticipantMatch(
+        parsedCommand.command,
+        boundParticipantId,
+      )
+    ) {
+      sendRejection(socket, {
+        code: "participant-unauthorized",
+        error: PARTICIPANT_UNAUTHORIZED_ERROR,
+        requestId,
+        roomCode: assignedRoomCode,
+      });
+      return;
+    }
+
+    const boundCommand = bindCommandParticipant(
+      parsedCommand.command,
+      boundParticipantId,
+    );
+
     await handleStoreResult(
       socket,
-      await store.applyCommand(roomCode, parsedCommand.command),
+      await store.applyCommand(assignedRoomCode, boundCommand),
       requestId,
-      roomCode,
-      parsedCommand.command,
+      assignedRoomCode,
+      boundCommand,
     );
   }
 
   async function handleGameInput(socket: WebSocket, message: GameInputMessage) {
     const requestId = getOptionalString(message.requestId);
     const roomCode = getOptionalString(message.roomCode);
+    const assignedRoomCode = roomCodeBySocket.get(socket);
+    const boundParticipantId = participantIdBySocket.get(socket);
+
+    if (
+      assignedRoomCode === undefined ||
+      roomCode !== assignedRoomCode
+    ) {
+      sendRejection(socket, {
+        code: "invalid-message",
+        error: "Game input must target the bootstrapped room.",
+        requestId,
+        roomCode,
+      });
+      return;
+    }
+
+    if (
+      boundParticipantId === undefined ||
+      getOptionalString(message.participantId) !== boundParticipantId
+    ) {
+      sendRejection(socket, {
+        code: "participant-unauthorized",
+        error: PARTICIPANT_UNAUTHORIZED_ERROR,
+        requestId,
+        roomCode: assignedRoomCode,
+      });
+      return;
+    }
 
     if (typeof message.gameId !== "string") {
       sendRejection(socket, {
@@ -396,15 +527,15 @@ export function createMultiplayerRoomWebSocketGateway({
     const command = {
       gameId,
       input: message.input as GameInputStoreCommand["input"],
-      participantId: message.participantId,
+      participantId: boundParticipantId,
       type: "game.input",
     } satisfies GameInputStoreCommand;
 
     await handleStoreResult(
       socket,
-      await store.applyCommand(roomCode, command),
+      await store.applyCommand(assignedRoomCode, command),
       requestId,
-      roomCode,
+      assignedRoomCode,
       command,
     );
   }
@@ -612,8 +743,8 @@ export function createMultiplayerRoomWebSocketGateway({
     }
 
     sendRejection(socket, {
-      code: "invalid-message",
-      error: "Participant connection could not be registered.",
+      code: "participant-unauthorized",
+      error: PARTICIPANT_UNAUTHORIZED_ERROR,
       requestId,
       roomCode,
     });
@@ -674,9 +805,13 @@ function sendAck(
   snapshot: MultiplayerRoomSnapshot,
   requestId: string | undefined,
   participantId: string | undefined,
+  participantCapability: string | undefined,
 ) {
   sendServerMessage(socket, {
     ...(snapshot.game === undefined ? {} : { gameSeq: snapshot.game.seq }),
+    ...(participantCapability === undefined
+      ? {}
+      : { participantCapability }),
     ...(participantId === undefined ? {} : { participantId }),
     ...(requestId === undefined ? {} : { requestId }),
     roomCode: snapshot.room.code,
@@ -778,6 +913,29 @@ function getCommandParticipantId(command: MultiplayerRoomStoreCommand) {
   return undefined;
 }
 
+function doesSubmittedParticipantMatch(
+  command: MultiplayerRoomStoreCommand,
+  participantId: string,
+) {
+  return (
+    !("participantId" in command) ||
+    getOptionalString(command.participantId) === participantId
+  );
+}
+
+function bindCommandParticipant(
+  command: Exclude<
+    MultiplayerRoomStoreCommand,
+    { type: "room.joinObserver" }
+  >,
+  participantId: string,
+): MultiplayerRoomStoreCommand {
+  return {
+    ...command,
+    participantId,
+  };
+}
+
 function isHostOnlyRoomCommand(value: unknown) {
   return (
     isObjectRecord(value) &&
@@ -809,7 +967,6 @@ function parseRoomCommand(value: unknown): ParseRoomCommandResult {
     return {
       command: {
         displayName: value.displayName,
-        ...(value.userId === undefined ? {} : { userId: value.userId }),
         type: "room.joinObserver",
       },
       success: true,

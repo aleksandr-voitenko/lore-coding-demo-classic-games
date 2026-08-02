@@ -41,7 +41,9 @@ This file covers React component ownership and shared game UI conventions under
   viewport when returning to the launcher. It also reconciles private-room URL
   entries on `popstate` while retaining launcher-owned tab, parameter, selection,
   and viewport state. Forward always bootstraps authoritative room state; it may
-  reuse only a launcher-created participant id scoped to the same signed-in user.
+  reuse only a participant id plus opaque capability scoped to the same signed-in
+  user in versioned `sessionStorage`. Capabilities never belong in room URLs,
+  shared snapshots, logs, or durable profile storage.
   Popstate, account changes, and unmount invalidate in-flight room creation so a
   stale response cannot navigate or replace a newer creation status.
   Multiplayer card availability and count come from the pure registry in
@@ -77,7 +79,13 @@ This file covers React component ownership and shared game UI conventions under
   Validate inbound WebSocket and successful room HTTP snapshots with the shared
   transport-neutral protocol guards before updating React state. The low-level
   WebSocket transport normalizes its requested room code once before sending
-  messages or scoping inbound validation.
+  messages or scoping inbound validation. A resume sends the private participant
+  capability; public participant ids are display identifiers only. The server
+  binds the resolved participant to the socket and supplies command authority,
+  while an invalid stored capability is cleared before reconnecting read-only.
+  HTTP room mutations use versioned paths, and an unversioned/mismatched
+  WebSocket bootstrap is terminal: ignore pre-bootstrap snapshots, close the
+  socket, and do not schedule reconnects against the incompatible gateway.
 - Active multiplayer game UI should be selected through a client
   renderer/input registry keyed by `gameId`. A renderer consumes authoritative
   server snapshots/events and emits adapter-owned intents through the generic

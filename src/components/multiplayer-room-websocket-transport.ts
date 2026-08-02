@@ -1,4 +1,5 @@
 import type { GameId } from "@/lib/game-catalog";
+import { MULTIPLAYER_ROOM_PROTOCOL_VERSION } from "@/lib/multiplayer/protocol";
 import type {
   MultiplayerGameInputPayload,
   MultiplayerRealtimeConnectionCursor,
@@ -45,6 +46,7 @@ export type MultiplayerRoomTransportSnapshot = {
 
 export type MultiplayerRoomTransportAck = {
   gameSeq?: number;
+  participantCapability?: string;
   participantId?: string;
   seq: number;
 };
@@ -85,6 +87,7 @@ type PendingTransportRequest = {
 type CreateConnectionMessageOptions = {
   displayName?: string | null;
   lastSeq?: MultiplayerRealtimeConnectionCursor | null;
+  participantCapability?: string | null;
   participantId?: string | null;
   requestId?: string;
   roomCode: string;
@@ -100,8 +103,10 @@ type CreateWebSocketTransportOptions = {
   onClose?: () => void;
   onDiagnosticsPingSample?: (sample: MultiplayerRoomTransportPingSample) => void;
   onError?: (error: MultiplayerRoomTransportError) => void;
+  onParticipantCapability?: (participantCapability: string) => void;
   onParticipantId?: (participantId: string) => void;
   onSnapshot: (snapshot: MultiplayerRoomTransportSnapshot) => void;
+  participantCapability?: string | null;
   participantId?: string | null;
   roomCode: string;
   url: string;
@@ -173,25 +178,37 @@ export function getConfiguredMultiplayerRoomWebSocketUrl(
 export function createMultiplayerRoomConnectionMessage({
   displayName,
   lastSeq,
+  participantCapability,
   participantId,
   requestId,
   roomCode,
 }: CreateConnectionMessageOptions): MultiplayerRealtimeConnectionMessage {
   const normalizedDisplayName = getOptionalNonEmptyString(displayName);
+  const normalizedParticipantCapability = getOptionalNonEmptyString(
+    participantCapability,
+  );
   const normalizedParticipantId = getOptionalNonEmptyString(participantId);
   const normalizedLastSeq = normalizeConnectionCursor(lastSeq);
   const sharedFields = {
     ...(normalizedDisplayName === undefined
       ? {}
       : { displayName: normalizedDisplayName }),
+    ...(normalizedParticipantCapability === undefined
+      ? {}
+      : { participantCapability: normalizedParticipantCapability }),
     ...(normalizedParticipantId === undefined
       ? {}
       : { participantId: normalizedParticipantId }),
     ...(requestId === undefined ? {} : { requestId }),
+    protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
     roomCode,
   };
 
-  if (normalizedParticipantId !== undefined || normalizedLastSeq !== undefined) {
+  if (
+    normalizedParticipantCapability !== undefined ||
+    normalizedParticipantId !== undefined ||
+    normalizedLastSeq !== undefined
+  ) {
     return {
       ...sharedFields,
       ...(normalizedLastSeq === undefined ? {} : { lastSeq: normalizedLastSeq }),
@@ -267,8 +284,10 @@ export function createMultiplayerRoomWebSocketTransport({
   onClose,
   onDiagnosticsPingSample,
   onError,
+  onParticipantCapability,
   onParticipantId,
   onSnapshot,
+  participantCapability,
   participantId,
   roomCode: requestedRoomCode,
   url,
@@ -394,6 +413,7 @@ export function createMultiplayerRoomWebSocketTransport({
         createMultiplayerRoomConnectionMessage({
           displayName,
           lastSeq,
+          participantCapability,
           participantId,
           requestId: connectionRequestId,
           roomCode,
@@ -411,6 +431,25 @@ export function createMultiplayerRoomWebSocketTransport({
     const message = parseServerMessage(event.data, roomCode);
 
     if (message === null) {
+      if (
+        !hasBootstrapped &&
+        isProtocolMismatchedBootstrap(event.data, roomCode)
+      ) {
+        const error = new MultiplayerRoomTransportError(
+          "Room stream protocol version is not supported. Refresh the page.",
+          { code: "protocol-version-mismatch" },
+        );
+
+        onBootstrapRejected?.(error);
+        terminateTransport({
+          closeSocket: true,
+          error,
+          notifyClose: false,
+          reportError: false,
+        });
+        return;
+      }
+
       onError?.(
         new MultiplayerRoomTransportError(
           "Room stream sent an unsupported message.",
@@ -430,14 +469,26 @@ export function createMultiplayerRoomWebSocketTransport({
     }
 
     if (message.type === "room.snapshot") {
+      if (!hasBootstrapped) {
+        return;
+      }
+
       onSnapshot(createTransportSnapshot(message.snapshot));
       return;
     }
 
     if (message.type === "room.commandAck") {
+      if (!hasBootstrapped) {
+        return;
+      }
+
+      notifyParticipantCapability(message.participantCapability);
       notifyParticipantId(message.participantId);
       resolvePendingRequest(message.requestId, {
         ...(message.gameSeq === undefined ? {} : { gameSeq: message.gameSeq }),
+        ...(message.participantCapability === undefined
+          ? {}
+          : { participantCapability: message.participantCapability }),
         ...(message.participantId === undefined
           ? {}
           : { participantId: message.participantId }),
@@ -550,6 +601,14 @@ export function createMultiplayerRoomWebSocketTransport({
   function notifyParticipantId(nextParticipantId: string | undefined) {
     if (nextParticipantId !== undefined) {
       onParticipantId?.(nextParticipantId);
+    }
+  }
+
+  function notifyParticipantCapability(
+    nextParticipantCapability: string | undefined,
+  ) {
+    if (nextParticipantCapability !== undefined) {
+      onParticipantCapability?.(nextParticipantCapability);
     }
   }
 
@@ -739,6 +798,33 @@ function parseServerMessage(
       : null;
   } catch {
     return null;
+  }
+}
+
+function isProtocolMismatchedBootstrap(
+  data: unknown,
+  expectedRoomCode: string,
+) {
+  if (typeof data !== "string") {
+    return false;
+  }
+
+  try {
+    const parsedMessage = JSON.parse(data) as unknown;
+
+    return (
+      typeof parsedMessage === "object" &&
+      parsedMessage !== null &&
+      !Array.isArray(parsedMessage) &&
+      "type" in parsedMessage &&
+      parsedMessage.type === "connection.bootstrap" &&
+      "roomCode" in parsedMessage &&
+      parsedMessage.roomCode === expectedRoomCode &&
+      (!("protocolVersion" in parsedMessage) ||
+        parsedMessage.protocolVersion !== MULTIPLAYER_ROOM_PROTOCOL_VERSION)
+    );
+  } catch {
+    return false;
   }
 }
 

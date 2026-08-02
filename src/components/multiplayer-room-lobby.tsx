@@ -34,6 +34,10 @@ import {
   type MultiplayerRoomClientSnapshot,
   useMultiplayerRoomClient,
 } from "@/components/multiplayer-room-client";
+import {
+  removeMultiplayerRoomParticipantCredentials,
+  writeMultiplayerRoomParticipantCredentials,
+} from "@/components/multiplayer-room-participant-credentials";
 import { MultiplayerRoomTransportError } from "@/components/multiplayer-room-transport";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -68,6 +72,7 @@ const MULTIPLAYER_ROOM_EXPIRED_MESSAGE =
 type MultiplayerRoomLobbyProps = {
   initialAuthMode?: UserAuthMode | null;
   initialGame?: MultiplayerRoomGameSnapshot | null;
+  initialParticipantCapability?: string | null;
   initialParticipantId?: string | null;
   initialRoom?: PrivateRoom | null;
   initialSeq?: number;
@@ -134,14 +139,6 @@ function getParticipantById(room: PrivateRoom | null, participantId: string | nu
   }
 
   return room.participants.find((participant) => participant.id === participantId) ?? null;
-}
-
-function getParticipantByUserId(room: PrivateRoom | null, userId: string | null) {
-  if (room === null || userId === null) {
-    return null;
-  }
-
-  return room.participants.find((participant) => participant.userId === userId) ?? null;
 }
 
 function createParticipantsById(participants: PrivateRoomParticipant[]) {
@@ -254,6 +251,7 @@ export function selectFreshMultiplayerRoomSnapshot<
 export function MultiplayerRoomLobby({
   initialAuthMode = null,
   initialGame = null,
+  initialParticipantCapability = null,
   initialParticipantId = null,
   initialRoom = null,
   initialSeq = 0,
@@ -288,6 +286,9 @@ export function MultiplayerRoomLobby({
     normalizedRoomCode === null ? "Room code is not supported." : null,
   );
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [participantCapability, setParticipantCapability] = useState<
+    string | null
+  >(initialParticipantCapability);
   const [participantId, setParticipantId] = useState<string | null>(initialParticipantId);
   const [roomSnapshot, setRoomSnapshot] = useState<MultiplayerRoomClientSnapshot | null>(() =>
     initialRoom === null
@@ -304,9 +305,8 @@ export function MultiplayerRoomLobby({
   const displayName = displayNameInput ?? user?.displayName ?? "";
   const inviteLink = getPrivateRoomShareLink(normalizedRoomCode, browserOrigin);
   const participantFromLocalId = getParticipantById(room, participantId);
-  const participantFromUser = getParticipantByUserId(room, userId);
-  const activeParticipant = participantFromLocalId ?? participantFromUser;
-  const activeParticipantId = participantFromLocalId?.id ?? participantFromUser?.id ?? null;
+  const activeParticipant = participantFromLocalId;
+  const activeParticipantId = participantFromLocalId?.id ?? null;
   const isHost =
     room !== null &&
     activeParticipant !== null &&
@@ -353,11 +353,30 @@ export function MultiplayerRoomLobby({
         roomSnapshotRef.current = null;
         setRoomSnapshot(null);
         setParticipantId(null);
+        setParticipantCapability(null);
+        if (normalizedRoomCode !== null) {
+          removeMultiplayerRoomParticipantCredentials(normalizedRoomCode);
+        }
+      } else if (
+        error instanceof MultiplayerRoomTransportError &&
+        error.code === "participant-unauthorized"
+      ) {
+        setParticipantId(null);
+        setParticipantCapability(null);
+        if (normalizedRoomCode !== null) {
+          removeMultiplayerRoomParticipantCredentials(normalizedRoomCode);
+        }
       }
 
       setLoadError(message);
     },
-    [setLoadError, setParticipantId, setRoomSnapshot],
+    [
+      normalizedRoomCode,
+      setLoadError,
+      setParticipantCapability,
+      setParticipantId,
+      setRoomSnapshot,
+    ],
   );
   const transportLastSeq = useMemo(
     () => ({
@@ -375,8 +394,10 @@ export function MultiplayerRoomLobby({
     lastSeq: transportLastSeq,
     onConnectionError: handleRoomTransportConnectionError,
     onDiagnosticsPingSample: recordDiagnosticsPingSample,
+    onParticipantCapability: setParticipantCapability,
     onParticipantId: setParticipantId,
     onSnapshot: handleRoomClientSnapshot,
+    participantCapability,
     participantId: activeParticipantId ?? participantId,
     roomCode: normalizedRoomCode,
   });
@@ -432,17 +453,25 @@ export function MultiplayerRoomLobby({
         const result = await sendRoomClientMessage({
           displayName: normalizedDisplayName,
           type: "room.joinObserver",
-          userId,
         });
 
-        if (result.participantId === undefined) {
+        if (
+          result.participantId === undefined ||
+          result.participantCapability === undefined
+        ) {
           throw new MultiplayerRoomRequestError(
-            "Join room response did not include a participant.",
+            "Join room response did not include participant credentials.",
             200,
           );
         }
 
+        setParticipantCapability(result.participantCapability);
         setParticipantId(result.participantId);
+        writeMultiplayerRoomParticipantCredentials(normalizedRoomCode, {
+          participantCapability: result.participantCapability,
+          participantId: result.participantId,
+          userId,
+        });
       } catch (error) {
         setFormError(getMultiplayerRoomRequestErrorMessage(error));
       } finally {
@@ -456,6 +485,7 @@ export function MultiplayerRoomLobby({
       sendRoomClientMessage,
       setFormError,
       setIsJoining,
+      setParticipantCapability,
       setParticipantId,
       userId,
     ],

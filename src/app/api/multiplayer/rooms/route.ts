@@ -8,12 +8,10 @@ import type {
 } from "@/lib/multiplayer/room";
 import {
   getMultiplayerRoomStoreErrorStatus,
-  getMultiplayerRoomStore,
   type MultiplayerRoomStore,
   type MultiplayerRoomStoreErrorCode,
   type MultiplayerRoomStoreResult,
 } from "@/lib/server/multiplayer-room-store";
-import { getUserProfileStore } from "@/lib/server/sqlite-user-profile-store";
 import { getSessionTokenFromRequest } from "@/lib/server/user-session-cookie";
 import type { AuthenticatedUser } from "@/lib/user-profile";
 
@@ -184,6 +182,16 @@ export function createHostOnlyCommandAuthErrorResponse(status: 401 | 403 = 401) 
   );
 }
 
+export function createMultiplayerProtocolMismatchResponse() {
+  return NextResponse.json(
+    {
+      code: "protocol-version-mismatch",
+      error: "Multiplayer protocol version is not supported. Refresh the page.",
+    },
+    { status: 426 },
+  );
+}
+
 export function createMultiplayerRoomsRouteHandlers(
   roomStore: MultiplayerRoomStore,
   userStore: MultiplayerRoomUserSessionLookup,
@@ -227,14 +235,25 @@ export function createMultiplayerRoomsRouteHandlers(
         return createMultiplayerRoomErrorResponse(result);
       }
 
-      return NextResponse.json(result.snapshot, { status: 201 });
+      return NextResponse.json(
+        {
+          ...(result.participantCapability === undefined
+            ? {}
+            : { participantCapability: result.participantCapability }),
+          ...result.snapshot,
+        },
+        {
+          headers: {
+            "Cache-Control": "no-store",
+          },
+          status: 201,
+        },
+      );
     },
   };
 }
 
-export async function POST(request: Request) {
-  return createMultiplayerRoomsRouteHandlers(
-    getMultiplayerRoomStore(),
-    getUserProfileStore(),
-  ).POST(request);
+export function POST(request: Request) {
+  void request;
+  return createMultiplayerProtocolMismatchResponse();
 }

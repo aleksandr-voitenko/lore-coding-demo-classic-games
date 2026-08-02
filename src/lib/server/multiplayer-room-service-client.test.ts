@@ -42,6 +42,85 @@ function getRequestBody(init: RequestInit | undefined) {
 }
 
 describe("multiplayer room service client", () => {
+  it("keeps a split-version preflight and legacy mutation target from changing room state", async () => {
+    const requests: Array<{ method: string; url: string }> = [];
+    let legacyMutationCount = 0;
+    const baseUrl = "http://service.local/_internal/multiplayer/rooms";
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const method = init?.method ?? "GET";
+      const url = String(input);
+
+      requests.push({ method, url });
+
+      if (method === "GET" && url === baseUrl) {
+        return Response.json({
+          mutationPathSegment: "v2",
+          participantCapabilities: true,
+          protocolVersion: 2,
+        });
+      }
+
+      // A legacy sidecar recognizes only the unversioned collection POST.
+      if (method === "POST" && url === baseUrl) {
+        legacyMutationCount += 1;
+        return Response.json(
+          {
+            participantCapability: "host-capability",
+            snapshot: ROOM_SNAPSHOT,
+            success: true,
+          },
+          { status: 201 },
+        );
+      }
+
+      return Response.json({ error: "Not found." }, { status: 404 });
+    });
+    const client = new MultiplayerRoomServiceClient({ baseUrl, fetcher });
+
+    await expect(client.createRoom({ host: HOST_USER })).resolves.toMatchObject({
+      code: "room-service-invalid-response",
+      success: false,
+    });
+    expect(legacyMutationCount).toBe(0);
+    expect(requests).toEqual([
+      { method: "GET", url: baseUrl },
+      { method: "POST", url: `${baseUrl}/v2` },
+    ]);
+  });
+
+  it("does not mutate rooms when the service lacks the capability protocol handshake", async () => {
+    const methods: string[] = [];
+    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
+      methods.push(init?.method ?? "GET");
+
+      if (init?.method === "GET") {
+        return Response.json(
+          { error: "Method not allowed." },
+          { status: 405 },
+        );
+      }
+
+      return Response.json(
+        {
+          participantCapability: "host-capability",
+          snapshot: ROOM_SNAPSHOT,
+          success: true,
+        },
+        { status: 201 },
+      );
+    });
+    const client = new MultiplayerRoomServiceClient({
+      baseUrl: "http://service.local/_internal/multiplayer/rooms",
+      fetcher,
+    });
+
+    await expect(client.createRoom({ host: HOST_USER })).resolves.toMatchObject({
+      code: "room-service-invalid-response",
+      success: false,
+    });
+    expect(methods).toEqual(["GET"]);
+  });
+
   it("creates, reads, and commands rooms through the configured HTTP base", async () => {
     const requests: Array<{
       init: RequestInit | undefined;
@@ -51,9 +130,24 @@ describe("multiplayer room service client", () => {
       const url = String(input);
       requests.push({ init, url });
 
-      if (url.endsWith("/_internal/multiplayer/rooms") && init?.method === "POST") {
+      if (
+        url.endsWith("/_internal/multiplayer/rooms") &&
+        init?.method === "GET"
+      ) {
+        return Response.json({
+          mutationPathSegment: "v2",
+          participantCapabilities: true,
+          protocolVersion: 2,
+        });
+      }
+
+      if (
+        url.endsWith("/_internal/multiplayer/rooms/v2") &&
+        init?.method === "POST"
+      ) {
         return Response.json(
           {
+            participantCapability: "host-capability",
             snapshot: ROOM_SNAPSHOT,
             success: true,
           },
@@ -75,7 +169,7 @@ describe("multiplayer room service client", () => {
       }
 
       if (
-        url.endsWith("/_internal/multiplayer/rooms/ROOM1") &&
+        url.endsWith("/_internal/multiplayer/rooms/v2/ROOM1") &&
         init?.method === "POST"
       ) {
         return Response.json({
@@ -110,6 +204,7 @@ describe("multiplayer room service client", () => {
         },
       }),
     ).resolves.toEqual({
+      participantCapability: "host-capability",
       snapshot: ROOM_SNAPSHOT,
       success: true,
     });
@@ -135,11 +230,15 @@ describe("multiplayer room service client", () => {
 
     expect(requests.map((request) => request.url)).toEqual([
       "http://service.local/_internal/multiplayer/rooms",
+      "http://service.local/_internal/multiplayer/rooms/v2",
       "http://service.local/_internal/multiplayer/rooms/ROOM1",
-      "http://service.local/_internal/multiplayer/rooms/ROOM1",
+      "http://service.local/_internal/multiplayer/rooms",
+      "http://service.local/_internal/multiplayer/rooms/v2/ROOM1",
     ]);
     expect(requests.map((request) => request.init?.method)).toEqual([
+      "GET",
       "POST",
+      "GET",
       "GET",
       "POST",
     ]);
@@ -147,7 +246,12 @@ describe("multiplayer room service client", () => {
       {
         accept: "application/json",
         authorization: "Bearer service-secret",
+      },
+      {
+        accept: "application/json",
+        authorization: "Bearer service-secret",
         "content-type": "application/json",
+        "x-multiplayer-room-protocol-version": "2",
       },
       {
         accept: "application/json",
@@ -156,16 +260,21 @@ describe("multiplayer room service client", () => {
       {
         accept: "application/json",
         authorization: "Bearer service-secret",
+      },
+      {
+        accept: "application/json",
+        authorization: "Bearer service-secret",
         "content-type": "application/json",
+        "x-multiplayer-room-protocol-version": "2",
       },
     ]);
-    expect(getRequestBody(requests[0]?.init)).toEqual({
+    expect(getRequestBody(requests[1]?.init)).toEqual({
       host: HOST_USER,
       settings: {
         gameId: "pong",
       },
     });
-    expect(getRequestBody(requests[2]?.init)).toEqual({
+    expect(getRequestBody(requests[4]?.init)).toEqual({
       displayName: "Guest Hero",
       type: "room.joinObserver",
     });
@@ -223,7 +332,29 @@ describe("multiplayer room service client", () => {
     ).resolves.toEqual({
       code: "room-service-unavailable",
       error:
-        "Room service request failed for POST http://service.local/_internal/multiplayer/rooms: connect ECONNREFUSED",
+        "Room service protocol check failed for GET http://service.local/_internal/multiplayer/rooms: connect ECONNREFUSED",
+      success: false,
+    });
+  });
+
+  it("rejects malformed capability-bearing room service results", async () => {
+    const client = new MultiplayerRoomServiceClient({
+      baseUrl: "http://service.local/_internal/multiplayer/rooms",
+      fetcher: vi.fn<typeof fetch>(async () =>
+        Response.json({
+          participantCapability: "host-capability",
+          snapshot: {
+            ...ROOM_SNAPSHOT,
+            participant: undefined,
+          },
+          success: true,
+        }),
+      ),
+    });
+
+    await expect(client.getRoom("ROOM1")).resolves.toEqual({
+      code: "room-service-invalid-response",
+      error: "Room service returned 200 with an invalid room result.",
       success: false,
     });
   });
@@ -244,16 +375,27 @@ describe("multiplayer room service client", () => {
   ])("preserves $code failures from the room authority", async (testCase) => {
     const client = new MultiplayerRoomServiceClient({
       baseUrl: "http://service.local/_internal/multiplayer/rooms",
-      fetcher: vi.fn<typeof fetch>(async () =>
-        Response.json(
+      fetcher: vi.fn<typeof fetch>(async (input, init) => {
+        if (
+          String(input).endsWith("/_internal/multiplayer/rooms") &&
+          init?.method === "GET"
+        ) {
+          return Response.json({
+            mutationPathSegment: "v2",
+            participantCapabilities: true,
+            protocolVersion: 2,
+          });
+        }
+
+        return Response.json(
           {
             code: testCase.code,
             error: testCase.error,
             success: false,
           },
           { status: testCase.status },
-        ),
-      ),
+        );
+      }),
     });
     const result =
       testCase.operation === "get"

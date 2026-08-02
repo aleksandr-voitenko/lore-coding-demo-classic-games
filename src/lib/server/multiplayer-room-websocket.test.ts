@@ -4,7 +4,10 @@ import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket, type RawData } from "ws";
 
-import type { MultiplayerRealtimeServerMessage } from "@/lib/multiplayer/protocol";
+import {
+  MULTIPLAYER_ROOM_PROTOCOL_VERSION,
+  type MultiplayerRealtimeServerMessage,
+} from "@/lib/multiplayer/protocol";
 import { getAsteroidsTickDelay } from "@/lib/asteroids-game-engine";
 import type { AsteroidsMultiplayerGameSnapshot } from "@/lib/asteroids-multiplayer";
 import type { PongGameState } from "@/lib/pong-game-engine";
@@ -43,12 +46,19 @@ afterEach(async () => {
 function createTestRoomStore({
   getNowMs,
   maxRooms,
+  participantCapabilities = [
+    "host-capability",
+    "guest-capability",
+    "guest-two-capability",
+    "observer-capability",
+  ],
   participantIds = ["host-1", "guest-1", "guest-2", "observer-1"],
   retentionPolicy,
   roomCodes = ["ROOM1"],
 }: {
   getNowMs?: () => number;
   maxRooms?: number;
+  participantCapabilities?: string[];
   participantIds?: string[];
   retentionPolicy?: {
     inProgressIdleTtlMs?: number;
@@ -59,10 +69,17 @@ function createTestRoomStore({
   };
   roomCodes?: string[];
 } = {}) {
+  let participantCapabilityIndex = 0;
   let participantIdIndex = 0;
   let roomCodeIndex = 0;
+  const capabilityOptions = {
+    createParticipantCapability: () =>
+      participantCapabilities[participantCapabilityIndex++] ??
+      `participant-capability-${participantCapabilityIndex}`,
+  };
 
   return new InProcessMultiplayerRoomStore({
+    ...capabilityOptions,
     createParticipantId: ({ role }) =>
       participantIds[participantIdIndex++] ?? `${role}-${participantIdIndex}`,
     createRoomCode: () => roomCodes[roomCodeIndex++] ?? "ROOM-FALLBACK",
@@ -428,7 +445,21 @@ function isServerMessage(value: unknown): value is MultiplayerRealtimeServerMess
 }
 
 function sendClientMessage(client: WebSocket, message: unknown) {
-  client.send(JSON.stringify(message));
+  const messageRecord =
+    typeof message === "object" && message !== null
+      ? (message as Record<string, unknown>)
+      : null;
+  const versionedMessage =
+    messageRecord !== null &&
+    (messageRecord.type === "connection.hello" ||
+      messageRecord.type === "connection.resume")
+      ? {
+          protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
+          ...messageRecord,
+        }
+      : message;
+
+  client.send(JSON.stringify(versionedMessage));
 }
 
 async function bootstrapClient(
@@ -442,7 +473,12 @@ async function bootstrapClient(
   );
 
   sendClientMessage(client, {
-    ...(participantId === undefined ? {} : { participantId }),
+    ...(participantId === undefined
+      ? {}
+      : {
+          participantCapability: getTestParticipantCapability(participantId),
+          participantId,
+        }),
     requestId: `hello-${roomCode}`,
     roomCode,
     type: "connection.hello",
@@ -459,7 +495,57 @@ async function bootstrapClient(
   return bootstrap;
 }
 
+function getTestParticipantCapability(participantId: string) {
+  if (participantId === "host-1") {
+    return "host-capability";
+  }
+
+  if (participantId === "guest-1") {
+    return "guest-capability";
+  }
+
+  if (participantId === "host-2") {
+    return "guest-two-capability";
+  }
+
+  throw new Error(`No test capability is configured for ${participantId}.`);
+}
+
 describe("multiplayer room WebSocket gateway", () => {
+  it.each([
+    ["missing", undefined],
+    ["mismatched", 1],
+  ])("rejects a %s bootstrap protocol before reading room state", async (_name, protocolVersion) => {
+    const store = createTestRoomStore();
+    const getRoomSpy = vi.spyOn(store, "getRoom");
+    const fixture = await createGatewayFixture(store);
+    const client = await connectClient(fixture.url);
+    const rejectionPromise = waitForServerMessage(
+      client,
+      (message) =>
+        message.type === "room.commandRejected" &&
+        message.requestId === `protocol-${protocolVersion ?? "missing"}`,
+    );
+
+    client.send(
+      JSON.stringify({
+        ...(protocolVersion === undefined ? {} : { protocolVersion }),
+        requestId: `protocol-${protocolVersion ?? "missing"}`,
+        roomCode: "ROOM1",
+        type: "connection.hello",
+      }),
+    );
+
+    await expect(rejectionPromise).resolves.toEqual({
+      code: "protocol-version-mismatch",
+      error: "Room stream protocol version is not supported. Refresh the page.",
+      requestId: `protocol-${protocolVersion ?? "missing"}`,
+      roomCode: "ROOM1",
+      type: "room.commandRejected",
+    });
+    expect(getRoomSpy).not.toHaveBeenCalled();
+  });
+
   it("normalizes snapshot pump intervals at gateway setup", async () => {
     const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
     const gateways: Array<
@@ -587,6 +673,73 @@ describe("multiplayer room WebSocket gateway", () => {
       },
     });
     expect(bootstrap.snapshot).not.toHaveProperty("participant");
+  });
+
+  it("does not treat a public participant id as a resume capability", async () => {
+    const store = createTestRoomStore();
+    createLobbyRoom(store);
+    const { url } = await createGatewayFixture(store);
+    const client = await connectClient(url);
+    const responsePromise = waitForServerMessage(
+      client,
+      (message) =>
+        "requestId" in message && message.requestId === "resume-with-public-id",
+    );
+
+    sendClientMessage(client, {
+      participantId: "host-1",
+      requestId: "resume-with-public-id",
+      roomCode: "ROOM1",
+      type: "connection.resume",
+    });
+
+    await expect(responsePromise).resolves.toMatchObject({
+      requestId: "resume-with-public-id",
+      roomCode: "ROOM1",
+      type: "room.commandRejected",
+    });
+  });
+
+  it("binds a resumed socket only through its opaque participant capability", async () => {
+    const store = createTestRoomStore();
+    createLobbyRoom(store);
+    const { url } = await createGatewayFixture(store);
+    const client = await connectClient(url);
+    const bootstrapPromise = waitForServerMessage(
+      client,
+      (message) =>
+        message.type === "connection.bootstrap" &&
+        message.requestId === "resume-with-capability",
+    );
+
+    sendClientMessage(client, {
+      participantCapability: "host-capability",
+      requestId: "resume-with-capability",
+      roomCode: "ROOM1",
+      type: "connection.resume",
+    });
+
+    const bootstrap = await bootstrapPromise;
+
+    expect(bootstrap).toMatchObject({
+      requestId: "resume-with-capability",
+      roomCode: "ROOM1",
+      snapshot: {
+        participant: {
+          id: "host-1",
+          role: "host",
+          userId: "user-1",
+        },
+      },
+      type: "connection.bootstrap",
+    });
+    expect(bootstrap).not.toHaveProperty("participantCapability");
+
+    if (bootstrap.type !== "connection.bootstrap") {
+      throw new Error("Expected a connection bootstrap message.");
+    }
+
+    expect(bootstrap.snapshot).not.toHaveProperty("participantCapability");
   });
 
   it("echoes diagnostics pings with server timing data", async () => {
@@ -722,6 +875,7 @@ describe("multiplayer room WebSocket gateway", () => {
     );
 
     sendClientMessage(client, {
+      participantCapability: "host-capability",
       participantId: "host-1",
       requestId: "boundary-bootstrap",
       roomCode: "ROOM1",
@@ -901,6 +1055,188 @@ describe("multiplayer room WebSocket gateway", () => {
     expectStoreSuccess(store.getRoom("ROOM2"));
   });
 
+  it("rejects seat commands from an unbound socket even when it submits a public participant id", async () => {
+    const store = createTestRoomStore();
+    createLobbyRoom(store);
+    const { url } = await createGatewayFixture(store);
+    const client = await connectClient(url);
+
+    await bootstrapClient(client);
+
+    const responsePromise = waitForServerMessage(
+      client,
+      (message) =>
+        "requestId" in message && message.requestId === "spoof-host-seat",
+    );
+
+    sendClientMessage(client, {
+      command: {
+        participantId: "host-1",
+        seatId: "left",
+        type: "room.claimSeat",
+      },
+      requestId: "spoof-host-seat",
+      roomCode: "ROOM1",
+      type: "room.command",
+    });
+
+    await expect(responsePromise).resolves.toMatchObject({
+      requestId: "spoof-host-seat",
+      roomCode: "ROOM1",
+      type: "room.commandRejected",
+    });
+    expect(expectStoreSuccess(store.getRoom("ROOM1")).room.seats[0]).toMatchObject({
+      id: "left",
+      occupiedByParticipantId: null,
+    });
+  });
+
+  it("rejects gameplay input from an unbound socket even when it submits a seated participant id", async () => {
+    const store = createTestRoomStore();
+    createStartedPongRoom(store);
+    const { url } = await createGatewayFixture(store);
+    const client = await connectClient(url);
+
+    await bootstrapClient(client);
+
+    const responsePromise = waitForServerMessage(
+      client,
+      (message) =>
+        "requestId" in message && message.requestId === "spoof-host-input",
+    );
+
+    sendClientMessage(client, {
+      gameId: "pong",
+      input: {
+        direction: "up",
+        type: "pong.setPaddleDirection",
+      },
+      participantId: "host-1",
+      requestId: "spoof-host-input",
+      roomCode: "ROOM1",
+      type: "game.input",
+    });
+
+    await expect(responsePromise).resolves.toMatchObject({
+      requestId: "spoof-host-input",
+      roomCode: "ROOM1",
+      type: "room.commandRejected",
+    });
+    expect(expectPongGame(expectStoreSuccess(store.getRoom("ROOM1"))).heldInputs).toEqual(
+      {},
+    );
+  });
+
+  it("rejects a participant id that does not match the capability-bound socket", async () => {
+    const store = createTestRoomStore();
+    createStartedPongRoom(store);
+    const { url } = await createGatewayFixture(store);
+    const client = await connectClient(url);
+    const bootstrapPromise = waitForServerMessage(
+      client,
+      (message) =>
+        message.type === "connection.bootstrap" &&
+        message.requestId === "resume-host-for-mismatch",
+    );
+
+    sendClientMessage(client, {
+      participantCapability: "host-capability",
+      requestId: "resume-host-for-mismatch",
+      roomCode: "ROOM1",
+      type: "connection.resume",
+    });
+    await bootstrapPromise;
+
+    const responsePromise = waitForServerMessage(
+      client,
+      (message) =>
+        "requestId" in message && message.requestId === "spoof-guest-input",
+    );
+
+    sendClientMessage(client, {
+      gameId: "pong",
+      input: {
+        direction: "up",
+        type: "pong.setPaddleDirection",
+      },
+      participantId: "guest-1",
+      requestId: "spoof-guest-input",
+      roomCode: "ROOM1",
+      type: "game.input",
+    });
+
+    await expect(responsePromise).resolves.toMatchObject({
+      requestId: "spoof-guest-input",
+      roomCode: "ROOM1",
+      type: "room.commandRejected",
+    });
+    expect(expectPongGame(expectStoreSuccess(store.getRoom("ROOM1"))).heldInputs).toEqual(
+      {},
+    );
+  });
+
+  it("keeps public observer joins guest-only and returns their capability only in the private ack", async () => {
+    const store = createTestRoomStore();
+    createLobbyRoom(store);
+    const { url } = await createGatewayFixture(store);
+    const sender = await connectClient(url);
+    const observer = await connectClient(url);
+
+    await bootstrapClient(sender);
+    await bootstrapClient(observer);
+
+    const ackPromise = waitForServerMessage(
+      sender,
+      (message) =>
+        message.type === "room.commandAck" &&
+        message.requestId === "join-with-forged-user",
+    );
+    const observerSnapshotPromise = waitForServerMessage(
+      observer,
+      (message) => message.type === "room.snapshot" && message.snapshot.seq === 2,
+    );
+
+    sendClientMessage(sender, {
+      command: {
+        displayName: "Grace Guest",
+        type: "room.joinObserver",
+        userId: "user-1",
+      },
+      requestId: "join-with-forged-user",
+      roomCode: "ROOM1",
+      type: "room.command",
+    });
+
+    const [ack, observerSnapshot] = await Promise.all([
+      ackPromise,
+      observerSnapshotPromise,
+    ]);
+
+    expect(observerSnapshot.type).toBe("room.snapshot");
+
+    if (observerSnapshot.type !== "room.snapshot") {
+      throw new Error("Expected an observer room snapshot.");
+    }
+
+    expect(observerSnapshot).not.toHaveProperty("participantCapability");
+    expect(observerSnapshot.snapshot).not.toHaveProperty(
+      "participantCapability",
+    );
+    expect(observerSnapshot.snapshot.room.participants).toContainEqual({
+      displayName: "Grace Guest",
+      id: "guest-1",
+      role: "observer",
+      userId: null,
+    });
+    expect(ack).toMatchObject({
+      participantCapability: "guest-capability",
+      participantId: "guest-1",
+      requestId: "join-with-forged-user",
+      roomCode: "ROOM1",
+      type: "room.commandAck",
+    });
+  });
+
   it("acks room commands and broadcasts authoritative snapshots", async () => {
     const store = createTestRoomStore();
     createLobbyRoom(store);
@@ -1006,6 +1342,8 @@ describe("multiplayer room WebSocket gateway", () => {
         }),
       createRoom: backingStore.createRoom.bind(backingStore),
       getRoom: backingStore.getRoom.bind(backingStore),
+      resolveParticipantCapability:
+        backingStore.resolveParticipantCapability.bind(backingStore),
       registerParticipantConnection,
       unregisterParticipantConnection:
         backingStore.unregisterParticipantConnection.bind(backingStore),
@@ -1147,7 +1485,7 @@ describe("multiplayer room WebSocket gateway", () => {
     const sender = await connectClient(url);
     const observer = await connectClient(url);
 
-    await bootstrapClient(sender);
+    await bootstrapClient(sender, "ROOM1", "host-1");
     await bootstrapClient(observer);
 
     const expectedGameSeq = started.game!.seq + 1;
@@ -1232,7 +1570,7 @@ describe("multiplayer room WebSocket gateway", () => {
     const sender = await connectClient(url);
     const observer = await connectClient(url);
 
-    await bootstrapClient(sender);
+    await bootstrapClient(sender, "ROOM1", "guest-1");
     await bootstrapClient(observer);
 
     const expectedGameSeq = started.game!.seq + 1;
@@ -1323,7 +1661,7 @@ describe("multiplayer room WebSocket gateway", () => {
     const sender = await connectClient(url);
     const observer = await connectClient(url);
 
-    await bootstrapClient(sender);
+    await bootstrapClient(sender, "ROOM1", "guest-1");
     await bootstrapClient(observer);
 
     const expectedGameSeq = started.game!.seq + 1;
@@ -1623,7 +1961,7 @@ describe("multiplayer room WebSocket gateway", () => {
     const { url } = await createGatewayFixture(store, { snapshotIntervalMs: 10 });
     const observer = await connectClient(url);
 
-    await bootstrapClient(observer);
+    await bootstrapClient(observer, "ROOM1", "host-1");
 
     const inputAckPromise = waitForServerMessage(
       observer,
@@ -1675,6 +2013,7 @@ describe("multiplayer room WebSocket gateway", () => {
   it("rejects malformed client messages", async () => {
     const { url } = await createGatewayFixture();
     const client = await connectClient(url);
+
     const rejectionPromise = waitForServerMessage(
       client,
       (message) => message.type === "room.commandRejected",
@@ -1753,6 +2092,8 @@ describe("multiplayer room WebSocket gateway", () => {
     );
     const { url } = await createGatewayFixture(store);
     const client = await connectClient(url);
+
+    await bootstrapClient(client, "ROOM1", "host-1");
     const rejectionPromise = waitForServerMessage(
       client,
       (message) =>

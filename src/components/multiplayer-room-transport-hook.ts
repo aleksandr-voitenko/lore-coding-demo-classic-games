@@ -38,8 +38,10 @@ type UseMultiplayerRoomWebSocketTransportOptions = {
   lastSeq?: MultiplayerRealtimeConnectionCursor | null;
   onConnectionError?: (error: MultiplayerRoomTransportError) => void;
   onDiagnosticsPingSample?: (sample: MultiplayerRoomTransportPingSample) => void;
+  onParticipantCapability?: (participantCapability: string) => void;
   onParticipantId?: (participantId: string) => void;
   onSnapshot: (snapshot: MultiplayerRoomTransportSnapshot) => void;
+  participantCapability?: string | null;
   participantId?: string | null;
   reconnectDelayMs?: number;
   roomCode: string | null;
@@ -69,8 +71,10 @@ export function useMultiplayerRoomWebSocketTransport({
   lastSeq,
   onConnectionError,
   onDiagnosticsPingSample,
+  onParticipantCapability,
   onParticipantId,
   onSnapshot,
+  participantCapability,
   participantId,
   reconnectDelayMs = DEFAULT_RECONNECT_DELAY_MS,
   roomCode,
@@ -85,8 +89,10 @@ export function useMultiplayerRoomWebSocketTransport({
     lastSeq,
     onConnectionError,
     onDiagnosticsPingSample,
+    onParticipantCapability,
     onParticipantId,
     onSnapshot,
+    participantCapability,
     participantId,
   });
   const transportRef = useRef<ReturnType<
@@ -100,8 +106,10 @@ export function useMultiplayerRoomWebSocketTransport({
       lastSeq,
       onConnectionError,
       onDiagnosticsPingSample,
+      onParticipantCapability,
       onParticipantId,
       onSnapshot,
+      participantCapability,
       participantId,
     };
   }, [
@@ -109,8 +117,10 @@ export function useMultiplayerRoomWebSocketTransport({
     lastSeq,
     onConnectionError,
     onDiagnosticsPingSample,
+    onParticipantCapability,
     onParticipantId,
     onSnapshot,
+    participantCapability,
     participantId,
   ]);
 
@@ -234,6 +244,13 @@ export function useMultiplayerRoomWebSocketTransport({
               latestOptionsRef.current.onDiagnosticsPingSample?.(sample);
             }
           },
+          onParticipantCapability: (nextParticipantCapability) => {
+            if (isCurrent) {
+              latestOptionsRef.current.onParticipantCapability?.(
+                nextParticipantCapability,
+              );
+            }
+          },
           onParticipantId: (nextParticipantId) => {
             if (isCurrent) {
               latestOptionsRef.current.onParticipantId?.(nextParticipantId);
@@ -244,6 +261,7 @@ export function useMultiplayerRoomWebSocketTransport({
               latestOptionsRef.current.onSnapshot(snapshot);
             }
           },
+          participantCapability: latestOptions.participantCapability,
           participantId: latestOptions.participantId,
           roomCode: activeRoomCode,
           url: activeUrl,
@@ -290,6 +308,8 @@ export function useMultiplayerRoomWebSocketTransport({
     bootstrapTimeoutMs,
     commandAckTimeoutMs,
     enabled,
+    participantCapability,
+    participantId,
     reconnectDelayMs,
     roomCode,
     setStatus,
