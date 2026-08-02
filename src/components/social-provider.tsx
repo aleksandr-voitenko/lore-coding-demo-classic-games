@@ -13,6 +13,7 @@ import {
 
 import {
   getSocialPendingCount,
+  type SocialOverviewRefreshResult,
   useSocialOverview,
 } from "@/hooks/use-social-overview";
 import {
@@ -39,9 +40,11 @@ export type SocialContextValue = {
   openSocialCenter: () => void;
   overview: SocialOverview | null;
   overviewError: Error | null;
+  overviewRequestGeneration: number | null;
   pendingCount: number;
   presenceError: Error | null;
   refresh: () => Promise<SocialOverview | null>;
+  refreshWithGeneration: () => Promise<SocialOverviewRefreshResult>;
   runMutation: SocialMutationRunner;
   setSocialCenterOpen: (open: boolean) => void;
 };
@@ -83,7 +86,9 @@ export function SocialProvider({
     isLoading,
     isRefreshing,
     overview,
+    overviewRequestGeneration,
     refresh,
+    refreshWithGeneration,
   } = useSocialOverview(socialUserId);
   const {
     availability,
@@ -160,9 +165,11 @@ export function SocialProvider({
       isRefreshing,
       overview,
       overviewError,
+      overviewRequestGeneration,
       pendingCount,
       presenceError: isEnabled ? presenceError : null,
       refresh,
+      refreshWithGeneration,
       runMutation,
     }),
     [
@@ -173,9 +180,11 @@ export function SocialProvider({
       isRefreshing,
       overview,
       overviewError,
+      overviewRequestGeneration,
       pendingCount,
       presenceError,
       refresh,
+      refreshWithGeneration,
       runMutation,
     ],
   );

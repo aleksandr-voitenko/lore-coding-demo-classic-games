@@ -35,6 +35,7 @@ import {
   SocialCenter,
   SocialCenterTrigger,
 } from "@/components/social-center";
+import { SocialPartyInviteControls } from "@/components/social-party-invite-controls";
 import { SocialProvider } from "@/components/social-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserAccountControls } from "@/components/user-account-controls";
@@ -438,6 +439,7 @@ export function GameLauncher({
           key={`${activeRoomSession.roomCode}:${currentUserId ?? "guest"}`}
           onBackToLibrary={returnToLibraryFromRoom}
           socialCenterTrigger={<SocialCenterTrigger />}
+          socialPartyInviteControls={SocialPartyInviteControls}
         />
         <SocialCenter />
       </SocialProvider>

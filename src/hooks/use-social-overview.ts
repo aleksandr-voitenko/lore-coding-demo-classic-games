@@ -19,6 +19,12 @@ export type SocialOverviewState = {
   isLoading: boolean;
   isRefreshing: boolean;
   overview: SocialOverview | null;
+  overviewRequestGeneration: number | null;
+};
+
+export type SocialOverviewRefreshResult = {
+  overview: SocialOverview | null;
+  requestGeneration: number;
 };
 
 type AccountSocialOverviewState = SocialOverviewState & {
@@ -35,6 +41,7 @@ const EMPTY_SOCIAL_OVERVIEW_STATE: SocialOverviewState = {
   isLoading: false,
   isRefreshing: false,
   overview: null,
+  overviewRequestGeneration: null,
 };
 
 function getInitialSocialOverviewState(
@@ -61,6 +68,9 @@ function normalizePollIntervalMs(value: number) {
  * Keeps the last valid social graph visible while a newer overview is loading.
  * Every request receives a generation so a late focus or polling response cannot
  * replace data fetched after a relationship mutation or account change.
+ * Versioned refreshes return their generation even when superseded or failed;
+ * callers can therefore wait for an equally new successful overview without
+ * mistaking an older retained graph for post-mutation evidence.
  */
 export function useSocialOverview(
   userId: string | null,
@@ -75,7 +85,9 @@ export function useSocialOverview(
   );
   const accountGenerationRef = useRef(0);
   const fetchOverviewRef = useRef(fetchOverview);
-  const inFlightRequestRef = useRef<Promise<SocialOverview | null> | null>(null);
+  const inFlightRequestRef = useRef<
+    Promise<SocialOverviewRefreshResult> | null
+  >(null);
   const requestGenerationRef = useRef(0);
   const activeUserIdRef = useRef(userId);
 
@@ -85,7 +97,10 @@ export function useSocialOverview(
 
   const requestOverview = useCallback((coalesce: boolean) => {
     if (userId === null) {
-      return Promise.resolve(null);
+      return Promise.resolve({
+        overview: null,
+        requestGeneration: requestGenerationRef.current,
+      });
     }
 
     if (coalesce && inFlightRequestRef.current !== null) {
@@ -116,7 +131,7 @@ export function useSocialOverview(
           accountGenerationRef.current !== accountGeneration ||
           requestGenerationRef.current !== requestGeneration
         ) {
-          return null;
+          return { overview: null, requestGeneration };
         }
 
         setState({
@@ -124,16 +139,17 @@ export function useSocialOverview(
           isLoading: false,
           isRefreshing: false,
           overview,
+          overviewRequestGeneration: requestGeneration,
           userId,
         });
-        return overview;
+        return { overview, requestGeneration };
       } catch (error) {
         if (
           activeUserIdRef.current !== userId ||
           accountGenerationRef.current !== accountGeneration ||
           requestGenerationRef.current !== requestGeneration
         ) {
-          return null;
+          return { overview: null, requestGeneration };
         }
 
         const normalizedError =
@@ -153,7 +169,7 @@ export function useSocialOverview(
                 isLoading: false,
               },
         );
-        return null;
+        return { overview: null, requestGeneration };
       }
     })();
 
@@ -167,9 +183,16 @@ export function useSocialOverview(
     return request;
   }, [userId]);
 
-  const refresh = useCallback(() => requestOverview(false), [requestOverview]);
+  const refreshWithGeneration = useCallback(
+    () => requestOverview(false),
+    [requestOverview],
+  );
+  const refresh = useCallback(
+    async () => (await refreshWithGeneration()).overview,
+    [refreshWithGeneration],
+  );
   const refreshPassively = useCallback(
-    () => requestOverview(true),
+    async () => (await requestOverview(true)).overview,
     [requestOverview],
   );
 
@@ -250,7 +273,9 @@ export function useSocialOverview(
     isLoading: scopedState.isLoading,
     isRefreshing: scopedState.isRefreshing,
     overview: scopedState.overview,
+    overviewRequestGeneration: scopedState.overviewRequestGeneration,
     refresh,
+    refreshWithGeneration,
   };
 }
 

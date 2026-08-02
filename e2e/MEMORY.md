@@ -41,6 +41,11 @@ This file covers Playwright browser-flow coverage under `e2e/`.
   delivery. The isolated sidecar suite should prove that WebSocket room events
   cover the host, guest, observer, lifecycle, and active-game delivery paths
   needed by the shared room shell and registered game adapters.
+- `sidecar/pong-private-room.e2e.ts` also owns the two-account host invitation
+  path because Play/Watch must stay disabled until the live party stream is
+  active. It covers friendship setup, linkless Watch creation, party-code
+  redaction, accessible admission help, local cancellation, external decline,
+  and focus recovery when the pending action disappears asynchronously.
 - `sidecar/tank-patrol-private-room.e2e.ts` covers Tank Patrol's required
   Player 1/Player 2 seat claims, authoritative Stage 1 start, both rendered
   tanks, and bidirectional held-movement delivery across two browser contexts.

@@ -400,6 +400,19 @@ capability. Incoming party invitations remain visible on busy/in-party surfaces,
 but acceptance is disabled unless presence is `available` and the current
 launcher surface can adopt the returned private credentials.
 
+The authenticated current party host also gets an Invite friends panel beside
+the Party roster in both lobby and active-game layouts. Available friends have
+explicit Play and Watch actions; current members, busy players, players in
+another party, offline players, and unknown availability stay visible with
+disabled actions and a reason. Play currently offers an open player spot or,
+when watcher capacity allows, Watching; Watch requests Watching, and watchers
+can use the existing next-match queue themselves. Observer capacity can leave
+Play enabled for an open player spot while disabling Watch. The server
+revalidates host ownership, friendship, presence, and capacity at creation and
+acceptance time, so the UI never promises admission before acceptance. The
+panel never displays a party code or participant capability, and Copy invite
+link remains the guest fallback.
+
 A signed-in document uses one cryptographic per-document presence id, renews
 its 45-second lease every 15 seconds only while visible, renews again on focus,
 and sends a keepalive release when hidden or unloaded. Logout gives that
@@ -411,7 +424,10 @@ per account. Generationless legacy operations remain valid only until that
 client identity first uses the sequenced contract. Social overview loading
 keeps the last valid same-account graph during refresh, suppresses stale account
 and request results, refreshes on focus, and otherwise polls every 30 seconds
-only while visible.
+only while visible. Successful overviews and explicit refresh attempts carry
+monotonic browser request generations so the host invitation panel can ignore
+pre-creation poll results while still retiring an invitation that resolves
+before its first post-creation overview.
 
 Presence leases, effective busy/in-party status, parties, matches, observer
 queues, and participant capabilities remain volatile and are never reconstructed

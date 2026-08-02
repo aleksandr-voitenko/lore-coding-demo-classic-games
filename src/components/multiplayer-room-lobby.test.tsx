@@ -19,6 +19,7 @@ import {
   selectFreshMultiplayerRoomSnapshot,
 } from "./multiplayer-room-lobby";
 import { MultiplayerRoomTransportError } from "./multiplayer-room-transport";
+import type { SocialPartyInviteControlsProps } from "./social-party-invite-controls";
 
 const PONG_ROOM: PrivateRoom = {
   code: "PONG-1",
@@ -109,6 +110,16 @@ const RUNNING_SNAKE_GAME = {
   snapshot: {},
 } satisfies MultiplayerRoomGameSnapshot<"snake", Record<string, never>>;
 
+function TestSocialPartyInviteControls({
+  room,
+}: SocialPartyInviteControlsProps) {
+  return (
+    <section data-testid="test-social-party-invite-controls">
+      Invite friends to {room.settings.gameId}
+    </section>
+  );
+}
+
 function getTestElementOpeningTag(markup: string, testId: string) {
   const match = markup.match(
     new RegExp(`<[^>]+data-testid="${testId}"[^>]*>`),
@@ -143,6 +154,7 @@ describe("multiplayer room lobby", () => {
               Friends
             </button>
           }
+          socialPartyInviteControls={TestSocialPartyInviteControls}
         />
       </CurrentUserProvider>,
     );
@@ -165,6 +177,9 @@ describe("multiplayer room lobby", () => {
     expect(markup).toContain('data-testid="multiplayer-room-next-game-select"');
     expect(markup).toContain('data-testid="multiplayer-room-replace-match-button"');
     expect(markup).toContain('data-testid="social-center-trigger"');
+    expect(markup).toContain(
+      'data-testid="test-social-party-invite-controls"',
+    );
     expect(markup).toContain("Private Party");
   });
 
@@ -194,6 +209,7 @@ describe("multiplayer room lobby", () => {
         initialRoom={PONG_ROOM}
         initialRoomCode="PONG-1"
         onBackToLibrary={vi.fn()}
+        socialPartyInviteControls={TestSocialPartyInviteControls}
       />,
     );
 
@@ -204,6 +220,38 @@ describe("multiplayer room lobby", () => {
     expect(markup).toContain("Join game");
     expect(markup).toContain('data-testid="multiplayer-party-panel"');
     expect(markup).not.toContain('data-testid="multiplayer-room-host-controls"');
+    expect(markup).not.toContain(
+      'data-testid="test-social-party-invite-controls"',
+    );
+  });
+
+  it("keeps friend invitation controls hidden from a signed-in non-host member", () => {
+    const memberRoom = {
+      ...PONG_ROOM,
+      participants: PONG_ROOM.participants.map((participant) =>
+        participant.id === "guest-participant"
+          ? { ...participant, userId: "user-2" }
+          : participant,
+      ),
+    } satisfies PrivateRoom;
+    const markup = renderToStaticMarkup(
+      <CurrentUserProvider
+        initialUser={{ displayName: "Grace", id: "user-2" }}
+      >
+        <MultiplayerRoomLobby
+          initialParticipantId="guest-participant"
+          initialRoom={memberRoom}
+          initialRoomCode="PONG-1"
+          onBackToLibrary={vi.fn()}
+          socialPartyInviteControls={TestSocialPartyInviteControls}
+        />
+      </CurrentUserProvider>,
+    );
+
+    expect(markup).toContain('data-testid="multiplayer-party-panel"');
+    expect(markup).not.toContain(
+      'data-testid="test-social-party-invite-controls"',
+    );
   });
 
   it("explains the open player slot while live actions wait for the room stream", () => {
@@ -355,6 +403,7 @@ describe("multiplayer room lobby", () => {
           initialRoomCode="PONG-1"
           initialSeq={4}
           onBackToLibrary={vi.fn()}
+          socialPartyInviteControls={TestSocialPartyInviteControls}
         />
       </CurrentUserProvider>,
     );
@@ -365,6 +414,9 @@ describe("multiplayer room lobby", () => {
     expect(markup).toContain("Ada · Left Paddle");
     expect(markup).toContain('data-testid="multiplayer-room-host-controls"');
     expect(markup).toContain('data-testid="multiplayer-party-panel"');
+    expect(markup).toContain(
+      'data-testid="test-social-party-invite-controls"',
+    );
   });
 
   it("keeps Join game and Watch available beside an active match", () => {

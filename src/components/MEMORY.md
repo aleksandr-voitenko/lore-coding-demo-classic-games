@@ -74,6 +74,21 @@ This file covers React component ownership and shared game UI conventions under
   succeeds but launcher adoption fails, retain the returned credentials in the
   same in-memory scope and retry only local adoption. Never render or log the
   capability.
+  The launcher injects `SocialPartyInviteControls` into the generic room shell,
+  but `MultiplayerRoomLobby` decides whether to render it from the live,
+  account-bound `isHost` check. Show it above the lobby Party roster and between
+  the active-game roster and guest-link fallback. The panel may correlate only
+  invitations created or idempotently returned for its mounted party; global
+  outgoing summaries intentionally omit party identity and cannot establish a
+  current-party pending state after host transfer. Once this panel receives an
+  exact invitation id, record the request generation of its explicit
+  post-creation refresh. A successful overview may reconcile that known id only
+  when its generation is at least the recorded generation, so pre-creation poll
+  results cannot hide a new invitation while concurrent, failed, or superseded
+  refreshes still retire invitations resolved before first observation.
+  Memoize the injected panel against invitation-relevant membership, seat,
+  queue, status, and capacity fields; active game snapshots arrive much more
+  often than those party fields change.
 - `multiplayer-room-lobby.tsx` owns the generic private-room lobby/shell UI and
   browser session state: participant resolution, fresh snapshot selection,
   host derivation, diagnostics presentation, and pending form/action state.

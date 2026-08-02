@@ -360,7 +360,7 @@ describe("useSocialOverview", () => {
     await flushPromiseSettlements();
 
     const loaded = harness.render(useRenderedSocialOverview);
-    const refreshPromise = loaded.refresh();
+    const refreshPromise = loaded.refreshWithGeneration();
 
     expect(harness.render(useRenderedSocialOverview)).toMatchObject({
       error: null,
@@ -371,13 +371,17 @@ describe("useSocialOverview", () => {
 
     const refreshError = new Error("Overview failed.");
     failedRefresh.reject(refreshError);
-    await refreshPromise;
+    await expect(refreshPromise).resolves.toEqual({
+      overview: null,
+      requestGeneration: 3,
+    });
 
     expect(harness.render(useRenderedSocialOverview)).toMatchObject({
       error: refreshError,
       isLoading: false,
       isRefreshing: false,
       overview: FIRST_OVERVIEW,
+      overviewRequestGeneration: 2,
     });
     harness.unmount();
   });
@@ -394,11 +398,17 @@ describe("useSocialOverview", () => {
       useSocialOverview("user-1", { fetchOverview, pollIntervalMs: 1_000 });
 
     const initial = harness.render(useRenderedSocialOverview);
-    const newerRefresh = initial.refresh();
+    const newerRefresh = initial.refreshWithGeneration();
 
     newerRequest.resolve(SECOND_OVERVIEW);
-    await newerRefresh;
-    expect(harness.render(useRenderedSocialOverview).overview).toBe(SECOND_OVERVIEW);
+    await expect(newerRefresh).resolves.toEqual({
+      overview: SECOND_OVERVIEW,
+      requestGeneration: 3,
+    });
+    expect(harness.render(useRenderedSocialOverview)).toMatchObject({
+      overview: SECOND_OVERVIEW,
+      overviewRequestGeneration: 3,
+    });
 
     olderRequest.resolve(FIRST_OVERVIEW);
     await flushPromiseSettlements();

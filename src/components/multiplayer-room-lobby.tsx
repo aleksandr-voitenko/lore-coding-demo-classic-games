@@ -11,6 +11,7 @@ import {
   UsersIcon,
 } from "lucide-react";
 import {
+  type ComponentType,
   type FormEvent,
   type ReactNode,
   useCallback,
@@ -49,6 +50,7 @@ import {
   MultiplayerRoomTransportError,
   type MultiplayerRoomMembershipEnded,
 } from "@/components/multiplayer-room-transport";
+import type { SocialPartyInviteControlsProps } from "@/components/social-party-invite-controls";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { UserAccountControls } from "@/components/user-account-controls";
@@ -99,6 +101,7 @@ type MultiplayerRoomLobbyProps = {
   initialRoomCode: string;
   onBackToLibrary: () => void;
   socialCenterTrigger?: ReactNode;
+  socialPartyInviteControls?: ComponentType<SocialPartyInviteControlsProps>;
 };
 
 type GuestJoinFormProps = {
@@ -264,6 +267,7 @@ export function MultiplayerRoomLobby({
   initialRoomCode,
   onBackToLibrary,
   socialCenterTrigger,
+  socialPartyInviteControls: SocialPartyInviteControlsView,
 }: MultiplayerRoomLobbyProps) {
   const { user } = useCurrentUser();
   const normalizedRoomCode = normalizePrivateRoomCode(initialRoomCode);
@@ -1006,6 +1010,18 @@ export function MultiplayerRoomLobby({
                   room={room}
                 />
 
+                {isHost && SocialPartyInviteControlsView !== undefined ? (
+                  <SocialPartyInviteControlsView
+                    actionsDisabled={roomActionsDisabled}
+                    actionsDisabledDescriptionId={
+                      roomActionsDisabled
+                        ? MULTIPLAYER_ROOM_CONNECTION_STATUS_ID
+                        : undefined
+                    }
+                    room={room}
+                  />
+                ) : null}
+
                 <section className="rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] p-4 shadow-sm">
                   <Button
                     className="w-full"
@@ -1108,22 +1124,35 @@ export function MultiplayerRoomLobby({
               ) : null}
             </div>
 
-            <MultiplayerPartyPanel
-              activeParticipantId={activeParticipantId}
-              actionsDisabled={roomActionsDisabled}
-              actionsDisabledDescriptionId={
-                roomActionsDisabled
-                  ? MULTIPLAYER_ROOM_CONNECTION_STATUS_ID
-                  : undefined
-              }
-              onCancelNextMatch={handleCancelNextMatch}
-              onJoinGame={handleClaimSeat}
-              onJoinNextMatch={handleJoinNextMatch}
-              onLeaveParty={requestLeaveParty}
-              onWatchInstead={handleReleaseSeat}
-              pendingAction={pendingAction}
-              room={room}
-            />
+            <aside className="flex min-w-0 flex-col gap-4">
+              {isHost && SocialPartyInviteControlsView !== undefined ? (
+                <SocialPartyInviteControlsView
+                  actionsDisabled={roomActionsDisabled}
+                  actionsDisabledDescriptionId={
+                    roomActionsDisabled
+                      ? MULTIPLAYER_ROOM_CONNECTION_STATUS_ID
+                      : undefined
+                  }
+                  room={room}
+                />
+              ) : null}
+              <MultiplayerPartyPanel
+                activeParticipantId={activeParticipantId}
+                actionsDisabled={roomActionsDisabled}
+                actionsDisabledDescriptionId={
+                  roomActionsDisabled
+                    ? MULTIPLAYER_ROOM_CONNECTION_STATUS_ID
+                    : undefined
+                }
+                onCancelNextMatch={handleCancelNextMatch}
+                onJoinGame={handleClaimSeat}
+                onJoinNextMatch={handleJoinNextMatch}
+                onLeaveParty={requestLeaveParty}
+                onWatchInstead={handleReleaseSeat}
+                pendingAction={pendingAction}
+                room={room}
+              />
+            </aside>
           </div>
         ) : null}
       </section>
