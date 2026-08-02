@@ -6,11 +6,16 @@ import {
   DEFAULT_ASTEROIDS_PRIVATE_ROOM_SEATS,
   DEFAULT_PONG_PRIVATE_ROOM_SEATS,
   DEFAULT_SPACE_INVADERS_PRIVATE_ROOM_SEATS,
+  getMultiplayerRoomStoreErrorStatus,
   InProcessMultiplayerRoomStore,
   PONG_RUNTIME_CATCH_UP_TICK_LIMIT,
   type MultiplayerRoomSnapshot,
   type MultiplayerRoomStoreResult,
 } from "./multiplayer-room-runtime";
+import {
+  MAX_MULTIPLAYER_ACCOUNT_AVAILABILITY_USER_IDS,
+  type MultiplayerAccountPartyResult,
+} from "./multiplayer-account-party";
 import { getAsteroidsTickDelay } from "../asteroids-game-engine";
 import type {
   AsteroidsMultiplayerGameSnapshot,
@@ -35,6 +40,7 @@ const HOST_USER = {
 function createTestRoomStore({
   getNowMs,
   maxConnectionsPerParticipant,
+  maxRooms,
   observerLimit,
   participantCapabilities = [
     "host-capability",
@@ -44,12 +50,21 @@ function createTestRoomStore({
   ],
   participantIds = ["host-1", "guest-1", "guest-2", "observer-1"],
   roomCodes = ["ROOM1"],
+  retentionPolicy,
 }: {
   getNowMs?: () => number;
   maxConnectionsPerParticipant?: number;
+  maxRooms?: number;
   observerLimit?: number;
   participantCapabilities?: string[];
   participantIds?: string[];
+  retentionPolicy?: Partial<{
+    inProgressIdleTtlMs: number;
+    lobbyIdleTtlMs: number;
+    sweepIntervalMs: number;
+    terminalTtlMs: number;
+    tombstoneTtlMs: number;
+  }>;
   roomCodes?: string[];
 } = {}) {
   let participantCapabilityIndex = 0;
@@ -70,7 +85,9 @@ function createTestRoomStore({
     ...(maxConnectionsPerParticipant === undefined
       ? {}
       : { maxConnectionsPerParticipant }),
+    ...(maxRooms === undefined ? {} : { maxRooms }),
     ...(observerLimit === undefined ? {} : { observerLimit }),
+    ...(retentionPolicy === undefined ? {} : { retentionPolicy }),
   });
 }
 
@@ -90,6 +107,61 @@ function expectStoreSnapshotSuccess(result: MultiplayerRoomStoreResult) {
 
 function expectStoreSuccess(result: MultiplayerRoomStoreResult) {
   return expectStoreSnapshotSuccess(result).snapshot;
+}
+
+function expectAccountSuccess(result: MultiplayerAccountPartyResult) {
+  expect(result).toMatchObject({ success: true });
+
+  if (!result.success) {
+    throw new Error(result.error);
+  }
+
+  return result;
+}
+
+function setAccountAvailable(
+  store: InProcessMultiplayerRoomStore,
+  userId: string,
+  clientId: string,
+) {
+  return expectAccountSuccess(
+    store.applyAccountCommand({
+      clientId,
+      state: "available",
+      type: "presence.renew",
+      userId,
+    }),
+  );
+}
+
+function admitAuthenticatedAccount(
+  store: InProcessMultiplayerRoomStore,
+  {
+    displayName,
+    intent,
+    partyCode = "ROOM1",
+    userId,
+  }: {
+    displayName: string;
+    intent: "play" | "watch";
+    partyCode?: string;
+    userId: string;
+  },
+) {
+  const result = expectAccountSuccess(
+    store.applyAccountCommand({
+      intent,
+      partyCode,
+      type: "party.admitAuthenticated",
+      user: { displayName, id: userId },
+    }),
+  );
+
+  if (result.outcome !== "admission") {
+    throw new Error("Expected authenticated party admission.");
+  }
+
+  return result;
 }
 
 function expectPongGame(snapshot: MultiplayerRoomSnapshot) {
@@ -1056,27 +1128,28 @@ describe("in-process multiplayer room store", () => {
         type: "room.joinObserver",
       }),
     );
-    expectStoreSuccess(
-      store.applyCommand("ROOM1", {
-        displayName: "Offline Member",
-        type: "room.joinObserver",
-        userId: "user-offline",
-      }),
-    );
-    expectStoreSuccess(
-      store.applyCommand("ROOM1", {
-        displayName: "Successor Member",
-        type: "room.joinObserver",
-        userId: "user-successor",
-      }),
-    );
-    expectStoreSuccess(
-      store.applyCommand("ROOM1", {
-        displayName: "Later Member",
-        type: "room.joinObserver",
-        userId: "user-later",
-      }),
-    );
+    for (const [userId, displayName, clientId] of [
+      ["user-offline", "Offline Member", "offline-client-01"],
+      ["user-successor", "Successor Member", "successor-client1"],
+      ["user-later", "Later Member", "later-client-0001"],
+    ] as const) {
+      expect(
+        store.applyAccountCommand({
+          clientId,
+          state: "available",
+          type: "presence.renew",
+          userId,
+        }),
+      ).toMatchObject({ outcome: "presence", success: true });
+      expect(
+        store.applyAccountCommand({
+          intent: "watch",
+          partyCode: "ROOM1",
+          type: "party.admitAuthenticated",
+          user: { displayName, id: userId },
+        }),
+      ).toMatchObject({ admission: "admitted", success: true });
+    }
     expect(store.registerParticipantConnection("ROOM1", "host-1")).toBe(true);
     expect(store.registerParticipantConnection("ROOM1", "guest-1")).toBe(true);
     expect(store.registerParticipantConnection("ROOM1", "successor-1")).toBe(
@@ -2818,5 +2891,712 @@ describe("in-process multiplayer room store", () => {
         thrust: true,
       },
     });
+  });
+
+  it("aggregates account presence commands and expires leases at the exact boundary", () => {
+    let nowMs = 1_000;
+    const store = createTestRoomStore({ getNowMs: () => nowMs });
+
+    expect(
+      store.applyAccountCommand({
+        clientId: "presence-client-1",
+        state: "available",
+        type: "presence.renew",
+        userId: "user-2",
+      }),
+    ).toEqual({
+      availability: "available",
+      changed: true,
+      outcome: "presence",
+      success: true,
+    });
+    expect(
+      store.applyAccountCommand({
+        clientId: "presence-client-1",
+        state: "available",
+        type: "presence.renew",
+        userId: "user-2",
+      }),
+    ).toMatchObject({ availability: "available", changed: false });
+    expect(
+      store.applyAccountCommand({
+        clientId: "presence-client-1",
+        state: "busy",
+        type: "presence.renew",
+        userId: "user-2",
+      }),
+    ).toMatchObject({ availability: "busy", changed: true });
+    expect(
+      store.applyAccountCommand({
+        clientId: "presence-client-1",
+        state: "available",
+        type: "presence.renew",
+        userId: "user-2",
+      }),
+    ).toMatchObject({ availability: "available", changed: true });
+    expect(
+      store.applyAccountCommand({
+        clientId: "presence-client-2",
+        state: "busy",
+        type: "presence.renew",
+        userId: "user-2",
+      }),
+    ).toMatchObject({ availability: "busy", changed: true });
+    expect(
+      store.applyAccountCommand({
+        clientId: "presence-client-3",
+        state: "available",
+        type: "presence.renew",
+        userId: "user-2",
+      }),
+    ).toMatchObject({ availability: "busy", changed: false });
+    expect(
+      store.applyAccountCommand({
+        clientId: "presence-client-2",
+        type: "presence.release",
+        userId: "user-2",
+      }),
+    ).toMatchObject({ availability: "available", changed: true });
+
+    expectStoreSuccess(store.createRoom({ host: HOST_USER }));
+    expect(
+      store.applyAccountCommand({
+        type: "presence.resolve",
+        userIds: ["user-1", "user-2", "user-2", "user-3"],
+      }),
+    ).toEqual({
+      availabilities: [
+        { availability: "in-party", userId: "user-1" },
+        { availability: "available", userId: "user-2" },
+        { availability: "offline", userId: "user-3" },
+      ],
+      outcome: "availability",
+      success: true,
+    });
+
+    nowMs += 45_000;
+
+    expect(
+      store.applyAccountCommand({
+        type: "presence.resolve",
+        userIds: ["user-1", "user-2"],
+      }),
+    ).toMatchObject({
+      availabilities: [
+        { availability: "in-party", userId: "user-1" },
+        { availability: "offline", userId: "user-2" },
+      ],
+      success: true,
+    });
+    expect(
+      store.applyAccountCommand({
+        type: "presence.resolve",
+        userIds: Array.from(
+          { length: MAX_MULTIPLAYER_ACCOUNT_AVAILABILITY_USER_IDS + 1 },
+          (_, index) => `user-${index}`,
+        ),
+      }),
+    ).toMatchObject({
+      code: "presence-resolution-limit-reached",
+      success: false,
+    });
+  });
+
+  it("rejects a second party for one host account with a conflict status", () => {
+    const store = createTestRoomStore({
+      participantIds: ["host-1", "host-2"],
+      roomCodes: ["ROOM1", "ROOM2"],
+    });
+
+    expectStoreSuccess(store.createRoom({ host: HOST_USER }));
+    expect(store.createRoom({ host: HOST_USER })).toEqual({
+      code: "user-already-in-party",
+      error: "This signed-in account already belongs to a party.",
+      success: false,
+    });
+    expect(getMultiplayerRoomStoreErrorStatus("user-already-in-party")).toBe(
+      409,
+    );
+  });
+
+  it("inspects host-owned invitations and admits play or watch accounts", () => {
+    const store = createTestRoomStore();
+
+    expectStoreSuccess(store.createRoom({ host: HOST_USER }));
+    expect(
+      store.applyAccountCommand({
+        hostUserId: "user-1",
+        intent: "watch",
+        partyCode: "ROOM1",
+        recipientUserId: "user-4",
+        type: "party.inspectInvitation",
+      }),
+    ).toMatchObject({
+      eligible: false,
+      reason: "recipient-offline",
+      success: true,
+    });
+    expect(
+      store.applyAccountCommand({
+        clientId: "busy-recipient-04",
+        state: "busy",
+        type: "presence.renew",
+        userId: "user-4",
+      }),
+    ).toMatchObject({ availability: "busy", success: true });
+    expect(
+      store.applyAccountCommand({
+        hostUserId: "user-1",
+        intent: "watch",
+        partyCode: "ROOM1",
+        recipientUserId: "user-4",
+        type: "party.inspectInvitation",
+      }),
+    ).toMatchObject({
+      eligible: false,
+      reason: "recipient-busy",
+      success: true,
+    });
+    expect(
+      store.applyAccountCommand({
+        hostUserId: "user-1",
+        intent: "watch",
+        partyCode: "ROOM1",
+        recipientUserId: "user-1",
+        type: "party.inspectInvitation",
+      }),
+    ).toMatchObject({
+      eligible: false,
+      reason: "recipient-in-party",
+      success: true,
+    });
+    expect(
+      store.applyAccountCommand({
+        intent: "watch",
+        partyCode: "ROOM1",
+        type: "party.admitAuthenticated",
+        user: { displayName: "Offline User", id: "user-5" },
+      }),
+    ).toMatchObject({ code: "recipient-unavailable", success: false });
+    setAccountAvailable(store, "user-2", "available-client2");
+    setAccountAvailable(store, "user-3", "available-client3");
+
+    expect(
+      store.applyAccountCommand({
+        hostUserId: "not-the-host",
+        intent: "play",
+        partyCode: "ROOM1",
+        recipientUserId: "user-2",
+        type: "party.inspectInvitation",
+      }),
+    ).toMatchObject({ code: "not-host", success: false });
+    expect(
+      store.applyAccountCommand({
+        hostUserId: "user-1",
+        intent: "play",
+        partyCode: "ROOM1",
+        recipientUserId: "user-2",
+        type: "party.inspectInvitation",
+      }),
+    ).toEqual({
+      admissionRole: "player",
+      eligible: true,
+      outcome: "invitation-eligibility",
+      reason: null,
+      success: true,
+    });
+
+    const player = admitAuthenticatedAccount(store, {
+      displayName: "Grace Player",
+      intent: "play",
+      userId: "user-2",
+    });
+    const watcher = admitAuthenticatedAccount(store, {
+      displayName: "Lin Watcher",
+      intent: "watch",
+      userId: "user-3",
+    });
+
+    expect(player).toMatchObject({
+      admission: "admitted",
+      participantId: "guest-1",
+      snapshot: {
+        participant: { role: "player", userId: "user-2" },
+        room: {
+          seats: [
+            { occupiedByParticipantId: "host-1" },
+            { occupiedByParticipantId: "guest-1" },
+          ],
+        },
+      },
+    });
+    expect(watcher).toMatchObject({
+      admission: "admitted",
+      participantId: "guest-2",
+      snapshot: { participant: { role: "observer", userId: "user-3" } },
+    });
+  });
+
+  it("falls running play invitations back to watching and reports a full party", () => {
+    const store = createTestRoomStore({ observerLimit: 1 });
+
+    expectStoreSuccess(store.createRoom({ host: HOST_USER }));
+    setAccountAvailable(store, "user-2", "available-player2");
+    admitAuthenticatedAccount(store, {
+      displayName: "Grace Player",
+      intent: "play",
+      userId: "user-2",
+    });
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        command: "start",
+        matchId: 1,
+        participantId: "host-1",
+        type: "room.lifecycle",
+      }),
+    );
+
+    setAccountAvailable(store, "user-3", "available-watcher3");
+    expect(
+      store.applyAccountCommand({
+        hostUserId: "user-1",
+        intent: "play",
+        partyCode: "ROOM1",
+        recipientUserId: "user-3",
+        type: "party.inspectInvitation",
+      }),
+    ).toMatchObject({ admissionRole: "observer", eligible: true });
+    expect(
+      admitAuthenticatedAccount(store, {
+        displayName: "Lin Watcher",
+        intent: "play",
+        userId: "user-3",
+      }),
+    ).toMatchObject({ snapshot: { participant: { role: "observer" } } });
+
+    setAccountAvailable(store, "user-4", "available-watcher4");
+    expect(
+      store.applyAccountCommand({
+        hostUserId: "user-1",
+        intent: "play",
+        partyCode: "ROOM1",
+        recipientUserId: "user-4",
+        type: "party.inspectInvitation",
+      }),
+    ).toMatchObject({
+      admissionRole: null,
+      eligible: false,
+      reason: "party-full",
+      success: true,
+    });
+    expect(
+      store.applyAccountCommand({
+        intent: "play",
+        partyCode: "ROOM1",
+        type: "party.admitAuthenticated",
+        user: { displayName: "Full Watcher", id: "user-4" },
+      }),
+    ).toMatchObject({ code: "observer-limit-reached", success: false });
+  });
+
+  it("reacquires one signed-in participant without rotating existing capabilities", () => {
+    const store = createTestRoomStore({
+      maxConnectionsPerParticipant: 3,
+      participantCapabilities: [
+        "host-capability",
+        "admitted-capability",
+        "reacquired-capability",
+        "third-capability",
+      ],
+    });
+
+    expectStoreSuccess(store.createRoom({ host: HOST_USER }));
+    setAccountAvailable(store, "user-2", "available-client2");
+    const admitted = admitAuthenticatedAccount(store, {
+      displayName: "Grace Player",
+      intent: "play",
+      userId: "user-2",
+    });
+    const reacquired = admitAuthenticatedAccount(store, {
+      displayName: "Grace Changed",
+      intent: "watch",
+      userId: "user-2",
+    });
+    const third = admitAuthenticatedAccount(store, {
+      displayName: "Grace Changed",
+      intent: "watch",
+      userId: "user-2",
+    });
+
+    expect(reacquired).toMatchObject({
+      admission: "reacquired",
+      participantId: admitted.participantId,
+      snapshot: { room: { participants: expect.arrayContaining([
+        expect.objectContaining({
+          displayName: "Grace Player",
+          id: admitted.participantId,
+          role: "player",
+        }),
+      ]) } },
+    });
+    for (const capability of [
+      admitted.participantCapability,
+      reacquired.participantCapability,
+      third.participantCapability,
+    ]) {
+      expect(store.resolveParticipantCapability("ROOM1", capability)).toBe(
+        admitted.participantId,
+      );
+    }
+    expect(
+      store.applyAccountCommand({
+        intent: "watch",
+        partyCode: "ROOM1",
+        type: "party.admitAuthenticated",
+        user: { displayName: "Grace Player", id: "user-2" },
+      }),
+    ).toMatchObject({
+      code: "participant-capability-limit-reached",
+      success: false,
+    });
+    expect(expectStoreSuccess(store.getRoom("ROOM1")).room.participants).toHaveLength(
+      2,
+    );
+  });
+
+  it("rejects authenticated admission while the account belongs to another party", () => {
+    const store = createTestRoomStore({
+      participantIds: ["host-1", "host-2"],
+      roomCodes: ["ROOM1", "ROOM2"],
+    });
+
+    expectStoreSuccess(store.createRoom({ host: HOST_USER }));
+    expectStoreSuccess(
+      store.createRoom({
+        host: { displayName: "Other Host", id: "user-2" },
+      }),
+    );
+
+    expect(
+      store.applyAccountCommand({
+        intent: "play",
+        partyCode: "ROOM1",
+        type: "party.admitAuthenticated",
+        user: { displayName: "Other Host", id: "user-2" },
+      }),
+    ).toMatchObject({ code: "in-other-party", success: false });
+    expect(expectStoreSuccess(store.getRoom("ROOM1")).room.participants).toHaveLength(
+      1,
+    );
+  });
+
+  it("cleans account membership after leave, close, expiry, and eviction", () => {
+    let nowMs = 1_000;
+    const leaveStore = createTestRoomStore({
+      participantIds: ["host-1", "guest-1", "guest-2", "host-2", "host-3"],
+      roomCodes: ["ROOM1", "ROOM2", "ROOM3"],
+    });
+
+    expectStoreSuccess(leaveStore.createRoom({ host: HOST_USER }));
+    setAccountAvailable(leaveStore, "user-2", "available-client2");
+    const admitted = admitAuthenticatedAccount(leaveStore, {
+      displayName: "Grace Player",
+      intent: "play",
+      userId: "user-2",
+    });
+    expectStoreSuccess(
+      leaveStore.applyCommand("ROOM1", {
+        participantId: admitted.participantId,
+        type: "room.leave",
+      }),
+    );
+    expect(
+      leaveStore.applyAccountCommand({
+        type: "presence.resolve",
+        userIds: ["user-2"],
+      }),
+    ).toMatchObject({
+      availabilities: [{ availability: "available", userId: "user-2" }],
+    });
+
+    setAccountAvailable(leaveStore, "user-3", "available-client3");
+    admitAuthenticatedAccount(leaveStore, {
+      displayName: "Lin Watcher",
+      intent: "watch",
+      userId: "user-3",
+    });
+
+    expect(
+      leaveStore.applyCommand("ROOM1", {
+        participantId: "host-1",
+        type: "room.leave",
+      }),
+    ).toMatchObject({ outcome: "party-closed", success: true });
+    expectStoreSuccess(leaveStore.createRoom({ host: HOST_USER }));
+    expectStoreSuccess(
+      leaveStore.createRoom({
+        host: { displayName: "Lin Watcher", id: "user-3" },
+      }),
+    );
+
+    const expiryStore = createTestRoomStore({
+      getNowMs: () => nowMs,
+      participantIds: ["host-1", "host-2"],
+      retentionPolicy: { lobbyIdleTtlMs: 100, sweepIntervalMs: 100 },
+      roomCodes: ["ROOM1", "ROOM2"],
+    });
+
+    expectStoreSuccess(expiryStore.createRoom({ host: HOST_USER }));
+    nowMs += 100;
+    expect(expiryStore.sweepExpiredRooms()).toBe(1);
+    expectStoreSuccess(expiryStore.createRoom({ host: HOST_USER }));
+
+    const evictionStore = createTestRoomStore({
+      maxRooms: 1,
+      participantIds: ["host-1", "host-2", "host-3"],
+      roomCodes: ["ROOM1", "ROOM2", "ROOM3"],
+    });
+
+    expectStoreSuccess(evictionStore.createRoom({ host: HOST_USER }));
+    expectStoreSuccess(
+      evictionStore.createRoom({
+        host: { displayName: "Other Host", id: "user-2" },
+      }),
+    );
+    expectStoreSuccess(evictionStore.createRoom({ host: HOST_USER }));
+  });
+
+  it("resolves TTL-expired membership before create or admission conflicts", () => {
+    let createNowMs = 0;
+    const createStore = createTestRoomStore({
+      getNowMs: () => createNowMs,
+      participantIds: ["host-1", "host-2"],
+      retentionPolicy: { lobbyIdleTtlMs: 100, sweepIntervalMs: 1_000 },
+      roomCodes: ["ROOM1", "ROOM2"],
+    });
+
+    expectStoreSuccess(createStore.createRoom({ host: HOST_USER }));
+    createNowMs = 99;
+    expect(createStore.sweepExpiredRooms()).toBe(0);
+    createNowMs = 100;
+    expectStoreSuccess(createStore.createRoom({ host: HOST_USER }));
+    expect(createStore.getRoom("ROOM1")).toMatchObject({
+      code: "room-expired",
+      success: false,
+    });
+
+    let admissionNowMs = 0;
+    const admissionStore = createTestRoomStore({
+      getNowMs: () => admissionNowMs,
+      participantIds: ["host-1", "host-2", "guest-1"],
+      retentionPolicy: { lobbyIdleTtlMs: 100, sweepIntervalMs: 1_000 },
+      roomCodes: ["ROOM1", "ROOM2"],
+    });
+
+    expectStoreSuccess(admissionStore.createRoom({ host: HOST_USER }));
+    expect(admissionStore.registerParticipantConnection("ROOM1", "host-1")).toBe(
+      true,
+    );
+    setAccountAvailable(admissionStore, "user-2", "available-client2");
+    expectStoreSuccess(
+      admissionStore.createRoom({
+        host: { displayName: "Old Host", id: "user-2" },
+      }),
+    );
+    admissionNowMs = 99;
+    expect(admissionStore.sweepExpiredRooms()).toBe(0);
+    admissionNowMs = 100;
+
+    expect(
+      admitAuthenticatedAccount(admissionStore, {
+        displayName: "Old Host",
+        intent: "watch",
+        userId: "user-2",
+      }),
+    ).toMatchObject({ admission: "admitted", participantId: "guest-1" });
+    expect(admissionStore.getRoom("ROOM2")).toMatchObject({
+      code: "room-expired",
+      success: false,
+    });
+  });
+
+  it("rejects admission to a TTL-expired target before the periodic sweep", () => {
+    let nowMs = 0;
+    const store = createTestRoomStore({
+      getNowMs: () => nowMs,
+      participantCapabilities: ["host-capability", "guest-capability"],
+      retentionPolicy: { lobbyIdleTtlMs: 100, sweepIntervalMs: 1_000 },
+    });
+
+    expectStoreSuccess(store.createRoom({ host: HOST_USER }));
+    setAccountAvailable(store, "user-2", "available-client2");
+    nowMs = 100;
+
+    expect(
+      store.applyAccountCommand({
+        intent: "watch",
+        partyCode: "ROOM1",
+        type: "party.admitAuthenticated",
+        user: { displayName: "Grace Watcher", id: "user-2" },
+      }),
+    ).toMatchObject({ code: "room-expired", success: false });
+    expect(store.getRoom("ROOM1")).toMatchObject({
+      code: "room-expired",
+      success: false,
+    });
+    expect(
+      store.applyAccountCommand({
+        type: "presence.resolve",
+        userIds: ["user-2"],
+      }),
+    ).toMatchObject({
+      availabilities: [{ availability: "available", userId: "user-2" }],
+    });
+  });
+
+  it("does not extend idle room retention when capability is reacquired", () => {
+    let nowMs = 0;
+    const store = createTestRoomStore({
+      getNowMs: () => nowMs,
+      participantCapabilities: [
+        "host-capability",
+        "admitted-capability",
+        "reacquired-capability",
+      ],
+      retentionPolicy: { lobbyIdleTtlMs: 100, sweepIntervalMs: 1_000 },
+    });
+
+    expectStoreSuccess(store.createRoom({ host: HOST_USER }));
+    setAccountAvailable(store, "user-2", "available-client2");
+    admitAuthenticatedAccount(store, {
+      displayName: "Grace Watcher",
+      intent: "watch",
+      userId: "user-2",
+    });
+
+    nowMs = 99;
+    expect(
+      admitAuthenticatedAccount(store, {
+        displayName: "Grace Watcher",
+        intent: "watch",
+        userId: "user-2",
+      }),
+    ).toMatchObject({ admission: "reacquired" });
+
+    nowMs = 100;
+    expect(store.getRoom("ROOM1")).toMatchObject({
+      code: "room-expired",
+      success: false,
+    });
+  });
+
+  it("compensates only an exact unconnected single-capability admission", () => {
+    const store = createTestRoomStore({
+      maxConnectionsPerParticipant: 3,
+      participantCapabilities: [
+        "host-capability",
+        "first-admission-capability",
+        "second-admission-capability",
+        "reacquired-capability",
+      ],
+      participantIds: ["host-1", "guest-1", "guest-2"],
+    });
+
+    expectStoreSuccess(store.createRoom({ host: HOST_USER }));
+    setAccountAvailable(store, "user-2", "available-client2");
+    const firstAdmission = admitAuthenticatedAccount(store, {
+      displayName: "Grace Watcher",
+      intent: "watch",
+      userId: "user-2",
+    });
+
+    expect(
+      store.applyAccountCommand({
+        participantCapability: firstAdmission.participantCapability,
+        participantId: "other-participant",
+        partyCode: "ROOM1",
+        type: "party.compensateAdmission",
+        userId: "user-2",
+      }),
+    ).toMatchObject({ code: "participant-conflict", success: false });
+    expect(
+      store.applyAccountCommand({
+        participantCapability: "wrong-capability",
+        participantId: firstAdmission.participantId,
+        partyCode: "ROOM1",
+        type: "party.compensateAdmission",
+        userId: "user-2",
+      }),
+    ).toMatchObject({ code: "participant-conflict", success: false });
+    expect(store.registerParticipantConnection("ROOM1", firstAdmission.participantId)).toBe(
+      true,
+    );
+    expect(
+      store.applyAccountCommand({
+        participantCapability: firstAdmission.participantCapability,
+        participantId: firstAdmission.participantId,
+        partyCode: "ROOM1",
+        type: "party.compensateAdmission",
+        userId: "user-2",
+      }),
+    ).toMatchObject({ code: "participant-conflict", success: false });
+    store.unregisterParticipantConnection("ROOM1", firstAdmission.participantId);
+
+    const compensation = store.applyAccountCommand({
+      participantCapability: firstAdmission.participantCapability,
+      participantId: firstAdmission.participantId,
+      partyCode: "ROOM1",
+      type: "party.compensateAdmission",
+      userId: "user-2",
+    });
+
+    expect(compensation).toMatchObject({
+      departed: true,
+      departedParticipantId: firstAdmission.participantId,
+      outcome: "departure",
+      success: true,
+    });
+    expect(
+      store.applyAccountCommand({
+        participantCapability: firstAdmission.participantCapability,
+        participantId: firstAdmission.participantId,
+        partyCode: "ROOM1",
+        type: "party.compensateAdmission",
+        userId: "user-2",
+      }),
+    ).toEqual({
+      departed: false,
+      outcome: "departure",
+      success: true,
+    });
+
+    const secondAdmission = admitAuthenticatedAccount(store, {
+      displayName: "Grace Watcher",
+      intent: "watch",
+      userId: "user-2",
+    });
+    admitAuthenticatedAccount(store, {
+      displayName: "Grace Watcher",
+      intent: "watch",
+      userId: "user-2",
+    });
+    expect(
+      store.applyAccountCommand({
+        participantCapability: secondAdmission.participantCapability,
+        participantId: secondAdmission.participantId,
+        partyCode: "ROOM1",
+        type: "party.compensateAdmission",
+        userId: "user-2",
+      }),
+    ).toMatchObject({ code: "participant-conflict", success: false });
+    expect(
+      store.applyAccountCommand({
+        participantCapability: "host-capability",
+        participantId: "host-1",
+        partyCode: "ROOM1",
+        type: "party.compensateAdmission",
+        userId: "user-1",
+      }),
+    ).toMatchObject({ code: "participant-conflict", success: false });
   });
 });

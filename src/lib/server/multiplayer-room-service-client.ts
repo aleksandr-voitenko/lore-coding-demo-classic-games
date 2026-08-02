@@ -10,6 +10,22 @@ import {
   isPrivateRoomMatchId,
   normalizePrivateRoomCode,
 } from "../multiplayer/room";
+import {
+  isPartyInvitationIntent,
+  normalizeSocialUserId,
+} from "../social";
+import { normalizeUserDisplayName } from "../user-profile";
+
+import {
+  MAX_MULTIPLAYER_ACCOUNT_AVAILABILITY_USER_IDS,
+  getMultiplayerAccountPartyErrorStatus,
+  isMultiplayerAccountPartyFailureCode,
+  type MultiplayerAccountPartyAuthority,
+  type MultiplayerAccountPartyCommand,
+  type MultiplayerAccountPartyFailure,
+  type MultiplayerAccountPartyResult,
+} from "./multiplayer-account-party";
+import type { MultiplayerSocialEffectivePresenceState } from "./multiplayer-social-presence";
 
 import type {
   CreateMultiplayerRoomOptions,
@@ -33,7 +49,15 @@ type MultiplayerRoomServiceClientOptions = {
 
 type HttpMethod = "GET" | "POST";
 
-export class MultiplayerRoomServiceClient implements MultiplayerRoomStore {
+type MultiplayerRoomServiceProtocolFailure = {
+  code: "room-service-invalid-response" | "room-service-unavailable";
+  error: string;
+  success: false;
+};
+
+export class MultiplayerRoomServiceClient
+  implements MultiplayerRoomStore, MultiplayerAccountPartyAuthority
+{
   readonly #baseUrl: string;
   readonly #bearerToken: string | undefined;
   readonly #fetcher: typeof fetch;
@@ -95,8 +119,63 @@ export class MultiplayerRoomServiceClient implements MultiplayerRoomStore {
     return this.#request("POST", normalizedRoomCode, command);
   }
 
+  async applyAccountCommand(
+    command: MultiplayerAccountPartyCommand,
+  ): Promise<MultiplayerAccountPartyResult> {
+    const protocolFailure = await this.#verifyMutationProtocol();
+
+    if (protocolFailure !== null) {
+      return protocolFailure;
+    }
+
+    const url = `${this.#baseUrl}/${MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT}/_accounts`;
+    let response: Response;
+
+    try {
+      response = await this.#fetcher(url, {
+        body: JSON.stringify(command),
+        headers: this.#getHeaders(true, true),
+        method: "POST",
+      });
+    } catch (error) {
+      return createAccountServiceFailure(
+        "room-service-unavailable",
+        `Room service account request failed for POST ${url}: ${getErrorMessage(
+          error,
+        )}`,
+      );
+    }
+
+    let payload: unknown;
+
+    try {
+      payload = await response.json();
+    } catch {
+      return createAccountServiceFailure(
+        "room-service-invalid-response",
+        `Room service returned ${response.status} without a valid JSON account result.`,
+      );
+    }
+
+    const result = parseMultiplayerAccountPartyServiceResult(payload, command);
+
+    const expectedStatus =
+      result === null
+        ? null
+        : result.success
+          ? 200
+          : getMultiplayerAccountPartyErrorStatus(result.code);
+
+    return result !== null && response.status === expectedStatus
+      ? result
+      : createAccountServiceFailure(
+        "room-service-invalid-response",
+        `Room service returned ${response.status} with an invalid account result.`,
+      );
+  }
+
   async #verifyMutationProtocol(): Promise<
-    Extract<MultiplayerRoomStoreResult, { success: false }> | null
+    MultiplayerRoomServiceProtocolFailure | null
   > {
     let response: Response;
 
@@ -106,7 +185,7 @@ export class MultiplayerRoomServiceClient implements MultiplayerRoomStore {
         method: "GET",
       });
     } catch (error) {
-      return createServiceFailure(
+      return createProtocolServiceFailure(
         "room-service-unavailable",
         `Room service protocol check failed for GET ${this.#baseUrl}: ${getErrorMessage(
           error,
@@ -119,7 +198,7 @@ export class MultiplayerRoomServiceClient implements MultiplayerRoomStore {
     try {
       payload = await response.json();
     } catch {
-      return createServiceFailure(
+      return createProtocolServiceFailure(
         "room-service-invalid-response",
         `Room service protocol check returned ${response.status} without valid JSON.`,
       );
@@ -127,14 +206,18 @@ export class MultiplayerRoomServiceClient implements MultiplayerRoomStore {
 
     if (
       !isRecord(payload) ||
+      response.status !== 200 ||
       payload.mutationPathSegment !==
         MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT ||
       payload.protocolVersion !== MULTIPLAYER_ROOM_PROTOCOL_VERSION ||
-      payload.participantCapabilities !== true
+      payload.participantCapabilities !== true ||
+      payload.accountPartyMemberships !== true ||
+      payload.authenticatedAdmission !== true ||
+      payload.socialPresenceLeases !== true
     ) {
-      return createServiceFailure(
+      return createProtocolServiceFailure(
         "room-service-invalid-response",
-        `Room service protocol check returned ${response.status} without capability protocol version ${MULTIPLAYER_ROOM_PROTOCOL_VERSION}.`,
+        `Room service protocol check returned ${response.status} without account authority protocol version ${MULTIPLAYER_ROOM_PROTOCOL_VERSION}.`,
       );
     }
 
@@ -353,6 +436,317 @@ function parseMultiplayerRoomServiceResult(
   return null;
 }
 
+function parseMultiplayerAccountPartyServiceResult(
+  value: unknown,
+  command: MultiplayerAccountPartyCommand,
+): MultiplayerAccountPartyResult | null {
+  if (!isRecord(value) || typeof value.success !== "boolean") {
+    return null;
+  }
+
+  if (!value.success) {
+    return isMultiplayerAccountPartyFailureCode(value.code) &&
+      typeof value.error === "string"
+      ? {
+          code: value.code,
+          error: value.error,
+          success: false,
+        }
+      : null;
+  }
+
+  if (value.outcome === "presence") {
+    return (command.type === "presence.renew" ||
+      command.type === "presence.release") &&
+      isMultiplayerSocialEffectivePresenceState(value.availability) &&
+      typeof value.changed === "boolean"
+      ? {
+          availability: value.availability,
+          changed: value.changed,
+          outcome: "presence",
+          success: true,
+        }
+      : null;
+  }
+
+  if (value.outcome === "availability") {
+    const availabilities = parseMultiplayerAccountAvailabilities(
+      value.availabilities,
+    );
+    const requestedUserIds =
+      command.type === "presence.resolve"
+        ? parseRequestedMultiplayerAccountUserIds(command.userIds)
+        : null;
+
+    return command.type === "presence.resolve" &&
+      availabilities !== null &&
+      requestedUserIds !== null &&
+      requestedUserIds.length === availabilities.length &&
+      requestedUserIds.every(
+        (userId, index) => availabilities[index]?.userId === userId,
+      )
+      ? {
+          availabilities,
+          outcome: "availability",
+          success: true,
+        }
+      : null;
+  }
+
+  if (value.outcome === "invitation-eligibility") {
+    if (
+      command.type !== "party.inspectInvitation" ||
+      typeof value.eligible !== "boolean" ||
+      !isOptionalAdmissionRole(value.admissionRole) ||
+      !isOptionalInvitationIneligibilityReason(value.reason)
+    ) {
+      return null;
+    }
+
+    const hasEligibleShape =
+      value.eligible && value.admissionRole !== null && value.reason === null;
+    const hasIneligibleShape =
+      !value.eligible && value.admissionRole === null && value.reason !== null;
+
+    return hasEligibleShape || hasIneligibleShape
+      ? {
+          admissionRole: value.admissionRole,
+          eligible: value.eligible,
+          outcome: "invitation-eligibility",
+          reason: value.reason,
+          success: true,
+        }
+      : null;
+  }
+
+  if (value.outcome === "admission") {
+    if (
+      command.type !== "party.admitAuthenticated" ||
+      !isPartyInvitationIntent(command.intent) ||
+      (value.admission !== "admitted" && value.admission !== "reacquired") ||
+      !isEntityId(value.participantId) ||
+      !isParticipantCapability(value.participantCapability) ||
+      !isMultiplayerRoomSnapshot(value.snapshot)
+    ) {
+      return null;
+    }
+
+    const partyCode = normalizePrivateRoomCode(command.partyCode);
+    const user = normalizeAuthenticatedAccountUser(command.user);
+    const participant = value.snapshot.participant;
+
+    if (
+      partyCode === null ||
+      user === null ||
+      value.snapshot.room.code !== partyCode ||
+      participant?.id !== value.participantId ||
+      participant.userId !== user.id ||
+      participant.displayName !== user.displayName ||
+      (value.admission === "admitted" &&
+        participant.role !== "observer" &&
+        (command.intent !== "play" || participant.role !== "player"))
+    ) {
+      return null;
+    }
+
+    return {
+      admission: value.admission,
+      outcome: "admission",
+      participantCapability: value.participantCapability,
+      participantId: value.participantId,
+      snapshot: value.snapshot as MultiplayerRoomSnapshot,
+      success: true,
+    };
+  }
+
+  if (value.outcome === "departure") {
+    if (
+      command.type !== "party.compensateAdmission" ||
+      typeof value.departed !== "boolean" ||
+      value.partyClosed !== undefined ||
+      !isOptionalEntityId(value.departedParticipantId) ||
+      (value.snapshot !== undefined &&
+        !isMultiplayerRoomSnapshot(value.snapshot))
+    ) {
+      return null;
+    }
+
+    const userId = normalizeSocialUserId(command.userId);
+    const participantId = normalizeAccountParticipantId(command.participantId);
+    const partyCode = normalizePrivateRoomCode(command.partyCode);
+    const participantCapability = isParticipantCapability(
+      command.participantCapability,
+    )
+      ? command.participantCapability
+      : null;
+    const hasDepartureShape =
+      value.departed &&
+      value.departedParticipantId === participantId &&
+      value.snapshot !== undefined &&
+      value.snapshot.room.code === partyCode &&
+      !value.snapshot.room.participants.some(
+        (participant) => participant.id === participantId,
+      );
+    const hasAlreadyAbsentShape =
+      !value.departed &&
+      value.departedParticipantId === undefined &&
+      value.snapshot === undefined;
+
+    if (
+      userId === null ||
+      participantId === null ||
+      partyCode === null ||
+      participantCapability === null ||
+      (!hasDepartureShape && !hasAlreadyAbsentShape)
+    ) {
+      return null;
+    }
+
+    return {
+      departed: value.departed,
+      ...(value.departedParticipantId === undefined
+        ? {}
+        : { departedParticipantId: value.departedParticipantId }),
+      outcome: "departure",
+      ...(value.snapshot === undefined
+        ? {}
+        : { snapshot: value.snapshot as MultiplayerRoomSnapshot }),
+      success: true,
+    };
+  }
+
+  return null;
+}
+
+function parseMultiplayerAccountAvailabilities(
+  value: unknown,
+): Array<{
+  availability: MultiplayerSocialEffectivePresenceState;
+  userId: string;
+}> | null {
+  if (
+    !Array.isArray(value) ||
+    value.length > MAX_MULTIPLAYER_ACCOUNT_AVAILABILITY_USER_IDS
+  ) {
+    return null;
+  }
+
+  const seenUserIds = new Set<string>();
+  const availabilities: Array<{
+    availability: MultiplayerSocialEffectivePresenceState;
+    userId: string;
+  }> = [];
+
+  for (const entry of value) {
+    if (!isRecord(entry)) {
+      return null;
+    }
+
+    const userId = normalizeSocialUserId(entry.userId);
+
+    if (
+      userId === null ||
+      userId !== entry.userId ||
+      seenUserIds.has(userId) ||
+      !isMultiplayerSocialEffectivePresenceState(entry.availability)
+    ) {
+      return null;
+    }
+
+    seenUserIds.add(userId);
+    availabilities.push({
+      availability: entry.availability,
+      userId,
+    });
+  }
+
+  return availabilities;
+}
+
+function parseRequestedMultiplayerAccountUserIds(value: unknown) {
+  if (
+    !Array.isArray(value) ||
+    value.length > MAX_MULTIPLAYER_ACCOUNT_AVAILABILITY_USER_IDS
+  ) {
+    return null;
+  }
+
+  const userIds: string[] = [];
+  const seenUserIds = new Set<string>();
+
+  for (const userIdValue of value) {
+    const userId = normalizeSocialUserId(userIdValue);
+
+    if (userId === null) {
+      return null;
+    }
+
+    if (!seenUserIds.has(userId)) {
+      seenUserIds.add(userId);
+      userIds.push(userId);
+    }
+  }
+
+  return userIds;
+}
+
+function normalizeAuthenticatedAccountUser(value: unknown) {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const id = normalizeSocialUserId(value.id);
+  const displayName = normalizeUserDisplayName(value.displayName);
+
+  return id === null || displayName.length === 0 ? null : { displayName, id };
+}
+
+function normalizeAccountParticipantId(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const participantId = value.trim();
+
+  return /^[a-zA-Z0-9-]{1,80}$/.test(participantId)
+    ? participantId
+    : null;
+}
+
+function isMultiplayerSocialEffectivePresenceState(
+  value: unknown,
+): value is MultiplayerSocialEffectivePresenceState {
+  return (
+    value === "available" ||
+    value === "busy" ||
+    value === "in-party" ||
+    value === "offline"
+  );
+}
+
+function isOptionalAdmissionRole(
+  value: unknown,
+): value is "observer" | "player" | null {
+  return value === null || value === "observer" || value === "player";
+}
+
+function isOptionalInvitationIneligibilityReason(
+  value: unknown,
+): value is
+  | "party-full"
+  | "recipient-busy"
+  | "recipient-in-party"
+  | "recipient-offline"
+  | null {
+  return (
+    value === null ||
+    value === "party-full" ||
+    value === "recipient-busy" ||
+    value === "recipient-in-party" ||
+    value === "recipient-offline"
+  );
+}
+
 function isEntityId(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value.trim() === value;
 }
@@ -377,10 +771,36 @@ function isOptionalParticipantCapability(
   );
 }
 
+function isParticipantCapability(value: unknown): value is string {
+  return isOptionalParticipantCapability(value) && value !== undefined;
+}
+
 function createServiceFailure(
   code: Extract<MultiplayerRoomStoreResult, { success: false }>["code"],
   error: string,
 ): Extract<MultiplayerRoomStoreResult, { success: false }> {
+  return {
+    code,
+    error,
+    success: false,
+  };
+}
+
+function createAccountServiceFailure(
+  code: MultiplayerAccountPartyFailure["code"],
+  error: string,
+): MultiplayerAccountPartyFailure {
+  return {
+    code,
+    error,
+    success: false,
+  };
+}
+
+function createProtocolServiceFailure(
+  code: MultiplayerRoomServiceProtocolFailure["code"],
+  error: string,
+): MultiplayerRoomServiceProtocolFailure {
   return {
     code,
     error,

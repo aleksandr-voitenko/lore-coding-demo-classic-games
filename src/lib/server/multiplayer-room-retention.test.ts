@@ -23,6 +23,14 @@ const HOST_USER = {
   displayName: "Ada Host",
   id: "user-1",
 };
+const SECOND_HOST_USER = {
+  displayName: "Grace Host",
+  id: "user-2",
+};
+const THIRD_HOST_USER = {
+  displayName: "Lin Host",
+  id: "user-3",
+};
 const PARTY_SEATS = [
   { id: "left", label: "Left", required: true },
   { id: "right", label: "Right", required: true },
@@ -86,18 +94,22 @@ function expectStoreFailure(
 function createRoom(
   store: InProcessMultiplayerRoomStore,
   settings: { gameId: "pong" | "snake" } = { gameId: "snake" },
+  host = HOST_USER,
 ) {
   return expectStoreSuccess(
     store.createRoom({
-      host: HOST_USER,
+      host,
       seats: PARTY_SEATS,
       settings,
     }),
   );
 }
 
-function createStartedRoom(store: InProcessMultiplayerRoomStore) {
-  const created = createRoom(store);
+function createStartedRoom(
+  store: InProcessMultiplayerRoomStore,
+  host = HOST_USER,
+) {
+  const created = createRoom(store, { gameId: "snake" }, host);
 
   expectStoreSuccess(
     store.applyCommand(created.room.code, {
@@ -466,7 +478,7 @@ describe("in-process multiplayer room retention", () => {
 
     createRoom(fixture.store);
     fixture.advanceBy(1);
-    const started = createStartedRoom(fixture.store);
+    const started = createStartedRoom(fixture.store, SECOND_HOST_USER);
 
     finishRoom(
       fixture.store,
@@ -474,7 +486,11 @@ describe("in-process multiplayer room retention", () => {
       started.room.hostParticipantId,
     );
     fixture.advanceBy(1);
-    const third = createRoom(fixture.store);
+    const third = createRoom(
+      fixture.store,
+      { gameId: "snake" },
+      THIRD_HOST_USER,
+    );
 
     expect(third.room.code).toBe("ROOM3");
     expectStoreSuccess(fixture.store.getRoom("ROOM1"));
@@ -486,7 +502,7 @@ describe("in-process multiplayer room retention", () => {
 
     createRoom(fixture.store);
     fixture.advanceBy(1);
-    createRoom(fixture.store);
+    createRoom(fixture.store, { gameId: "snake" }, SECOND_HOST_USER);
     fixture.advanceBy(1);
     expectStoreSuccess(
       fixture.store.applyCommand("ROOM1", {
@@ -494,7 +510,7 @@ describe("in-process multiplayer room retention", () => {
         type: "room.joinObserver",
       }),
     );
-    createRoom(fixture.store);
+    createRoom(fixture.store, { gameId: "snake" }, THIRD_HOST_USER);
 
     expectStoreSuccess(fixture.store.getRoom("ROOM1"));
     expectStoreFailure(fixture.store.getRoom("ROOM2"), "room-expired");
@@ -507,7 +523,7 @@ describe("in-process multiplayer room retention", () => {
     createStartedRoom(runningFixture.store);
     expectStoreFailure(
       runningFixture.store.createRoom({
-        host: HOST_USER,
+        host: SECOND_HOST_USER,
         seats: PARTY_SEATS,
         settings: { gameId: "snake" },
       }),
@@ -528,7 +544,7 @@ describe("in-process multiplayer room retention", () => {
     );
     expectStoreFailure(
       pausedFixture.store.createRoom({
-        host: HOST_USER,
+        host: SECOND_HOST_USER,
         seats: PARTY_SEATS,
         settings: { gameId: "snake" },
       }),
@@ -544,7 +560,7 @@ describe("in-process multiplayer room retention", () => {
     ).toBe(true);
     expectStoreFailure(
       connectedFixture.store.createRoom({
-        host: HOST_USER,
+        host: SECOND_HOST_USER,
         seats: PARTY_SEATS,
         settings: { gameId: "snake" },
       }),
@@ -557,8 +573,8 @@ describe("in-process multiplayer room retention", () => {
     const fixture = createRetentionStore({ maxRooms: 1 });
 
     createRoom(fixture.store);
-    createRoom(fixture.store);
-    createRoom(fixture.store);
+    createRoom(fixture.store, { gameId: "snake" }, SECOND_HOST_USER);
+    createRoom(fixture.store, { gameId: "snake" }, THIRD_HOST_USER);
 
     expectStoreFailure(fixture.store.getRoom("ROOM1"), "room-not-found");
     expectStoreFailure(fixture.store.getRoom("ROOM2"), "room-expired");
@@ -590,7 +606,7 @@ describe("in-process multiplayer room retention", () => {
     });
 
     createRoom(fixture.store);
-    createRoom(fixture.store);
+    createRoom(fixture.store, { gameId: "snake" }, SECOND_HOST_USER);
     expectStoreFailure(
       fixture.store.createRoom({
         host: HOST_USER,

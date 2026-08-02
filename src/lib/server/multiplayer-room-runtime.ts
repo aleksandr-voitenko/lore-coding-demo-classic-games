@@ -23,6 +23,7 @@ import {
   isPrivateRoomMatchId,
   leavePrivateRoom,
   normalizePrivateRoomCode,
+  normalizePrivateRoomDisplayName,
   pausePrivateRoom,
   queuePrivateRoomParticipantForNextMatch,
   releasePrivateRoomSeat,
@@ -33,12 +34,29 @@ import {
   updatePrivateRoomSettings,
 } from "../multiplayer/room";
 import {
+  isPartyInvitationIntent,
+  normalizeSocialUserId,
+} from "../social";
+import {
+  MAX_MULTIPLAYER_ACCOUNT_AVAILABILITY_USER_IDS,
+  type MultiplayerAccountPartyAuthority,
+  type MultiplayerAccountPartyCommand,
+  type MultiplayerAccountPartyFailure,
+  type MultiplayerAccountPartyFailureCode,
+  type MultiplayerAccountPartyResult,
+} from "./multiplayer-account-party";
+import {
   getDefaultMultiplayerServerGameAdapter,
   getMultiplayerServerGameAdapter,
   type MultiplayerServerGameRuntimeAdapter,
   type MultiplayerServerGameRuntimeFailure,
   type MultiplayerServerGameSnapshot,
 } from "./multiplayer-game-adapters";
+import {
+  MultiplayerSocialPresenceRegistry,
+  type MultiplayerSocialPartyMembership,
+  type MultiplayerSocialPresenceFailure,
+} from "./multiplayer-social-presence";
 
 export {
   DEFAULT_ASTEROIDS_PRIVATE_ROOM_SEATS,
@@ -51,12 +69,10 @@ export type MultiplayerRoomStoreCommand =
   | {
       displayName: unknown;
       type: "room.joinObserver";
-      userId?: unknown;
     }
   | {
       displayName: unknown;
       type: "room.joinPlayer";
-      userId?: unknown;
     }
   | {
       matchId: unknown;
@@ -149,7 +165,8 @@ export type MultiplayerRoomStoreErrorCode =
   | "room-service-invalid-response"
   | "room-service-unavailable"
   | "room-not-found"
-  | "stale-match";
+  | "stale-match"
+  | "user-already-in-party";
 
 export type MultiplayerRoomStoreSnapshotSuccess = {
   departedParticipantId?: string;
@@ -264,7 +281,7 @@ type StoredMultiplayerRoom = {
   game?: StoredMultiplayerGameRuntime;
   lastDisconnectedAtMs?: number;
   lastMeaningfulActivityAtMs: number;
-  participantCapabilityHashesByParticipantId: Map<string, Buffer>;
+  participantCapabilityHashesByParticipantId: Map<string, Buffer[]>;
   room: PrivateRoom;
   seq: number;
   terminalAtMs?: number;
@@ -449,6 +466,7 @@ export function isMultiplayerRoomStoreErrorCode(
     case "seat-not-found":
     case "seat-occupied":
     case "stale-match":
+    case "user-already-in-party":
       return true;
   }
 
@@ -494,7 +512,8 @@ export function getMultiplayerRoomStoreErrorStatus(
     code === "participant-already-seated" ||
     code === "required-seats-empty" ||
     code === "seat-occupied" ||
-    code === "stale-match"
+    code === "stale-match" ||
+    code === "user-already-in-party"
   ) {
     return 409;
   }
@@ -577,6 +596,81 @@ function createStoredRoomSnapshot(
     },
     success: true,
   };
+}
+
+function createAccountPartyFailure(
+  code: MultiplayerAccountPartyFailureCode,
+  error: string,
+): MultiplayerAccountPartyFailure {
+  return { code, error, success: false };
+}
+
+function getAccountPresenceFailure(
+  failure: MultiplayerSocialPresenceFailure,
+): MultiplayerAccountPartyFailure {
+  return createAccountPartyFailure(failure.code, failure.error);
+}
+
+function getAccountRoomFailure(
+  failure: MultiplayerRoomStoreFailure,
+): MultiplayerAccountPartyFailure {
+  switch (failure.code) {
+    case "invalid-room-code":
+    case "observer-limit-reached":
+    case "participant-not-found":
+    case "party-closed":
+    case "room-expired":
+    case "room-not-found":
+      return createAccountPartyFailure(failure.code, failure.error);
+    default:
+      return createAccountPartyFailure(
+        "invalid-account-command",
+        failure.error,
+      );
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeAccountParticipantId(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const participantId = value.trim();
+
+  return /^[a-zA-Z0-9-]{1,80}$/.test(participantId)
+    ? participantId
+    : null;
+}
+
+function normalizeAuthenticatedAccountUser(value: unknown) {
+  if (!isRecord(value)) {
+    return createAccountPartyFailure(
+      "invalid-account-command",
+      "Authenticated admission requires a signed-in user object.",
+    );
+  }
+
+  const id = normalizeSocialUserId(value.id);
+
+  if (id === null) {
+    return createAccountPartyFailure(
+      "invalid-user-id",
+      "Authenticated admission requires a supported account identifier.",
+    );
+  }
+
+  const displayName = normalizePrivateRoomDisplayName(value.displayName);
+
+  return displayName.length === 0
+    ? createAccountPartyFailure(
+        "invalid-account-command",
+        "Authenticated admission requires a display name.",
+      )
+    : { success: true as const, user: { displayName, id } };
 }
 
 function normalizeParticipantCapability(value: unknown) {
@@ -925,7 +1019,10 @@ function getCreateRoomSeats(
 }
 
 export class InProcessMultiplayerRoomStore
-  implements MultiplayerRoomStore, MultiplayerRoomParticipantConnectionStore
+  implements
+    MultiplayerRoomStore,
+    MultiplayerRoomParticipantConnectionStore,
+    MultiplayerAccountPartyAuthority<MultiplayerRoomSnapshot>
 {
   readonly #createParticipantCapability: (
     context: MultiplayerRoomParticipantCapabilityFactoryContext,
@@ -940,6 +1037,7 @@ export class InProcessMultiplayerRoomStore
   readonly #observerLimit: number;
   readonly #retentionPolicy: MultiplayerRoomRetentionPolicy;
   readonly #rooms = new Map<string, StoredMultiplayerRoom>();
+  readonly #socialPresence: MultiplayerSocialPresenceRegistry;
   readonly #tombstones = new Map<string, MultiplayerRoomTombstone>();
   #lastSweepAtMs: number;
 
@@ -967,6 +1065,7 @@ export class InProcessMultiplayerRoomStore
       "Party watcher limit",
     );
     this.#retentionPolicy = normalizeRetentionPolicy(retentionPolicy);
+    this.#socialPresence = new MultiplayerSocialPresenceRegistry({ getNowMs });
     this.#lastSweepAtMs = getNowMs();
   }
 
@@ -989,6 +1088,15 @@ export class InProcessMultiplayerRoomStore
         this.#tombstones.has(normalizedRoomCode))
     ) {
       return createStoreFailure("duplicate-room", "Room code is already in use.");
+    }
+
+    const existingHostMembership = this.#getLivePartyMembership(host.id, nowMs);
+
+    if (existingHostMembership !== null) {
+      return createStoreFailure(
+        "user-already-in-party",
+        "This signed-in account already belongs to a party.",
+      );
     }
 
     const hostParticipantId = this.#createParticipantId({
@@ -1018,7 +1126,10 @@ export class InProcessMultiplayerRoomStore
       );
     }
 
-    const participantCapabilityHashesByParticipantId = new Map<string, Buffer>();
+    const participantCapabilityHashesByParticipantId = new Map<
+      string,
+      Buffer[]
+    >();
     const hostParticipantCapability = this.#mintParticipantCapability(
       participantCapabilityHashesByParticipantId,
       {
@@ -1036,6 +1147,21 @@ export class InProcessMultiplayerRoomStore
       room: result.room,
       seq: INITIAL_ROOM_SEQUENCE,
     };
+
+    const membershipResult = this.#socialPresence.setPartyMembership({
+      participantId: result.room.hostParticipantId,
+      roomCode: result.room.code,
+      userId: host.id,
+    });
+
+    if (!membershipResult.success) {
+      return createStoreFailure(
+        membershipResult.code === "in-other-party"
+          ? "user-already-in-party"
+          : "invalid-host",
+        membershipResult.error,
+      );
+    }
 
     this.#rooms.set(result.room.code, storedRoom);
 
@@ -1135,6 +1261,14 @@ export class InProcessMultiplayerRoomStore
       clearDepartedParticipantGameInput(storedRoom, participantId);
       removeDepartedParticipantAuthority(storedRoom, participantId, nowMs);
 
+      if (departingParticipant.userId !== null) {
+        this.#socialPresence.clearPartyMembership({
+          participantId,
+          roomCode: storedRoom.room.code,
+          userId: departingParticipant.userId,
+        });
+      }
+
       const nextSeq = storedRoom.seq + 1;
 
       if (leaveResult.closed) {
@@ -1218,7 +1352,6 @@ export class InProcessMultiplayerRoomStore
       result = addParticipant(storedRoom.room, {
         displayName: command.displayName,
         participantId,
-        userId: command.userId,
       });
     } else if (command.type === "room.joinNextMatch") {
       participantId = getCommandParticipantIdValue(command);
@@ -1313,6 +1446,600 @@ export class InProcessMultiplayerRoomStore
     );
   }
 
+  applyAccountCommand(
+    command: MultiplayerAccountPartyCommand,
+  ): MultiplayerAccountPartyResult<MultiplayerRoomSnapshot> {
+    switch (command.type) {
+      case "presence.renew": {
+        const previousAvailability =
+          this.#socialPresence.getEffectiveState(command.userId) ?? "offline";
+        const result = this.#socialPresence.renewLease(command);
+
+        if (!result.success) {
+          return getAccountPresenceFailure(result);
+        }
+
+        const availability =
+          this.#socialPresence.getEffectiveState(result.lease.userId) ??
+          "offline";
+
+        return {
+          availability,
+          changed: availability !== previousAvailability,
+          outcome: "presence",
+          success: true,
+        };
+      }
+      case "presence.release": {
+        const previousAvailability =
+          this.#socialPresence.getEffectiveState(command.userId) ?? "offline";
+        const result = this.#socialPresence.releaseLease(command);
+
+        if (!result.success) {
+          return getAccountPresenceFailure(result);
+        }
+
+        const availability =
+          this.#socialPresence.getEffectiveState(command.userId) ?? "offline";
+
+        return {
+          availability,
+          changed: availability !== previousAvailability,
+          outcome: "presence",
+          success: true,
+        };
+      }
+      case "presence.resolve":
+        return this.#resolveAccountAvailabilities(command.userIds);
+      case "party.inspectInvitation":
+        return this.#inspectPartyInvitation(command);
+      case "party.admitAuthenticated":
+        return this.#admitAuthenticatedParticipant(command);
+      case "party.compensateAdmission":
+        return this.#compensateAuthenticatedAdmission(command);
+    }
+  }
+
+  #resolveAccountAvailabilities(userIdValues: unknown) {
+    if (!Array.isArray(userIdValues)) {
+      return createAccountPartyFailure(
+        "invalid-account-command",
+        "Presence resolution requires an array of account identifiers.",
+      );
+    }
+
+    if (userIdValues.length > MAX_MULTIPLAYER_ACCOUNT_AVAILABILITY_USER_IDS) {
+      return createAccountPartyFailure(
+        "presence-resolution-limit-reached",
+        `Presence resolution accepts at most ${MAX_MULTIPLAYER_ACCOUNT_AVAILABILITY_USER_IDS} accounts.`,
+      );
+    }
+
+    const userIds: string[] = [];
+    const seenUserIds = new Set<string>();
+
+    for (const userIdValue of userIdValues) {
+      const userId = normalizeSocialUserId(userIdValue);
+
+      if (userId === null) {
+        return createAccountPartyFailure(
+          "invalid-user-id",
+          "Presence resolution received an unsupported account identifier.",
+        );
+      }
+
+      if (!seenUserIds.has(userId)) {
+        seenUserIds.add(userId);
+        userIds.push(userId);
+      }
+    }
+
+    return {
+      availabilities: userIds.map((userId) => ({
+        availability:
+          this.#socialPresence.getEffectiveState(userId) ?? "offline",
+        userId,
+      })),
+      outcome: "availability",
+      success: true,
+    } as const;
+  }
+
+  #inspectPartyInvitation(
+    command: Extract<
+      MultiplayerAccountPartyCommand,
+      { type: "party.inspectInvitation" }
+    >,
+  ): MultiplayerAccountPartyResult<MultiplayerRoomSnapshot> {
+    const hostUserId = normalizeSocialUserId(command.hostUserId);
+    const recipientUserId = normalizeSocialUserId(command.recipientUserId);
+    const partyCode = normalizePrivateRoomCode(command.partyCode);
+
+    if (hostUserId === null || recipientUserId === null) {
+      return createAccountPartyFailure(
+        "invalid-user-id",
+        "Invitation inspection requires supported account identifiers.",
+      );
+    }
+
+    if (partyCode === null) {
+      return createAccountPartyFailure(
+        "invalid-room-code",
+        "Invitation inspection requires a supported party code.",
+      );
+    }
+
+    if (!isPartyInvitationIntent(command.intent)) {
+      return createAccountPartyFailure(
+        "invalid-invitation-intent",
+        "Invitation intent must be play or watch.",
+      );
+    }
+
+    const lookupNowMs = this.#getNowMs();
+    const storedRoomResult = this.#getAccountStoredRoom(
+      partyCode,
+      lookupNowMs,
+    );
+
+    if (!("room" in storedRoomResult)) {
+      return getAccountRoomFailure(storedRoomResult);
+    }
+
+    const host = storedRoomResult.room.participants.find(
+      (participant) =>
+        participant.id === storedRoomResult.room.hostParticipantId,
+    );
+
+    if (host?.userId !== hostUserId) {
+      return createAccountPartyFailure(
+        "not-host",
+        "Only the authenticated party host can invite a friend.",
+      );
+    }
+
+    const availability =
+      this.#socialPresence.getEffectiveState(recipientUserId) ?? "offline";
+
+    if (availability !== "available") {
+      const reason =
+        availability === "busy"
+          ? "recipient-busy"
+          : availability === "in-party"
+            ? "recipient-in-party"
+            : "recipient-offline";
+
+      return {
+        admissionRole: null,
+        eligible: false,
+        outcome: "invitation-eligibility",
+        reason,
+        success: true,
+      };
+    }
+
+    const admissionRole = this.#getAuthenticatedAdmissionRole(
+      storedRoomResult.room,
+      command.intent,
+    );
+
+    return admissionRole === null
+      ? {
+          admissionRole: null,
+          eligible: false,
+          outcome: "invitation-eligibility",
+          reason: "party-full",
+          success: true,
+        }
+      : {
+          admissionRole,
+          eligible: true,
+          outcome: "invitation-eligibility",
+          reason: null,
+          success: true,
+        };
+  }
+
+  #admitAuthenticatedParticipant(
+    command: Extract<
+      MultiplayerAccountPartyCommand,
+      { type: "party.admitAuthenticated" }
+    >,
+  ): MultiplayerAccountPartyResult<MultiplayerRoomSnapshot> {
+    const partyCode = normalizePrivateRoomCode(command.partyCode);
+
+    if (partyCode === null) {
+      return createAccountPartyFailure(
+        "invalid-room-code",
+        "Authenticated admission requires a supported party code.",
+      );
+    }
+
+    if (!isPartyInvitationIntent(command.intent)) {
+      return createAccountPartyFailure(
+        "invalid-invitation-intent",
+        "Invitation intent must be play or watch.",
+      );
+    }
+
+    const userResult = normalizeAuthenticatedAccountUser(command.user);
+
+    if (!userResult.success) {
+      return userResult;
+    }
+
+    const { user } = userResult;
+
+    const lookupNowMs = this.#getNowMs();
+    const storedRoomResult = this.#getAccountStoredRoom(
+      partyCode,
+      lookupNowMs,
+    );
+
+    if (!("room" in storedRoomResult)) {
+      return getAccountRoomFailure(storedRoomResult);
+    }
+
+    const existingMembership = this.#getLivePartyMembership(
+      user.id,
+      lookupNowMs,
+    );
+
+    if (existingMembership !== null) {
+      if (existingMembership.roomCode !== partyCode) {
+        return createAccountPartyFailure(
+          "in-other-party",
+          "This account already belongs to another party.",
+        );
+      }
+
+      return this.#reacquireAuthenticatedParticipant(
+        storedRoomResult,
+        existingMembership,
+        lookupNowMs,
+      );
+    }
+
+    if (this.#socialPresence.getEffectiveState(user.id) !== "available") {
+      return createAccountPartyFailure(
+        "recipient-unavailable",
+        "This account is no longer available to join the party.",
+      );
+    }
+
+    const admissionRole = this.#getAuthenticatedAdmissionRole(
+      storedRoomResult.room,
+      command.intent,
+    );
+
+    if (admissionRole === null) {
+      return createAccountPartyFailure(
+        "observer-limit-reached",
+        "This party already has the maximum number of watchers.",
+      );
+    }
+
+    const participantId = this.#createParticipantId({
+      role: admissionRole,
+      roomCode: partyCode,
+    });
+    const addParticipant =
+      command.intent === "play"
+        ? addPrivateRoomGuestParticipantAsPlayer
+        : addPrivateRoomGuestParticipantAsObserver;
+    const addResult = addParticipant(storedRoomResult.room, {
+      displayName: user.displayName,
+      participantId,
+      userId: user.id,
+    });
+
+    if (!addResult.success) {
+      return addResult.code === "observer-limit-reached"
+        ? createAccountPartyFailure(addResult.code, addResult.error)
+        : createAccountPartyFailure(
+            "invalid-account-command",
+            addResult.error,
+          );
+    }
+
+    const membershipResult = this.#socialPresence.setPartyMembership({
+      participantId,
+      roomCode: partyCode,
+      userId: user.id,
+    });
+
+    if (!membershipResult.success) {
+      return getAccountPresenceFailure(membershipResult);
+    }
+
+    let participantCapability: string;
+
+    try {
+      participantCapability = this.#mintParticipantCapability(
+        storedRoomResult.participantCapabilityHashesByParticipantId,
+        { participantId, role: admissionRole, roomCode: partyCode },
+      );
+    } catch (error) {
+      this.#socialPresence.clearPartyMembership({
+        participantId,
+        roomCode: partyCode,
+        userId: user.id,
+      });
+      throw error;
+    }
+
+    storedRoomResult.room = addResult.room;
+    storedRoomResult.seq += 1;
+    storedRoomResult.lastMeaningfulActivityAtMs = lookupNowMs;
+    refreshStoredRoomTerminalAt(
+      storedRoomResult,
+      storedRoomResult.lastMeaningfulActivityAtMs,
+    );
+
+    return {
+      admission: "admitted",
+      outcome: "admission",
+      participantCapability,
+      participantId,
+      snapshot: createStoredRoomSnapshot(
+        storedRoomResult,
+        storedRoomResult.lastMeaningfulActivityAtMs,
+        participantId,
+      ).snapshot,
+      success: true,
+    };
+  }
+
+  #reacquireAuthenticatedParticipant(
+    storedRoom: StoredMultiplayerRoom,
+    membership: MultiplayerSocialPartyMembership,
+    nowMs: number,
+  ): MultiplayerAccountPartyResult<MultiplayerRoomSnapshot> {
+    const participant = storedRoom.room.participants.find(
+      (entry) =>
+        entry.id === membership.participantId &&
+        entry.userId === membership.userId,
+    );
+
+    if (participant === undefined) {
+      return createAccountPartyFailure(
+        "participant-conflict",
+        "Party membership does not match an active participant.",
+      );
+    }
+
+    const capabilityHashes =
+      storedRoom.participantCapabilityHashesByParticipantId.get(participant.id) ??
+      [];
+
+    if (capabilityHashes.length >= this.#maxConnectionsPerParticipant) {
+      return createAccountPartyFailure(
+        "participant-capability-limit-reached",
+        "This participant has reached the capability reacquisition limit.",
+      );
+    }
+
+    const participantCapability = this.#mintParticipantCapability(
+      storedRoom.participantCapabilityHashesByParticipantId,
+      {
+        participantId: participant.id,
+        role: participant.role,
+        roomCode: storedRoom.room.code,
+      },
+    );
+    return {
+      admission: "reacquired",
+      outcome: "admission",
+      participantCapability,
+      participantId: participant.id,
+      snapshot: createStoredRoomSnapshot(
+        storedRoom,
+        nowMs,
+        participant.id,
+      ).snapshot,
+      success: true,
+    };
+  }
+
+  #compensateAuthenticatedAdmission(
+    command: Extract<
+      MultiplayerAccountPartyCommand,
+      { type: "party.compensateAdmission" }
+    >,
+  ): MultiplayerAccountPartyResult<MultiplayerRoomSnapshot> {
+    const userId = normalizeSocialUserId(command.userId);
+    const partyCode = normalizePrivateRoomCode(command.partyCode);
+    const participantId = normalizeAccountParticipantId(command.participantId);
+    const participantCapability = normalizeParticipantCapability(
+      command.participantCapability,
+    );
+
+    if (userId === null) {
+      return createAccountPartyFailure(
+        "invalid-user-id",
+        "Admission compensation requires a supported account identifier.",
+      );
+    }
+
+    if (partyCode === null) {
+      return createAccountPartyFailure(
+        "invalid-room-code",
+        "Admission compensation requires a supported party code.",
+      );
+    }
+
+    if (participantId === null) {
+      return createAccountPartyFailure(
+        "invalid-participant-id",
+        "Admission compensation requires a supported participant identifier.",
+      );
+    }
+
+    if (participantCapability === null) {
+      return createAccountPartyFailure(
+        "invalid-account-command",
+        "Admission compensation requires a supported participant capability.",
+      );
+    }
+
+    const membership = this.#socialPresence.getPartyMembership(userId);
+
+    if (membership === null) {
+      return {
+        departed: false,
+        outcome: "departure",
+        success: true,
+      };
+    }
+
+    if (
+      membership.roomCode !== partyCode ||
+      membership.participantId !== participantId
+    ) {
+      return createAccountPartyFailure(
+        "participant-conflict",
+        "Admission compensation does not match current party membership.",
+      );
+    }
+
+    const lookupNowMs = this.#getNowMs();
+    const storedRoomResult = this.#getAccountStoredRoom(
+      partyCode,
+      lookupNowMs,
+    );
+
+    if (!("room" in storedRoomResult)) {
+      return this.#socialPresence.getPartyMembership(userId) === null
+        ? {
+            departed: false,
+            outcome: "departure",
+            success: true,
+          }
+        : getAccountRoomFailure(storedRoomResult);
+    }
+
+    const participant = storedRoomResult.room.participants.find(
+      (entry) => entry.id === participantId && entry.userId === userId,
+    );
+    const capabilityHashes =
+      storedRoomResult.participantCapabilityHashesByParticipantId.get(
+        participantId,
+      ) ?? [];
+    const soleCapabilityHash =
+      capabilityHashes.length === 1 ? capabilityHashes[0] : undefined;
+    const candidateCapabilityHash = hashParticipantCapability(
+      participantCapability,
+    );
+
+    // Durable invitation acceptance may fail after admission. Rollback stays
+    // safe only while this is still the sole, unused capability; a connection
+    // or reacquisition means another request now owns the membership.
+    if (
+      participant === undefined ||
+      participant.id === storedRoomResult.room.hostParticipantId ||
+      (storedRoomResult.connectionCountsByParticipantId.get(participantId) ??
+        0) !== 0 ||
+      soleCapabilityHash === undefined ||
+      !participantCapabilityHashesMatch(
+        soleCapabilityHash,
+        candidateCapabilityHash,
+      )
+    ) {
+      return createAccountPartyFailure(
+        "participant-conflict",
+        "Admission compensation no longer matches an unconnected admission.",
+      );
+    }
+
+    const leaveResult = leavePrivateRoom(storedRoomResult.room, {
+      participantId,
+    });
+
+    if (!leaveResult.success || leaveResult.closed) {
+      return createAccountPartyFailure(
+        "participant-conflict",
+        leaveResult.success
+          ? "Admission compensation cannot close a party."
+          : leaveResult.error,
+      );
+    }
+
+    const nowMs = lookupNowMs;
+
+    clearDepartedParticipantGameInput(storedRoomResult, participantId);
+    removeDepartedParticipantAuthority(storedRoomResult, participantId, nowMs);
+    this.#socialPresence.clearPartyMembership({
+      participantId,
+      roomCode: partyCode,
+      userId,
+    });
+    storedRoomResult.room = leaveResult.room;
+    storedRoomResult.seq += 1;
+    storedRoomResult.lastMeaningfulActivityAtMs = nowMs;
+    refreshStoredRoomTerminalAt(storedRoomResult, nowMs);
+
+    return {
+      departed: true,
+      departedParticipantId: participantId,
+      outcome: "departure",
+      snapshot: createStoredRoomSnapshot(storedRoomResult, nowMs).snapshot,
+      success: true,
+    };
+  }
+
+  #getAuthenticatedAdmissionRole(
+    room: PrivateRoom,
+    intent: "play" | "watch",
+  ) {
+    const admissionRole =
+      intent === "play" ? getPrivateRoomGuestPlayerAdmissionRole(room) : "observer";
+
+    return admissionRole === "observer" &&
+      getPrivateRoomWatchingParticipantIds(room).length >= room.observerLimit
+      ? null
+      : admissionRole;
+  }
+
+  #getAccountStoredRoom(roomCode: string, nowMs = this.#getNowMs()) {
+    this.#sweepIfDue(nowMs);
+
+    const storedRoom = this.#getStoredRoom(roomCode, nowMs);
+
+    if ("room" in storedRoom) {
+      advanceGameRuntimeTo(storedRoom, nowMs);
+      refreshStoredRoomTerminalAt(storedRoom, nowMs);
+    }
+
+    return storedRoom;
+  }
+
+  #getLivePartyMembership(userId: unknown, nowMs: number) {
+    const membership = this.#socialPresence.getPartyMembership(userId);
+
+    if (membership === null) {
+      return null;
+    }
+
+    const storedRoom = this.#rooms.get(membership.roomCode);
+    const participant = storedRoom?.room.participants.find(
+      (entry) =>
+        entry.id === membership.participantId &&
+        entry.userId === membership.userId,
+    );
+
+    if (storedRoom === undefined || participant === undefined) {
+      this.#socialPresence.clearPartyMembership(membership);
+      return null;
+    }
+
+    if (this.#isRoomExpired(storedRoom, nowMs)) {
+      this.#expireRoom(membership.roomCode, nowMs);
+      return null;
+    }
+
+    return membership;
+  }
+
   resolveParticipantCapability(
     roomCode: unknown,
     participantCapability: unknown,
@@ -1332,9 +2059,11 @@ export class InProcessMultiplayerRoomStore
 
     const candidateHash = hashParticipantCapability(normalizedCapability);
 
-    for (const [participantId, storedHash] of storedRoom.participantCapabilityHashesByParticipantId) {
+    for (const [participantId, storedHashes] of storedRoom.participantCapabilityHashesByParticipantId) {
       if (
-        participantCapabilityHashesMatch(candidateHash, storedHash) &&
+        storedHashes.some((storedHash) =>
+          participantCapabilityHashesMatch(candidateHash, storedHash),
+        ) &&
         storedRoom.room.participants.some(
           (participant) => participant.id === participantId,
         )
@@ -1420,9 +2149,18 @@ export class InProcessMultiplayerRoomStore
   }
 
   #mintParticipantCapability(
-    capabilityHashesByParticipantId: Map<string, Buffer>,
+    capabilityHashesByParticipantId: Map<string, Buffer[]>,
     context: MultiplayerRoomParticipantCapabilityFactoryContext,
   ) {
+    const participantHashes =
+      capabilityHashesByParticipantId.get(context.participantId) ?? [];
+
+    if (participantHashes.length >= this.#maxConnectionsPerParticipant) {
+      throw new Error(
+        "Participant capability limit must be checked before minting.",
+      );
+    }
+
     const participantCapability = normalizeParticipantCapability(
       this.#createParticipantCapability(context),
     );
@@ -1436,8 +2174,14 @@ export class InProcessMultiplayerRoomStore
     );
 
     if (
-      Array.from(capabilityHashesByParticipantId.values()).some((storedHash) =>
-        participantCapabilityHashesMatch(storedHash, participantCapabilityHash),
+      Array.from(capabilityHashesByParticipantId.values()).some(
+        (storedHashes) =>
+          storedHashes.some((storedHash) =>
+            participantCapabilityHashesMatch(
+              storedHash,
+              participantCapabilityHash,
+            ),
+          ),
       )
     ) {
       throw new Error("Participant capability factory must return unique values.");
@@ -1445,7 +2189,7 @@ export class InProcessMultiplayerRoomStore
 
     capabilityHashesByParticipantId.set(
       context.participantId,
-      participantCapabilityHash,
+      [...participantHashes, participantCapabilityHash],
     );
 
     return participantCapability;
@@ -1596,6 +2340,7 @@ export class InProcessMultiplayerRoomStore
   }
 
   #expireRoom(roomCode: string, nowMs: number) {
+    this.#socialPresence.clearPartyMembershipsForRoom(roomCode);
     this.#rooms.delete(roomCode);
     this.#tombstones.set(roomCode, {
       error: "Room has expired. Create or join a new room.",
@@ -1606,6 +2351,7 @@ export class InProcessMultiplayerRoomStore
   }
 
   #closeParty(roomCode: string, nowMs: number, error: string) {
+    this.#socialPresence.clearPartyMembershipsForRoom(roomCode);
     this.#rooms.delete(roomCode);
     this.#tombstones.set(roomCode, {
       error,

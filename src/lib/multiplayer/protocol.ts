@@ -6,7 +6,7 @@ import type {
   PrivateRoomSettings,
 } from "./room";
 
-export const MULTIPLAYER_ROOM_PROTOCOL_VERSION = 5 as const;
+export const MULTIPLAYER_ROOM_PROTOCOL_VERSION = 6 as const;
 export const MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT =
   `v${MULTIPLAYER_ROOM_PROTOCOL_VERSION}`;
 export const MULTIPLAYER_ROOM_PROTOCOL_VERSION_HEADER =

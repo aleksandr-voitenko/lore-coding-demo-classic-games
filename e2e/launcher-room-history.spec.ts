@@ -14,7 +14,7 @@ test("private rooms follow browser Back and Forward navigation", async ({ page }
 
     if (
       request.method() === "POST" &&
-      url.pathname === "/api/multiplayer/rooms/v5"
+      url.pathname === "/api/multiplayer/rooms/v6"
     ) {
       roomCreateRequestCount += 1;
     }
@@ -61,8 +61,49 @@ test("a delayed stale room response cannot replace a newer create attempt", asyn
 }) => {
   const releaseRoomRequests: (() => void)[] = [];
   let roomResponseCount = 0;
+  let roomRequestCount = 0;
 
-  await page.route("**/api/multiplayer/rooms/v5", async (route) => {
+  const createRoomResponse = (requestIndex: number) => {
+    const participantId = `host-${requestIndex + 1}`;
+    const participant = {
+      displayName: "Delayed Room Hero",
+      id: participantId,
+      role: "host" as const,
+      userId: "delayed-room-user",
+    };
+
+    return {
+      participant,
+      participantCapability: `host-capability-${requestIndex + 1}`,
+      room: {
+        code: requestIndex === 0 ? "AAA111" : "BBB222",
+        hostParticipantId: participantId,
+        matchId: 1,
+        nextMatchParticipantIds: [],
+        observerLimit: 8,
+        participants: [participant],
+        seats: [
+          {
+            id: "left",
+            label: "Left Paddle",
+            occupiedByParticipantId: participantId,
+            required: true,
+          },
+          {
+            id: "right",
+            label: "Right Paddle",
+            occupiedByParticipantId: null,
+            required: true,
+          },
+        ],
+        settings: { gameId: "pong" },
+        status: "lobby" as const,
+      },
+      seq: 1,
+    };
+  };
+
+  await page.route("**/api/multiplayer/rooms/v6", async (route) => {
     const request = route.request();
 
     if (request.method() !== "POST") {
@@ -70,10 +111,16 @@ test("a delayed stale room response cannot replace a newer create attempt", asyn
       return;
     }
 
+    const requestIndex = roomRequestCount;
+
+    roomRequestCount += 1;
     await new Promise<void>((resolve) => {
       releaseRoomRequests.push(resolve);
     });
-    await route.continue();
+    await route.fulfill({
+      json: createRoomResponse(requestIndex),
+      status: 201,
+    });
   });
   page.on("response", (response) => {
     const request = response.request();
@@ -81,7 +128,7 @@ test("a delayed stale room response cannot replace a newer create attempt", asyn
 
     if (
       request.method() === "POST" &&
-      url.pathname === "/api/multiplayer/rooms/v5"
+      url.pathname === "/api/multiplayer/rooms/v6"
     ) {
       roomResponseCount += 1;
     }

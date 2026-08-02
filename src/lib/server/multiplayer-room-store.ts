@@ -13,6 +13,20 @@ export {
   InProcessMultiplayerRoomStore,
   PONG_RUNTIME_CATCH_UP_TICK_LIMIT,
 } from "./multiplayer-room-runtime";
+export {
+  MAX_MULTIPLAYER_ACCOUNT_AVAILABILITY_USER_IDS,
+  getMultiplayerAccountPartyErrorStatus,
+  isMultiplayerAccountPartyFailureCode,
+} from "./multiplayer-account-party";
+export type {
+  MultiplayerAccountAvailability,
+  MultiplayerAccountPartyAuthority,
+  MultiplayerAccountPartyCommand,
+  MultiplayerAccountPartyFailure,
+  MultiplayerAccountPartyFailureCode,
+  MultiplayerAccountPartyResult,
+  MultiplayerPartyInvitationIneligibilityReason,
+} from "./multiplayer-account-party";
 export type {
   CreateMultiplayerRoomOptions,
   MultiplayerRoomGameSnapshot,

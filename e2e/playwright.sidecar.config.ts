@@ -9,6 +9,7 @@ const baseURL = `http://${HOST}:${NEXT_PORT}`;
 const sidecarBaseURL = `http://${HOST}:${SIDECAR_PORT}`;
 const sidecarRoomServiceURL = `${sidecarBaseURL}/_internal/multiplayer/rooms`;
 const sidecarWebSocketURL = `ws://${HOST}:${SIDECAR_PORT}/multiplayer/rooms`;
+const roomServiceBearerToken = "playwright-sidecar-room-service";
 const testRunId = process.env.PLAYWRIGHT_TEST_RUN_ID ?? `${Date.now()}-${process.pid}`;
 const leaderboardDatabasePath = join(
   tmpdir(),
@@ -53,6 +54,8 @@ export default defineConfig({
       env: {
         MULTIPLAYER_SIDECAR_HOST: HOST,
         MULTIPLAYER_SIDECAR_PORT: String(SIDECAR_PORT),
+        MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN:
+          roomServiceBearerToken,
       },
       reuseExistingServer: false,
       timeout: 30_000,
@@ -63,6 +66,8 @@ export default defineConfig({
       env: {
         GAME_LEADERBOARD_SQLITE_PATH: leaderboardDatabasePath,
         MULTIPLAYER_ROOM_SERVICE_URL: sidecarRoomServiceURL,
+        MULTIPLAYER_ROOM_SERVICE_CLIENT_BEARER_TOKEN:
+          roomServiceBearerToken,
         NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL: sidecarWebSocketURL,
       },
       reuseExistingServer: false,

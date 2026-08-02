@@ -13,6 +13,10 @@ import {
   DEFAULT_MULTIPLAYER_ROOM_RETENTION_POLICY,
   type MultiplayerRoomStoreResult,
 } from "./multiplayer-room-runtime";
+import {
+  MAX_MULTIPLAYER_ACCOUNT_AVAILABILITY_USER_IDS,
+  type MultiplayerAccountPartyResult,
+} from "./multiplayer-account-party";
 import { DEFAULT_PRIVATE_ROOM_OBSERVER_LIMIT } from "../multiplayer/room";
 
 import {
@@ -37,6 +41,9 @@ const ROOM_SERVICE_MUTATION_HEADERS = {
   [MULTIPLAYER_ROOM_PROTOCOL_VERSION_HEADER]: String(
     MULTIPLAYER_ROOM_PROTOCOL_VERSION,
   ),
+};
+const ROOM_SERVICE_AUTHORIZATION_HEADERS = {
+  authorization: "Bearer service-secret",
 };
 
 afterEach(async () => {
@@ -184,6 +191,10 @@ function sendClientMessage(client: WebSocket, message: unknown) {
 
 async function readStoreResult(response: Response) {
   return (await response.json()) as MultiplayerRoomStoreResult;
+}
+
+async function readAccountPartyResult(response: Response) {
+  return (await response.json()) as MultiplayerAccountPartyResult;
 }
 
 function expectStoreSuccess(result: MultiplayerRoomStoreResult) {
@@ -408,13 +419,13 @@ describe("multiplayer room sidecar", () => {
     expect(client.readyState).toBe(WebSocket.OPEN);
   });
 
-  it("advertises protocol v5 and rejects unversioned or v4 mutation paths before room creation", async () => {
+  it("fails account authority closed without a bearer token and rejects older mutation paths before room creation", async () => {
     const sidecar = await createStartedSidecar();
     const origin = getOrigin(sidecar);
     const serviceBaseUrl = `${origin}/_internal/rooms`;
 
     const handshakeResponse = await fetch(serviceBaseUrl);
-    const mutationResponse = await fetch(serviceBaseUrl, {
+    const unversionedMutationResponse = await fetch(serviceBaseUrl, {
       body: JSON.stringify({
         host: {
           displayName: "Ada Host",
@@ -424,48 +435,353 @@ describe("multiplayer room sidecar", () => {
       headers: ROOM_SERVICE_MUTATION_HEADERS,
       method: "POST",
     });
-    const v4MutationResponse = await fetch(`${serviceBaseUrl}/v4`, {
-      body: "{",
-      headers: ROOM_SERVICE_MUTATION_HEADERS,
-      method: "POST",
-    });
-    const roomResponse = await fetch(`${serviceBaseUrl}/ROOM1`);
-
-    expect(handshakeResponse.status).toBe(200);
-    await expect(handshakeResponse.json()).resolves.toEqual({
-      mutationPathSegment: MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT,
-      participantCapabilities: true,
-      protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
-    });
-    expect(mutationResponse.status).toBe(426);
-    await expect(mutationResponse.json()).resolves.toEqual({
-      error: "Room service protocol version is not supported.",
-    });
-    expect(v4MutationResponse.status).toBe(426);
-    await expect(v4MutationResponse.json()).resolves.toEqual({
-      error: "Room service protocol version is not supported.",
-    });
-    expect(roomResponse.status).toBe(404);
-  });
-
-  it("rejects room creation at configured capacity while a participant is connected", async () => {
-    const sidecar = await createStartedSidecar(
-      createTestConfig({ maxRooms: 1 }),
-    );
-    const origin = getOrigin(sidecar);
-    const serviceBaseUrl = `${origin}/_internal/rooms`;
-    const createRoomRequest = () =>
-      fetch(`${serviceBaseUrl}/${MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT}`, {
+    const unauthorizedCreateResponse = await fetch(
+      `${serviceBaseUrl}/${MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT}`,
+      {
         body: JSON.stringify({
           host: {
             displayName: "Ada Host",
             id: "user-1",
           },
+        }),
+        headers: ROOM_SERVICE_MUTATION_HEADERS,
+        method: "POST",
+      },
+    );
+    const retiredMutationResponses = await Promise.all(
+      ["v2", "v3", "v4", "v5"].map((versionPathSegment) =>
+        fetch(`${serviceBaseUrl}/${versionPathSegment}`, {
+          body: "{",
+          headers: ROOM_SERVICE_MUTATION_HEADERS,
+          method: "POST",
+        }),
+      ),
+    );
+    const roomResponse = await fetch(`${serviceBaseUrl}/ROOM1`);
+
+    expect(handshakeResponse.status).toBe(200);
+    await expect(handshakeResponse.json()).resolves.toEqual({
+      accountPartyMemberships: false,
+      authenticatedAdmission: false,
+      mutationPathSegment: MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT,
+      participantCapabilities: true,
+      protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
+      socialPresenceLeases: false,
+    });
+    expect(unversionedMutationResponse.status).toBe(426);
+    await expect(unversionedMutationResponse.json()).resolves.toEqual({
+      error: "Room service protocol version is not supported.",
+    });
+    expect(unauthorizedCreateResponse.status).toBe(401);
+    await expect(unauthorizedCreateResponse.json()).resolves.toEqual({
+      error: "Unauthorized.",
+    });
+    expect(retiredMutationResponses.map((response) => response.status)).toEqual([
+      426, 426, 426, 426,
+    ]);
+    await expect(
+      Promise.all(retiredMutationResponses.map((response) => response.json())),
+    ).resolves.toEqual(
+      retiredMutationResponses.map(() => ({
+        error: "Room service protocol version is not supported.",
+      })),
+    );
+    expect(roomResponse.status).toBe(404);
+  });
+
+  it("gates account commands by bearer token and protocol before parsing their body", async () => {
+    const tokenlessSidecar = await createStartedSidecar();
+    const sidecar = await createStartedSidecar(
+      createTestConfig({ roomServiceBearerToken: "service-secret" }),
+    );
+    const accountMutationUrl = `${getOrigin(sidecar)}/_internal/rooms/${MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT}/_accounts`;
+    const tokenlessResponse = await fetch(
+      `${getOrigin(tokenlessSidecar)}/_internal/rooms/${MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT}/_accounts`,
+      {
+        body: JSON.stringify({
+          clientId: "client_account_a",
+          state: "available",
+          type: "presence.renew",
+          userId: "user-1",
+        }),
+        headers: ROOM_SERVICE_MUTATION_HEADERS,
+        method: "POST",
+      },
+    );
+    const unauthorizedResponse = await fetch(accountMutationUrl, {
+      body: "{",
+      method: "POST",
+    });
+    const unversionedResponse = await fetch(accountMutationUrl, {
+      body: "{",
+      headers: { authorization: "Bearer service-secret" },
+      method: "POST",
+    });
+    const wrongVersionResponse = await fetch(accountMutationUrl, {
+      body: "{",
+      headers: {
+        authorization: "Bearer service-secret",
+        [MULTIPLAYER_ROOM_PROTOCOL_VERSION_HEADER]: String(
+          MULTIPLAYER_ROOM_PROTOCOL_VERSION - 1,
+        ),
+      },
+      method: "POST",
+    });
+    const invalidJsonResponse = await fetch(accountMutationUrl, {
+      body: "{",
+      headers: {
+        ...ROOM_SERVICE_MUTATION_HEADERS,
+        authorization: "Bearer service-secret",
+      },
+      method: "POST",
+    });
+    const unsupportedCommandResponse = await fetch(accountMutationUrl, {
+      body: JSON.stringify({ type: "party.unsupported" }),
+      headers: {
+        ...ROOM_SERVICE_MUTATION_HEADERS,
+        authorization: "Bearer service-secret",
+      },
+      method: "POST",
+    });
+    const oversizedResolutionResponse = await fetch(accountMutationUrl, {
+      body: JSON.stringify({
+        type: "presence.resolve",
+        userIds: Array.from(
+          { length: MAX_MULTIPLAYER_ACCOUNT_AVAILABILITY_USER_IDS + 1 },
+          (_, index) => `user-${index}`,
+        ),
+      }),
+      headers: {
+        ...ROOM_SERVICE_MUTATION_HEADERS,
+        authorization: "Bearer service-secret",
+      },
+      method: "POST",
+    });
+
+    expect(tokenlessResponse.status).toBe(401);
+    await expect(tokenlessResponse.json()).resolves.toEqual({
+      error: "Unauthorized.",
+    });
+    expect(unauthorizedResponse.status).toBe(401);
+    await expect(unauthorizedResponse.json()).resolves.toEqual({
+      error: "Unauthorized.",
+    });
+    expect(unversionedResponse.status).toBe(426);
+    await expect(unversionedResponse.json()).resolves.toEqual({
+      error: "Room service protocol version is not supported.",
+    });
+    expect(wrongVersionResponse.status).toBe(426);
+    await expect(wrongVersionResponse.json()).resolves.toEqual({
+      error: "Room service protocol version is not supported.",
+    });
+    expect(invalidJsonResponse.status).toBe(400);
+    await expect(invalidJsonResponse.json()).resolves.toEqual({
+      code: "invalid-command",
+      error: "Request body must be valid JSON.",
+      success: false,
+    });
+    expect(unsupportedCommandResponse.status).toBe(400);
+    await expect(unsupportedCommandResponse.json()).resolves.toEqual({
+      code: "invalid-account-command",
+      error: "Account command type is not supported.",
+      success: false,
+    });
+    expect(oversizedResolutionResponse.status).toBe(413);
+    await expect(oversizedResolutionResponse.json()).resolves.toEqual({
+      code: "presence-resolution-limit-reached",
+      error: `Presence resolution accepts at most ${MAX_MULTIPLAYER_ACCOUNT_AVAILABILITY_USER_IDS} accounts.`,
+      success: false,
+    });
+  });
+
+  it("applies account presence, eligibility, admission, and compensated departure commands", async () => {
+    const sidecar = await createStartedSidecar(
+      createTestConfig({ roomServiceBearerToken: "service-secret" }),
+    );
+    const origin = getOrigin(sidecar);
+    const serviceBaseUrl = `${origin}/_internal/rooms`;
+    const authorizedHeaders = {
+      ...ROOM_SERVICE_MUTATION_HEADERS,
+      authorization: "Bearer service-secret",
+    };
+    const createResponse = await fetch(
+      `${serviceBaseUrl}/${MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT}`,
+      {
+        body: JSON.stringify({
+          host: {
+            displayName: "Ada Host",
+            id: "user-1",
+          },
+          settings: { gameId: "pong" },
+        }),
+        headers: authorizedHeaders,
+        method: "POST",
+      },
+    );
+    const createResult = await readStoreResult(createResponse);
+    const createdSnapshot = expectStoreSuccess(createResult);
+    const accountMutationUrl = `${serviceBaseUrl}/${MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT}/_accounts`;
+    const postAccountCommand = (command: unknown) =>
+      fetch(accountMutationUrl, {
+        body: JSON.stringify(command),
+        headers: authorizedHeaders,
+        method: "POST",
+      });
+
+    const presenceResponse = await postAccountCommand({
+      clientId: "client_account_b",
+      state: "available",
+      type: "presence.renew",
+      userId: "user-2",
+    });
+    const availabilityResponse = await postAccountCommand({
+      type: "presence.resolve",
+      userIds: ["user-1", "user-2", "user-3"],
+    });
+    const eligibilityResponse = await postAccountCommand({
+      hostUserId: "user-1",
+      intent: "play",
+      partyCode: createdSnapshot.room.code,
+      recipientUserId: "user-2",
+      type: "party.inspectInvitation",
+    });
+
+    expect(presenceResponse.status).toBe(200);
+    await expect(readAccountPartyResult(presenceResponse)).resolves.toEqual({
+      availability: "available",
+      changed: true,
+      outcome: "presence",
+      success: true,
+    });
+    expect(availabilityResponse.status).toBe(200);
+    await expect(readAccountPartyResult(availabilityResponse)).resolves.toEqual({
+      availabilities: [
+        { availability: "in-party", userId: "user-1" },
+        { availability: "available", userId: "user-2" },
+        { availability: "offline", userId: "user-3" },
+      ],
+      outcome: "availability",
+      success: true,
+    });
+    expect(eligibilityResponse.status).toBe(200);
+    await expect(readAccountPartyResult(eligibilityResponse)).resolves.toEqual({
+      admissionRole: "player",
+      eligible: true,
+      outcome: "invitation-eligibility",
+      reason: null,
+      success: true,
+    });
+
+    const broadcastSnapshot = vi.spyOn(sidecar.gateway, "broadcastSnapshot");
+    const admissionResponse = await postAccountCommand({
+      intent: "play",
+      partyCode: createdSnapshot.room.code,
+      type: "party.admitAuthenticated",
+      user: {
+        displayName: "Grace Guest",
+        id: "user-2",
+      },
+    });
+    const admissionResult = await readAccountPartyResult(admissionResponse);
+
+    expect(admissionResponse.status).toBe(200);
+    expect(admissionResult).toMatchObject({
+      admission: "admitted",
+      outcome: "admission",
+      snapshot: {
+        room: {
+          code: createdSnapshot.room.code,
+          participants: expect.arrayContaining([
+            expect.objectContaining({
+              displayName: "Grace Guest",
+              role: "player",
+              userId: "user-2",
+            }),
+          ]),
+        },
+      },
+      success: true,
+    });
+
+    if (!admissionResult.success || admissionResult.outcome !== "admission") {
+      throw new Error("Expected authenticated party admission to succeed.");
+    }
+
+    expect(broadcastSnapshot).toHaveBeenCalledTimes(1);
+    expect(broadcastSnapshot).toHaveBeenLastCalledWith(admissionResult.snapshot);
+
+    const departureCommand = {
+      participantCapability: admissionResult.participantCapability,
+      participantId: admissionResult.participantId,
+      partyCode: createdSnapshot.room.code,
+      type: "party.compensateAdmission",
+      userId: "user-2",
+    };
+    const departureResponse = await postAccountCommand(departureCommand);
+    const departureResult = await readAccountPartyResult(departureResponse);
+
+    expect(departureResponse.status).toBe(200);
+    expect(departureResult).toMatchObject({
+      departed: true,
+      departedParticipantId: admissionResult.participantId,
+      outcome: "departure",
+      snapshot: {
+        room: {
+          code: createdSnapshot.room.code,
+          participants: [expect.objectContaining({ userId: "user-1" })],
+        },
+      },
+      success: true,
+    });
+
+    if (
+      !departureResult.success ||
+      departureResult.outcome !== "departure" ||
+      departureResult.snapshot === undefined
+    ) {
+      throw new Error("Expected admission compensation to return a snapshot.");
+    }
+
+    expect(broadcastSnapshot).toHaveBeenCalledTimes(2);
+    expect(broadcastSnapshot).toHaveBeenLastCalledWith(departureResult.snapshot);
+
+    const repeatedDepartureResponse = await postAccountCommand(departureCommand);
+
+    expect(repeatedDepartureResponse.status).toBe(200);
+    await expect(
+      readAccountPartyResult(repeatedDepartureResponse),
+    ).resolves.toEqual({
+      departed: false,
+      outcome: "departure",
+      success: true,
+    });
+    expect(broadcastSnapshot).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects room creation at configured capacity while a participant is connected", async () => {
+    const sidecar = await createStartedSidecar(
+      createTestConfig({
+        maxRooms: 1,
+        roomServiceBearerToken: "service-secret",
+      }),
+    );
+    const origin = getOrigin(sidecar);
+    const serviceBaseUrl = `${origin}/_internal/rooms`;
+    const createRoomRequest = (hostUserId = "user-1") =>
+      fetch(`${serviceBaseUrl}/${MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT}`, {
+        body: JSON.stringify({
+          host: {
+            displayName: "Ada Host",
+            id: hostUserId,
+          },
           settings: {
             gameId: "pong",
           },
         }),
-        headers: ROOM_SERVICE_MUTATION_HEADERS,
+        headers: {
+          ...ROOM_SERVICE_MUTATION_HEADERS,
+          ...ROOM_SERVICE_AUTHORIZATION_HEADERS,
+        },
         method: "POST",
       });
     const firstResponse = await createRoomRequest();
@@ -496,7 +812,7 @@ describe("multiplayer room sidecar", () => {
     });
     await bootstrapPromise;
 
-    const capacityResponse = await createRoomRequest();
+    const capacityResponse = await createRoomRequest("user-2");
 
     expect(capacityResponse.status).toBe(503);
     await expect(readStoreResult(capacityResponse)).resolves.toEqual({
@@ -507,7 +823,9 @@ describe("multiplayer room sidecar", () => {
   });
 
   it("shares HTTP room endpoints with the WebSocket gateway store", async () => {
-    const sidecar = await createStartedSidecar();
+    const sidecar = await createStartedSidecar(
+      createTestConfig({ roomServiceBearerToken: "service-secret" }),
+    );
     const origin = getOrigin(sidecar);
     const publicPathCreateResponse = await fetch(`${origin}/rooms`, {
       body: JSON.stringify({
@@ -532,7 +850,10 @@ describe("multiplayer room sidecar", () => {
             gameId: "pong",
           },
         }),
-        headers: ROOM_SERVICE_MUTATION_HEADERS,
+        headers: {
+          ...ROOM_SERVICE_MUTATION_HEADERS,
+          authorization: "Bearer service-secret",
+        },
         method: "POST",
       },
     );
@@ -599,6 +920,7 @@ describe("multiplayer room sidecar", () => {
 
     const afterWebSocketCommandResponse = await fetch(
       `${serviceBaseUrl}/${roomCode}`,
+      { headers: ROOM_SERVICE_AUTHORIZATION_HEADERS },
     );
 
     expect(afterWebSocketCommandResponse.status).toBe(200);
@@ -624,7 +946,10 @@ describe("multiplayer room sidecar", () => {
           matchId: 1,
           type: "room.claimSeat",
         }),
-        headers: ROOM_SERVICE_MUTATION_HEADERS,
+        headers: {
+          ...ROOM_SERVICE_MUTATION_HEADERS,
+          ...ROOM_SERVICE_AUTHORIZATION_HEADERS,
+        },
         method: "POST",
       },
     );
@@ -635,7 +960,11 @@ describe("multiplayer room sidecar", () => {
     });
 
     const afterRejectedCommandSnapshot = expectStoreSuccess(
-      await readStoreResult(await fetch(`${serviceBaseUrl}/${roomCode}`)),
+      await readStoreResult(
+        await fetch(`${serviceBaseUrl}/${roomCode}`, {
+          headers: ROOM_SERVICE_AUTHORIZATION_HEADERS,
+        }),
+      ),
     );
 
     expect(afterRejectedCommandSnapshot.room.seats).toEqual([
@@ -663,7 +992,10 @@ describe("multiplayer room sidecar", () => {
           matchId: 1,
           type: "room.claimSeat",
         }),
-        headers: ROOM_SERVICE_MUTATION_HEADERS,
+        headers: {
+          ...ROOM_SERVICE_MUTATION_HEADERS,
+          ...ROOM_SERVICE_AUTHORIZATION_HEADERS,
+        },
         method: "POST",
       },
     );
@@ -748,6 +1080,9 @@ describe("multiplayer room sidecar", () => {
       }),
     );
     const origin = getOrigin(sidecar);
+    const handshakeResponse = await fetch(`${origin}/_internal/rooms`, {
+      headers: { authorization: "Bearer service-secret" },
+    });
     const mutationUrl = `${origin}/_internal/rooms/${MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT}`;
     const unauthorizedResponse = await fetch(mutationUrl, {
       body: "{}",
@@ -767,6 +1102,15 @@ describe("multiplayer room sidecar", () => {
       method: "POST",
     });
 
+    expect(handshakeResponse.status).toBe(200);
+    await expect(handshakeResponse.json()).resolves.toEqual({
+      accountPartyMemberships: true,
+      authenticatedAdmission: true,
+      mutationPathSegment: MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT,
+      participantCapabilities: true,
+      protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
+      socialPresenceLeases: true,
+    });
     expect(unauthorizedResponse.status).toBe(401);
     await expect(unauthorizedResponse.json()).resolves.toEqual({
       error: "Unauthorized.",

@@ -129,8 +129,11 @@ function expectSpaceInvadersGame(snapshot: MultiplayerRoomSnapshot) {
   return snapshot.game as SpaceInvadersMultiplayerServerGameSnapshot;
 }
 
-function createLobbyRoom(store: InProcessMultiplayerRoomStore) {
-  return expectStoreSuccess(store.createRoom({ host: HOST_USER }));
+function createLobbyRoom(
+  store: InProcessMultiplayerRoomStore,
+  host: AuthenticatedUser = HOST_USER,
+) {
+  return expectStoreSuccess(store.createRoom({ host }));
 }
 
 function createPongSnapshotWithStatus(
@@ -929,8 +932,11 @@ describe("multiplayer room WebSocket gateway", () => {
       roomCodes,
     });
 
-    for (const roomCode of roomCodes) {
-      createLobbyRoom(store);
+    for (const [index, roomCode] of roomCodes.entries()) {
+      createLobbyRoom(store, {
+        displayName: `Host ${index + 1}`,
+        id: `user-${index + 1}`,
+      });
       expect(store.getRoom(roomCode).success).toBe(true);
     }
 
@@ -1085,7 +1091,10 @@ describe("multiplayer room WebSocket gateway", () => {
     nowMs = 10_000;
     expectStoreSuccess(store.getRoom("ROOM1"));
 
-    createLobbyRoom(store);
+    createLobbyRoom(store, {
+      displayName: "Second Host",
+      id: "user-2",
+    });
     await bootstrapClient(client, "ROOM2", "host-2");
     nowMs += 1_000;
     expect(store.getRoom("ROOM1")).toMatchObject({

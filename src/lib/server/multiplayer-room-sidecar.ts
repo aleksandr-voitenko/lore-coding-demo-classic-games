@@ -8,6 +8,12 @@ import {
 } from "../multiplayer/protocol";
 import { DEFAULT_PRIVATE_ROOM_OBSERVER_LIMIT } from "../multiplayer/room";
 import {
+  getMultiplayerAccountPartyErrorStatus,
+  type MultiplayerAccountPartyAuthority,
+  type MultiplayerAccountPartyCommand,
+  type MultiplayerAccountPartyResult,
+} from "./multiplayer-account-party";
+import {
   DEFAULT_MULTIPLAYER_ROOM_SNAPSHOT_INTERVAL_MS,
   createMultiplayerRoomWebSocketGateway,
   type MultiplayerRoomWebSocketGateway,
@@ -22,6 +28,7 @@ import {
   type MultiplayerRoomStore,
   type MultiplayerRoomStoreCommand,
   type MultiplayerRoomStoreResult,
+  type MultiplayerRoomSnapshot,
 } from "./multiplayer-room-runtime";
 
 export const DEFAULT_MULTIPLAYER_SIDECAR_HOST = "127.0.0.1";
@@ -76,6 +83,9 @@ export type MultiplayerRoomSidecar = {
   server: HttpServer;
   start: () => Promise<void>;
 };
+
+export type MultiplayerRoomSidecarStore = MultiplayerRoomStore &
+  MultiplayerAccountPartyAuthority<MultiplayerRoomSnapshot>;
 
 export function parseMultiplayerRoomSidecarConfig(
   env: MultiplayerRoomSidecarEnv = process.env,
@@ -213,7 +223,7 @@ export async function runMultiplayerRoomSidecarFromEnv(
 
 async function handleHttpRequest(
   config: MultiplayerRoomSidecarConfig,
-  roomStore: MultiplayerRoomStore,
+  roomStore: MultiplayerRoomSidecarStore,
   gateway: MultiplayerRoomWebSocketGateway,
   request: IncomingMessage,
   response: ServerResponse,
@@ -283,6 +293,9 @@ type RoomServiceRoute =
       kind: "mutation-collection";
     }
   | {
+      kind: "mutation-accounts";
+    }
+  | {
       kind: "room";
       roomCode: string;
     }
@@ -304,13 +317,18 @@ type ReadJsonRequestBodyResult =
 
 async function handleRoomServiceRequest(
   config: MultiplayerRoomSidecarConfig,
-  roomStore: MultiplayerRoomStore,
+  roomStore: MultiplayerRoomSidecarStore,
   gateway: MultiplayerRoomWebSocketGateway,
   route: RoomServiceRoute,
   request: IncomingMessage,
   response: ServerResponse,
 ) {
-  if (!isAuthorizedRoomServiceRequest(config, request)) {
+  const isAuthorized =
+    route.kind === "mutation-accounts" || route.kind === "mutation-collection"
+      ? isAuthorizedAccountPartyRequest(config, request)
+      : isAuthorizedRoomServiceRequest(config, request);
+
+  if (!isAuthorized) {
     sendJson(request, response, 401, {
       error: "Unauthorized.",
     });
@@ -319,10 +337,16 @@ async function handleRoomServiceRequest(
 
   if (route.kind === "collection") {
     if (request.method === "GET") {
+      const accountAuthorityConfigured =
+        config.roomServiceBearerToken !== undefined;
+
       sendJson(request, response, 200, {
+        accountPartyMemberships: accountAuthorityConfigured,
+        authenticatedAdmission: accountAuthorityConfigured,
         mutationPathSegment: MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT,
         participantCapabilities: true,
         protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
+        socialPresenceLeases: accountAuthorityConfigured,
       });
       return;
     }
@@ -390,6 +414,35 @@ async function handleRoomServiceRequest(
     return;
   }
 
+  if (route.kind === "mutation-accounts") {
+    const command = parseAccountPartyCommand(body.value);
+
+    if (!command.success) {
+      sendAccountPartyResult(request, response, {
+        code: "invalid-account-command",
+        error: command.error,
+        success: false,
+      });
+      return;
+    }
+
+    const result = await roomStore.applyAccountCommand(command.command);
+
+    if (result.success) {
+      if (result.outcome === "admission") {
+        gateway.broadcastSnapshot(result.snapshot);
+      } else if (
+        result.outcome === "departure" &&
+        result.snapshot !== undefined
+      ) {
+        gateway.broadcastSnapshot(result.snapshot);
+      }
+    }
+
+    sendAccountPartyResult(request, response, result);
+    return;
+  }
+
   const command = parseRoomServiceCommand(body.value);
 
   if (!command.success) {
@@ -423,6 +476,12 @@ function getRoomServiceRoute(
   if (pathname === mutationBasePath) {
     return {
       kind: "mutation-collection",
+    };
+  }
+
+  if (pathname === `${mutationBasePath}/_accounts`) {
+    return {
+      kind: "mutation-accounts",
     };
   }
 
@@ -609,6 +668,41 @@ function parseRoomServiceCommand(value: unknown):
   };
 }
 
+function parseAccountPartyCommand(value: unknown):
+  | {
+      command: MultiplayerAccountPartyCommand;
+      success: true;
+    }
+  | {
+      error: string;
+      success: false;
+    } {
+  if (!isRecord(value)) {
+    return {
+      error: "Account command must be a JSON object.",
+      success: false,
+    };
+  }
+
+  switch (value.type) {
+    case "presence.renew":
+    case "presence.release":
+    case "presence.resolve":
+    case "party.inspectInvitation":
+    case "party.admitAuthenticated":
+    case "party.compensateAdmission":
+      return {
+        command: value as MultiplayerAccountPartyCommand,
+        success: true,
+      };
+  }
+
+  return {
+    error: "Account command type is not supported.",
+    success: false,
+  };
+}
+
 function isLifecycleCommand(value: unknown) {
   return (
     value === "finish" ||
@@ -631,6 +725,19 @@ function sendStoreResult(
     result.success
       ? successStatusCode
       : getMultiplayerRoomStoreErrorStatus(result.code),
+    result,
+  );
+}
+
+function sendAccountPartyResult(
+  request: IncomingMessage,
+  response: ServerResponse,
+  result: MultiplayerAccountPartyResult,
+) {
+  sendJson(
+    request,
+    response,
+    result.success ? 200 : getMultiplayerAccountPartyErrorStatus(result.code),
     result,
   );
 }
@@ -677,6 +784,17 @@ function isAuthorizedRoomServiceRequest(
   return (
     request.headers.authorization ===
     `Bearer ${config.roomServiceBearerToken}`
+  );
+}
+
+function isAuthorizedAccountPartyRequest(
+  config: MultiplayerRoomSidecarConfig,
+  request: IncomingMessage,
+) {
+  return (
+    config.roomServiceBearerToken !== undefined &&
+    request.headers.authorization ===
+      `Bearer ${config.roomServiceBearerToken}`
   );
 }
 

@@ -168,9 +168,13 @@ describe("start multiplayer dev wrapper", () => {
       },
       {},
     );
-    const specs = createMultiplayerDevProcessSpecs(config, {
-      PATH: "/usr/bin",
-    });
+    const specs = createMultiplayerDevProcessSpecs(
+      config,
+      {
+        PATH: "/usr/bin",
+      },
+      () => "generated-dev-secret",
+    );
 
     expect(specs).toMatchObject([
       {
@@ -178,6 +182,8 @@ describe("start multiplayer dev wrapper", () => {
         env: {
           MULTIPLAYER_SIDECAR_HOST: "0.0.0.0",
           MULTIPLAYER_SIDECAR_PORT: "3001",
+          MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN:
+            "generated-dev-secret",
           MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS: "33",
           PATH: "/usr/bin",
         },
@@ -197,6 +203,8 @@ describe("start multiplayer dev wrapper", () => {
           MULTIPLAYER_DEV_PUBLIC_HOST: "192.168.50.9",
           MULTIPLAYER_ROOM_SERVICE_URL:
             "http://127.0.0.1:3001/_internal/multiplayer/rooms",
+          MULTIPLAYER_ROOM_SERVICE_CLIENT_BEARER_TOKEN:
+            "generated-dev-secret",
           NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL:
             "ws://192.168.50.9:3001/multiplayer/rooms",
           PATH: "/usr/bin",
@@ -204,5 +212,18 @@ describe("start multiplayer dev wrapper", () => {
         label: "next",
       },
     ]);
+  });
+
+  it("rejects mismatched room-service bearer secrets", () => {
+    const config = resolveMultiplayerDevConfig({}, {});
+
+    expect(() =>
+      createMultiplayerDevProcessSpecs(config, {
+        MULTIPLAYER_ROOM_SERVICE_CLIENT_BEARER_TOKEN: "next-secret",
+        MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN: "sidecar-secret",
+      }),
+    ).toThrow(
+      "MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN and MULTIPLAYER_ROOM_SERVICE_CLIENT_BEARER_TOKEN must match.",
+    );
   });
 });

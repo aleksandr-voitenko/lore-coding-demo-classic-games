@@ -2,6 +2,7 @@
 
 import os from "node:os";
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -96,7 +97,31 @@ export function resolveMultiplayerDevConfig(
   };
 }
 
-export function createMultiplayerDevProcessSpecs(config, env = process.env) {
+export function createMultiplayerDevProcessSpecs(
+  config,
+  env = process.env,
+  createBearerToken = () => randomBytes(32).toString("base64url"),
+) {
+  const sidecarBearerToken = getOptionalEnvString(
+    env.MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN,
+  );
+  const clientBearerToken = getOptionalEnvString(
+    env.MULTIPLAYER_ROOM_SERVICE_CLIENT_BEARER_TOKEN,
+  );
+
+  if (
+    sidecarBearerToken !== undefined &&
+    clientBearerToken !== undefined &&
+    sidecarBearerToken !== clientBearerToken
+  ) {
+    throw new Error(
+      "MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN and MULTIPLAYER_ROOM_SERVICE_CLIENT_BEARER_TOKEN must match.",
+    );
+  }
+
+  const roomServiceBearerToken =
+    sidecarBearerToken ?? clientBearerToken ?? createBearerToken();
+
   return [
     {
       args: ["run", "start:sidecar"],
@@ -104,6 +129,8 @@ export function createMultiplayerDevProcessSpecs(config, env = process.env) {
         ...env,
         MULTIPLAYER_SIDECAR_HOST: config.sidecarHost,
         MULTIPLAYER_SIDECAR_PORT: String(config.sidecarPort),
+        MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN:
+          roomServiceBearerToken,
         MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS: String(
           config.snapshotIntervalMs,
         ),
@@ -124,6 +151,8 @@ export function createMultiplayerDevProcessSpecs(config, env = process.env) {
         ...env,
         MULTIPLAYER_DEV_PUBLIC_HOST: config.publicHost,
         MULTIPLAYER_ROOM_SERVICE_URL: config.roomServiceUrl,
+        MULTIPLAYER_ROOM_SERVICE_CLIENT_BEARER_TOKEN:
+          roomServiceBearerToken,
         NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL: config.webSocketUrl,
       },
       label: "next",

@@ -89,6 +89,8 @@ Optional wrapper overrides include `MULTIPLAYER_DEV_NEXT_PORT`,
 `MULTIPLAYER_SIDECAR_MAX_ROOMS` are inherited by the child process. Next still
 talks to the sidecar through
 `127.0.0.1`; only browser-facing URLs use the detected LAN address.
+The wrapper also generates one ephemeral room-service bearer secret and passes
+it to both child processes unless a matching secret is already configured.
 
 Build and run the experimental multiplayer room sidecar in a separate terminal:
 
@@ -103,9 +105,11 @@ The sidecar defaults to `127.0.0.1:3001`, exposes `GET /healthz`, accepts public
 room WebSocket upgrades on `/multiplayer/rooms`, and serves the internal JSON
 room service on `/_internal/multiplayer/rooms`:
 
-- `POST /_internal/multiplayer/rooms/v5` creates a room.
+- `POST /_internal/multiplayer/rooms/v6` creates a room.
 - `GET /_internal/multiplayer/rooms/<code>` reads a room snapshot.
-- `POST /_internal/multiplayer/rooms/v5/<code>` applies a parsed room command.
+- `POST /_internal/multiplayer/rooms/v6/<code>` applies a parsed room command.
+- `POST /_internal/multiplayer/rooms/v6/_accounts` applies a protected presence
+  or authenticated account-party command.
 
 Override the bind address and path with `MULTIPLAYER_SIDECAR_HOST`,
 `MULTIPLAYER_SIDECAR_PORT`, `MULTIPLAYER_SIDECAR_WEBSOCKET_PATH`, and
@@ -286,17 +290,23 @@ capability from creating unbounded subscriber tabs.
 
 The sidecar room service endpoints are internal service endpoints; public HTTP
 room creation and host authorization should still flow through the Next API
-routes. If the internal hop needs a bearer token, set the same secret in
+routes. Set the same bearer secret in
 `MULTIPLAYER_ROOM_SERVICE_CLIENT_BEARER_TOKEN` for the Next process and
 `MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN` for the sidecar process.
-Party queue, capacity, and leave mutations require protocol version 5. The Next process
+The account-authority endpoint and every room-creation mutation always require
+that configured secret. A tokenless sidecar advertises those capabilities as
+unavailable and refuses creation rather than trusting a caller-supplied account
+id. `npm run dev:multiplayer` generates and shares a secret automatically.
+Protocol v6 adds expiring browser presence leases, one-party-per-account
+membership, authenticated friend admission, bounded multi-tab capability
+reacquisition, and exact admission compensation. The Next process
 preflights the authenticated internal collection endpoint, then sends create and
-command POSTs through its advertised `/v5` mutation path with
-`x-multiplayer-room-protocol-version: 5`; the sidecar rejects legacy paths or a
+command POSTs through its advertised `/v6` mutation path with
+`x-multiplayer-room-protocol-version: 6`; the sidecar rejects legacy paths or a
 missing/mismatched header before reading a mutation body. Browser create and
-host-command POSTs likewise use `/api/multiplayer/rooms/v5` and
-`/api/multiplayer/rooms/<code>/v5`; the v4, v3, v2, and unversioned POST routes
-return 426. Browser
+host-command POSTs likewise use `/api/multiplayer/rooms/v6` and
+`/api/multiplayer/rooms/<code>/v6`; the v5, v4, v3, v2, and unversioned POST
+routes return 426. Browser
 `connection.hello` and `connection.resume` messages and the corresponding
 bootstrap carry the same version, and a mismatched bootstrap closes without
 reconnecting. During a rolling mixed-version deployment, room mutations and

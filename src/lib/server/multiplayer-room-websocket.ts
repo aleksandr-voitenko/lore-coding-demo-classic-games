@@ -938,7 +938,8 @@ function getRealtimeRejectionCode(
   if (
     code === "room-capacity-reached" ||
     code === "room-service-invalid-response" ||
-    code === "room-service-unavailable"
+    code === "room-service-unavailable" ||
+    code === "user-already-in-party"
   ) {
     return "invalid-message";
   }

@@ -122,7 +122,7 @@ This file covers Node-only server helpers and storage adapters under
   detaches every socket for that participant, while party closure sends one
   terminal event and detaches all members. Its public
   factory defaults inbound client messages to 64 KiB through `ws` `maxPayload`
-  while preserving explicit caller overrides. Protocol v5 carries match ids in
+  while preserving explicit caller overrides. Protocol v6 carries match ids in
   game snapshots, reconnect cursors, command acknowledgements, and every
   match-scoped command. The gateway includes the generation in broadcast
   deduplication and relays stale-match failures without acknowledging or
@@ -150,9 +150,15 @@ This file covers Node-only server helpers and storage adapters under
   bootstrap requires the same version before room lookup. A legacy sidecar
   cannot route the versioned mutation path even if a rolling-deployment
   preflight reaches a newer instance. This deliberately makes mixed app,
-  sidecar, or browser deployments fail before room state changes. It is emitted
-  through `tsconfig.sidecar.json`
-  because the main app
+  sidecar, or browser deployments fail before room state changes. It also
+  exposes a bearer-only `/v6/_accounts` authority endpoint for expiring browser
+  presence leases, one-party-per-account membership, authenticated admission,
+  bounded capability reacquisition, and tuple-bound admission compensation. The
+  same bearer boundary protects room creation because its host id establishes
+  authoritative account membership; tokenless capability discovery fails those
+  account-authority flags closed. The multiplayer development wrapper generates
+  one ephemeral secret and supplies it to both local processes. The sidecar is
+  emitted through `tsconfig.sidecar.json` because the main app
   TypeScript config typechecks only and does not emit runtime JavaScript. Keep
   sidecar-emitted runtime imports resolvable by plain Node after TypeScript emits
   CommonJS; TypeScript path aliases are not rewritten in emitted output.

@@ -59,8 +59,8 @@ function createProtocolRoom(settings: PrivateRoomSettings): PrivateRoom {
 }
 
 describe("multiplayer realtime protocol", () => {
-  it("uses protocol v5 for party membership lifecycle messages", () => {
-    expect(MULTIPLAYER_ROOM_PROTOCOL_VERSION).toBe(5);
+  it("uses protocol v6 for party membership lifecycle messages", () => {
+    expect(MULTIPLAYER_ROOM_PROTOCOL_VERSION).toBe(6);
   });
 
   it("carries connection hello, resume, diagnostics ping, and bootstrap messages for a room", () => {
