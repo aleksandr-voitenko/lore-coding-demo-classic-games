@@ -19,8 +19,12 @@ This file covers Node-only server helpers and storage adapters under
   the API route and tests. Keep parsing, validation, normalized submissions, JSON
   response shaping, and rank calculation behind this boundary.
 - `sqlite-app-schema.ts` owns shared SQLite path preparation and schema
-  initialization for leaderboards, users, password hashes, user sessions, and
-  signed-in game sessions.
+  initialization for leaderboards, users, password hashes, user sessions,
+  signed-in game sessions, and the durable social graph. Schema version 6 adds
+  pending canonical-pair friend requests, canonical friendships, directed
+  blocks, and short-lived party invitations. Every SQLite store uses this same
+  initialized database and configured path rather than creating a separate
+  friends database.
 - `sqlite-leaderboard-store.ts` is the current production leaderboard store. It
   uses `better-sqlite3`, initializes the shared schema, and exposes
   `getLeaderboardStore()` as the default singleton.
@@ -29,6 +33,13 @@ This file covers Node-only server helpers and storage adapters under
 - `sqlite-user-profile-store.ts` owns user registration, password login,
   signed-in session persistence, game-session recording, and aggregate profile
   stats.
+- `sqlite-social-store.ts` is the only writer for durable friend requests,
+  friendships, directed blocks, and party invitations. Its immediate
+  transactions keep pair cleanup and invitation transitions atomic, make
+  state-based retries safe, and return client-safe overview invitations without
+  their bearer-like party codes. Invitation mutation/admission helpers retain
+  the code only in server-side records and compute expiration from the
+  server-owned five-minute TTL rather than accepting a caller timestamp.
 - `sqlite-replay-store.ts` owns generic server-issued replay runs and one latest
   saved replay per signed-in user/game. Keep generic `createReplayRun`,
   `saveReplay`, and `getReplay` behavior available for future games while
@@ -227,6 +238,35 @@ This file covers Node-only server helpers and storage adapters under
   sign-up. `user_sessions` stores hashed cookie tokens, and `game_sessions`
   stores only signed-in play sessions with active duration, final score, result,
   sort direction, game id, and leaderboard key.
+- Social lookup is an exact query through the existing normalized
+  `display_name_key` and returns at most one minimal identity. Social repository
+  operations must require a password-backed account, exclude legacy
+  passwordless rows, suppress either-direction blocks, and derive the acting
+  account from its authenticated session boundary rather than accepting it from
+  a public identifier.
+- `friend_requests` stores only the current pending request for one canonical
+  account pair and separately records which account requested it;
+  `friendships` stores accepted canonical pairs; `user_blocks` remains directed.
+  The repository must serialize relationship mutations in SQLite transactions.
+  Blocking deletes requests and friendships and revokes pending party
+  invitations in both directions atomically. Removing a friendship also revokes
+  pending invitations for the pair, and unblocking does not recreate any prior
+  state.
+- `party_invitations` stores a bounded-lifetime play/watch intent against a
+  volatile party code without a room foreign key. A pending invitation has no
+  resolution timestamp and may transition to accepted, declined, canceled,
+  revoked, or expired with one. It stores neither match state nor participant
+  capabilities. The store owns a five-minute default TTL, redacts the party code
+  from social overviews, and can revoke every live invitation for one recipient
+  atomically when presence becomes unavailable. Presence leases, effective
+  availability, party membership, matches, observer queues, and capabilities
+  stay process-local and must not be inferred from SQLite after a restart.
+- Durable invitation rows are not yet an invitation-admission API. Public HTTP
+  creation and acceptance remain deferred until the presence registry and
+  trusted Next-to-sidecar bridge can fail closed for busy, offline, unknown,
+  same-party, and other-party recipients; revalidate live party existence and
+  capacity; and issue or reacquire a participant capability without trusting a
+  client-submitted user id.
 - `game_replay_runs` stores server-issued run ids and seeds. `game_replays`
   stores the latest signed-in replay payload per user/game and is used by the
   profile page to expose the Last Replay action.

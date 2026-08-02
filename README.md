@@ -323,8 +323,17 @@ the current runtime advances.
 
 ## Persistent Storage
 
-Leaderboards, player accounts, signed-in sessions, profile stats, and saved
-replays use SQLite.
+Leaderboards, player accounts, signed-in sessions, profile stats, saved
+replays, and the durable social graph use the same SQLite database. Schema
+version 6 adds one pending friend request per canonical account pair, accepted
+canonical friendships, directed blocks, and short-lived party invitations with
+play/watch intent and accepted, declined, canceled, revoked, or expired terminal
+states. Blocking another account removes requests and friendships and revokes
+pending invitations in both directions in one transaction; removing a friend
+also revokes pending invitations for that pair, while unblocking restores
+nothing automatically. Party invitations use a server-owned five-minute expiry;
+pending social overviews omit the reusable party code until trusted admission
+succeeds.
 Leaderboard records are stored under game-and-parameter keys such as
 `snake|mode=levels` or `tetris|board=10x20|level=3`. Signed-in play sessions also
 store the selected leaderboard key so profile stats can report both per-game
@@ -332,11 +341,24 @@ totals and parameter-aware history.
 
 Player names are unique after trimming, whitespace collapsing, and
 case-insensitive comparison. Passwords are salted and hashed in SQLite; existing
-passwordless demo names remain reserved and cannot be claimed through sign-up.
+passwordless demo names remain reserved, cannot be claimed through sign-up, and
+are not eligible for social discovery or relationships. Social discovery is
+defined as an exact lookup through the same normalized display-name key, not a
+fuzzy search or public directory, and exposes only the matching account's
+minimal public identity when that relationship is allowed.
 
 The default database path is `.data/snake-leaderboard.sqlite`, kept for
 compatibility with existing Snake deployments. On a VPS, set
 `GAME_LEADERBOARD_SQLITE_PATH` to durable storage.
+
+This schema milestone does not expose a Friends interface or public social API
+yet. Presence leases, effective busy/in-party status, parties, matches, observer
+queues, and participant capabilities remain volatile and are never reconstructed
+from social rows. Party invitation records refer to volatile party codes without
+a database foreign key and never store participant capabilities. Authenticated
+invitation creation and acceptance remain deferred until the presence service
+and trusted Next-to-sidecar admission bridge can recheck availability, live
+party membership, capacity, and capability issuance together.
 
 Snake, Tetris, Breakout, Minesweeper, Space Invaders, Pong, Simon, 2048,
 Asteroids, and the Tank Patrol single-player campaign record replay events

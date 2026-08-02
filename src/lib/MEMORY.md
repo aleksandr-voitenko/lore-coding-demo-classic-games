@@ -130,6 +130,14 @@ This file covers deterministic game engines and shared source logic under
 - `user-profile.ts` owns shared auth, user, game-session, and profile-stat
   types; display-name/password/game-id/session-id validation; and client helpers
   for `/api/auth/*`, `/api/me`, and `/api/game-sessions`.
+- `social.ts` owns client-safe social record types, availability and
+  relationship vocabularies, invitation intent/status validation, social entity
+  id normalization, and deterministic canonical account-pair ordering. Exact
+  social discovery must reuse the unique normalized display-name key from
+  `user-profile.ts`; it is a one-result minimal-identity lookup, not a fuzzy
+  search or user directory. Legacy passwordless account rows are excluded from
+  discovery and social relationships. Keep SQLite transactions, session
+  authorization, and invitation admission out of this shared module.
 - `game-replay.ts` owns shared replay run ids, seed normalization, deterministic
   replay random creation, active-play replay clocks, API path/client helpers,
   base replay payload validation, and generic cursor coordinate

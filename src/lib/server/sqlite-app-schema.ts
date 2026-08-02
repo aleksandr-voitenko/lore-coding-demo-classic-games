@@ -7,7 +7,7 @@ import { dirname, join, resolve } from "node:path";
 export type SqliteDatabase = InstanceType<typeof Database>;
 
 export const DEFAULT_SQLITE_FILENAME = "snake-leaderboard.sqlite";
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export function prepareSqliteDatabasePath(databasePath: string) {
   if (databasePath === ":memory:") {
@@ -68,6 +68,78 @@ export function initializeAppSchema(database: SqliteDatabase) {
 
     CREATE INDEX IF NOT EXISTS user_sessions_user_idx
       ON user_sessions (user_id, expires_at);
+
+    CREATE TABLE IF NOT EXISTS friend_requests (
+      user_a_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_b_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      requester_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (user_a_id, user_b_id),
+      CHECK (user_a_id < user_b_id),
+      CHECK (requester_user_id IN (user_a_id, user_b_id))
+    );
+
+    CREATE INDEX IF NOT EXISTS friend_requests_requester_idx
+      ON friend_requests (requester_user_id, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS friend_requests_user_b_idx
+      ON friend_requests (user_b_id, user_a_id);
+
+    CREATE TABLE IF NOT EXISTS friendships (
+      user_a_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_b_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (user_a_id, user_b_id),
+      CHECK (user_a_id < user_b_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS friendships_user_b_idx
+      ON friendships (user_b_id, user_a_id);
+
+    CREATE TABLE IF NOT EXISTS user_blocks (
+      blocker_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      blocked_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (blocker_user_id, blocked_user_id),
+      CHECK (blocker_user_id <> blocked_user_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS user_blocks_blocked_idx
+      ON user_blocks (blocked_user_id, blocker_user_id);
+
+    CREATE TABLE IF NOT EXISTS party_invitations (
+      id TEXT PRIMARY KEY,
+      party_code TEXT NOT NULL,
+      inviter_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recipient_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      intent TEXT NOT NULL CHECK (intent IN ('play', 'watch')),
+      status TEXT NOT NULL CHECK (
+        status IN ('pending', 'accepted', 'declined', 'canceled', 'revoked', 'expired')
+      ),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      resolved_at TEXT,
+      CHECK (inviter_user_id <> recipient_user_id),
+      CHECK (expires_at > created_at),
+      CHECK (
+        (status = 'pending' AND resolved_at IS NULL) OR
+        (status <> 'pending' AND resolved_at IS NOT NULL)
+      )
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS party_invitations_pending_party_recipient_idx
+      ON party_invitations (party_code, recipient_user_id)
+      WHERE status = 'pending';
+
+    CREATE INDEX IF NOT EXISTS party_invitations_recipient_idx
+      ON party_invitations (recipient_user_id, status, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS party_invitations_inviter_idx
+      ON party_invitations (inviter_user_id, status, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS party_invitations_expiry_idx
+      ON party_invitations (status, expires_at);
 
     CREATE TABLE IF NOT EXISTS game_sessions (
       id TEXT PRIMARY KEY,
