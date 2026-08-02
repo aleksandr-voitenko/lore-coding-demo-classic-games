@@ -69,6 +69,61 @@ describe("social API shared helpers", () => {
     });
   });
 
+  it("accepts the routed host when the framework URL canonicalizes its hostname", async () => {
+    const result = await readSocialJsonMutation(
+      new Request("http://localhost:3100/api/social/presence", {
+        body: JSON.stringify({ clientId: "browser-client-1" }),
+        headers: {
+          "content-type": "application/json",
+          host: "127.0.0.1:3100",
+          origin: "http://127.0.0.1:3100",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(result).toEqual({
+      payload: { clientId: "browser-client-1" },
+      success: true,
+    });
+  });
+
+  it.each([
+    {
+      host: "games.example",
+      name: "different routed host",
+      origin: "https://other.example",
+    },
+    {
+      host: "games.example",
+      name: "different protocol",
+      origin: "http://games.example",
+    },
+  ])("rejects a $name", async ({ host, origin }) => {
+    const result = await readSocialJsonMutation(
+      new Request("https://internal.example/api/social/presence", {
+        body: "{}",
+        headers: {
+          "content-type": "application/json",
+          host,
+          origin,
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(result.success).toBe(false);
+
+    if (result.success) {
+      throw new Error("Expected origin validation to fail.");
+    }
+
+    expect(result.response.status).toBe(403);
+    await expect(result.response.json()).resolves.toMatchObject({
+      code: "cross-origin-request",
+    });
+  });
+
   it.each([
     {
       expectedCode: "cross-origin-request",

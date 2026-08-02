@@ -214,6 +214,23 @@ describe("game launcher", () => {
       expect(markup).not.toContain(`data-testid="private-room-host-${gameId}-button"`);
       expect(markup).not.toContain(`data-testid="private-room-host-${gameId}-status"`);
     }
+    expect(markup).toContain('data-testid="social-center-trigger"');
+  });
+
+  it("shows Friends in a signed-in room header but not during replay gameplay", () => {
+    const roomMarkup = renderToStaticMarkup(
+      <CurrentUserProvider initialUser={{ displayName: "Ada", id: "user-1" }}>
+        <GameLauncher initialRoomCode="PONG-1" />
+      </CurrentUserProvider>,
+    );
+    const replayMarkup = renderToStaticMarkup(
+      <CurrentUserProvider initialUser={{ displayName: "Ada", id: "user-1" }}>
+        <GameLauncher initialReplayGameId="snake" />
+      </CurrentUserProvider>,
+    );
+
+    expect(roomMarkup).toContain('data-testid="social-center-trigger"');
+    expect(replayMarkup).not.toContain('data-testid="social-center-trigger"');
   });
 
   it("creates Space Invaders private-room settings from selected launcher parameters", () => {

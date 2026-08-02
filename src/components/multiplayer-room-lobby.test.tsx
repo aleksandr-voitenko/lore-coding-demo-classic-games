@@ -138,6 +138,11 @@ describe("multiplayer room lobby", () => {
           initialRoom={PONG_ROOM}
           initialRoomCode="PONG-1"
           onBackToLibrary={vi.fn()}
+          socialCenterTrigger={
+            <button data-testid="social-center-trigger" type="button">
+              Friends
+            </button>
+          }
         />
       </CurrentUserProvider>,
     );
@@ -159,6 +164,7 @@ describe("multiplayer room lobby", () => {
     expect(markup).toContain('data-testid="multiplayer-room-start-button"');
     expect(markup).toContain('data-testid="multiplayer-room-next-game-select"');
     expect(markup).toContain('data-testid="multiplayer-room-replace-match-button"');
+    expect(markup).toContain('data-testid="social-center-trigger"');
     expect(markup).toContain("Private Party");
   });
 

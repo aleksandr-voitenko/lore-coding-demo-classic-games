@@ -3,6 +3,7 @@
 import {
   createContext,
   useCallback,
+  useContext,
   useLayoutEffect,
   useMemo,
   useState,
@@ -27,9 +28,10 @@ export type SocialMutationRunner = <Result>(
   mutation: () => Promise<Result>,
 ) => Promise<Result>;
 
-type SocialContextValue = {
+export type SocialContextValue = {
   availability: SocialAvailability;
   closeSocialCenter: () => void;
+  isEnabled: boolean;
   isLoading: boolean;
   isMutationPending: (key: string) => boolean;
   isRefreshing: boolean;
@@ -46,27 +48,20 @@ type SocialContextValue = {
 
 const EMPTY_PENDING_MUTATIONS = new Set<string>();
 
-type AccountSocialCenterState = {
-  open: boolean;
-  userId: string | null;
-};
+const SocialContext = createContext<SocialContextValue | null>(null);
 
-const SocialContext = createContext<SocialContextValue>({
-  availability: "offline",
-  closeSocialCenter: () => {},
-  isLoading: false,
-  isMutationPending: () => false,
-  isRefreshing: false,
-  isSocialCenterOpen: false,
-  openSocialCenter: () => {},
-  overview: null,
-  overviewError: null,
-  pendingCount: 0,
-  presenceError: null,
-  refresh: async () => null,
-  runMutation: async (_key, mutation) => mutation(),
-  setSocialCenterOpen: () => {},
-});
+type SocialContextData = Omit<
+  SocialContextValue,
+  | "closeSocialCenter"
+  | "isSocialCenterOpen"
+  | "openSocialCenter"
+  | "setSocialCenterOpen"
+>;
+
+type AccountSocialCenterState = {
+  accountKey: string;
+  open: boolean;
+};
 
 type SocialProviderProps = {
   children: ReactNode;
@@ -81,7 +76,8 @@ export function SocialProvider({
 }: SocialProviderProps) {
   const { accountEpoch, isAccountEpochCurrent, user } = useCurrentUser();
   const userId = user?.id ?? null;
-  const socialUserId = enabled ? userId : null;
+  const isEnabled = enabled && userId !== null;
+  const socialUserId = isEnabled ? userId : null;
   const {
     error: overviewError,
     isLoading,
@@ -93,10 +89,8 @@ export function SocialProvider({
     availability,
     error: presenceError,
   } = useSocialPresence(socialUserId, presenceState);
-  const [socialCenterState, setSocialCenterState] =
-    useState<AccountSocialCenterState>({ open: false, userId });
   const [mutationCoordinator] = useState(
-    () => new SocialMutationCoordinator({ accountEpoch, userId }),
+    () => new SocialMutationCoordinator({ accountEpoch, userId: socialUserId }),
   );
   const mutationSnapshot = useSyncExternalStore(
     mutationCoordinator.subscribe,
@@ -105,28 +99,23 @@ export function SocialProvider({
   );
 
   useLayoutEffect(() => {
-    mutationCoordinator.setAccount({ accountEpoch, userId });
-  }, [accountEpoch, mutationCoordinator, userId]);
+    mutationCoordinator.setAccount({ accountEpoch, userId: socialUserId });
+  }, [accountEpoch, mutationCoordinator, socialUserId]);
 
   const pendingMutations =
     mutationSnapshot.accountEpoch === accountEpoch &&
-    mutationSnapshot.userId === userId
+    mutationSnapshot.userId === socialUserId
       ? mutationSnapshot.pendingKeys
       : EMPTY_PENDING_MUTATIONS;
-  const isSocialCenterOpen =
-    socialCenterState.userId === userId && socialCenterState.open;
   const pendingCount = getSocialPendingCount(overview);
-
-  const setSocialCenterOpen = useCallback(
-    (open: boolean) => {
-      setSocialCenterState({ open, userId });
-    },
-    [userId],
-  );
 
   const runMutation = useCallback<SocialMutationRunner>(
     async (key, mutation) => {
-      const mutationAccount = { accountEpoch, userId };
+      if (!enabled) {
+        throw new Error("Friends are not available on this screen.");
+      }
+
+      const mutationAccount = { accountEpoch, userId: socialUserId };
 
       try {
         return await mutationCoordinator.run(
@@ -139,9 +128,10 @@ export function SocialProvider({
         const currentSnapshot = mutationCoordinator.getSnapshot();
 
         if (
+          socialUserId !== null &&
           isAccountEpochCurrent(accountEpoch) &&
           currentSnapshot.accountEpoch === accountEpoch &&
-          currentSnapshot.userId === userId
+          currentSnapshot.userId === socialUserId
         ) {
           void refresh();
         }
@@ -149,16 +139,74 @@ export function SocialProvider({
     },
     [
       accountEpoch,
+      enabled,
       isAccountEpochCurrent,
       mutationCoordinator,
       refresh,
-      userId,
+      socialUserId,
     ],
   );
 
   const isMutationPending = useCallback(
     (key: string) => pendingMutations.has(key),
     [pendingMutations],
+  );
+  const contextData = useMemo<SocialContextData>(
+    () => ({
+      availability: isEnabled ? availability : "offline",
+      isEnabled,
+      isLoading,
+      isMutationPending,
+      isRefreshing,
+      overview,
+      overviewError,
+      pendingCount,
+      presenceError: isEnabled ? presenceError : null,
+      refresh,
+      runMutation,
+    }),
+    [
+      availability,
+      isEnabled,
+      isLoading,
+      isMutationPending,
+      isRefreshing,
+      overview,
+      overviewError,
+      pendingCount,
+      presenceError,
+      refresh,
+      runMutation,
+    ],
+  );
+
+  return (
+    <SocialContextScope
+      accountKey={`${accountEpoch}:${socialUserId ?? "disabled"}`}
+      data={contextData}
+    >
+      {children}
+    </SocialContextScope>
+  );
+}
+
+function SocialContextScope({
+  accountKey,
+  children,
+  data,
+}: {
+  accountKey: string;
+  children: ReactNode;
+  data: SocialContextData;
+}) {
+  const [socialCenterState, setSocialCenterState] =
+    useState<AccountSocialCenterState>({ accountKey, open: false });
+  const isSocialCenterOpen =
+    socialCenterState.accountKey === accountKey && socialCenterState.open;
+  const setSocialCenterOpen = useCallback(
+    (open: boolean) =>
+      setSocialCenterState({ accountKey, open: data.isEnabled && open }),
+    [accountKey, data.isEnabled],
   );
   const openSocialCenter = useCallback(
     () => setSocialCenterOpen(true),
@@ -170,35 +218,17 @@ export function SocialProvider({
   );
   const contextValue = useMemo<SocialContextValue>(
     () => ({
-      availability,
+      ...data,
       closeSocialCenter,
-      isLoading,
-      isMutationPending,
-      isRefreshing,
-      isSocialCenterOpen,
+      isSocialCenterOpen: data.isEnabled && isSocialCenterOpen,
       openSocialCenter,
-      overview,
-      overviewError,
-      pendingCount,
-      presenceError,
-      refresh,
-      runMutation,
       setSocialCenterOpen,
     }),
     [
-      availability,
       closeSocialCenter,
-      isLoading,
-      isMutationPending,
-      isRefreshing,
+      data,
       isSocialCenterOpen,
       openSocialCenter,
-      overview,
-      overviewError,
-      pendingCount,
-      presenceError,
-      refresh,
-      runMutation,
       setSocialCenterOpen,
     ],
   );
@@ -208,4 +238,14 @@ export function SocialProvider({
       {children}
     </SocialContext.Provider>
   );
+}
+
+export function useSocial() {
+  const context = useContext(SocialContext);
+
+  if (context === null) {
+    throw new Error("useSocial must be used within a SocialProvider.");
+  }
+
+  return context;
 }

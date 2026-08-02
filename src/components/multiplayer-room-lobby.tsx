@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import {
   type FormEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useId,
@@ -97,6 +98,7 @@ type MultiplayerRoomLobbyProps = {
   initialSeq?: number;
   initialRoomCode: string;
   onBackToLibrary: () => void;
+  socialCenterTrigger?: ReactNode;
 };
 
 type GuestJoinFormProps = {
@@ -261,6 +263,7 @@ export function MultiplayerRoomLobby({
   initialSeq = 0,
   initialRoomCode,
   onBackToLibrary,
+  socialCenterTrigger,
 }: MultiplayerRoomLobbyProps) {
   const { user } = useCurrentUser();
   const normalizedRoomCode = normalizePrivateRoomCode(initialRoomCode);
@@ -882,6 +885,7 @@ export function MultiplayerRoomLobby({
             </div>
           </div>
           <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end">
+            {socialCenterTrigger}
             <ThemeToggle testId="multiplayer-room-theme-toggle" />
             <UserAccountControls initialAuthMode={initialAuthMode} />
           </div>

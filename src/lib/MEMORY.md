@@ -152,7 +152,10 @@ This file covers deterministic game engines and shared source logic under
   Missing generations remain a rollout-only legacy mode until that client id
   first enters sequenced mode. Logout gives authenticated lease release a
   bounded head start before deleting the session cookie; the server TTL remains
-  the fallback when that advisory cleanup cannot finish in time. The sidecar
+  the fallback when that advisory cleanup cannot finish in time. Once that
+  awaited release has run, the signed-out React update clears the held desired
+  presence without issuing a second request after the session cookie is gone.
+  The sidecar
   protocol handshake must advertise sequenced presence support before a service
   client sends account commands, so deploy the sidecar before clients that
   require this capability.

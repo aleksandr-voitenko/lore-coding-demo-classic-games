@@ -376,7 +376,10 @@ presence renewal/release, friend-request decisions, friend removal, blocks, and
 party-invitation creation/resolution under `/api/social`. Mutations derive the
 actor from the HTTP-only session cookie, require same-origin JSON when they have
 a body, reject bodies over 16 KiB before JSON parsing, and return no-store
-responses. Presence resolution enriches friends with only `available`, `busy`,
+responses. Same-origin checks accept the framework URL or the transport `Host`
+with the same protocol, because local and proxied Next.js runtimes can
+canonicalize the URL hostname; a different host or protocol is still rejected.
+Presence resolution enriches friends with only `available`, `busy`,
 `in-party`, `offline`, or `unknown`; a room-service failure falls back to
 `unknown` and keeps invitation actions disabled. Exact
 discovery allows 30 requests per account per minute, friend-request creation
@@ -386,18 +389,29 @@ and 100 pending outgoing friend requests, plus 20 pending incoming and 20
 pending outgoing party invitations.
 
 The browser social foundation validates every successful payload before
-exposing it to UI state. Once the Friends surface enables it, a signed-in
-document uses one cryptographic per-document presence id, renews its 45-second
-lease every 15 seconds only while visible, renews again on focus, and sends a
-keepalive release when hidden or unloaded. Logout gives that advisory release a
-short opportunity to finish before clearing the authenticating session cookie;
-the TTL remains the fallback. Presence operations carry an increasing
-per-document generation, and the room authority suppresses delayed replays for
-up to five minutes within a bounded 64-client tombstone set per account.
-Generationless legacy operations remain valid only until that client identity
-first uses the sequenced contract. Social overview loading keeps the last valid
-same-account graph during refresh, suppresses stale account and request results,
-refreshes on focus, and otherwise polls every 30 seconds only while visible.
+exposing it to UI state. Signed-in library and leaderboard screens expose a
+Friends button while room screens keep the same entry point available for
+relationship management. Solo games and replays omit the button to avoid an
+interrupting social surface during play. The dialog supports privacy-preserving
+exact-name discovery, incoming and outgoing friend requests, removal and
+blocking confirmations, invitation decline/cancel actions, and explicit
+availability labels. It never renders a private room code or participant
+capability. Incoming party invitations remain visible on busy/in-party surfaces,
+but acceptance is disabled unless presence is `available` and the current
+launcher surface can adopt the returned private credentials.
+
+A signed-in document uses one cryptographic per-document presence id, renews
+its 45-second lease every 15 seconds only while visible, renews again on focus,
+and sends a keepalive release when hidden or unloaded. Logout gives that
+advisory release a short opportunity to finish before clearing the
+authenticating session cookie; the TTL remains the fallback. Presence operations
+carry an increasing per-document generation, and the room authority suppresses
+delayed replays for up to five minutes within a bounded 64-client tombstone set
+per account. Generationless legacy operations remain valid only until that
+client identity first uses the sequenced contract. Social overview loading
+keeps the last valid same-account graph during refresh, suppresses stale account
+and request results, refreshes on focus, and otherwise polls every 30 seconds
+only while visible.
 
 Presence leases, effective busy/in-party status, parties, matches, observer
 queues, and participant capabilities remain volatile and are never reconstructed

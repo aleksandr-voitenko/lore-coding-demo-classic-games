@@ -385,6 +385,21 @@ describe("social presence client", () => {
     expect(harness.controller.getSnapshot()).toEqual({ availability: "offline", error: null });
   });
 
+  it("does not release again after the awaited sign-out release", async () => {
+    const harness = createHarness();
+
+    harness.controller.start();
+    await harness.controller.update("user-1", "available");
+    await harness.controller.releaseForSignOut();
+    await harness.controller.update(null, "available");
+
+    expect(harness.fetcher).toHaveBeenCalledTimes(2);
+    expect(harness.controller.getSnapshot()).toEqual({
+      availability: "offline",
+      error: null,
+    });
+  });
+
   it("does nothing for a signed-out document", async () => {
     const harness = createHarness();
 

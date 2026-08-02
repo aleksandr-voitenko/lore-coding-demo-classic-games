@@ -54,6 +54,25 @@ describe("global leaderboard screen", () => {
       expect(getArtworkImageMarkup(markup, artworkSrc)).toHaveLength(2);
     }
   });
+
+  it("renders an injected Friends action in the leaderboard header", () => {
+    const defaultMarkup = renderToStaticMarkup(
+      <GlobalLeaderboardScreen onBackToMenu={vi.fn()} />,
+    );
+    const friendsMarkup = renderToStaticMarkup(
+      <GlobalLeaderboardScreen
+        onBackToMenu={vi.fn()}
+        socialCenterTrigger={
+          <button data-testid="social-center-trigger" type="button">
+            Friends
+          </button>
+        }
+      />,
+    );
+
+    expect(defaultMarkup).not.toContain('data-testid="social-center-trigger"');
+    expect(friendsMarkup).toContain('data-testid="social-center-trigger"');
+  });
 });
 
 function getArtworkImageMarkup(markup: string, artworkSrc: string) {

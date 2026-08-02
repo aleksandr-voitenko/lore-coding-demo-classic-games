@@ -231,10 +231,12 @@ export class SocialPresenceController {
       previousPresence?.state !== nextPresence?.state;
 
     if (nextPresence === null) {
+      const shouldRelease =
+        previousPresence !== null && !this.#isReleaseHeld;
       this.#isReleaseHeld = false;
       this.#desiredPresence = null;
       this.#setSnapshot({ availability: "offline", error: null });
-      await this.#suspendAndRelease(true, false, previousPresence !== null);
+      await this.#suspendAndRelease(true, false, shouldRelease);
       return;
     }
 

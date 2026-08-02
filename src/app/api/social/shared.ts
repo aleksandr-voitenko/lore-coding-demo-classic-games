@@ -104,7 +104,21 @@ function isSameOriginWhenPresent(request: Request) {
   }
 
   try {
-    return new URL(origin).origin === new URL(request.url).origin;
+    const originUrl = new URL(origin);
+    const requestUrl = new URL(request.url);
+
+    if (originUrl.origin === requestUrl.origin) {
+      return true;
+    }
+
+    const requestHost = request.headers.get("host")?.trim();
+
+    return (
+      requestHost !== undefined &&
+      requestHost.length > 0 &&
+      originUrl.protocol === requestUrl.protocol &&
+      originUrl.host === requestHost
+    );
   } catch {
     return false;
   }

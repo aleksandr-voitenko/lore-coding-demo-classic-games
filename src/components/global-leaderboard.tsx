@@ -1,7 +1,12 @@
 "use client";
 
 import { ArrowLeftIcon, TrophyIcon } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 
 import { GameCardArtworkFrame } from "@/components/game-card-artwork-frame";
 import {
@@ -19,6 +24,7 @@ import {
 
 type GlobalLeaderboardScreenProps = {
   onBackToMenu: () => void;
+  socialCenterTrigger?: ReactNode;
 };
 
 function createEmptyGlobalLeaderboardSnapshots(): GlobalLeaderboardSnapshot[] {
@@ -31,6 +37,7 @@ function createEmptyGlobalLeaderboardSnapshots(): GlobalLeaderboardSnapshot[] {
 
 export function GlobalLeaderboardScreen({
   onBackToMenu,
+  socialCenterTrigger,
 }: GlobalLeaderboardScreenProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [leaderboards, setLeaderboards] = useState<GlobalLeaderboardSnapshot[]>(
@@ -93,15 +100,18 @@ export function GlobalLeaderboardScreen({
               Leaderboards
             </h1>
           </div>
-          <button
-            className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] px-3 text-sm font-semibold text-[var(--chrome-ink)] shadow-sm transition hover:bg-[var(--chrome-accent-faint)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--chrome-focus-ring)] active:translate-y-px sm:w-auto"
-            data-testid="global-leaderboard-back-button"
-            onClick={handleBackToMenu}
-            type="button"
-          >
-            <ArrowLeftIcon className="size-4" aria-hidden="true" />
-            Games
-          </button>
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+            {socialCenterTrigger}
+            <button
+              className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-md border border-[var(--chrome-border)] bg-[var(--chrome-panel)] px-3 text-sm font-semibold text-[var(--chrome-ink)] shadow-sm transition hover:bg-[var(--chrome-accent-faint)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--chrome-focus-ring)] active:translate-y-px sm:w-auto"
+              data-testid="global-leaderboard-back-button"
+              onClick={handleBackToMenu}
+              type="button"
+            >
+              <ArrowLeftIcon className="size-4" aria-hidden="true" />
+              Games
+            </button>
+          </div>
         </header>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

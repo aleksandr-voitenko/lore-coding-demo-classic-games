@@ -31,6 +31,10 @@ import {
   removeMultiplayerRoomParticipantCredentials,
   writeMultiplayerRoomParticipantCredentials,
 } from "@/components/multiplayer-room-participant-credentials";
+import {
+  SocialCenter,
+  SocialCenterTrigger,
+} from "@/components/social-center";
 import { SocialProvider } from "@/components/social-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserAccountControls } from "@/components/user-account-controls";
@@ -416,7 +420,7 @@ export function GameLauncher({
       activeRoomSession.userId === currentUserId;
 
     return (
-      <SocialProvider enabled={false} presenceState="busy">
+      <SocialProvider enabled presenceState="busy">
         <MultiplayerRoomLobby
           initialAuthMode={initialAuthMode}
           initialParticipantCapability={
@@ -433,15 +437,21 @@ export function GameLauncher({
           initialRoomCode={activeRoomSession.roomCode}
           key={`${activeRoomSession.roomCode}:${currentUserId ?? "guest"}`}
           onBackToLibrary={returnToLibraryFromRoom}
+          socialCenterTrigger={<SocialCenterTrigger />}
         />
+        <SocialCenter />
       </SocialProvider>
     );
   }
 
   if (isGlobalLeaderboardVisible) {
     return (
-      <SocialProvider enabled={false} presenceState="available">
-        <GlobalLeaderboardScreen onBackToMenu={returnToMenu} />
+      <SocialProvider enabled presenceState="available">
+        <GlobalLeaderboardScreen
+          onBackToMenu={returnToMenu}
+          socialCenterTrigger={<SocialCenterTrigger />}
+        />
+        <SocialCenter />
       </SocialProvider>
     );
   }
@@ -451,13 +461,14 @@ export function GameLauncher({
     const initialGameProps = createInitialGameProps(selectedGame, parameterValues);
 
     return (
-      <SocialProvider enabled={false} presenceState="busy">
+      <SocialProvider enabled presenceState="busy">
         <SelectedGame
           {...initialGameProps}
           onBackToMenu={returnToMenu}
           onReplayBackToProfile={returnToProfile}
           replayMode={selectedReplayMode ?? undefined}
         />
+        <SocialCenter />
       </SocialProvider>
     );
   }
@@ -481,7 +492,7 @@ export function GameLauncher({
   }
 
   return (
-    <SocialProvider enabled={false} presenceState="available">
+    <SocialProvider enabled presenceState="available">
       <main
         className="min-h-svh bg-[var(--chrome-page)] px-4 py-6 text-[var(--chrome-ink)] sm:px-6 lg:py-8"
         data-testid="game-menu"
@@ -512,6 +523,7 @@ export function GameLauncher({
             </button>
           </div>
           <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:col-start-2 sm:row-start-1 sm:w-auto sm:justify-end lg:col-start-3">
+            <SocialCenterTrigger />
             <ThemeToggle testId="launcher-theme-toggle" />
             <UserAccountControls initialAuthMode={initialAuthMode} />
           </div>
@@ -622,6 +634,7 @@ export function GameLauncher({
         })}
         </section>
       </main>
+      <SocialCenter />
     </SocialProvider>
   );
 }

@@ -991,6 +991,118 @@ test("auth modal validates signup passwords before submitting", async ({ page })
   await expect(page.getByTestId("profile-link")).toHaveCount(0);
 });
 
+test("Friends stays account-scoped across launcher surfaces", async ({
+  browser,
+  page,
+}) => {
+  const forbiddenSocialResponses: Promise<{ body: string; url: string }>[] = [];
+
+  page.on("response", (response) => {
+    if (response.status() === 403 && response.url().includes("/api/social")) {
+      forbiddenSocialResponses.push(
+        response.text().then((body) => ({ body, url: response.url() })),
+      );
+    }
+  });
+
+  await openLauncher(page);
+  await expect(page.getByTestId("social-center-trigger")).toHaveCount(0);
+
+  const friendContext = await browser.newContext();
+  const friendPage = await friendContext.newPage();
+
+  await openLauncher(friendPage);
+  await signUpFromLauncher(friendPage, "Confirmation Friend");
+
+  await signUpFromLauncher(page, "Friends Explorer");
+  const friendsTrigger = page.getByTestId("social-center-trigger");
+
+  await expect(friendsTrigger).toBeVisible();
+  await friendsTrigger.click();
+  const dialog = page.getByTestId("social-center-dialog");
+
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Find a friend" })).toBeVisible();
+  await expect(dialog.getByTestId("social-party-invitations")).toContainText(
+    "No party invitations.",
+  );
+  await expect(dialog.getByTestId("social-friends")).toContainText(
+    "Add a friend by their exact user name.",
+  );
+  await dialog.getByTestId("social-discovery-input").fill("Missing Friend");
+  await dialog.getByTestId("social-discovery-submit").click();
+  await expect(dialog.getByText("No exact match found.")).toBeVisible();
+  await expect(dialog).not.toContainText(/participant capability|room code/i);
+
+  await dialog.getByTestId("social-discovery-input").fill("Confirmation Friend");
+  await dialog.getByTestId("social-discovery-submit").click();
+  await dialog
+    .getByTestId("social-discovery-result")
+    .getByRole("button", { name: "Add friend" })
+    .click();
+  await expect(dialog.getByTestId("social-center-status")).toContainText(
+    "Friend request sent",
+  );
+
+  await friendPage.reload();
+  await friendPage.getByTestId("social-center-trigger").click();
+  const friendDialog = friendPage.getByTestId("social-center-dialog");
+  const incomingRequest = friendDialog
+    .getByTestId("social-incoming-requests")
+    .locator("article")
+    .filter({ hasText: "Friends Explorer" });
+
+  await expect(incomingRequest).toBeVisible();
+  await incomingRequest.getByRole("button", { name: "Accept" }).click();
+  await expect(friendDialog.getByTestId("social-center-status")).toContainText(
+    "now friends",
+  );
+  await friendContext.close();
+
+  await page.reload();
+  await page.getByTestId("social-center-trigger").click();
+  const refreshedDialog = page.getByTestId("social-center-dialog");
+  const friendRow = refreshedDialog
+    .getByTestId("social-friends")
+    .locator("article")
+    .filter({ hasText: "Confirmation Friend" });
+  const removeFriendButton = friendRow.getByRole("button", { name: "Remove" });
+
+  await expect(friendRow).toBeVisible();
+  await removeFriendButton.click();
+  const confirmation = refreshedDialog.getByTestId("social-center-confirmation");
+  const cancelConfirmation = confirmation.getByRole("button", { name: "Cancel" });
+
+  await expect(cancelConfirmation).toBeFocused();
+  await cancelConfirmation.click();
+  await expect(removeFriendButton).toBeFocused();
+
+  const closeButton = refreshedDialog.getByTestId("social-center-close-button");
+  expect(await closeButton.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+
+    return { height: rect.height, width: rect.width };
+  })).toEqual({ height: 44, width: 44 });
+  await closeButton.click();
+  await expect(friendsTrigger).toBeFocused();
+
+  await signOutFromLauncher(page);
+  await expect(page.getByTestId("social-center-trigger")).toHaveCount(0);
+  await signUpFromLauncher(page, "Friends Explorer Two");
+  await page.getByTestId("social-center-trigger").click();
+  await expect(page.getByTestId("social-discovery-input")).toHaveValue("");
+  await page.getByTestId("social-center-close-button").click();
+
+  await page.getByTestId("global-leaderboard-open-button").click();
+  await expect(page.getByTestId("global-leaderboard-screen")).toBeVisible();
+  await expect(page.getByTestId("social-center-trigger")).toBeVisible();
+  await page.getByTestId("global-leaderboard-back-button").click();
+  await openGame(page, "snake");
+  await expect(page.getByTestId("snake-start-button")).toBeVisible();
+  await expect(page.getByTestId("social-center-trigger")).toHaveCount(0);
+  expect(await Promise.all(forbiddenSocialResponses)).toEqual([]);
+});
+
 test("auth modal reports duplicate signup names next to the name field", async ({
   browserIssues,
   page,
