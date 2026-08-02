@@ -343,6 +343,7 @@ async function handleRoomServiceRequest(
       sendJson(request, response, 200, {
         accountPartyMemberships: accountAuthorityConfigured,
         authenticatedAdmission: accountAuthorityConfigured,
+        membershipOnlyReacquisition: accountAuthorityConfigured,
         mutationPathSegment: MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT,
         participantCapabilities: true,
         protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
@@ -690,6 +691,7 @@ function parseAccountPartyCommand(value: unknown):
     case "presence.resolve":
     case "party.inspectInvitation":
     case "party.admitAuthenticated":
+    case "party.reacquireAuthenticated":
     case "party.compensateAdmission":
       return {
         command: value as MultiplayerAccountPartyCommand,

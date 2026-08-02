@@ -20,9 +20,11 @@ This file covers Node-only server helpers and storage adapters under
   response shaping, and rank calculation behind this boundary.
 - `sqlite-app-schema.ts` owns shared SQLite path preparation and schema
   initialization for leaderboards, users, password hashes, user sessions,
-  signed-in game sessions, and the durable social graph. Schema version 6 adds
+  signed-in game sessions, and the durable social graph. Schema version 7 adds
   pending canonical-pair friend requests, canonical friendships, directed
-  blocks, and short-lived party invitations. Every SQLite store uses this same
+  blocks, short-lived party invitations, recipient-wide invitation-acceptance
+  claims, and fixed-window social API rate-limit counters. Every SQLite store
+  uses this same
   initialized database and configured path rather than creating a separate
   friends database.
 - `sqlite-leaderboard-store.ts` is the current production leaderboard store. It
@@ -40,6 +42,22 @@ This file covers Node-only server helpers and storage adapters under
   their bearer-like party codes. Invitation mutation/admission helpers retain
   the code only in server-side records and compute expiration from the
   server-owned five-minute TTL rather than accepting a caller timestamp.
+  `getSocialStore()` shares the configured application SQLite path with account
+  and profile storage. Successful post-admission acceptance and revocation of
+  every other live invitation for that recipient happen inside one immediate
+  transaction; an idempotent accepted retry repeats the cleanup without turning
+  the invitation record into a client-visible party credential. Pending
+  incoming/outgoing friend requests have 100-row per-account ceilings. Exact
+  discovery consumes a 30-per-minute durable fixed-window counter and
+  friend-request creation consumes a separate 10-per-minute counter; party
+  invitation creation consumes 20 per minute. Party invitations have 20-row
+  pending incoming/outgoing ceilings. Resolved nonaccepted history is bounded
+  to 1,000 rows, while only the newest accepted invitation per recipient is
+  retained as the lost-response reacquisition index. Acceptance uses a
+  30-second recipient-wide claim with a two-minute recovery grace so one account
+  cannot concurrently accept invitations to different parties and only the
+  matching live token can finalize. Invitations retain a base expiry so handled
+  failures restore the original TTL instead of extending it with every attempt.
 - `sqlite-replay-store.ts` owns generic server-issued replay runs and one latest
   saved replay per signed-in user/game. Keep generic `createReplayRun`,
   `saveReplay`, and `getReplay` behavior available for future games while
@@ -153,8 +171,12 @@ This file covers Node-only server helpers and storage adapters under
   sidecar, or browser deployments fail before room state changes. It also
   exposes a bearer-only `/v6/_accounts` authority endpoint for expiring browser
   presence leases, one-party-per-account membership, authenticated admission,
-  bounded capability reacquisition, and tuple-bound admission compensation. The
-  same bearer boundary protects room creation because its host id establishes
+  atomic membership-only capability reacquisition, bounded capability fanout,
+  and tuple-bound admission compensation. The collection preflight advertises
+  `membershipOnlyReacquisition: true` only when
+  account authority is configured, and the service client requires that bit so
+  an older v6 sidecar fails closed before any mutation. The same bearer boundary
+  protects room creation because its host id establishes
   authoritative account membership; tokenless capability discovery fails those
   account-authority flags closed. The multiplayer development wrapper generates
   one ephemeral secret and supplies it to both local processes. The sidecar is
@@ -263,16 +285,41 @@ This file covers Node-only server helpers and storage adapters under
   resolution timestamp and may transition to accepted, declined, canceled,
   revoked, or expired with one. It stores neither match state nor participant
   capabilities. The store owns a five-minute default TTL, redacts the party code
-  from social overviews, and can revoke every live invitation for one recipient
-  atomically when presence becomes unavailable. Presence leases, effective
-  availability, party membership, matches, observer queues, and capabilities
-  stay process-local and must not be inferred from SQLite after a restart.
-- Durable invitation rows are not yet an invitation-admission API. Public HTTP
-  creation and acceptance remain deferred until the presence registry and
-  trusted Next-to-sidecar bridge can fail closed for busy, offline, unknown,
-  same-party, and other-party recipients; revalidate live party existence and
-  capacity; and issue or reacquire a participant capability without trusting a
-  client-submitted user id.
+  from social overviews, caps pending incoming/outgoing invitations at 20 each,
+  and leaves existing rows pending through volatile busy, in-party, offline, or
+  unknown availability. Presence leases, effective availability, party
+  membership, matches, observer queues, and capabilities stay process-local and
+  must not be inferred from SQLite after a restart.
+- `party_invitation_acceptance_claims` serializes acceptance per recipient with
+  one 30-second lease and a token bound to both invitation and recipient. A
+  successful claim extends the pending invitation through the lease plus a
+  two-minute recovery grace while `party_invitations.base_expires_at` preserves
+  the original deadline. Releasing a handled failure restores that deadline and
+  expires the invitation if it has passed. Terminal relationship, block,
+  cancellation, party, and successful acceptance transitions clear claims;
+  expiry cleanup preserves a live claim. Resolved nonaccepted invitation history
+  is capped at 1,000 rows, and a recipient retains only the newest accepted row
+  for lost-response membership-only reacquisition. These leases are not a
+  distributed transaction with sidecar admission; ADR 0003 documents the rare
+  delayed-response recovery window that requires future provisional-admission
+  generations to close.
+- Authenticated invitation APIs keep party codes inside the server boundary.
+  Creation validates the durable relationship, checks host ownership,
+  availability, and capacity, revalidates the relationship, and only then
+  persists. Existing invitations remain pending when volatile availability
+  changes. Acceptance claims first, admits through party authority, atomically
+  finalizes the claimed durable row, and exposes the capability only after
+  finalization; a newly admitted participant is exactly compensated when
+  persistence fails, and the claim is released only after compensation is
+  confirmed. Accepted-response retries use the authority's atomic,
+  membership-only
+  `party.reacquireAuthenticated` command, so an accepted row is not a reusable
+  rejoin grant. Social overview reads
+  reconcile private pending tuples through `party.inspectInvitation` and revoke
+  terminal parties before serializing rows, covering WebSocket closure, expiry,
+  eviction, and sidecar restart without exposing party codes. Host transfer is
+  not terminal: an already-issued invitation continues to target the persistent
+  party. Reconciliation is bounded to four concurrent authority calls.
 - `game_replay_runs` stores server-issued run ids and seeds. `game_replays`
   stores the latest signed-in replay payload per user/game and is used by the
   profile page to expose the Last Replay action.

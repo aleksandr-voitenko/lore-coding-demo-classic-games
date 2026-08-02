@@ -463,6 +463,7 @@ describe("multiplayer room sidecar", () => {
     await expect(handshakeResponse.json()).resolves.toEqual({
       accountPartyMemberships: false,
       authenticatedAdmission: false,
+      membershipOnlyReacquisition: false,
       mutationPathSegment: MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT,
       participantCapabilities: true,
       protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,
@@ -754,6 +755,22 @@ describe("multiplayer room sidecar", () => {
       departed: false,
       outcome: "departure",
       success: true,
+    });
+
+    const reacquisitionResponse = await postAccountCommand({
+      partyCode: createdSnapshot.room.code,
+      type: "party.reacquireAuthenticated",
+      user: {
+        displayName: "Grace Guest",
+        id: "user-2",
+      },
+    });
+
+    expect(reacquisitionResponse.status).toBe(404);
+    await expect(readAccountPartyResult(reacquisitionResponse)).resolves.toEqual({
+      code: "participant-not-found",
+      error: "This account no longer belongs to the party.",
+      success: false,
     });
     expect(broadcastSnapshot).toHaveBeenCalledTimes(2);
   });
@@ -1106,6 +1123,7 @@ describe("multiplayer room sidecar", () => {
     await expect(handshakeResponse.json()).resolves.toEqual({
       accountPartyMemberships: true,
       authenticatedAdmission: true,
+      membershipOnlyReacquisition: true,
       mutationPathSegment: MULTIPLAYER_ROOM_PROTOCOL_PATH_SEGMENT,
       participantCapabilities: true,
       protocolVersion: MULTIPLAYER_ROOM_PROTOCOL_VERSION,

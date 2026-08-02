@@ -7,7 +7,7 @@ import { dirname, join, resolve } from "node:path";
 export type SqliteDatabase = InstanceType<typeof Database>;
 
 export const DEFAULT_SQLITE_FILENAME = "snake-leaderboard.sqlite";
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export function prepareSqliteDatabasePath(databasePath: string) {
   if (databasePath === ":memory:") {
@@ -85,6 +85,16 @@ export function initializeAppSchema(database: SqliteDatabase) {
     CREATE INDEX IF NOT EXISTS friend_requests_user_b_idx
       ON friend_requests (user_b_id, user_a_id);
 
+    CREATE TABLE IF NOT EXISTS social_api_rate_limits (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      action TEXT NOT NULL CHECK (
+        action IN ('discovery', 'friend-request', 'party-invitation')
+      ),
+      window_started_at TEXT NOT NULL,
+      request_count INTEGER NOT NULL CHECK (request_count > 0),
+      PRIMARY KEY (user_id, action)
+    );
+
     CREATE TABLE IF NOT EXISTS friendships (
       user_a_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       user_b_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -119,9 +129,11 @@ export function initializeAppSchema(database: SqliteDatabase) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       expires_at TEXT NOT NULL,
+      base_expires_at TEXT,
       resolved_at TEXT,
       CHECK (inviter_user_id <> recipient_user_id),
       CHECK (expires_at > created_at),
+      CHECK (base_expires_at IS NULL OR base_expires_at > created_at),
       CHECK (
         (status = 'pending' AND resolved_at IS NULL) OR
         (status <> 'pending' AND resolved_at IS NOT NULL)
@@ -132,6 +144,9 @@ export function initializeAppSchema(database: SqliteDatabase) {
       ON party_invitations (party_code, recipient_user_id)
       WHERE status = 'pending';
 
+    CREATE UNIQUE INDEX IF NOT EXISTS party_invitations_id_recipient_idx
+      ON party_invitations (id, recipient_user_id);
+
     CREATE INDEX IF NOT EXISTS party_invitations_recipient_idx
       ON party_invitations (recipient_user_id, status, created_at DESC);
 
@@ -140,6 +155,25 @@ export function initializeAppSchema(database: SqliteDatabase) {
 
     CREATE INDEX IF NOT EXISTS party_invitations_expiry_idx
       ON party_invitations (status, expires_at);
+
+    CREATE TABLE IF NOT EXISTS party_invitation_acceptance_claims (
+      invitation_id TEXT PRIMARY KEY,
+      recipient_user_id TEXT NOT NULL
+        REFERENCES users(id) ON DELETE CASCADE,
+      claim_token TEXT NOT NULL UNIQUE,
+      claimed_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      FOREIGN KEY (invitation_id, recipient_user_id)
+        REFERENCES party_invitations(id, recipient_user_id)
+        ON DELETE CASCADE,
+      CHECK (expires_at > claimed_at)
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS party_invitation_acceptance_claims_recipient_idx
+      ON party_invitation_acceptance_claims (recipient_user_id);
+
+    CREATE INDEX IF NOT EXISTS party_invitation_acceptance_claims_expiry_idx
+      ON party_invitation_acceptance_claims (expires_at);
 
     CREATE TABLE IF NOT EXISTS game_sessions (
       id TEXT PRIMARY KEY,
@@ -176,6 +210,24 @@ export function initializeAppSchema(database: SqliteDatabase) {
   addColumnIfMissing(database, "users", "password_hash TEXT");
   addColumnIfMissing(database, "leaderboard_scores", "user_id TEXT");
   addColumnIfMissing(database, "leaderboard_scores", "game_session_id TEXT");
+  addColumnIfMissing(database, "party_invitations", "base_expires_at TEXT");
+
+  database.exec(`
+    UPDATE party_invitations
+    SET base_expires_at = expires_at
+    WHERE base_expires_at IS NULL;
+
+    DELETE FROM party_invitations AS candidate
+    WHERE candidate.status = 'accepted'
+      AND candidate.id <> (
+        SELECT newest.id
+        FROM party_invitations AS newest
+        WHERE newest.status = 'accepted'
+          AND newest.recipient_user_id = candidate.recipient_user_id
+        ORDER BY newest.resolved_at DESC, newest.id DESC
+        LIMIT 1
+      );
+  `);
 
   database.exec(`
     CREATE INDEX IF NOT EXISTS leaderboard_scores_desc_idx

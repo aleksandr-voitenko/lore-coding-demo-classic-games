@@ -185,6 +185,7 @@ describe("multiplayer room service client", () => {
         return Response.json({
           accountPartyMemberships: true,
           authenticatedAdmission: true,
+          membershipOnlyReacquisition: true,
           mutationPathSegment: "v6",
           participantCapabilities: true,
           protocolVersion: 6,
@@ -205,6 +206,38 @@ describe("multiplayer room service client", () => {
     expect(methods).toEqual(["GET"]);
   });
 
+  it("does not send membership-only reacquisition to a v6 sidecar that does not advertise it", async () => {
+    const methods: string[] = [];
+    const client = new MultiplayerRoomServiceClient({
+      baseUrl: "http://service.local/_internal/multiplayer/rooms",
+      fetcher: vi.fn<typeof fetch>(async (_input, init) => {
+        methods.push(init?.method ?? "GET");
+
+        return Response.json({
+          accountPartyMemberships: true,
+          authenticatedAdmission: true,
+          mutationPathSegment: "v6",
+          participantCapabilities: true,
+          protocolVersion: 6,
+          socialPresenceLeases: true,
+          // Deliberately omit membershipOnlyReacquisition to model an older v6 sidecar.
+        });
+      }),
+    });
+
+    await expect(
+      client.applyAccountCommand({
+        partyCode: "ROOM1",
+        type: "party.reacquireAuthenticated",
+        user: GUEST_USER,
+      }),
+    ).resolves.toMatchObject({
+      code: "room-service-invalid-response",
+      success: false,
+    });
+    expect(methods).toEqual(["GET"]);
+  });
+
   it("does not trust a capability-shaped protocol preflight returned with an error status", async () => {
     const methods: string[] = [];
     const client = new MultiplayerRoomServiceClient({
@@ -216,6 +249,7 @@ describe("multiplayer room service client", () => {
           {
             accountPartyMemberships: true,
             authenticatedAdmission: true,
+            membershipOnlyReacquisition: true,
             mutationPathSegment: "v6",
             participantCapabilities: true,
             protocolVersion: 6,
@@ -254,6 +288,7 @@ describe("multiplayer room service client", () => {
         return Response.json({
           accountPartyMemberships: true,
           authenticatedAdmission: true,
+          membershipOnlyReacquisition: true,
           mutationPathSegment: "v6",
           participantCapabilities: true,
           protocolVersion: 6,
@@ -420,6 +455,7 @@ describe("multiplayer room service client", () => {
         return Response.json({
           accountPartyMemberships: true,
           authenticatedAdmission: true,
+          membershipOnlyReacquisition: true,
           mutationPathSegment: "v6",
           participantCapabilities: true,
           protocolVersion: 6,
@@ -459,6 +495,15 @@ describe("multiplayer room service client", () => {
             admission: "admitted",
             outcome: "admission",
             participantCapability: "guest-capability",
+            participantId: "guest-1",
+            snapshot: ADMISSION_SNAPSHOT,
+            success: true,
+          });
+        case "party.reacquireAuthenticated":
+          return Response.json({
+            admission: "reacquired",
+            outcome: "admission",
+            participantCapability: "reacquired-capability",
             participantId: "guest-1",
             snapshot: ADMISSION_SNAPSHOT,
             success: true,
@@ -537,6 +582,19 @@ describe("multiplayer room service client", () => {
     });
     await expect(
       client.applyAccountCommand({
+        partyCode: "ROOM1",
+        type: "party.reacquireAuthenticated",
+        user: GUEST_USER,
+      }),
+    ).resolves.toMatchObject({
+      admission: "reacquired",
+      outcome: "admission",
+      participantCapability: "reacquired-capability",
+      participantId: "guest-1",
+      success: true,
+    });
+    await expect(
+      client.applyAccountCommand({
         participantCapability: "guest-capability",
         participantId: "guest-1",
         partyCode: "ROOM1",
@@ -551,7 +609,7 @@ describe("multiplayer room service client", () => {
     });
 
     expect(requests.map(({ url }) => url)).toEqual(
-      Array.from({ length: 5 }).flatMap(() => [
+      Array.from({ length: 6 }).flatMap(() => [
         baseUrl,
         `${baseUrl}/v6/_accounts`,
       ]),
@@ -654,6 +712,22 @@ describe("multiplayer room service client", () => {
         outcome: "admission",
         participantCapability: "guest-capability",
         participantId: "guest-2",
+        snapshot: ADMISSION_SNAPSHOT,
+        success: true,
+      },
+    },
+    {
+      command: {
+        partyCode: "ROOM1",
+        type: "party.reacquireAuthenticated" as const,
+        user: GUEST_USER,
+      },
+      name: "a new admission returned for a membership-only reacquisition",
+      payload: {
+        admission: "admitted",
+        outcome: "admission",
+        participantCapability: "guest-capability",
+        participantId: "guest-1",
         snapshot: ADMISSION_SNAPSHOT,
         success: true,
       },
@@ -797,6 +871,7 @@ describe("multiplayer room service client", () => {
           ? Response.json({
               accountPartyMemberships: true,
               authenticatedAdmission: true,
+              membershipOnlyReacquisition: true,
               mutationPathSegment: "v6",
               participantCapabilities: true,
               protocolVersion: 6,
@@ -821,6 +896,7 @@ describe("multiplayer room service client", () => {
           ? Response.json({
               accountPartyMemberships: true,
               authenticatedAdmission: true,
+              membershipOnlyReacquisition: true,
               mutationPathSegment: "v6",
               participantCapabilities: true,
               protocolVersion: 6,
@@ -860,6 +936,7 @@ describe("multiplayer room service client", () => {
           ? Response.json({
               accountPartyMemberships: true,
               authenticatedAdmission: true,
+              membershipOnlyReacquisition: true,
               mutationPathSegment: "v6",
               participantCapabilities: true,
               protocolVersion: 6,
@@ -927,6 +1004,7 @@ describe("multiplayer room service client", () => {
           ? Response.json({
               accountPartyMemberships: true,
               authenticatedAdmission: true,
+              membershipOnlyReacquisition: true,
               mutationPathSegment: "v6",
               participantCapabilities: true,
               protocolVersion: 6,
@@ -1053,6 +1131,7 @@ describe("multiplayer room service client", () => {
           return Response.json({
             accountPartyMemberships: true,
             authenticatedAdmission: true,
+            membershipOnlyReacquisition: true,
             mutationPathSegment: "v6",
             participantCapabilities: true,
             protocolVersion: 6,

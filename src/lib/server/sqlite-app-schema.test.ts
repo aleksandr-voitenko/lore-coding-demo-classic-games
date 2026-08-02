@@ -74,6 +74,31 @@ const V5_SCHEMA = `
   PRAGMA user_version = 5;
 `;
 
+const V6_PARTY_INVITATION_SCHEMA = `
+  CREATE TABLE party_invitations (
+    id TEXT PRIMARY KEY,
+    party_code TEXT NOT NULL,
+    inviter_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    recipient_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    intent TEXT NOT NULL CHECK (intent IN ('play', 'watch')),
+    status TEXT NOT NULL CHECK (
+      status IN ('pending', 'accepted', 'declined', 'canceled', 'revoked', 'expired')
+    ),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    resolved_at TEXT,
+    CHECK (inviter_user_id <> recipient_user_id),
+    CHECK (expires_at > created_at),
+    CHECK (
+      (status = 'pending' AND resolved_at IS NULL) OR
+      (status <> 'pending' AND resolved_at IS NOT NULL)
+    )
+  );
+
+  PRAGMA user_version = 6;
+`;
+
 const CREATED_AT = "2026-08-03T00:00:00.000Z";
 
 describe("SQLite app schema", () => {
@@ -97,7 +122,7 @@ describe("SQLite app schema", () => {
     return database;
   }
 
-  it("migrates an existing v5 database to social schema v6 idempotently", () => {
+  it("migrates v5 to the rate-limited, acceptance-claimed v7 schema", () => {
     const database = createDatabase("app-schema-v5-");
 
     database.exec(V5_SCHEMA);
@@ -196,7 +221,9 @@ describe("SQLite app schema", () => {
           `SELECT name FROM sqlite_master
            WHERE type = 'table'
              AND name IN (
-               'friend_requests', 'friendships', 'user_blocks', 'party_invitations'
+               'friend_requests', 'friendships', 'user_blocks',
+               'party_invitations', 'party_invitation_acceptance_claims',
+               'social_api_rate_limits'
              )
            ORDER BY name`,
         )
@@ -204,7 +231,9 @@ describe("SQLite app schema", () => {
     ).toEqual([
       { name: "friend_requests" },
       { name: "friendships" },
+      { name: "party_invitation_acceptance_claims" },
       { name: "party_invitations" },
+      { name: "social_api_rate_limits" },
       { name: "user_blocks" },
     ]);
     expect(
@@ -227,6 +256,87 @@ describe("SQLite app schema", () => {
     expect(
       database.prepare("SELECT run_id AS runId FROM game_replays").all(),
     ).toEqual([{ runId: "run-1" }]);
+    expect(database.pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("migrates v6 invitation expiry bases and prunes stale accepted retry indexes", () => {
+    const database = createDatabase("app-schema-v6-social-");
+
+    database.exec(V5_SCHEMA);
+    database.exec(V6_PARTY_INVITATION_SCHEMA);
+
+    for (const [id, displayName] of [
+      ["user-1", "Ada"],
+      ["user-2", "Grace"],
+      ["user-3", "Lin"],
+    ] as const) {
+      database
+        .prepare(
+          `INSERT INTO users (
+            id, display_name, display_name_key, password_hash, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          displayName,
+          displayName.toLowerCase(),
+          "password-hash",
+          CREATED_AT,
+          CREATED_AT,
+        );
+    }
+
+    const insertAccepted = database.prepare(`
+      INSERT INTO party_invitations (
+        id, party_code, inviter_user_id, recipient_user_id, intent, status,
+        created_at, updated_at, expires_at, resolved_at
+      ) VALUES (?, ?, ?, ?, 'play', 'accepted', ?, ?, ?, ?)
+    `);
+    insertAccepted.run(
+      "accepted-old",
+      "PARTY-OLD",
+      "user-1",
+      "user-2",
+      CREATED_AT,
+      "2026-08-03T00:01:00.000Z",
+      "2026-08-03T00:05:00.000Z",
+      "2026-08-03T00:01:00.000Z",
+    );
+    insertAccepted.run(
+      "accepted-new",
+      "PARTY-NEW",
+      "user-3",
+      "user-2",
+      CREATED_AT,
+      "2026-08-03T00:02:00.000Z",
+      "2026-08-03T00:05:00.000Z",
+      "2026-08-03T00:02:00.000Z",
+    );
+
+    initializeAppSchema(database);
+    initializeAppSchema(database);
+
+    expect(database.pragma("user_version", { simple: true })).toBe(
+      SCHEMA_VERSION,
+    );
+    expect(
+      database
+        .prepare(
+          `SELECT
+             id,
+             expires_at AS expiresAt,
+             base_expires_at AS baseExpiresAt
+           FROM party_invitations
+           WHERE status = 'accepted'`,
+        )
+        .all(),
+    ).toEqual([
+      {
+        baseExpiresAt: "2026-08-03T00:05:00.000Z",
+        expiresAt: "2026-08-03T00:05:00.000Z",
+        id: "accepted-new",
+      },
+    ]);
     expect(database.pragma("foreign_key_check")).toEqual([]);
   });
 
@@ -310,6 +420,34 @@ describe("SQLite app schema", () => {
         CREATED_AT,
         "2026-08-03T00:05:00.000Z",
       );
+    expect(() =>
+      database
+        .prepare(
+          `INSERT INTO party_invitation_acceptance_claims (
+            invitation_id, recipient_user_id, claim_token, claimed_at, expires_at
+          ) VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(
+          "invite-1",
+          "user-3",
+          "mismatched-claim",
+          CREATED_AT,
+          "2026-08-03T00:00:30.000Z",
+        ),
+    ).toThrow(/FOREIGN KEY constraint failed/);
+    database
+      .prepare(
+        `INSERT INTO party_invitation_acceptance_claims (
+          invitation_id, recipient_user_id, claim_token, claimed_at, expires_at
+        ) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(
+        "invite-1",
+        "user-1",
+        "claim-1",
+        CREATED_AT,
+        "2026-08-03T00:00:30.000Z",
+      );
 
     expect(() =>
       database
@@ -331,12 +469,98 @@ describe("SQLite app schema", () => {
         ),
     ).toThrow(/UNIQUE constraint failed/);
 
+    database
+      .prepare(
+        `INSERT INTO party_invitations (
+          id, party_code, inviter_user_id, recipient_user_id, intent, status,
+          created_at, updated_at, expires_at, resolved_at
+        ) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, NULL)`,
+      )
+      .run(
+        "invite-2",
+        "PARTY-2",
+        "user-3",
+        "user-1",
+        "watch",
+        CREATED_AT,
+        CREATED_AT,
+        "2026-08-03T00:05:00.000Z",
+      );
+    expect(() =>
+      database
+        .prepare(
+          `INSERT INTO party_invitation_acceptance_claims (
+            invitation_id, recipient_user_id, claim_token, claimed_at, expires_at
+          ) VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(
+          "invite-2",
+          "user-1",
+          "claim-2",
+          CREATED_AT,
+          "2026-08-03T00:00:30.000Z",
+        ),
+    ).toThrow(/UNIQUE constraint failed/);
+    database.prepare("DELETE FROM party_invitations WHERE id = ?").run("invite-2");
+
+    database
+      .prepare(
+        `INSERT INTO party_invitations (
+          id, party_code, inviter_user_id, recipient_user_id, intent, status,
+          created_at, updated_at, expires_at, resolved_at
+        ) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, NULL)`,
+      )
+      .run(
+        "invite-3",
+        "PARTY-3",
+        "user-1",
+        "user-3",
+        "watch",
+        CREATED_AT,
+        CREATED_AT,
+        "2026-08-03T00:05:00.000Z",
+      );
+    expect(() =>
+      database
+        .prepare(
+          `INSERT INTO party_invitation_acceptance_claims (
+            invitation_id, recipient_user_id, claim_token, claimed_at, expires_at
+          ) VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(
+          "invite-3",
+          "user-3",
+          "claim-1",
+          CREATED_AT,
+          "2026-08-03T00:00:30.000Z",
+        ),
+    ).toThrow(/UNIQUE constraint failed/);
+    expect(() =>
+      database
+        .prepare(
+          `INSERT INTO party_invitation_acceptance_claims (
+            invitation_id, recipient_user_id, claim_token, claimed_at, expires_at
+          ) VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(
+          "invite-3",
+          "user-3",
+          "claim-3",
+          CREATED_AT,
+          CREATED_AT,
+        ),
+    ).toThrow(/CHECK constraint failed/);
+    database.prepare("DELETE FROM party_invitations WHERE id = ?").run("invite-3");
+
     database.prepare("DELETE FROM users WHERE id = ?").run("user-2");
 
     expect(database.prepare("SELECT * FROM friend_requests").all()).toEqual([]);
     expect(database.prepare("SELECT * FROM friendships").all()).toEqual([]);
     expect(database.prepare("SELECT * FROM user_blocks").all()).toEqual([]);
     expect(database.prepare("SELECT * FROM party_invitations").all()).toEqual([]);
+    expect(
+      database.prepare("SELECT * FROM party_invitation_acceptance_claims").all(),
+    ).toEqual([]);
     expect(database.pragma("foreign_key_check")).toEqual([]);
   });
 });

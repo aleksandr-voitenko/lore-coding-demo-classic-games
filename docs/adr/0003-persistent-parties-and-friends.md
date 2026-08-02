@@ -132,8 +132,10 @@ invitation and returns a conflict if availability changed after the UI loaded.
 
 The app does not deliver an invitation to someone already playing. There is no
 Join now, After this match, or cross-party transfer flow. If a pending recipient
-becomes busy or joins a party before accepting, the invitation is revoked and
-the sender sees that the friend is no longer available.
+becomes busy, goes offline, or joins a party before accepting, the invitation
+remains pending but cannot be accepted. It becomes actionable again when the
+recipient is `available`, provided its bounded TTL has not expired. Volatile
+availability observations do not rewrite durable invitation state.
 
 Availability is volatile lease state, not high-frequency SQLite history. A
 visible browser client refreshes a short-lived per-client lease through an
@@ -153,10 +155,24 @@ after a bounded interval or when the party closes or disappears.
 
 Invitation creation verifies authenticated host ownership, accepted friendship,
 block state, recipient availability, active-party membership, party capacity,
-and duplicate active invitations. Invitation acceptance verifies the signed-in
-recipient again, resolves the volatile party, admits the account through a
-trusted Next-to-sidecar command, and marks the invitation accepted only after
-admission succeeds.
+and duplicate active invitations. It validates the durable relationship before
+consulting private party authority, revalidates the relationship after that
+call, and persists the invitation only after both checks and the authority check
+succeed.
+
+Invitation acceptance verifies the signed-in recipient again and atomically
+claims one invitation for that recipient before calling volatile party
+authority. The short claim prevents concurrent accepts from admitting the same
+account to different parties. The server then admits the account through a
+trusted Next-to-sidecar command and marks the invitation accepted only after
+admission succeeds. Only the live claim token may finalize acceptance. A newly
+admitted membership is compensated before the claim is released if durable
+finalization fails; if compensation cannot be confirmed, the claim remains
+until its lease expires. Releasing an ordinary failed attempt restores the
+invitation's original expiry and resolves it immediately if that deadline has
+passed; only an unobserved crash leaves the recovery extension in force.
+Accepted-response retries use a membership-only
+reacquisition command and cannot create membership after the account has left.
 
 A recipient who joins before a match starts receives the open player slot for a
 play invitation. A recipient who joins a party with a running match watches and
@@ -203,9 +219,15 @@ public room WebSocket merely to deliver friend badges.
 
 ### Persistence And Results
 
-Friendships, blocks, and invitation records are durable. Parties, participant
-capabilities, presence leases, matches, game runtime, and observer queues remain
-volatile. A sidecar restart abandons them consistently with ADR 0001.
+Friendships, blocks, invitation records, rate-limit counters, and short
+recipient-wide invitation-acceptance claims are durable. Acceptance claims use
+a 30-second lease and extend the selected invitation through a two-minute
+recovery grace while retaining its original expiry for normal failure release.
+Terminal nonaccepted invitation history is globally bounded,
+and only the newest accepted invitation per recipient is retained as a
+lost-response reacquisition index. Parties, participant capabilities, presence
+leases, matches, game runtime, and observer queues remain volatile. A sidecar
+restart abandons them consistently with ADR 0001.
 
 Changing games does not write multiplayer state into solo replays, sessions, or
 leaderboards. Any later multiplayer history remains a compact server-derived
@@ -223,13 +245,14 @@ gates until the party snapshot, protocol, and UI land together.
 - Old clients must fail clearly on unsupported party protocol versions rather
   than sending commands without a match generation or participant capability.
 
-Participant authority hardening introduces capability-aware protocol version 2.
-The internal room-service collection advertises the version and capability
-support plus a versioned mutation path, and every mutating internal POST uses
-that path and carries the version in a required header. The app preflights before
-posting while the sidecar validates the path and header before parsing the
-mutation. An old sidecar cannot route the versioned path if a rolling-deployment
-preflight and POST reach different instances. Browser-to-app mutations use
+The implemented capability-aware protocol is version 6. The internal
+room-service collection advertises the version, a versioned mutation path, and
+the account-authority capabilities used by this flow, including
+`membershipOnlyReacquisition: true`. Every mutating internal POST uses that path
+and carries the version in a required header. The app preflights before posting
+while the sidecar validates the path and header before parsing the mutation. An
+old sidecar, including a v6 sidecar without atomic membership-only
+reacquisition, fails closed before admission. Browser-to-app mutations use
 parallel versioned public paths while legacy POST routes return 426. WebSocket
 hello/resume and bootstrap messages negotiate the same version before the
 gateway reads room state or activates a socket; a mismatched bootstrap is a
@@ -259,7 +282,28 @@ id contract.
 
 Disallowing invitations to busy or already-partied friends sacrifices deferred
 or cross-party invitations. It provides a clearer initial product, prevents
-gameplay interruptions, and avoids partially completed party transfers.
+gameplay interruptions, and avoids partially completed party transfers. A
+previously delivered invitation may wait through temporary unavailability, but
+it never interrupts play or transfers membership and still expires on its
+original bounded timeline unless an acceptance claim is actively recovering.
+
+### Known Acceptance Recovery Limit
+
+Acceptance claims serialize ordinary concurrent decisions, but their leases do
+not form a distributed transaction with volatile party authority. If an
+admission response takes longer than the claim lease, a retry may reacquire that
+same provisional membership. If the invitation is then canceled, revoked, or
+otherwise resolved before either request finalizes, exact compensation can no
+longer prove that removing the membership is safe because the retry minted a
+second capability. The account may remain in a capability-less volatile party
+membership until the party closes, expires, or the sidecar restarts.
+
+This rare recovery window requires authority latency longer than the claim
+lease, a same-recipient retry, and a second terminal or persistence race. It does
+not disclose a capability or grant party control. A future protocol revision
+should carry invitation and acceptance-generation identifiers into provisional
+admission and add explicit commit/abort commands so the sidecar can fence older
+attempts and remove only the newest uncommitted membership.
 
 ## Rejected Alternatives
 

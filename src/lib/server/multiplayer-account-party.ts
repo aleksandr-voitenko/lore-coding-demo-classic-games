@@ -35,6 +35,11 @@ export type MultiplayerAccountPartyCommand =
       user: unknown;
     }
   | {
+      partyCode: unknown;
+      type: "party.reacquireAuthenticated";
+      user: unknown;
+    }
+  | {
       participantCapability: unknown;
       participantId: unknown;
       partyCode: unknown;

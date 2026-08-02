@@ -93,3 +93,55 @@ This file covers routes and App Router conventions under `src/app/`.
   command parsing, WebSocket-only command rejection, and signed-in host-command
   authorization. Its `route.ts` entry stays thin and exports only Next-supported
   route configuration plus the production `GET` and `POST` handlers.
+
+## Social API
+
+- `api/social/shared.ts` owns the common signed-in session lookup, optional
+  same-origin mutation check, JSON content-type/body parsing, no-store response
+  shaping, durable and volatile error mapping, and the only serializer allowed
+  to turn a private invitation record into client JSON. Its shared reader
+  rejects declared or streamed JSON bodies over 16 KiB before unbounded parsing.
+  Route entries stay thin and export only Next-supported methods plus `dynamic`
+  and `runtime`.
+- `GET /api/social` returns one durable overview enriched with chunked volatile
+  friend availability. Failed or rejected authority chunks remain `unknown`
+  instead of hiding the durable graph. `GET /api/social/discovery` performs one
+  exact normalized display-name lookup without exposing a directory. Before
+  overview serialization, private pending invitation tuples are inspected and
+  terminal-party rows are revoked; party codes never enter the response.
+- `POST` and `DELETE /api/social/presence` renew or release one authenticated
+  browser lease. The actor always comes from the session cookie. Presence is a
+  volatile invitation gate and never resolves durable invitations: pending
+  invitations remain suspended while the effective state is not `available`
+  and can be accepted after availability clears, subject to TTL.
+- Friend-request, friend, and block routes delegate direction and retry
+  semantics to the SQLite social store. JSON methods require
+  `application/json`; every state-changing method rejects a mismatched supplied
+  Origin before calling the store. Exact discovery, friend-request creation,
+  and party-invitation creation consume separate durable fixed-window rate
+  limits (30/minute, 10/minute, and 20/minute) and return `429` plus
+  `Retry-After`; the store also caps pending incoming and outgoing requests at
+  100 each per account.
+- Party invitation creation validates friendship/block state before the private
+  authority call, checks host ownership, recipient availability, and capacity,
+  revalidates the relationship after the call, and only then persists the row.
+  Busy, in-party, offline, and unknown recipients return a conflict without
+  resolving an existing pending invitation. Terminal party failures revoke all
+  invitations for that party.
+- Acceptance claims one pending invitation through a 30-second recipient-wide
+  SQLite lease before calling party authority. Only the matching live token can
+  finalize acceptance; the claim extends the invitation through a two-minute
+  recovery grace while retaining the base expiry. A handled authority failure
+  releases the claim and restores that base expiry, immediately expiring the
+  row when its original deadline has passed. Successful finalization accepts
+  the selected invitation and revokes the recipient's other pending invitations
+  atomically before returning the capability. A failed durable finalization
+  compensates only `admitted`,
+  never `reacquired`, membership and releases the claim only after compensation
+  is confirmed. An accepted-response retry uses the authority's membership-only
+  `party.reacquireAuthenticated` command, which cannot create a new participant
+  after the account leaves. Party invitations are capped at 20 pending incoming
+  and 20 pending outgoing rows per account; resolved nonaccepted history is
+  capped at 1,000 rows, with only the newest accepted row per recipient retained
+  as a retry index. Overview reconciliation and friend-availability resolution
+  run at most four authority calls concurrently.

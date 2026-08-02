@@ -30,10 +30,19 @@ import {
   prepareSqliteDatabasePath,
   type SqliteDatabase,
 } from "./sqlite-app-schema";
+import { getUserProfileSqlitePath } from "./sqlite-user-profile-store";
 
 type CreateSqliteSocialStoreOptions = {
+  acceptanceClaimTtlMs?: number;
+  acceptanceRecoveryGraceMs?: number;
+  createAcceptanceClaimToken?: () => string;
   createId?: () => string;
   databasePath: string;
+  maxIncomingFriendRequestsPerUser?: number;
+  maxOutgoingFriendRequestsPerUser?: number;
+  maxPendingPartyInvitationsPerInviter?: number;
+  maxPendingPartyInvitationsPerRecipient?: number;
+  maxResolvedPartyInvitationHistory?: number;
   now?: () => Date;
   partyInvitationTtlMs?: number;
 };
@@ -57,10 +66,15 @@ export type SocialStoreFailureReason =
   | "invalid-invitation-id"
   | "invalid-invitation-intent"
   | "invalid-party-code"
+  | "invalid-rate-limit-action"
   | "invalid-user-id"
+  | "friend-request-limit-reached"
   | "not-friends"
   | "party-invitation-expired"
+  | "party-invitation-acceptance-in-progress"
+  | "party-invitation-claim-conflict"
   | "party-invitation-id-conflict"
+  | "party-invitation-limit-reached"
   | "party-invitation-not-found"
   | "party-invitation-not-pending"
   | "user-not-found";
@@ -135,11 +149,49 @@ export type PartyInvitationCreationResult =
     }
   | SocialStoreFailure;
 
+export type PartyInvitationAcceptanceClaimResult =
+  | {
+      claimExpiresAt: string;
+      claimToken: string;
+      invitation: SocialPartyInvitationRecord;
+      success: true;
+    }
+  | SocialStoreFailure;
+
+export type PartyInvitationAcceptanceReleaseResult =
+  | {
+      released: boolean;
+      success: true;
+    }
+  | SocialStoreFailure;
+
 export type PartyInvitationLookupResult = PartyInvitationMutationResult;
+
+export type PartyInvitationReconciliationLookupResult =
+  | {
+      invitations: SocialPartyInvitationRecord[];
+      success: true;
+    }
+  | SocialStoreFailure;
 
 export type PartyInvitationPartyRevocationResult =
   | {
       revokedCount: number;
+      success: true;
+    }
+  | SocialStoreFailure;
+
+export type SocialApiRateLimitAction =
+  | "discovery"
+  | "friend-request"
+  | "party-invitation";
+
+export type SocialApiRateLimitResult =
+  | {
+      allowed: boolean;
+      remaining: number;
+      resetAt: string;
+      retryAfterSeconds: number;
       success: true;
     }
   | SocialStoreFailure;
@@ -216,9 +268,33 @@ const PARTY_INVITATION_SELECT = `
 `;
 
 export const DEFAULT_PARTY_INVITATION_TTL_MS = 5 * 60 * 1000;
+export const DEFAULT_PARTY_INVITATION_ACCEPTANCE_CLAIM_TTL_MS = 30_000;
+export const DEFAULT_PARTY_INVITATION_ACCEPTANCE_RECOVERY_GRACE_MS =
+  2 * 60 * 1000;
+export const DEFAULT_MAX_INCOMING_FRIEND_REQUESTS_PER_USER = 100;
+export const DEFAULT_MAX_OUTGOING_FRIEND_REQUESTS_PER_USER = 100;
+export const DEFAULT_MAX_PENDING_PARTY_INVITATIONS_PER_INVITER = 20;
+export const DEFAULT_MAX_PENDING_PARTY_INVITATIONS_PER_RECIPIENT = 20;
+export const DEFAULT_MAX_RESOLVED_PARTY_INVITATION_HISTORY = 1_000;
+export const SOCIAL_API_RATE_LIMITS = {
+  discovery: { limit: 30, windowMs: 60_000 },
+  "friend-request": { limit: 10, windowMs: 60_000 },
+  "party-invitation": { limit: 20, windowMs: 60_000 },
+} as const satisfies Record<
+  SocialApiRateLimitAction,
+  { limit: number; windowMs: number }
+>;
 
 function createFailure(reason: SocialStoreFailureReason): SocialStoreFailure {
   return { reason, success: false };
+}
+
+function normalizePositiveSafeInteger(value: number, name: string) {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new RangeError(`${name} must be a positive safe integer.`);
+  }
+
+  return value;
 }
 
 function toAuthenticatedUser(row: UserRow): AuthenticatedUser {
@@ -281,31 +357,215 @@ function toSocialPartyInvitationRecord(
 }
 
 export class SqliteSocialStore {
+  readonly #acceptanceClaimTtlMs: number;
+  readonly #acceptanceRecoveryGraceMs: number;
+  readonly #createAcceptanceClaimToken: () => string;
   readonly #createId: () => string;
   readonly #database: SqliteDatabase;
+  readonly #maxIncomingFriendRequestsPerUser: number;
+  readonly #maxOutgoingFriendRequestsPerUser: number;
+  readonly #maxPendingPartyInvitationsPerInviter: number;
+  readonly #maxPendingPartyInvitationsPerRecipient: number;
+  readonly #maxResolvedPartyInvitationHistory: number;
   readonly #now: () => Date;
   readonly #partyInvitationTtlMs: number;
 
   constructor({
+    acceptanceClaimTtlMs = DEFAULT_PARTY_INVITATION_ACCEPTANCE_CLAIM_TTL_MS,
+    acceptanceRecoveryGraceMs =
+      DEFAULT_PARTY_INVITATION_ACCEPTANCE_RECOVERY_GRACE_MS,
+    createAcceptanceClaimToken = randomUUID,
     createId = randomUUID,
     databasePath,
+    maxIncomingFriendRequestsPerUser =
+      DEFAULT_MAX_INCOMING_FRIEND_REQUESTS_PER_USER,
+    maxOutgoingFriendRequestsPerUser =
+      DEFAULT_MAX_OUTGOING_FRIEND_REQUESTS_PER_USER,
+    maxPendingPartyInvitationsPerInviter =
+      DEFAULT_MAX_PENDING_PARTY_INVITATIONS_PER_INVITER,
+    maxPendingPartyInvitationsPerRecipient =
+      DEFAULT_MAX_PENDING_PARTY_INVITATIONS_PER_RECIPIENT,
+    maxResolvedPartyInvitationHistory =
+      DEFAULT_MAX_RESOLVED_PARTY_INVITATION_HISTORY,
     now = () => new Date(),
     partyInvitationTtlMs = DEFAULT_PARTY_INVITATION_TTL_MS,
   }: CreateSqliteSocialStoreOptions) {
-    if (!Number.isSafeInteger(partyInvitationTtlMs) || partyInvitationTtlMs <= 0) {
-      throw new RangeError("Party invitation TTL must be a positive safe integer.");
-    }
+    const normalizedAcceptanceClaimTtlMs = normalizePositiveSafeInteger(
+      acceptanceClaimTtlMs,
+      "Party invitation acceptance claim TTL",
+    );
+    const normalizedAcceptanceRecoveryGraceMs = normalizePositiveSafeInteger(
+      acceptanceRecoveryGraceMs,
+      "Party invitation acceptance recovery grace",
+    );
+    const normalizedMaxIncomingFriendRequestsPerUser =
+      normalizePositiveSafeInteger(
+        maxIncomingFriendRequestsPerUser,
+        "Incoming friend request limit",
+      );
+    const normalizedMaxOutgoingFriendRequestsPerUser =
+      normalizePositiveSafeInteger(
+        maxOutgoingFriendRequestsPerUser,
+        "Outgoing friend request limit",
+      );
+    const normalizedMaxPendingPartyInvitationsPerInviter =
+      normalizePositiveSafeInteger(
+        maxPendingPartyInvitationsPerInviter,
+        "Pending party invitation inviter limit",
+      );
+    const normalizedMaxPendingPartyInvitationsPerRecipient =
+      normalizePositiveSafeInteger(
+        maxPendingPartyInvitationsPerRecipient,
+        "Pending party invitation recipient limit",
+      );
+    const normalizedMaxResolvedPartyInvitationHistory =
+      normalizePositiveSafeInteger(
+        maxResolvedPartyInvitationHistory,
+        "Resolved party invitation history limit",
+      );
+    const normalizedPartyInvitationTtlMs = normalizePositiveSafeInteger(
+      partyInvitationTtlMs,
+      "Party invitation TTL",
+    );
 
+    this.#acceptanceClaimTtlMs = normalizedAcceptanceClaimTtlMs;
+    this.#acceptanceRecoveryGraceMs = normalizedAcceptanceRecoveryGraceMs;
+    this.#createAcceptanceClaimToken = createAcceptanceClaimToken;
     this.#createId = createId;
-    this.#database = new Database(prepareSqliteDatabasePath(databasePath));
+    this.#maxIncomingFriendRequestsPerUser =
+      normalizedMaxIncomingFriendRequestsPerUser;
+    this.#maxOutgoingFriendRequestsPerUser =
+      normalizedMaxOutgoingFriendRequestsPerUser;
+    this.#maxPendingPartyInvitationsPerInviter =
+      normalizedMaxPendingPartyInvitationsPerInviter;
+    this.#maxPendingPartyInvitationsPerRecipient =
+      normalizedMaxPendingPartyInvitationsPerRecipient;
+    this.#maxResolvedPartyInvitationHistory =
+      normalizedMaxResolvedPartyInvitationHistory;
     this.#now = now;
-    this.#partyInvitationTtlMs = partyInvitationTtlMs;
+    this.#partyInvitationTtlMs = normalizedPartyInvitationTtlMs;
+    this.#database = new Database(prepareSqliteDatabasePath(databasePath));
 
     initializeAppSchema(this.#database);
   }
 
   close() {
     this.#database.close();
+  }
+
+  async consumeSocialApiRateLimit(
+    userIdValue: unknown,
+    actionValue: unknown,
+  ): Promise<SocialApiRateLimitResult> {
+    const userId = normalizeSocialUserId(userIdValue);
+    const action =
+      actionValue === "discovery" ||
+      actionValue === "friend-request" ||
+      actionValue === "party-invitation"
+        ? actionValue
+        : null;
+
+    if (userId === null) {
+      return createFailure("invalid-user-id");
+    }
+
+    if (action === null) {
+      return createFailure("invalid-rate-limit-action");
+    }
+
+    return this.#database.transaction((): SocialApiRateLimitResult => {
+      if (!this.#isCanonicalUser(userId)) {
+        return createFailure("user-not-found");
+      }
+
+      const configuration = SOCIAL_API_RATE_LIMITS[action];
+      const now = this.#now();
+      const nowMs = now.getTime();
+      const existing = this.#database
+        .prepare<{ action: SocialApiRateLimitAction; userId: string }>(`
+          SELECT
+            window_started_at AS windowStartedAt,
+            request_count AS requestCount
+          FROM social_api_rate_limits
+          WHERE user_id = @userId
+            AND action = @action
+        `)
+        .get({ action, userId }) as
+        | { requestCount: number; windowStartedAt: string }
+        | undefined;
+      const existingStartedAtMs =
+        existing === undefined ? 0 : Date.parse(existing.windowStartedAt);
+      const shouldReset =
+        existing === undefined ||
+        !Number.isFinite(existingStartedAtMs) ||
+        nowMs >= existingStartedAtMs + configuration.windowMs;
+
+      if (shouldReset) {
+        const windowStartedAt = now.toISOString();
+
+        this.#database
+          .prepare<{
+            action: SocialApiRateLimitAction;
+            userId: string;
+            windowStartedAt: string;
+          }>(`
+            INSERT INTO social_api_rate_limits (
+              user_id,
+              action,
+              window_started_at,
+              request_count
+            )
+            VALUES (@userId, @action, @windowStartedAt, 1)
+            ON CONFLICT (user_id, action) DO UPDATE SET
+              window_started_at = excluded.window_started_at,
+              request_count = 1
+          `)
+          .run({ action, userId, windowStartedAt });
+
+        return {
+          allowed: true,
+          remaining: configuration.limit - 1,
+          resetAt: new Date(nowMs + configuration.windowMs).toISOString(),
+          retryAfterSeconds: 0,
+          success: true,
+        };
+      }
+
+      const resetAtMs = existingStartedAtMs + configuration.windowMs;
+
+      if (existing.requestCount >= configuration.limit) {
+        return {
+          allowed: false,
+          remaining: 0,
+          resetAt: new Date(resetAtMs).toISOString(),
+          retryAfterSeconds: Math.max(
+            1,
+            Math.ceil((resetAtMs - nowMs) / 1000),
+          ),
+          success: true,
+        };
+      }
+
+      this.#database
+        .prepare<{
+          action: SocialApiRateLimitAction;
+          userId: string;
+        }>(`
+          UPDATE social_api_rate_limits
+          SET request_count = request_count + 1
+          WHERE user_id = @userId
+            AND action = @action
+        `)
+        .run({ action, userId });
+
+      return {
+        allowed: true,
+        remaining: configuration.limit - existing.requestCount - 1,
+        resetAt: new Date(resetAtMs).toISOString(),
+        retryAfterSeconds: 0,
+        success: true,
+      };
+    }).immediate();
   }
 
   async discoverUser(
@@ -457,6 +717,8 @@ export class SqliteSocialStore {
         `)
         .all({ actorUserId }) as PartyInvitationRow[];
 
+      this.#pruneResolvedPartyInvitationHistory();
+
       return {
         overview: {
           blockedUsers: blocks.map(toSocialBlock),
@@ -477,6 +739,45 @@ export class SqliteSocialStore {
         success: true,
       };
     }).immediate();
+  }
+
+  async getPendingPartyInvitationsForReconciliation(
+    actorUserIdValue: unknown,
+  ): Promise<PartyInvitationReconciliationLookupResult> {
+    const actorUserId = normalizeSocialUserId(actorUserIdValue);
+
+    if (actorUserId === null) {
+      return createFailure("invalid-user-id");
+    }
+
+    return this.#database.transaction(
+      (): PartyInvitationReconciliationLookupResult => {
+        if (!this.#isCanonicalUser(actorUserId)) {
+          return createFailure("user-not-found");
+        }
+
+        const now = this.#now().toISOString();
+        this.#expirePendingInvitationsForActor(actorUserId, now);
+        const rows = this.#database
+          .prepare<{ actorUserId: string }>(`
+            ${PARTY_INVITATION_SELECT}
+            WHERE party_invitations.status = 'pending'
+              AND (
+                party_invitations.inviter_user_id = @actorUserId
+                OR party_invitations.recipient_user_id = @actorUserId
+              )
+            ORDER BY party_invitations.created_at DESC, party_invitations.id ASC
+          `)
+          .all({ actorUserId }) as PartyInvitationRow[];
+
+        this.#pruneResolvedPartyInvitationHistory();
+
+        return {
+          invitations: rows.map(toSocialPartyInvitationRecord),
+          success: true,
+        };
+      },
+    ).immediate();
   }
 
   async createFriendRequest(
@@ -520,6 +821,10 @@ export class SqliteSocialStore {
           },
           success: true,
         };
+      }
+
+      if (this.#hasReachedFriendRequestLimit(pair)) {
+        return createFailure("friend-request-limit-reached");
       }
 
       const createdAt = this.#now().toISOString();
@@ -907,11 +1212,9 @@ export class SqliteSocialStore {
 
       const now = this.#now();
       const timestamp = now.toISOString();
-      this.#expirePendingInvitationsForPartyRecipient(
-        partyCode,
-        pair.targetUserId,
-        timestamp,
-      );
+      this.#expirePendingInvitationsForActor(pair.actorUserId, timestamp);
+      this.#expirePendingInvitationsForActor(pair.targetUserId, timestamp);
+      this.#pruneResolvedPartyInvitationHistory();
 
       const existingInvitation = this.#getPendingPartyInvitationForPartyRecipient(
         partyCode,
@@ -923,6 +1226,15 @@ export class SqliteSocialStore {
           existingInvitation.intent === intent
           ? { created: false, invitation: existingInvitation, success: true }
           : createFailure("duplicate-party-invitation");
+      }
+
+      if (
+        this.#hasReachedPartyInvitationLimit(
+          pair.actorUserId,
+          pair.targetUserId,
+        )
+      ) {
+        return createFailure("party-invitation-limit-reached");
       }
 
       const invitationId = normalizePartyInvitationId(this.#createId());
@@ -960,6 +1272,7 @@ export class SqliteSocialStore {
             created_at,
             updated_at,
             expires_at,
+            base_expires_at,
             resolved_at
           )
           SELECT
@@ -971,6 +1284,7 @@ export class SqliteSocialStore {
             'pending',
             @createdAt,
             @createdAt,
+            @expiresAt,
             @expiresAt,
             NULL
           WHERE EXISTS (
@@ -1044,6 +1358,39 @@ export class SqliteSocialStore {
     }).immediate();
   }
 
+  async validatePartyInvitationRelationship(
+    inviterUserIdValue: unknown,
+    recipientUserIdValue: unknown,
+  ): Promise<SocialMutationResult> {
+    const pair = this.#normalizeActorTarget(
+      inviterUserIdValue,
+      recipientUserIdValue,
+    );
+
+    if (!pair.success) {
+      return pair.failure;
+    }
+
+    return this.#database.transaction((): SocialMutationResult => {
+      const validationFailure = this.#validateCanonicalUsers(
+        pair.actorUserId,
+        pair.targetUserId,
+      );
+
+      if (validationFailure !== null) {
+        return validationFailure;
+      }
+
+      if (this.#isPairBlocked(pair)) {
+        return createFailure("blocked");
+      }
+
+      return this.#friendshipExists(pair)
+        ? { success: true }
+        : createFailure("not-friends");
+    }).immediate();
+  }
+
   async getPendingPartyInvitation(
     recipientUserIdValue: unknown,
     invitationIdValue: unknown,
@@ -1067,24 +1414,405 @@ export class SqliteSocialStore {
       const now = this.#now().toISOString();
       this.#expirePendingInvitationForRecipient(invitationId, recipientUserId, now);
 
-      return this.#getOwnedPendingInvitation(
+      const invitation = this.#getOwnedPendingInvitation(
         invitationId,
         recipientUserId,
         "recipient",
       );
+
+      this.#pruneResolvedPartyInvitationHistory();
+      return invitation;
     }).immediate();
+  }
+
+  async claimPartyInvitationForAcceptance(
+    recipientUserIdValue: unknown,
+    invitationIdValue: unknown,
+  ): Promise<PartyInvitationAcceptanceClaimResult> {
+    const recipientUserId = normalizeSocialUserId(recipientUserIdValue);
+    const invitationId = normalizePartyInvitationId(invitationIdValue);
+
+    if (recipientUserId === null) {
+      return createFailure("invalid-user-id");
+    }
+
+    if (invitationId === null) {
+      return createFailure("invalid-invitation-id");
+    }
+
+    return this.#database.transaction((): PartyInvitationAcceptanceClaimResult => {
+      if (!this.#isCanonicalUser(recipientUserId)) {
+        return createFailure("user-not-found");
+      }
+
+      const now = this.#now();
+      const timestamp = now.toISOString();
+      this.#deleteInactivePartyInvitationAcceptanceClaims(timestamp);
+      this.#expirePendingInvitationForRecipient(
+        invitationId,
+        recipientUserId,
+        timestamp,
+      );
+      const invitation = this.#getOwnedPendingInvitation(
+        invitationId,
+        recipientUserId,
+        "recipient",
+      );
+
+      if (!invitation.success) {
+        return invitation;
+      }
+
+      const activeRecipientClaim = this.#database
+        .prepare<{ recipientUserId: string }>(`
+          SELECT invitation_id
+          FROM party_invitation_acceptance_claims
+          WHERE recipient_user_id = @recipientUserId
+        `)
+        .get({ recipientUserId });
+
+      if (activeRecipientClaim !== undefined) {
+        return createFailure("party-invitation-acceptance-in-progress");
+      }
+
+      const claimToken = normalizePartyInvitationId(
+        this.#createAcceptanceClaimToken(),
+      );
+
+      if (claimToken === null) {
+        return createFailure("party-invitation-claim-conflict");
+      }
+
+      const claimExpiresAt = new Date(
+        now.getTime() + this.#acceptanceClaimTtlMs,
+      ).toISOString();
+      const recoveryExpiresAt = new Date(
+        now.getTime() +
+          this.#acceptanceClaimTtlMs +
+          this.#acceptanceRecoveryGraceMs,
+      ).toISOString();
+      const insert = this.#database
+        .prepare<{
+          claimExpiresAt: string;
+          claimToken: string;
+          invitationId: string;
+          recipientUserId: string;
+          timestamp: string;
+        }>(`
+          INSERT OR IGNORE INTO party_invitation_acceptance_claims (
+            invitation_id,
+            recipient_user_id,
+            claim_token,
+            claimed_at,
+            expires_at
+          )
+          VALUES (
+            @invitationId,
+            @recipientUserId,
+            @claimToken,
+            @timestamp,
+            @claimExpiresAt
+          )
+        `)
+        .run({
+          claimExpiresAt,
+          claimToken,
+          invitationId,
+          recipientUserId,
+          timestamp,
+        });
+
+      if (insert.changes !== 1) {
+        const recipientClaimExists = this.#database
+          .prepare<{ recipientUserId: string }>(`
+            SELECT 1
+            FROM party_invitation_acceptance_claims
+            WHERE recipient_user_id = @recipientUserId
+          `)
+          .get({ recipientUserId });
+
+        return createFailure(
+          recipientClaimExists === undefined
+            ? "party-invitation-claim-conflict"
+            : "party-invitation-acceptance-in-progress",
+        );
+      }
+
+      this.#database
+        .prepare<{
+          invitationId: string;
+          recoveryExpiresAt: string;
+          timestamp: string;
+        }>(`
+          UPDATE party_invitations
+          SET
+            base_expires_at = COALESCE(base_expires_at, expires_at),
+            expires_at = MAX(expires_at, @recoveryExpiresAt),
+            updated_at = @timestamp
+          WHERE id = @invitationId
+            AND status = 'pending'
+        `)
+        .run({ invitationId, recoveryExpiresAt, timestamp });
+      const claimedInvitation = this.#getPartyInvitationById(invitationId);
+
+      if (claimedInvitation === null) {
+        return createFailure("party-invitation-not-found");
+      }
+
+      return {
+        claimExpiresAt,
+        claimToken,
+        invitation: claimedInvitation,
+        success: true,
+      };
+    }).immediate();
+  }
+
+  async getAcceptedPartyInvitationForReacquisition(
+    recipientUserIdValue: unknown,
+    invitationIdValue: unknown,
+  ): Promise<PartyInvitationLookupResult> {
+    const recipientUserId = normalizeSocialUserId(recipientUserIdValue);
+    const invitationId = normalizePartyInvitationId(invitationIdValue);
+
+    if (recipientUserId === null) {
+      return createFailure("invalid-user-id");
+    }
+
+    if (invitationId === null) {
+      return createFailure("invalid-invitation-id");
+    }
+
+    if (!this.#isCanonicalUser(recipientUserId)) {
+      return createFailure("user-not-found");
+    }
+
+    const invitationRow = this.#getOwnedPartyInvitationRow(
+      invitationId,
+      recipientUserId,
+      "recipient",
+    );
+
+    if (invitationRow === undefined) {
+      return createFailure("party-invitation-not-found");
+    }
+
+    return invitationRow.status === "accepted"
+      ? {
+          invitation: toSocialPartyInvitationRecord(invitationRow),
+          success: true,
+        }
+      : createFailure("party-invitation-not-pending");
   }
 
   async acceptPartyInvitationAfterAdmission(
     recipientUserIdValue: unknown,
     invitationIdValue: unknown,
+    claimTokenValue: unknown,
   ): Promise<PartyInvitationMutationResult> {
-    return this.#resolvePartyInvitation(
-      recipientUserIdValue,
-      invitationIdValue,
-      "recipient",
-      "accepted",
-    );
+    const recipientUserId = normalizeSocialUserId(recipientUserIdValue);
+    const invitationId = normalizePartyInvitationId(invitationIdValue);
+    const claimToken = normalizePartyInvitationId(claimTokenValue);
+
+    if (recipientUserId === null) {
+      return createFailure("invalid-user-id");
+    }
+
+    if (invitationId === null || claimToken === null) {
+      return createFailure("invalid-invitation-id");
+    }
+
+    return this.#database.transaction((): PartyInvitationMutationResult => {
+      if (!this.#isCanonicalUser(recipientUserId)) {
+        return createFailure("user-not-found");
+      }
+
+      const invitationRow = this.#getOwnedPartyInvitationRow(
+        invitationId,
+        recipientUserId,
+        "recipient",
+      );
+
+      if (invitationRow === undefined) {
+        return createFailure("party-invitation-not-found");
+      }
+
+      const now = this.#now().toISOString();
+
+      if (invitationRow.status === "accepted") {
+        this.#database
+          .prepare<{ recipientUserId: string }>(`
+            DELETE FROM party_invitation_acceptance_claims
+            WHERE recipient_user_id = @recipientUserId
+          `)
+          .run({ recipientUserId });
+        this.#revokeLivePartyInvitationsForRecipient(
+          recipientUserId,
+          now,
+          false,
+        );
+
+        return {
+          invitation: toSocialPartyInvitationRecord(invitationRow),
+          success: true,
+        };
+      }
+
+      if (invitationRow.status !== "pending") {
+        return createFailure("party-invitation-not-pending");
+      }
+
+      const claim = this.#database
+        .prepare<{
+          claimToken: string;
+          invitationId: string;
+          now: string;
+          recipientUserId: string;
+        }>(`
+          SELECT 1
+          FROM party_invitation_acceptance_claims
+          WHERE invitation_id = @invitationId
+            AND recipient_user_id = @recipientUserId
+            AND claim_token = @claimToken
+            AND expires_at > @now
+        `)
+        .get({ claimToken, invitationId, now, recipientUserId });
+
+      if (claim === undefined) {
+        return createFailure("party-invitation-acceptance-in-progress");
+      }
+
+      const update = this.#database
+        .prepare<{
+          invitationId: string;
+          now: string;
+          recipientUserId: string;
+        }>(`
+          UPDATE party_invitations
+          SET status = 'accepted', updated_at = @now, resolved_at = @now
+          WHERE id = @invitationId
+            AND recipient_user_id = @recipientUserId
+            AND status = 'pending'
+        `)
+        .run({ invitationId, now, recipientUserId });
+
+      if (update.changes !== 1) {
+        return createFailure("party-invitation-not-pending");
+      }
+
+      this.#database
+        .prepare<{ invitationId: string; recipientUserId: string }>(`
+          DELETE FROM party_invitations
+          WHERE recipient_user_id = @recipientUserId
+            AND status = 'accepted'
+            AND id <> @invitationId
+        `)
+        .run({ invitationId, recipientUserId });
+
+      this.#database
+        .prepare<{ recipientUserId: string }>(`
+          DELETE FROM party_invitation_acceptance_claims
+          WHERE recipient_user_id = @recipientUserId
+        `)
+        .run({ recipientUserId });
+      this.#revokeLivePartyInvitationsForRecipient(
+        recipientUserId,
+        now,
+        false,
+      );
+      this.#pruneResolvedPartyInvitationHistory();
+
+      const invitation = this.#getPartyInvitationById(invitationId);
+
+      return invitation === null
+        ? createFailure("party-invitation-not-found")
+        : { invitation, success: true };
+    }).immediate();
+  }
+
+  async releasePartyInvitationAcceptanceClaim(
+    recipientUserIdValue: unknown,
+    invitationIdValue: unknown,
+    claimTokenValue: unknown,
+  ): Promise<PartyInvitationAcceptanceReleaseResult> {
+    const recipientUserId = normalizeSocialUserId(recipientUserIdValue);
+    const invitationId = normalizePartyInvitationId(invitationIdValue);
+    const claimToken = normalizePartyInvitationId(claimTokenValue);
+
+    if (recipientUserId === null) {
+      return createFailure("invalid-user-id");
+    }
+
+    if (invitationId === null || claimToken === null) {
+      return createFailure("invalid-invitation-id");
+    }
+
+    return this.#database.transaction((): PartyInvitationAcceptanceReleaseResult => {
+      if (!this.#isCanonicalUser(recipientUserId)) {
+        return createFailure("user-not-found");
+      }
+
+      const now = this.#now().toISOString();
+      const restorableInvitation = this.#database
+        .prepare<{
+          claimToken: string;
+          invitationId: string;
+          recipientUserId: string;
+        }>(`
+          SELECT 1
+          FROM party_invitation_acceptance_claims
+          WHERE invitation_id = @invitationId
+            AND recipient_user_id = @recipientUserId
+            AND claim_token = @claimToken
+        `)
+        .get({ claimToken, invitationId, recipientUserId });
+
+      if (restorableInvitation === undefined) {
+        return { released: false, success: true };
+      }
+
+      this.#database
+        .prepare<{
+          invitationId: string;
+          now: string;
+          recipientUserId: string;
+        }>(`
+          UPDATE party_invitations
+          SET
+            expires_at = COALESCE(base_expires_at, expires_at),
+            status = CASE
+              WHEN COALESCE(base_expires_at, expires_at) <= @now
+                THEN 'expired'
+              ELSE status
+            END,
+            updated_at = @now,
+            resolved_at = CASE
+              WHEN COALESCE(base_expires_at, expires_at) <= @now
+                THEN @now
+              ELSE resolved_at
+            END
+          WHERE id = @invitationId
+            AND recipient_user_id = @recipientUserId
+            AND status = 'pending'
+        `)
+        .run({ invitationId, now, recipientUserId });
+
+      const released = this.#database
+        .prepare<{
+          claimToken: string;
+          invitationId: string;
+          recipientUserId: string;
+        }>(`
+          DELETE FROM party_invitation_acceptance_claims
+          WHERE invitation_id = @invitationId
+            AND recipient_user_id = @recipientUserId
+            AND claim_token = @claimToken
+        `)
+        .run({ claimToken, invitationId, recipientUserId }).changes;
+
+      this.#pruneResolvedPartyInvitationHistory();
+      return { released: released === 1, success: true };
+    }).immediate();
   }
 
   async declinePartyInvitation(
@@ -1138,22 +1866,13 @@ export class SqliteSocialStore {
       }
 
       const now = this.#now().toISOString();
-      this.#expirePendingInvitationsForRecipient(recipientUserId, now);
-      const result = this.#database
-        .prepare<{ now: string; recipientUserId: string }>(`
-          UPDATE party_invitations
-          SET
-            status = 'revoked',
-            updated_at = @now,
-            resolved_at = @now
-          WHERE recipient_user_id = @recipientUserId
-            AND status = 'pending'
-            AND expires_at > @now
-        `)
-        .run({ now, recipientUserId });
+      const revokedCount = this.#revokeLivePartyInvitationsForRecipient(
+        recipientUserId,
+        now,
+      );
 
       return {
-        revokedCount: result.changes,
+        revokedCount,
         success: true,
       };
     }).immediate();
@@ -1180,9 +1899,11 @@ export class SqliteSocialStore {
             resolved_at = @now
           WHERE party_code = @partyCode
             AND status = 'pending'
-            AND expires_at > @now
         `)
         .run({ now, partyCode });
+
+      this.#deleteInactivePartyInvitationAcceptanceClaims(now);
+      this.#pruneResolvedPartyInvitationHistory();
 
       return {
         revokedCount: result.changes,
@@ -1213,6 +1934,74 @@ export class SqliteSocialStore {
 
   #isCanonicalUser(userId: string) {
     return this.#getCanonicalUser(userId) !== null;
+  }
+
+  #hasReachedFriendRequestLimit(pair: ActorTargetParameters) {
+    const outgoing = this.#database
+      .prepare<{ actorUserId: string }>(`
+        SELECT COUNT(*) AS requestCount
+        FROM friend_requests
+        WHERE requester_user_id = @actorUserId
+      `)
+      .get({ actorUserId: pair.actorUserId }) as { requestCount: number };
+
+    if (
+      outgoing.requestCount >= this.#maxOutgoingFriendRequestsPerUser
+    ) {
+      return true;
+    }
+
+    const incoming = this.#database
+      .prepare<{ targetUserId: string }>(`
+        SELECT COUNT(*) AS requestCount
+        FROM friend_requests
+        WHERE requester_user_id != @targetUserId
+          AND (
+            user_a_id = @targetUserId
+            OR user_b_id = @targetUserId
+          )
+      `)
+      .get({ targetUserId: pair.targetUserId }) as { requestCount: number };
+
+    return (
+      incoming.requestCount >= this.#maxIncomingFriendRequestsPerUser
+    );
+  }
+
+  #hasReachedPartyInvitationLimit(
+    inviterUserId: string,
+    recipientUserId: string,
+  ) {
+    const counts = this.#database
+      .prepare<{
+        inviterUserId: string;
+        recipientUserId: string;
+      }>(`
+        SELECT
+          (
+            SELECT COUNT(*)
+            FROM party_invitations
+            WHERE inviter_user_id = @inviterUserId
+              AND status = 'pending'
+          ) AS outgoingCount,
+          (
+            SELECT COUNT(*)
+            FROM party_invitations
+            WHERE recipient_user_id = @recipientUserId
+              AND status = 'pending'
+          ) AS incomingCount
+      `)
+      .get({ inviterUserId, recipientUserId }) as {
+      incomingCount: number;
+      outgoingCount: number;
+    };
+
+    return (
+      counts.outgoingCount >=
+        this.#maxPendingPartyInvitationsPerInviter ||
+      counts.incomingCount >=
+        this.#maxPendingPartyInvitationsPerRecipient
+    );
   }
 
   #getCanonicalUser(userId: string) {
@@ -1380,9 +2169,44 @@ export class SqliteSocialStore {
           )
       `)
       .run({ firstUserId, now, secondUserId });
+
+    this.#deleteInactivePartyInvitationAcceptanceClaims(now);
+    this.#pruneResolvedPartyInvitationHistory();
+  }
+
+  #deleteInactivePartyInvitationAcceptanceClaims(now: string) {
+    this.#database
+      .prepare<{ now: string }>(`
+        DELETE FROM party_invitation_acceptance_claims
+        WHERE expires_at <= @now
+          OR NOT EXISTS (
+            SELECT 1
+            FROM party_invitations
+            WHERE party_invitations.id = party_invitation_acceptance_claims.invitation_id
+              AND party_invitations.status = 'pending'
+          )
+      `)
+      .run({ now });
+  }
+
+  #pruneResolvedPartyInvitationHistory() {
+    this.#database
+      .prepare<{ historyLimit: number }>(`
+        DELETE FROM party_invitations
+        WHERE status IN ('declined', 'canceled', 'revoked', 'expired')
+          AND id NOT IN (
+            SELECT id
+            FROM party_invitations
+            WHERE status IN ('declined', 'canceled', 'revoked', 'expired')
+            ORDER BY resolved_at DESC, id DESC
+            LIMIT @historyLimit
+          )
+      `)
+      .run({ historyLimit: this.#maxResolvedPartyInvitationHistory });
   }
 
   #expirePendingInvitationsForActor(actorUserId: string, now: string) {
+    this.#deleteInactivePartyInvitationAcceptanceClaims(now);
     this.#database
       .prepare<{ actorUserId: string; now: string }>(`
         UPDATE party_invitations
@@ -1393,29 +2217,14 @@ export class SqliteSocialStore {
             inviter_user_id = @actorUserId
             OR recipient_user_id = @actorUserId
           )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM party_invitation_acceptance_claims
+            WHERE party_invitation_acceptance_claims.invitation_id = party_invitations.id
+              AND party_invitation_acceptance_claims.expires_at > @now
+          )
       `)
       .run({ actorUserId, now });
-  }
-
-  #expirePendingInvitationsForPartyRecipient(
-    partyCode: string,
-    recipientUserId: string,
-    now: string,
-  ) {
-    this.#database
-      .prepare<{
-        now: string;
-        partyCode: string;
-        recipientUserId: string;
-      }>(`
-        UPDATE party_invitations
-        SET status = 'expired', updated_at = @now, resolved_at = @now
-        WHERE party_code = @partyCode
-          AND recipient_user_id = @recipientUserId
-          AND status = 'pending'
-          AND expires_at <= @now
-      `)
-      .run({ now, partyCode, recipientUserId });
   }
 
   #expirePendingInvitationForRecipient(
@@ -1423,6 +2232,7 @@ export class SqliteSocialStore {
     recipientUserId: string,
     now: string,
   ) {
+    this.#deleteInactivePartyInvitationAcceptanceClaims(now);
     this.#database
       .prepare<{
         invitationId: string;
@@ -1435,6 +2245,12 @@ export class SqliteSocialStore {
           AND recipient_user_id = @recipientUserId
           AND status = 'pending'
           AND expires_at <= @now
+          AND NOT EXISTS (
+            SELECT 1
+            FROM party_invitation_acceptance_claims
+            WHERE party_invitation_acceptance_claims.invitation_id = party_invitations.id
+              AND party_invitation_acceptance_claims.expires_at > @now
+          )
       `)
       .run({ invitationId, now, recipientUserId });
   }
@@ -1443,6 +2259,7 @@ export class SqliteSocialStore {
     recipientUserId: string,
     now: string,
   ) {
+    this.#deleteInactivePartyInvitationAcceptanceClaims(now);
     this.#database
       .prepare<{ now: string; recipientUserId: string }>(`
         UPDATE party_invitations
@@ -1450,8 +2267,55 @@ export class SqliteSocialStore {
         WHERE recipient_user_id = @recipientUserId
           AND status = 'pending'
           AND expires_at <= @now
+          AND NOT EXISTS (
+            SELECT 1
+            FROM party_invitation_acceptance_claims
+            WHERE party_invitation_acceptance_claims.invitation_id = party_invitations.id
+              AND party_invitation_acceptance_claims.expires_at > @now
+          )
       `)
       .run({ now, recipientUserId });
+  }
+
+  #revokeLivePartyInvitationsForRecipient(
+    recipientUserId: string,
+    now: string,
+    preserveAcceptanceClaims = true,
+  ) {
+    this.#expirePendingInvitationsForRecipient(recipientUserId, now);
+
+    const revokedCount = this.#database
+      .prepare<{
+        now: string;
+        preserveAcceptanceClaims: number;
+        recipientUserId: string;
+      }>(`
+        UPDATE party_invitations
+        SET
+          status = 'revoked',
+          updated_at = @now,
+          resolved_at = @now
+        WHERE recipient_user_id = @recipientUserId
+          AND status = 'pending'
+          AND expires_at > @now
+          AND (
+            @preserveAcceptanceClaims = 0
+            OR NOT EXISTS (
+              SELECT 1
+              FROM party_invitation_acceptance_claims
+              WHERE party_invitation_acceptance_claims.invitation_id = party_invitations.id
+                AND party_invitation_acceptance_claims.expires_at > @now
+            )
+          )
+      `)
+      .run({
+        now,
+        preserveAcceptanceClaims: preserveAcceptanceClaims ? 1 : 0,
+        recipientUserId,
+      }).changes;
+
+    this.#pruneResolvedPartyInvitationHistory();
+    return revokedCount;
   }
 
   #expirePendingInvitationForInviter(
@@ -1459,6 +2323,7 @@ export class SqliteSocialStore {
     inviterUserId: string,
     now: string,
   ) {
+    this.#deleteInactivePartyInvitationAcceptanceClaims(now);
     this.#database
       .prepare<{
         invitationId: string;
@@ -1471,11 +2336,18 @@ export class SqliteSocialStore {
           AND inviter_user_id = @inviterUserId
           AND status = 'pending'
           AND expires_at <= @now
+          AND NOT EXISTS (
+            SELECT 1
+            FROM party_invitation_acceptance_claims
+            WHERE party_invitation_acceptance_claims.invitation_id = party_invitations.id
+              AND party_invitation_acceptance_claims.expires_at > @now
+          )
       `)
       .run({ invitationId, inviterUserId, now });
   }
 
   #expirePendingInvitationsForParty(partyCode: string, now: string) {
+    this.#deleteInactivePartyInvitationAcceptanceClaims(now);
     this.#database
       .prepare<{ now: string; partyCode: string }>(`
         UPDATE party_invitations
@@ -1483,6 +2355,12 @@ export class SqliteSocialStore {
         WHERE party_code = @partyCode
           AND status = 'pending'
           AND expires_at <= @now
+          AND NOT EXISTS (
+            SELECT 1
+            FROM party_invitation_acceptance_claims
+            WHERE party_invitation_acceptance_claims.invitation_id = party_invitations.id
+              AND party_invitation_acceptance_claims.expires_at > @now
+          )
       `)
       .run({ now, partyCode });
   }
@@ -1576,7 +2454,10 @@ export class SqliteSocialStore {
     actorUserIdValue: unknown,
     invitationIdValue: unknown,
     owner: "inviter" | "recipient",
-    status: Exclude<PartyInvitationStatus, "expired" | "pending">,
+    status: Exclude<
+      PartyInvitationStatus,
+      "accepted" | "expired" | "pending"
+    >,
   ): Promise<PartyInvitationMutationResult> {
     const actorUserId = normalizeSocialUserId(actorUserIdValue);
     const invitationId = normalizePartyInvitationId(invitationIdValue);
@@ -1617,8 +2498,11 @@ export class SqliteSocialStore {
       }
 
       if (invitationRow.status === status) {
+        const invitation = toSocialPartyInvitationRecord(invitationRow);
+        this.#pruneResolvedPartyInvitationHistory();
+
         return {
-          invitation: toSocialPartyInvitationRecord(invitationRow),
+          invitation,
           success: true,
         };
       }
@@ -1634,14 +2518,16 @@ export class SqliteSocialStore {
           actorUserId: string;
           invitationId: string;
           now: string;
-          status: Exclude<PartyInvitationStatus, "expired" | "pending">;
+          status: Exclude<
+            PartyInvitationStatus,
+            "accepted" | "expired" | "pending"
+          >;
         }>(`
           UPDATE party_invitations
           SET status = @status, updated_at = @now, resolved_at = @now
           WHERE id = @invitationId
             AND ${ownershipColumn} = @actorUserId
             AND status = 'pending'
-            AND expires_at > @now
         `)
         .run({ actorUserId, invitationId, now, status });
 
@@ -1649,11 +2535,25 @@ export class SqliteSocialStore {
         return createFailure("party-invitation-not-pending");
       }
 
+      this.#deleteInactivePartyInvitationAcceptanceClaims(now);
+
       const invitation = this.#getPartyInvitationById(invitationId);
+
+      this.#pruneResolvedPartyInvitationHistory();
 
       return invitation === null
         ? createFailure("party-invitation-not-found")
         : { invitation, success: true };
     }).immediate();
   }
+}
+
+let defaultStore: SqliteSocialStore | null = null;
+
+export function getSocialStore() {
+  defaultStore ??= new SqliteSocialStore({
+    databasePath: getUserProfileSqlitePath(),
+  });
+
+  return defaultStore;
 }

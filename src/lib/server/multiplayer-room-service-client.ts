@@ -213,6 +213,7 @@ export class MultiplayerRoomServiceClient
       payload.participantCapabilities !== true ||
       payload.accountPartyMemberships !== true ||
       payload.authenticatedAdmission !== true ||
+      payload.membershipOnlyReacquisition !== true ||
       payload.socialPresenceLeases !== true
     ) {
       return createProtocolServiceFailure(
@@ -520,10 +521,15 @@ function parseMultiplayerAccountPartyServiceResult(
   }
 
   if (value.outcome === "admission") {
+    const isAdmissionCommand = command.type === "party.admitAuthenticated";
+    const isReacquisitionCommand =
+      command.type === "party.reacquireAuthenticated";
+
     if (
-      command.type !== "party.admitAuthenticated" ||
-      !isPartyInvitationIntent(command.intent) ||
+      (!isAdmissionCommand && !isReacquisitionCommand) ||
+      (isAdmissionCommand && !isPartyInvitationIntent(command.intent)) ||
       (value.admission !== "admitted" && value.admission !== "reacquired") ||
+      (isReacquisitionCommand && value.admission !== "reacquired") ||
       !isEntityId(value.participantId) ||
       !isParticipantCapability(value.participantCapability) ||
       !isMultiplayerRoomSnapshot(value.snapshot)
@@ -542,7 +548,8 @@ function parseMultiplayerAccountPartyServiceResult(
       participant?.id !== value.participantId ||
       participant.userId !== user.id ||
       participant.displayName !== user.displayName ||
-      (value.admission === "admitted" &&
+      (isAdmissionCommand &&
+        value.admission === "admitted" &&
         participant.role !== "observer" &&
         (command.intent !== "play" || participant.role !== "player"))
     ) {

@@ -317,6 +317,12 @@ lifecycle commands carry the same generation. Restart creates a fresh runtime
 and advances the match id, while stale-generation commands are rejected before
 the current runtime advances.
 
+The collection preflight also requires
+`membershipOnlyReacquisition: true`. This capability bit distinguishes a
+sidecar that implements `party.reacquireAuthenticated` atomically from an older
+v6 sidecar, so accepted-invitation retries fail before mutation instead of
+falling back to broader authenticated admission.
+
 ## Stack
 
 - Node.js 22
@@ -335,15 +341,19 @@ the current runtime advances.
 
 Leaderboards, player accounts, signed-in sessions, profile stats, saved
 replays, and the durable social graph use the same SQLite database. Schema
-version 6 adds one pending friend request per canonical account pair, accepted
-canonical friendships, directed blocks, and short-lived party invitations with
-play/watch intent and accepted, declined, canceled, revoked, or expired terminal
-states. Blocking another account removes requests and friendships and revokes
-pending invitations in both directions in one transaction; removing a friend
+version 7 includes one pending friend request per canonical account pair,
+accepted canonical friendships, directed blocks, short-lived party invitations,
+recipient-wide acceptance claims, and fixed-window API counters for exact
+discovery, friend-request creation, and party-invitation creation. Pending
+incoming and outgoing friend requests are capped per account. Party invitations
+carry play/watch intent and accepted, declined, canceled, revoked, or expired
+terminal states. Blocking another account removes requests and friendships and
+revokes pending invitations in both directions in one transaction; removing a
+friend
 also revokes pending invitations for that pair, while unblocking restores
 nothing automatically. Party invitations use a server-owned five-minute expiry;
-pending social overviews omit the reusable party code until trusted admission
-succeeds.
+all client-facing invitation summaries omit the reusable party code, including
+after trusted admission succeeds.
 Leaderboard records are stored under game-and-parameter keys such as
 `snake|mode=levels` or `tetris|board=10x20|level=3`. Signed-in play sessions also
 store the selected leaderboard key so profile stats can report both per-game
@@ -361,14 +371,52 @@ The default database path is `.data/snake-leaderboard.sqlite`, kept for
 compatibility with existing Snake deployments. On a VPS, set
 `GAME_LEADERBOARD_SQLITE_PATH` to durable storage.
 
-This schema milestone does not expose a Friends interface or public social API
-yet. Presence leases, effective busy/in-party status, parties, matches, observer
+Authenticated social APIs now expose the durable overview and exact discovery,
+presence renewal/release, friend-request decisions, friend removal, blocks, and
+party-invitation creation/resolution under `/api/social`. Mutations derive the
+actor from the HTTP-only session cookie, require same-origin JSON when they have
+a body, reject bodies over 16 KiB before JSON parsing, and return no-store
+responses. Presence resolution enriches friends with only `available`, `busy`,
+`in-party`, `offline`, or `unknown`; a room-service failure falls back to
+`unknown` and keeps invitation actions disabled. Exact
+discovery allows 30 requests per account per minute, friend-request creation
+allows 10, and party-invitation creation allows 20; all return `429` with
+`Retry-After` when exhausted. Each account may hold at most 100 pending incoming
+and 100 pending outgoing friend requests, plus 20 pending incoming and 20
+pending outgoing party invitations.
+
+Presence leases, effective busy/in-party status, parties, matches, observer
 queues, and participant capabilities remain volatile and are never reconstructed
-from social rows. Party invitation records refer to volatile party codes without
-a database foreign key and never store participant capabilities. Authenticated
-invitation creation and acceptance remain deferred until the presence service
-and trusted Next-to-sidecar admission bridge can recheck availability, live
-party membership, capacity, and capability issuance together.
+from social rows. Invitation creation validates the relationship, asks the
+sidecar to confirm host ownership and current eligibility, revalidates the
+relationship, and only then inserts or returns the durable invitation. Busy,
+in-party, offline, and unknown recipients cannot receive or accept an invitation;
+an existing pending invitation is suspended until the recipient becomes
+available again or its TTL expires.
+
+Acceptance reads the private party code only inside the trusted server boundary
+and first obtains a 30-second, recipient-wide SQLite claim. The claim serializes
+concurrent accepts, extends the invitation through a two-minute recovery grace,
+and allows only its matching token to finalize. Releasing a failed attempt
+restores the original invitation expiry, or expires it immediately when that
+deadline has passed. The server then admits the
+signed-in account, atomically accepts the chosen invitation while revoking the
+recipient's other pending invitations, and returns the participant capability
+only after that durable step succeeds. A new admission is compensated if
+persistence fails; the claim is released only after compensation succeeds, and
+a pre-existing membership reacquisition is never removed. A retry after a lost
+acceptance response uses a membership-only authority command that cannot admit
+a new participant; an old accepted invitation therefore cannot rejoin a party
+after the account leaves.
+
+Before an overview returns invitations, private invitation tuples are
+reconciled with the sidecar so terminal parties are revoked even after WebSocket
+closure, expiry, eviction, or sidecar restart. Host transfer does not invalidate
+an already-issued party invitation. Reconciliation and friend-availability
+resolution use at most four concurrent authority calls. Resolved nonaccepted
+invitation history is bounded to 1,000 rows, and only the newest accepted row per
+recipient is retained as the lost-response reconnect index. Client-facing
+invitation JSON never contains a party code or stores a participant capability.
 
 Snake, Tetris, Breakout, Minesweeper, Space Invaders, Pong, Simon, 2048,
 Asteroids, and the Tank Patrol single-player campaign record replay events

@@ -1495,6 +1495,8 @@ export class InProcessMultiplayerRoomStore
         return this.#inspectPartyInvitation(command);
       case "party.admitAuthenticated":
         return this.#admitAuthenticatedParticipant(command);
+      case "party.reacquireAuthenticated":
+        return this.#reacquireAuthenticatedMembership(command);
       case "party.compensateAdmission":
         return this.#compensateAuthenticatedAdmission(command);
     }
@@ -1788,6 +1790,63 @@ export class InProcessMultiplayerRoomStore
       ).snapshot,
       success: true,
     };
+  }
+
+  #reacquireAuthenticatedMembership(
+    command: Extract<
+      MultiplayerAccountPartyCommand,
+      { type: "party.reacquireAuthenticated" }
+    >,
+  ): MultiplayerAccountPartyResult<MultiplayerRoomSnapshot> {
+    const partyCode = normalizePrivateRoomCode(command.partyCode);
+
+    if (partyCode === null) {
+      return createAccountPartyFailure(
+        "invalid-room-code",
+        "Authenticated reacquisition requires a supported party code.",
+      );
+    }
+
+    const userResult = normalizeAuthenticatedAccountUser(command.user);
+
+    if (!userResult.success) {
+      return userResult;
+    }
+
+    const lookupNowMs = this.#getNowMs();
+    const storedRoomResult = this.#getAccountStoredRoom(
+      partyCode,
+      lookupNowMs,
+    );
+
+    if (!("room" in storedRoomResult)) {
+      return getAccountRoomFailure(storedRoomResult);
+    }
+
+    const existingMembership = this.#getLivePartyMembership(
+      userResult.user.id,
+      lookupNowMs,
+    );
+
+    if (existingMembership === null) {
+      return createAccountPartyFailure(
+        "participant-not-found",
+        "This account no longer belongs to the party.",
+      );
+    }
+
+    if (existingMembership.roomCode !== partyCode) {
+      return createAccountPartyFailure(
+        "in-other-party",
+        "This account already belongs to another party.",
+      );
+    }
+
+    return this.#reacquireAuthenticatedParticipant(
+      storedRoomResult,
+      existingMembership,
+      lookupNowMs,
+    );
   }
 
   #reacquireAuthenticatedParticipant(

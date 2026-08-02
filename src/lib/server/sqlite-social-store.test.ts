@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -9,6 +9,7 @@ import type { PartyInvitationIntent } from "@/lib/social";
 import { createUserDisplayNameKey } from "@/lib/user-profile";
 
 import {
+  SOCIAL_API_RATE_LIMITS,
   SqliteSocialStore,
   type PartyInvitationMutationResult,
   type SocialOverviewResult,
@@ -87,12 +88,40 @@ function createStoreHarness() {
   const databasePath = join(tempDir, "social.sqlite");
   const stores = new Set<SqliteSocialStore>();
   let currentTime = START_TIME;
+  let nextAcceptanceClaimToken = 0;
   let nextInvitationId = 0;
 
-  function createStore(options: { createId?: () => string } = {}) {
+  function createStore(
+    options: {
+      acceptanceClaimTtlMs?: number;
+      acceptanceRecoveryGraceMs?: number;
+      createAcceptanceClaimToken?: () => string;
+      createId?: () => string;
+      maxIncomingFriendRequestsPerUser?: number;
+      maxOutgoingFriendRequestsPerUser?: number;
+      maxPendingPartyInvitationsPerInviter?: number;
+      maxPendingPartyInvitationsPerRecipient?: number;
+      maxResolvedPartyInvitationHistory?: number;
+    } = {},
+  ) {
     const store = new SqliteSocialStore({
+      acceptanceClaimTtlMs: options.acceptanceClaimTtlMs,
+      acceptanceRecoveryGraceMs: options.acceptanceRecoveryGraceMs,
+      createAcceptanceClaimToken:
+        options.createAcceptanceClaimToken ??
+        (() => `claim-${++nextAcceptanceClaimToken}`),
       createId: options.createId ?? (() => `invitation-${++nextInvitationId}`),
       databasePath,
+      maxIncomingFriendRequestsPerUser:
+        options.maxIncomingFriendRequestsPerUser,
+      maxOutgoingFriendRequestsPerUser:
+        options.maxOutgoingFriendRequestsPerUser,
+      maxPendingPartyInvitationsPerInviter:
+        options.maxPendingPartyInvitationsPerInviter,
+      maxPendingPartyInvitationsPerRecipient:
+        options.maxPendingPartyInvitationsPerRecipient,
+      maxResolvedPartyInvitationHistory:
+        options.maxResolvedPartyInvitationHistory,
       now: () => new Date(currentTime),
       partyInvitationTtlMs: INVITATION_TTL_MS,
     });
@@ -225,6 +254,38 @@ async function createInvitation(
   );
 }
 
+async function claimInvitation(
+  store: SqliteSocialStore,
+  recipientUserId: string,
+  invitationId: string,
+) {
+  const claim = await store.claimPartyInvitationForAcceptance(
+    recipientUserId,
+    invitationId,
+  );
+  expect(claim.success).toBe(true);
+
+  if (!claim.success) {
+    throw new Error(`Expected acceptance claim, got ${claim.reason}.`);
+  }
+
+  return claim;
+}
+
+async function claimAndAcceptInvitation(
+  store: SqliteSocialStore,
+  recipientUserId: string,
+  invitationId: string,
+) {
+  const claim = await claimInvitation(store, recipientUserId, invitationId);
+
+  return store.acceptPartyInvitationAfterAdmission(
+    recipientUserId,
+    invitationId,
+    claim.claimToken,
+  );
+}
+
 describe("sqlite social store", () => {
   const disposables: Array<() => void> = [];
 
@@ -232,6 +293,21 @@ describe("sqlite social store", () => {
     while (disposables.length > 0) {
       disposables.pop()?.();
     }
+  });
+
+  it("validates configuration before creating or opening the database", () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "social-store-invalid-"));
+    const databasePath = join(tempDir, "social.sqlite");
+    disposables.push(() => rmSync(tempDir, { force: true, recursive: true }));
+
+    expect(
+      () =>
+        new SqliteSocialStore({
+          databasePath,
+          maxPendingPartyInvitationsPerRecipient: 0,
+        }),
+    ).toThrow("Pending party invitation recipient limit");
+    expect(existsSync(databasePath)).toBe(false);
   });
 
   it("discovers exactly normalized account names and reports relationship changes", async () => {
@@ -308,6 +384,74 @@ describe("sqlite social store", () => {
     });
     await expect(harness.store.discoverUser("user-missing", "Grace Hopper")).resolves.toEqual({
       reason: "user-not-found",
+      success: false,
+    });
+  });
+
+  it("rate-limits social API actions independently and resets fixed windows", async () => {
+    const harness = createStoreHarness();
+    disposables.push(harness.dispose);
+    const discoveryLimit = SOCIAL_API_RATE_LIMITS.discovery.limit;
+
+    for (let request = 0; request < discoveryLimit; request += 1) {
+      await expect(
+        harness.store.consumeSocialApiRateLimit("user-ada", "discovery"),
+      ).resolves.toMatchObject({
+        allowed: true,
+        remaining: discoveryLimit - request - 1,
+        success: true,
+      });
+    }
+
+    await expect(
+      harness.store.consumeSocialApiRateLimit("user-ada", "discovery"),
+    ).resolves.toMatchObject({
+      allowed: false,
+      remaining: 0,
+      retryAfterSeconds: 60,
+      success: true,
+    });
+    await expect(
+      harness.store.consumeSocialApiRateLimit("user-ada", "friend-request"),
+    ).resolves.toMatchObject({ allowed: true, success: true });
+    const partyInvitationLimit =
+      SOCIAL_API_RATE_LIMITS["party-invitation"].limit;
+
+    for (let request = 0; request < partyInvitationLimit; request += 1) {
+      await expect(
+        harness.store.consumeSocialApiRateLimit(
+          "user-ada",
+          "party-invitation",
+        ),
+      ).resolves.toMatchObject({
+        allowed: true,
+        remaining: partyInvitationLimit - request - 1,
+        success: true,
+      });
+    }
+
+    await expect(
+      harness.store.consumeSocialApiRateLimit(
+        "user-ada",
+        "party-invitation",
+      ),
+    ).resolves.toMatchObject({ allowed: false, remaining: 0, success: true });
+
+    harness.advanceTime(SOCIAL_API_RATE_LIMITS.discovery.windowMs);
+    await expect(
+      harness.store.consumeSocialApiRateLimit("user-ada", "discovery"),
+    ).resolves.toMatchObject({
+      allowed: true,
+      remaining: discoveryLimit - 1,
+      success: true,
+    });
+    await expect(
+      harness.store.consumeSocialApiRateLimit("bad user", "discovery"),
+    ).resolves.toEqual({ reason: "invalid-user-id", success: false });
+    await expect(
+      harness.store.consumeSocialApiRateLimit("user-ada", "unsupported"),
+    ).resolves.toEqual({
+      reason: "invalid-rate-limit-action",
       success: false,
     });
   });
@@ -480,6 +624,47 @@ describe("sqlite social store", () => {
     await expect(
       harness.store.createFriendRequest("user-ada", "user-legacy"),
     ).resolves.toEqual({ reason: "user-not-found", success: false });
+  });
+
+  it("caps pending incoming and outgoing friend requests without breaking retries", async () => {
+    const outgoingHarness = createStoreHarness();
+    disposables.push(outgoingHarness.dispose);
+    const outgoingStore = outgoingHarness.createStore({
+      maxOutgoingFriendRequestsPerUser: 1,
+    });
+
+    await expect(
+      outgoingStore.createFriendRequest("user-ada", "user-grace"),
+    ).resolves.toMatchObject({ created: true, success: true });
+    await expect(
+      outgoingStore.createFriendRequest("user-ada", "user-grace"),
+    ).resolves.toMatchObject({ created: false, success: true });
+    await expect(
+      outgoingStore.createFriendRequest("user-ada", "user-alan"),
+    ).resolves.toEqual({
+      reason: "friend-request-limit-reached",
+      success: false,
+    });
+    await outgoingStore.cancelFriendRequest("user-ada", "user-grace");
+    await expect(
+      outgoingStore.createFriendRequest("user-ada", "user-alan"),
+    ).resolves.toMatchObject({ created: true, success: true });
+
+    const incomingHarness = createStoreHarness();
+    disposables.push(incomingHarness.dispose);
+    const incomingStore = incomingHarness.createStore({
+      maxIncomingFriendRequestsPerUser: 1,
+    });
+
+    await expect(
+      incomingStore.createFriendRequest("user-ada", "user-grace"),
+    ).resolves.toMatchObject({ created: true, success: true });
+    await expect(
+      incomingStore.createFriendRequest("user-amy", "user-grace"),
+    ).resolves.toEqual({
+      reason: "friend-request-limit-reached",
+      success: false,
+    });
   });
 
   it("accepts only incoming requests and prevents duplicate friendships", async () => {
@@ -815,6 +1000,122 @@ describe("sqlite social store", () => {
     expect(replacementOverview[0]).not.toHaveProperty("partyCode");
   });
 
+  it("returns private pending invitation tuples only for server reconciliation", async () => {
+    const harness = createStoreHarness();
+    disposables.push(harness.dispose);
+    await makeFriends(harness, "user-ada", "user-grace");
+    await makeFriends(harness, "user-amy", "user-ada");
+    await makeFriends(harness, "user-grace", "user-betty");
+
+    const outgoing = await createInvitation(harness, {
+      inviterUserId: "user-ada",
+      partyCode: "OUTGOING",
+      recipientUserId: "user-grace",
+    });
+    const incoming = await createInvitation(harness, {
+      inviterUserId: "user-amy",
+      partyCode: "INCOMING",
+      recipientUserId: "user-ada",
+    });
+    await createInvitation(harness, {
+      inviterUserId: "user-grace",
+      partyCode: "UNRELATED",
+      recipientUserId: "user-betty",
+    });
+
+    const result =
+      await harness.store.getPendingPartyInvitationsForReconciliation(
+        "user-ada",
+      );
+
+    expect(result).toMatchObject({ success: true });
+    if (!result.success) {
+      throw new Error(`Expected reconciliation rows, got ${result.reason}.`);
+    }
+    expect(
+      result.invitations.map((invitation) => ({
+        id: invitation.id,
+        partyCode: invitation.partyCode,
+      })),
+    ).toEqual(
+      expect.arrayContaining([
+        { id: outgoing.id, partyCode: "OUTGOING" },
+        { id: incoming.id, partyCode: "INCOMING" },
+      ]),
+    );
+    expect(result.invitations).toHaveLength(2);
+    await expect(
+      harness.store.getPendingPartyInvitationsForReconciliation("bad user"),
+    ).resolves.toEqual({ reason: "invalid-user-id", success: false });
+  });
+
+  it("caps pending party invitations per inviter and recipient while preserving retries", async () => {
+    const outgoingHarness = createStoreHarness();
+    disposables.push(outgoingHarness.dispose);
+    await makeFriends(outgoingHarness, "user-ada", "user-grace");
+    await makeFriends(outgoingHarness, "user-ada", "user-amy");
+    const outgoingStore = outgoingHarness.createStore({
+      maxPendingPartyInvitationsPerInviter: 1,
+    });
+    const first = await createInvitation(
+      outgoingHarness,
+      {
+        inviterUserId: "user-ada",
+        partyCode: "OUTGOING-1",
+        recipientUserId: "user-grace",
+        store: outgoingStore,
+      },
+    );
+
+    await expect(
+      outgoingStore.createPartyInvitation({
+        intent: "play",
+        inviterUserId: "user-ada",
+        partyCode: "OUTGOING-1",
+        recipientUserId: "user-grace",
+      }),
+    ).resolves.toEqual({ created: false, invitation: first, success: true });
+    await expect(
+      outgoingStore.createPartyInvitation({
+        intent: "play",
+        inviterUserId: "user-ada",
+        partyCode: "OUTGOING-2",
+        recipientUserId: "user-amy",
+      }),
+    ).resolves.toEqual({
+      reason: "party-invitation-limit-reached",
+      success: false,
+    });
+
+    const incomingHarness = createStoreHarness();
+    disposables.push(incomingHarness.dispose);
+    await makeFriends(incomingHarness, "user-ada", "user-grace");
+    await makeFriends(incomingHarness, "user-amy", "user-grace");
+    const incomingStore = incomingHarness.createStore({
+      maxPendingPartyInvitationsPerRecipient: 1,
+    });
+    await createInvitation(
+      incomingHarness,
+      {
+        inviterUserId: "user-ada",
+        partyCode: "INCOMING-1",
+        recipientUserId: "user-grace",
+        store: incomingStore,
+      },
+    );
+    await expect(
+      incomingStore.createPartyInvitation({
+        intent: "watch",
+        inviterUserId: "user-amy",
+        partyCode: "INCOMING-2",
+        recipientUserId: "user-grace",
+      }),
+    ).resolves.toEqual({
+      reason: "party-invitation-limit-reached",
+      success: false,
+    });
+  });
+
   it("enforces invitation ownership and records accepted, declined, canceled, revoked, and expired resolutions", async () => {
     const harness = createStoreHarness();
     disposables.push(harness.dispose);
@@ -835,13 +1136,19 @@ describe("sqlite social store", () => {
       harness.store.cancelPartyInvitation("user-grace", accepted.id),
     ).resolves.toEqual({ reason: "party-invitation-not-found", success: false });
     await expect(
-      harness.store.acceptPartyInvitationAfterAdmission("user-ada", accepted.id),
+      harness.store.claimPartyInvitationForAcceptance("user-ada", accepted.id),
     ).resolves.toEqual({ reason: "party-invitation-not-found", success: false });
 
+    const acceptanceClaim = await claimInvitation(
+      harness.store,
+      "user-grace",
+      accepted.id,
+    );
     const acceptedAt = harness.advanceTime();
     const acceptedResult = await harness.store.acceptPartyInvitationAfterAdmission(
       "user-grace",
       accepted.id,
+      acceptanceClaim.claimToken,
     );
     expect(acceptedResult).toMatchObject({
       invitation: {
@@ -854,7 +1161,11 @@ describe("sqlite social store", () => {
       success: true,
     });
     await expect(
-      harness.store.acceptPartyInvitationAfterAdmission("user-grace", accepted.id),
+      harness.store.acceptPartyInvitationAfterAdmission(
+        "user-grace",
+        accepted.id,
+        acceptanceClaim.claimToken,
+      ),
     ).resolves.toEqual(acceptedResult);
     await expect(
       harness.store.declinePartyInvitation("user-grace", accepted.id),
@@ -925,6 +1236,416 @@ describe("sqlite social store", () => {
       "revoked",
       "expired",
     ]);
+  });
+
+  it("atomically accepts one invitation and revokes the recipient's other live invitations", async () => {
+    const harness = createStoreHarness();
+    disposables.push(harness.dispose);
+    await makeFriends(harness, "user-ada", "user-grace");
+    await makeFriends(harness, "user-amy", "user-grace");
+    await makeFriends(harness, "user-ada", "user-zed");
+
+    const selected = await createInvitation(harness, {
+      inviterUserId: "user-ada",
+      partyCode: "SELECTED",
+      recipientUserId: "user-grace",
+    });
+    const otherForRecipient = await createInvitation(harness, {
+      inviterUserId: "user-amy",
+      partyCode: "OTHER-FOR-RECIPIENT",
+      recipientUserId: "user-grace",
+    });
+    const unrelatedRecipient = await createInvitation(harness, {
+      inviterUserId: "user-ada",
+      partyCode: "UNRELATED-RECIPIENT",
+      recipientUserId: "user-zed",
+    });
+
+    const acceptedAt = harness.advanceTime();
+    await expect(
+      claimAndAcceptInvitation(
+        harness.store,
+        "user-grace",
+        selected.id,
+      ),
+    ).resolves.toMatchObject({
+      invitation: { id: selected.id, status: "accepted" },
+      success: true,
+    });
+
+    expect(readInvitationRecords(harness.databasePath)).toEqual([
+      expect.objectContaining({
+        id: selected.id,
+        resolvedAt: acceptedAt,
+        status: "accepted",
+      }),
+      expect.objectContaining({
+        id: otherForRecipient.id,
+        resolvedAt: acceptedAt,
+        status: "revoked",
+      }),
+      expect.objectContaining({
+        id: unrelatedRecipient.id,
+        resolvedAt: null,
+        status: "pending",
+      }),
+    ]);
+
+    const createdAfterAcceptance = await createInvitation(harness, {
+      inviterUserId: "user-amy",
+      partyCode: "CREATED-AFTER-ACCEPTANCE",
+      recipientUserId: "user-grace",
+    });
+    const retriedAt = harness.advanceTime();
+    await expect(
+      harness.store.acceptPartyInvitationAfterAdmission(
+        "user-grace",
+        selected.id,
+        "already-accepted-token",
+      ),
+    ).resolves.toMatchObject({
+      invitation: { id: selected.id, status: "accepted" },
+      success: true,
+    });
+
+    expect(
+      readInvitationRecords(harness.databasePath).find(
+        (invitation) => invitation.id === createdAfterAcceptance.id,
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        resolvedAt: retriedAt,
+        status: "revoked",
+      }),
+    );
+    expect(
+      readInvitationRecords(harness.databasePath).find(
+        (invitation) => invitation.id === unrelatedRecipient.id,
+      ),
+    ).toEqual(expect.objectContaining({ resolvedAt: null, status: "pending" }));
+  });
+
+  it("serializes recipient acceptance claims and protects the claimed invitation", async () => {
+    const harness = createStoreHarness();
+    disposables.push(harness.dispose);
+    await makeFriends(harness, "user-ada", "user-grace");
+    await makeFriends(harness, "user-amy", "user-grace");
+    const selected = await createInvitation(harness, {
+      inviterUserId: "user-ada",
+      partyCode: "CLAIMED",
+      recipientUserId: "user-grace",
+    });
+    const other = await createInvitation(harness, {
+      inviterUserId: "user-amy",
+      partyCode: "OTHER",
+      recipientUserId: "user-grace",
+    });
+    const claim = await claimInvitation(
+      harness.store,
+      "user-grace",
+      selected.id,
+    );
+
+    await expect(
+      harness.store.claimPartyInvitationForAcceptance(
+        "user-grace",
+        selected.id,
+      ),
+    ).resolves.toEqual({
+      reason: "party-invitation-acceptance-in-progress",
+      success: false,
+    });
+    await expect(
+      harness.store.claimPartyInvitationForAcceptance("user-grace", other.id),
+    ).resolves.toEqual({
+      reason: "party-invitation-acceptance-in-progress",
+      success: false,
+    });
+    await expect(
+      harness.store.revokePendingPartyInvitationsForRecipient("user-grace"),
+    ).resolves.toEqual({ revokedCount: 1, success: true });
+    await expect(
+      harness.store.getPendingPartyInvitation("user-grace", selected.id),
+    ).resolves.toMatchObject({ invitation: { status: "pending" }, success: true });
+    await expect(
+      harness.store.releasePartyInvitationAcceptanceClaim(
+        "user-grace",
+        selected.id,
+        "wrong-token",
+      ),
+    ).resolves.toEqual({ released: false, success: true });
+    await expect(
+      harness.store.releasePartyInvitationAcceptanceClaim(
+        "user-grace",
+        selected.id,
+        claim.claimToken,
+      ),
+    ).resolves.toEqual({ released: true, success: true });
+  });
+
+  it("extends near-expiry invitations so an expired claim can be retried safely", async () => {
+    const harness = createStoreHarness();
+    disposables.push(harness.dispose);
+    await makeFriends(harness, "user-ada", "user-grace");
+    const claimStore = harness.createStore({
+      acceptanceClaimTtlMs: 1_000,
+      acceptanceRecoveryGraceMs: 5_000,
+    });
+    const invitation = await createInvitation(harness, {
+      inviterUserId: "user-ada",
+      partyCode: "RECOVERY",
+      recipientUserId: "user-grace",
+      store: claimStore,
+    });
+    harness.advanceTime(INVITATION_TTL_MS - 500);
+    const firstClaim = await claimInvitation(
+      claimStore,
+      "user-grace",
+      invitation.id,
+    );
+
+    expect(Date.parse(firstClaim.invitation.expiresAt)).toBeGreaterThan(
+      Date.parse(firstClaim.claimExpiresAt),
+    );
+    harness.advanceTime(1_100);
+    const retryClaim = await claimInvitation(
+      claimStore,
+      "user-grace",
+      invitation.id,
+    );
+
+    await expect(
+      claimStore.acceptPartyInvitationAfterAdmission(
+        "user-grace",
+        invitation.id,
+        firstClaim.claimToken,
+      ),
+    ).resolves.toEqual({
+      reason: "party-invitation-acceptance-in-progress",
+      success: false,
+    });
+    await expect(
+      claimStore.acceptPartyInvitationAfterAdmission(
+        "user-grace",
+        invitation.id,
+        retryClaim.claimToken,
+      ),
+    ).resolves.toMatchObject({
+      invitation: { status: "accepted" },
+      success: true,
+    });
+  });
+
+  it("restores the base TTL when a failed acceptance releases its claim", async () => {
+    const harness = createStoreHarness();
+    disposables.push(harness.dispose);
+    await makeFriends(harness, "user-ada", "user-grace");
+    const claimStore = harness.createStore({
+      acceptanceClaimTtlMs: 2_000,
+      acceptanceRecoveryGraceMs: 5_000,
+    });
+    const invitation = await createInvitation(harness, {
+      inviterUserId: "user-ada",
+      partyCode: "RELEASED-RECOVERY",
+      recipientUserId: "user-grace",
+      store: claimStore,
+    });
+    harness.advanceTime(INVITATION_TTL_MS - 500);
+    const firstClaim = await claimInvitation(
+      claimStore,
+      "user-grace",
+      invitation.id,
+    );
+
+    expect(firstClaim.invitation.expiresAt).not.toBe(invitation.expiresAt);
+    await expect(
+      claimStore.releasePartyInvitationAcceptanceClaim(
+        "user-grace",
+        invitation.id,
+        firstClaim.claimToken,
+      ),
+    ).resolves.toEqual({ released: true, success: true });
+    await expect(
+      claimStore.getPendingPartyInvitation("user-grace", invitation.id),
+    ).resolves.toMatchObject({
+      invitation: { expiresAt: invitation.expiresAt, status: "pending" },
+      success: true,
+    });
+
+    const secondClaim = await claimInvitation(
+      claimStore,
+      "user-grace",
+      invitation.id,
+    );
+    harness.advanceTime(600);
+    await expect(
+      claimStore.releasePartyInvitationAcceptanceClaim(
+        "user-grace",
+        invitation.id,
+        secondClaim.claimToken,
+      ),
+    ).resolves.toEqual({ released: true, success: true });
+    await expect(
+      claimStore.getPendingPartyInvitation("user-grace", invitation.id),
+    ).resolves.toEqual({
+      reason: "party-invitation-expired",
+      success: false,
+    });
+  });
+
+  it("clears acceptance claims when relationship invalidation revokes an invitation", async () => {
+    const harness = createStoreHarness();
+    disposables.push(harness.dispose);
+    await makeFriends(harness, "user-ada", "user-grace");
+    await makeFriends(harness, "user-amy", "user-grace");
+    const invalidated = await createInvitation(harness, {
+      inviterUserId: "user-ada",
+      partyCode: "INVALIDATED",
+      recipientUserId: "user-grace",
+    });
+    await claimInvitation(harness.store, "user-grace", invalidated.id);
+    await harness.store.blockUser("user-ada", "user-grace");
+    const replacement = await createInvitation(harness, {
+      inviterUserId: "user-amy",
+      partyCode: "REPLACEMENT",
+      recipientUserId: "user-grace",
+    });
+
+    await expect(
+      harness.store.claimPartyInvitationForAcceptance(
+        "user-grace",
+        replacement.id,
+      ),
+    ).resolves.toMatchObject({ invitation: { id: replacement.id }, success: true });
+    expect(readInvitationRecords(harness.databasePath)).toContainEqual(
+      expect.objectContaining({ id: invalidated.id, status: "revoked" }),
+    );
+  });
+
+  it("bounds resolved history while retaining only the newest accepted reconnect index", async () => {
+    const harness = createStoreHarness();
+    disposables.push(harness.dispose);
+    await makeFriends(harness, "user-ada", "user-grace");
+    const boundedStore = harness.createStore({
+      maxResolvedPartyInvitationHistory: 2,
+    });
+
+    for (let index = 0; index < 4; index += 1) {
+      const invitation = await createInvitation(harness, {
+        inviterUserId: "user-ada",
+        partyCode: `HISTORY-${index}`,
+        recipientUserId: "user-grace",
+        store: boundedStore,
+      });
+      await expect(
+        boundedStore.cancelPartyInvitation("user-ada", invitation.id),
+      ).resolves.toMatchObject({
+        invitation: { id: invitation.id, status: "canceled" },
+        success: true,
+      });
+    }
+
+    expect(
+      readInvitationRecords(harness.databasePath).filter(
+        (invitation) => invitation.status === "canceled",
+      ),
+    ).toHaveLength(2);
+
+    const firstAccepted = await createInvitation(harness, {
+      inviterUserId: "user-ada",
+      partyCode: "ACCEPTED-OLD",
+      recipientUserId: "user-grace",
+      store: boundedStore,
+    });
+    await claimAndAcceptInvitation(
+      boundedStore,
+      "user-grace",
+      firstAccepted.id,
+    );
+    const newestAccepted = await createInvitation(harness, {
+      inviterUserId: "user-ada",
+      partyCode: "ACCEPTED-NEW",
+      recipientUserId: "user-grace",
+      store: boundedStore,
+    });
+    await claimAndAcceptInvitation(
+      boundedStore,
+      "user-grace",
+      newestAccepted.id,
+    );
+
+    await expect(
+      boundedStore.getAcceptedPartyInvitationForReacquisition(
+        "user-grace",
+        firstAccepted.id,
+      ),
+    ).resolves.toEqual({
+      reason: "party-invitation-not-found",
+      success: false,
+    });
+    await expect(
+      boundedStore.getAcceptedPartyInvitationForReacquisition(
+        "user-grace",
+        newestAccepted.id,
+      ),
+    ).resolves.toMatchObject({
+      invitation: { id: newestAccepted.id, partyCode: "ACCEPTED-NEW" },
+      success: true,
+    });
+  });
+
+  it("returns only recipient-owned accepted invitations for capability reacquisition", async () => {
+    const harness = createStoreHarness();
+    disposables.push(harness.dispose);
+    await makeFriends(harness, "user-ada", "user-grace");
+
+    const accepted = await createInvitation(harness, {
+      inviterUserId: "user-ada",
+      partyCode: "REACQUIRE",
+      recipientUserId: "user-grace",
+    });
+    await claimAndAcceptInvitation(
+      harness.store,
+      "user-grace",
+      accepted.id,
+    );
+    const pending = await createInvitation(harness, {
+      inviterUserId: "user-ada",
+      partyCode: "STILL-PENDING",
+      recipientUserId: "user-grace",
+    });
+
+    await expect(
+      harness.store.getAcceptedPartyInvitationForReacquisition(
+        "user-grace",
+        accepted.id,
+      ),
+    ).resolves.toMatchObject({
+      invitation: {
+        id: accepted.id,
+        partyCode: "REACQUIRE",
+        status: "accepted",
+      },
+      success: true,
+    });
+    await expect(
+      harness.store.getAcceptedPartyInvitationForReacquisition(
+        "user-ada",
+        accepted.id,
+      ),
+    ).resolves.toEqual({
+      reason: "party-invitation-not-found",
+      success: false,
+    });
+    await expect(
+      harness.store.getAcceptedPartyInvitationForReacquisition(
+        "user-grace",
+        pending.id,
+      ),
+    ).resolves.toEqual({
+      reason: "party-invitation-not-pending",
+      success: false,
+    });
   });
 
   it("revokes both directions for a removed pair without touching another friendship", async () => {

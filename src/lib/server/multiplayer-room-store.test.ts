@@ -3264,6 +3264,60 @@ describe("in-process multiplayer room store", () => {
     );
   });
 
+  it("reacquires authenticated authority only for an existing same-party membership", () => {
+    const store = createTestRoomStore({
+      participantCapabilities: [
+        "host-capability",
+        "admitted-capability",
+        "membership-only-capability",
+      ],
+    });
+
+    expectStoreSuccess(store.createRoom({ host: HOST_USER }));
+    setAccountAvailable(store, "user-2", "available-client2");
+    const admitted = admitAuthenticatedAccount(store, {
+      displayName: "Grace Player",
+      intent: "play",
+      userId: "user-2",
+    });
+    expect(
+      store.applyAccountCommand({
+        partyCode: "ROOM1",
+        type: "party.reacquireAuthenticated",
+        user: { displayName: "Grace Player", id: "user-2" },
+      }),
+    ).toMatchObject({
+      admission: "reacquired",
+      participantCapability: "membership-only-capability",
+      participantId: admitted.participantId,
+      success: true,
+    });
+    expect(
+      store.applyAccountCommand({
+        partyCode: "ROOM1",
+        type: "party.reacquireAuthenticated",
+        user: { displayName: "New Account", id: "user-3" },
+      }),
+    ).toMatchObject({ code: "participant-not-found", success: false });
+
+    expectStoreSuccess(
+      store.applyCommand("ROOM1", {
+        participantId: admitted.participantId,
+        type: "room.leave",
+      }),
+    );
+    expect(
+      store.applyAccountCommand({
+        partyCode: "ROOM1",
+        type: "party.reacquireAuthenticated",
+        user: { displayName: "Grace Player", id: "user-2" },
+      }),
+    ).toMatchObject({ code: "participant-not-found", success: false });
+    expect(expectStoreSuccess(store.getRoom("ROOM1")).room.participants).toHaveLength(
+      1,
+    );
+  });
+
   it("rejects authenticated admission while the account belongs to another party", () => {
     const store = createTestRoomStore({
       participantIds: ["host-1", "host-2"],
@@ -3282,6 +3336,13 @@ describe("in-process multiplayer room store", () => {
         intent: "play",
         partyCode: "ROOM1",
         type: "party.admitAuthenticated",
+        user: { displayName: "Other Host", id: "user-2" },
+      }),
+    ).toMatchObject({ code: "in-other-party", success: false });
+    expect(
+      store.applyAccountCommand({
+        partyCode: "ROOM1",
+        type: "party.reacquireAuthenticated",
         user: { displayName: "Other Host", id: "user-2" },
       }),
     ).toMatchObject({ code: "in-other-party", success: false });
