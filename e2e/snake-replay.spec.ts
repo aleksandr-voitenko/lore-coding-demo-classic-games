@@ -466,6 +466,71 @@ test("Snake replay save uses the latest run after an unsaved restart", async ({
   await expect(await getSnakeHeadPosition(page)).toEqual(liveFinalHead);
 });
 
+test("Snake replay remains saveable when an earlier save finishes after restart", async ({
+  page,
+  request,
+}, testInfo) => {
+  const displayName = `Replay Save ${testInfo.workerIndex}${testInfo.retry}${Date.now() % 100_000}`;
+  const savedRunIds: string[] = [];
+  let issuedRunCount = 0;
+  let releaseFirstSave!: () => void;
+  const firstSaveReleased = new Promise<void>((resolve) => {
+    releaseFirstSave = resolve;
+  });
+
+  await seedSnakeLeaderboard(request, displayName);
+  await page.clock.install({ time: new Date("2026-09-05T12:00:00.000Z") });
+  await page.route("**/api/replays/snake/run", async (route) => {
+    issuedRunCount += 1;
+    await route.fulfill({
+      contentType: "application/json",
+      json: { id: `snake-save-race-run-${issuedRunCount}`, seed: 4_321 },
+      status: 201,
+    });
+  });
+  await page.route("**/api/replays/snake", async (route) => {
+    const replay = route.request().postDataJSON() as { runId: string };
+
+    savedRunIds.push(replay.runId);
+
+    if (savedRunIds.length === 1) {
+      await firstSaveReleased;
+    }
+
+    await route.fulfill({ json: { saved: true }, status: 201 });
+  });
+
+  await openLauncher(page);
+  await signUpFromLauncher(page, displayName);
+  await openGame(page, "snake");
+  await page.clock.pauseAt(new Date("2026-09-05T12:01:00.000Z"));
+  await page.getByTestId("snake-start-button").click();
+  await expect(page.getByTestId("snake-status")).toHaveText("Running");
+  await page.clock.runFor(4_000);
+  await expect(page.getByTestId("snake-game-over-screen")).toBeVisible();
+
+  const saveButton = page.getByTestId("snake-save-replay-button");
+
+  await saveButton.click();
+  await expect(saveButton).toHaveText("Saving replay");
+  await expect.poll(() => savedRunIds).toEqual(["snake-save-race-run-1"]);
+  await page.getByTestId("snake-new-game-button").click();
+  await expect(page.getByTestId("snake-status")).toHaveText("Running");
+  expect(issuedRunCount).toBe(2);
+
+  const firstSaveResponse = page.waitForResponse("**/api/replays/snake");
+
+  releaseFirstSave();
+  await firstSaveResponse;
+  await page.clock.runFor(4_000);
+  await expect(page.getByTestId("snake-game-over-screen")).toBeVisible();
+  await expect(saveButton).toHaveText("Save replay");
+  await expect(saveButton).toBeEnabled();
+  await saveButton.click();
+  await expect(saveButton).toHaveText("Replay saved");
+  expect(savedRunIds).toEqual(["snake-save-race-run-1", "snake-save-race-run-2"]);
+});
+
 test("Snake replay preserves a delayed downward turn without phantom advances", async ({
   page,
 }, testInfo) => {

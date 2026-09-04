@@ -194,18 +194,26 @@ export function useLiveGameReplayRecording<
   Recording extends LiveGameReplayRecording<LiveGameReplayRecordedEvent>,
   Payload,
 >({ saveReplay }: { saveReplay: (payload: Payload) => Promise<void> }) {
-  const [finishedReplay, setFinishedReplay] = useState<Payload | null>(null);
+  const [finishedReplay, setFinishedReplayState] = useState<Payload | null>(null);
   const [isReplayRunPending, setIsReplayRunPending] = useState(false);
   const [replaySaveStatus, setReplaySaveStatus] =
     useState<ReplaySaveStatus>("idle");
   const isReplayRunPendingRef = useRef(false);
   const replayRecordingRef = useRef<Recording | null>(null);
+  const finishedReplayGenerationRef = useRef(0);
+
+  const setFinishedReplay = useCallback<typeof setFinishedReplayState>((replay) => {
+    // Change save ownership synchronously with the payload. A failed atomic
+    // replacement keeps both the existing payload and its pending save valid.
+    finishedReplayGenerationRef.current += 1;
+    setFinishedReplayState(replay);
+  }, []);
 
   const resetReplayRecording = useCallback(() => {
     replayRecordingRef.current = null;
     setFinishedReplay(null);
     setReplaySaveStatus("idle");
-  }, []);
+  }, [setFinishedReplay]);
 
   const beginReplayRecording = useCallback(
     (createRecording: () => Promise<Recording>) =>
@@ -220,7 +228,7 @@ export function useLiveGameReplayRecording<
         createRecording,
         { installRecording: false },
       ),
-    [],
+    [setFinishedReplay],
   );
 
   const startReplayRecording = useCallback(
@@ -235,7 +243,7 @@ export function useLiveGameReplayRecording<
         },
         createRecording,
       ),
-    [],
+    [setFinishedReplay],
   );
 
   const replaceReplayRecording = useCallback(
@@ -250,7 +258,7 @@ export function useLiveGameReplayRecording<
         },
         createRecording,
       ),
-    [],
+    [setFinishedReplay],
   );
 
   const pauseRecordingClock = useCallback(() => {
@@ -276,7 +284,7 @@ export function useLiveGameReplayRecording<
 
       return replay;
     },
-    [finishedReplay],
+    [finishedReplay, setFinishedReplay],
   );
 
   const saveFinishedReplay = useCallback(async () => {
@@ -284,13 +292,18 @@ export function useLiveGameReplayRecording<
       return;
     }
 
+    const saveGeneration = finishedReplayGenerationRef.current;
     setReplaySaveStatus("saving");
 
     try {
       await saveReplay(finishedReplay);
-      setReplaySaveStatus("saved");
+      if (finishedReplayGenerationRef.current === saveGeneration) {
+        setReplaySaveStatus("saved");
+      }
     } catch {
-      setReplaySaveStatus("failed");
+      if (finishedReplayGenerationRef.current === saveGeneration) {
+        setReplaySaveStatus("failed");
+      }
     }
   }, [finishedReplay, replaySaveStatus, saveReplay]);
 

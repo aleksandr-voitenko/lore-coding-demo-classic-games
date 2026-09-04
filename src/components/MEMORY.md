@@ -276,7 +276,10 @@ This file covers React component ownership and shared game UI conventions under
   run setup is asynchronous, freeze the current game, replay clock, and profile
   session clock and ignore live input until setup succeeds; a failed replacement
   must not reset the completed profile-session guard or discard the current
-  replay. Replay recordings
+  replay. Save settlements belong to the finished payload's generation: reset,
+  start, and successful replacement invalidate older saves synchronously, while
+  failed replacement preserves the current save and its retry state. Replay
+  recordings
   stamp active elapsed milliseconds on each event and pause that replay clock
   while Pause, Help, or abandon-confirm overlays stop the player's active view;
   replay players schedule playback from those elapsed timestamps instead of
