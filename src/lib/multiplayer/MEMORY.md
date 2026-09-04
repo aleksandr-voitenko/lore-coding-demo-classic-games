@@ -28,6 +28,17 @@ folder.
   ownership. The model also owns FIFO next-match queueing/cancellation, queue
   promotion at match boundaries, explicit member leave, host transfer, and
   close-when-no-successor outcomes.
+- `settings.ts` owns shared setting types, iterative JSON-tree validation and
+  copying, and admission normalization. `room.ts` re-exports the existing type
+  names. Admission allows at most 32 object/array containers along a path,
+  counting normalized settings as 1 and parameters as 2, and at most 16 KiB of
+  serialized UTF-8 settings including game id, keys, punctuation, and escaping.
+  Create, update, and replacement reject invalid or excessive settings before
+  applying them. Snapshot structural validation remains total for deep valid
+  JSON without imposing these admission limits; the distinction preserves
+  forward-compatible input parsing without admitting settings that native JSON
+  serialization cannot safely emit. Copies never share nested source references
+  and preserve special JSON keys such as `__proto__` as data properties.
 - `protocol.ts` owns the shared realtime envelope types. The envelope should
   stay stable across games: connection messages identify the room, room commands
   wrap the private-room command model, game input carries `gameId` plus a nested

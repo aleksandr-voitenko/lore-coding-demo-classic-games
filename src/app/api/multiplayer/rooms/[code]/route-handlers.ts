@@ -8,6 +8,7 @@ import type {
 } from "@/lib/server/multiplayer-room-store";
 import { getSessionTokenFromRequest } from "@/lib/server/user-session-cookie";
 
+import { readMultiplayerRoomJson } from "../request-body";
 import {
   createHostOnlyCommandAuthErrorResponse,
   createMultiplayerRoomErrorResponse,
@@ -178,18 +179,12 @@ export function createMultiplayerRoomRouteHandlers(
     },
 
     async POST(request: Request, { code }: { code: string }) {
-      let payload: unknown;
-
-      try {
-        payload = await request.json();
-      } catch {
-        return NextResponse.json(
-          { error: "Request body must be valid JSON." },
-          { status: 400 },
-        );
+      const json = await readMultiplayerRoomJson(request);
+      if (!json.success) {
+        return json.response;
       }
 
-      const parsedCommand = parseRoomCommand(payload);
+      const parsedCommand = parseRoomCommand(json.payload);
 
       if (!parsedCommand.success) {
         return NextResponse.json({ error: parsedCommand.error }, { status: 400 });

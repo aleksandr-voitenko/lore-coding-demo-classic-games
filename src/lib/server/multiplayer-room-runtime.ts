@@ -1,12 +1,15 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 
 import type { PrivateRoomLifecycleCommand } from "../multiplayer/protocol";
+import {
+  clonePrivateRoomSettings,
+  normalizePrivateRoomSettings,
+} from "../multiplayer/settings";
 import type {
   PrivateRoom,
   PrivateRoomErrorCode,
   PrivateRoomOperationFailure,
   PrivateRoomSeatInput,
-  PrivateRoomSettingValue,
   PrivateRoomSettings,
 } from "../multiplayer/room";
 import {
@@ -376,40 +379,6 @@ function normalizeRetentionPolicy(
       resolvedPolicy.tombstoneTtlMs,
       "Room tombstone TTL",
     ),
-  };
-}
-
-function clonePrivateRoomSettingValue(
-  value: PrivateRoomSettingValue,
-): PrivateRoomSettingValue {
-  if (Array.isArray(value)) {
-    return value.map((entry) => clonePrivateRoomSettingValue(entry));
-  }
-
-  if (typeof value === "object" && value !== null) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [
-        key,
-        clonePrivateRoomSettingValue(entry as PrivateRoomSettingValue),
-      ]),
-    );
-  }
-
-  return value;
-}
-
-function clonePrivateRoomSettings(settings: PrivateRoomSettings): PrivateRoomSettings {
-  if (settings.parameters === undefined) {
-    return {
-      gameId: settings.gameId,
-    };
-  }
-
-  return {
-    gameId: settings.gameId,
-    parameters: clonePrivateRoomSettingValue(settings.parameters) as Readonly<
-      Record<string, PrivateRoomSettingValue>
-    >,
   };
 }
 
@@ -1074,6 +1043,11 @@ export class InProcessMultiplayerRoomStore
     seats,
     settings = getDefaultMultiplayerServerGameAdapter().defaultSettings,
   }: CreateMultiplayerRoomOptions): MultiplayerRoomStoreSnapshotResult {
+    const normalizedSettings = normalizePrivateRoomSettings(settings);
+    if (!normalizedSettings.success) {
+      return createStoreFailure("invalid-room-settings", normalizedSettings.error);
+    }
+    settings = normalizedSettings.settings;
     const nowMs = this.#getNowMs();
 
     this.#sweepIfDue(nowMs);
@@ -1194,6 +1168,16 @@ export class InProcessMultiplayerRoomStore
     roomCode: unknown,
     command: MultiplayerRoomStoreCommand,
   ): MultiplayerRoomStoreResult {
+    if (
+      command.type === "room.updateSettings" ||
+      command.type === "room.replaceMatch"
+    ) {
+      const settings = normalizePrivateRoomSettings(command.settings);
+      if (!settings.success) {
+        return createStoreFailure("invalid-room-settings", settings.error);
+      }
+      command = { ...command, settings: settings.settings };
+    }
     const nowMs = this.#getNowMs();
 
     this.#sweepIfDue(nowMs);

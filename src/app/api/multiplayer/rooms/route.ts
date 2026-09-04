@@ -2,10 +2,8 @@ import { NextResponse } from "next/server";
 
 import { isGameId } from "@/lib/game-catalog";
 import { DEFAULT_MULTIPLAYER_GAME_ID } from "@/lib/multiplayer/game-registry";
-import type {
-  PrivateRoomSettingValue,
-  PrivateRoomSettings,
-} from "@/lib/multiplayer/room";
+import type { PrivateRoomSettings } from "@/lib/multiplayer/room";
+import { normalizePrivateRoomSettings } from "@/lib/multiplayer/settings";
 import {
   getMultiplayerRoomStoreErrorStatus,
   type MultiplayerRoomStore,
@@ -14,6 +12,8 @@ import {
 } from "@/lib/server/multiplayer-room-store";
 import { getSessionTokenFromRequest } from "@/lib/server/user-session-cookie";
 import type { AuthenticatedUser } from "@/lib/user-profile";
+
+import { readMultiplayerRoomJson } from "./request-body";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -39,27 +39,6 @@ const HOST_ONLY_COMMAND_AUTH_ERROR =
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isPrivateRoomSettingValue(value: unknown): value is PrivateRoomSettingValue {
-  if (
-    value === null ||
-    typeof value === "boolean" ||
-    typeof value === "string" ||
-    (typeof value === "number" && Number.isFinite(value))
-  ) {
-    return true;
-  }
-
-  if (Array.isArray(value)) {
-    return value.every((entry) => isPrivateRoomSettingValue(entry));
-  }
-
-  if (isRecord(value)) {
-    return Object.values(value).every((entry) => isPrivateRoomSettingValue(entry));
-  }
-
-  return false;
 }
 
 export function parsePrivateRoomSettingsPayload(
@@ -126,24 +105,7 @@ export function parsePrivateRoomSettingsPayload(
     };
   }
 
-  if (
-    !Object.values(parametersValue).every((entry) =>
-      isPrivateRoomSettingValue(entry),
-    )
-  ) {
-    return {
-      error: "Room parameters must contain JSON-compatible values.",
-      success: false,
-    };
-  }
-
-  return {
-    settings: {
-      gameId,
-      parameters: parametersValue as Readonly<Record<string, PrivateRoomSettingValue>>,
-    },
-    success: true,
-  };
+  return normalizePrivateRoomSettings({ gameId, parameters: parametersValue });
 }
 
 export function getMultiplayerRoomErrorStatus(code: MultiplayerRoomStoreErrorCode) {
@@ -209,18 +171,12 @@ export function createMultiplayerRoomsRouteHandlers(
         );
       }
 
-      let payload: unknown;
-
-      try {
-        payload = await request.json();
-      } catch {
-        return NextResponse.json(
-          { error: "Request body must be valid JSON." },
-          { status: 400 },
-        );
+      const json = await readMultiplayerRoomJson(request);
+      if (!json.success) {
+        return json.response;
       }
 
-      const parsedSettings = parsePrivateRoomSettingsPayload(payload);
+      const parsedSettings = parsePrivateRoomSettingsPayload(json.payload);
 
       if (!parsedSettings.success) {
         return NextResponse.json({ error: parsedSettings.error }, { status: 400 });

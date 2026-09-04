@@ -1,24 +1,11 @@
-import { isGameId, type GameId } from "../game-catalog";
 import { normalizeUserDisplayName } from "../user-profile";
+import { normalizePrivateRoomSettings, type PrivateRoomSettings } from "./settings";
+
+export type { PrivateRoomSettings, PrivateRoomSettingValue } from "./settings";
 
 export type PrivateRoomStatus = "finished" | "lobby" | "paused" | "running";
 
 export type PrivateRoomParticipantRole = "host" | "observer" | "player";
-
-export type PrivateRoomSettingValue =
-  | boolean
-  | null
-  | number
-  | string
-  | readonly PrivateRoomSettingValue[]
-  | {
-      readonly [key: string]: PrivateRoomSettingValue;
-    };
-
-export type PrivateRoomSettings = {
-  gameId: GameId;
-  parameters?: Readonly<Record<string, PrivateRoomSettingValue>>;
-};
 
 export type PrivateRoomParticipant = {
   displayName: string;
@@ -218,46 +205,6 @@ function normalizePrivateRoomSeatLabel(value: unknown) {
   const label = normalizeRequiredString(value);
 
   return label === null ? null : label;
-}
-
-function clonePrivateRoomSettingValue(
-  value: PrivateRoomSettingValue,
-): PrivateRoomSettingValue {
-  if (Array.isArray(value)) {
-    return value.map((item) => clonePrivateRoomSettingValue(item));
-  }
-
-  if (typeof value === "object" && value !== null) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [
-        key,
-        clonePrivateRoomSettingValue(entry as PrivateRoomSettingValue),
-      ]),
-    );
-  }
-
-  return value;
-}
-
-function normalizePrivateRoomSettings(
-  settings: PrivateRoomSettings,
-): PrivateRoomSettings | null {
-  const gameId = typeof settings.gameId === "string" ? settings.gameId.trim() : "";
-
-  if (!isGameId(gameId)) {
-    return null;
-  }
-
-  if (settings.parameters === undefined) {
-    return { gameId };
-  }
-
-  return {
-    gameId,
-    parameters: clonePrivateRoomSettingValue(settings.parameters) as Readonly<
-      Record<string, PrivateRoomSettingValue>
-    >,
-  };
 }
 
 function normalizePrivateRoomSeats(
@@ -553,10 +500,10 @@ export function createPrivateRoom({
 
   const normalizedSettings = normalizePrivateRoomSettings(settings);
 
-  if (normalizedSettings === null) {
+  if (!normalizedSettings.success) {
     return createPrivateRoomError(
       "invalid-room-settings",
-      "Room settings require a supported game id.",
+      normalizedSettings.error,
     );
   }
 
@@ -582,7 +529,7 @@ export function createPrivateRoom({
           }
         : seat,
     ),
-    settings: normalizedSettings,
+    settings: normalizedSettings.settings,
     status: "lobby",
   });
 }
@@ -731,14 +678,14 @@ export function updatePrivateRoomSettings(
 
   const normalizedSettings = normalizePrivateRoomSettings(settings);
 
-  if (normalizedSettings === null) {
+  if (!normalizedSettings.success) {
     return createPrivateRoomError(
       "invalid-room-settings",
-      "Room settings require a supported game id.",
+      normalizedSettings.error,
     );
   }
 
-  if (normalizedSettings.gameId !== room.settings.gameId) {
+  if (normalizedSettings.settings.gameId !== room.settings.gameId) {
     return createPrivateRoomError(
       "invalid-room-settings",
       "Changing games requires replacing the current match.",
@@ -747,7 +694,7 @@ export function updatePrivateRoomSettings(
 
   return createPrivateRoomSuccess({
     ...room,
-    settings: normalizedSettings,
+    settings: normalizedSettings.settings,
   });
 }
 
@@ -770,10 +717,10 @@ export function replacePrivateRoomMatch(
 
   const normalizedSettings = normalizePrivateRoomSettings(settings);
 
-  if (normalizedSettings === null) {
+  if (!normalizedSettings.success) {
     return createPrivateRoomError(
       "invalid-room-settings",
-      "Room settings require a supported game id.",
+      normalizedSettings.error,
     );
   }
 
@@ -808,7 +755,7 @@ export function replacePrivateRoomMatch(
     matchId: getNextPrivateRoomMatchId(room.matchId),
     participants: applyPrivateRoomParticipantRoles(room, nextSeats),
     seats: nextSeats,
-    settings: normalizedSettings,
+    settings: normalizedSettings.settings,
     status: "lobby",
   };
 

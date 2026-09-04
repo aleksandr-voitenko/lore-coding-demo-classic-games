@@ -75,7 +75,13 @@ This file covers Node-only server helpers and storage adapters under
 - `multiplayer-room-runtime.ts` wraps the pure room model with process-local room
   state, deterministic id/code/time factories for tests, snapshot sequence
   numbers for API routes, and adapter-owned runtimes that expose optional
-  server-owned game snapshots. It retains the current canonical room/game state,
+  server-owned game snapshots. Creation, settings updates, and match replacement
+  first normalize and bound settings through `multiplayer/settings.ts`: 32 nested
+  containers (settings root 1, parameters 2) and 16 KiB of serialized UTF-8 JSON.
+  Rejection precedes room lookup, retention work, and runtime advancement, so
+  excessive settings cannot consume room capacity or advance a rejected match.
+  Domain and snapshot settings copies reuse the same iterative traversal. The
+  runtime retains the current canonical room/game state,
   not an internal history of accepted inputs or snapshot advances; current
   WebSocket reconnects recover from a fresh authoritative snapshot. Room state
   is intentionally volatile: the in-process store or sidecar owns server

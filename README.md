@@ -322,6 +322,16 @@ lifecycle commands carry the same generation. Restart creates a fresh runtime
 and advances the match id, while stale-generation commands are rejected before
 the current runtime advances.
 
+Room creation, settings updates, and match replacement admit at most 32 nested
+JSON containers and 16 KiB of serialized UTF-8 settings. The normalized settings
+object counts as container 1 and its parameters object as container 2; the byte
+budget includes the game id, parameter keys, JSON punctuation, and string
+escaping. Current game presets fit comfortably within these limits. Violations
+of these structural, depth, or size rules return HTTP 400 before room state or
+gameplay advances.
+Public room creation and command bodies are limited to 64 KiB before JSON parsing,
+matching the internal sidecar budget; oversized bodies return HTTP 413.
+
 The collection preflight also requires
 `membershipOnlyReacquisition: true`. This capability bit distinguishes a
 sidecar that implements `party.reacquireAuthenticated` atomically from an older

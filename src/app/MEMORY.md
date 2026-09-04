@@ -93,6 +93,16 @@ This file covers routes and App Router conventions under `src/app/`.
   command parsing, WebSocket-only command rejection, and signed-in host-command
   authorization. Its `route.ts` entry stays thin and exports only Next-supported
   route configuration plus the production `GET` and `POST` handlers.
+- `api/multiplayer/rooms/request-body.ts` bounds public room create/command JSON
+  to 64 KiB using both declared and streamed byte lengths before parsing;
+  oversized bodies return 413. Settings parsing shares admission normalization
+  with the room authority: at most 32 containers including settings root 1 and
+  parameters 2, and 16 KiB of serialized UTF-8 settings including game id,
+  keys, punctuation, and escaping. Invalid or excessive settings return 400
+  before command authorization performs a room lookup or advances gameplay.
+  The canonical room store repeats admission validation for internal sidecar
+  callers. The unversioned and retired version routes retain their existing
+  fail-closed 426 responses.
 
 ## Social API
 

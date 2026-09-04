@@ -1,5 +1,6 @@
 import { isGameId } from "../game-catalog";
 import { MULTIPLAYER_ROOM_PROTOCOL_VERSION } from "./protocol";
+import { isPrivateRoomSettingValue } from "./settings";
 import type {
   MultiplayerRealtimeGameSnapshot,
   MultiplayerRealtimeRejectionCode,
@@ -12,7 +13,6 @@ import {
   normalizePrivateRoomCode,
   type PrivateRoom,
   type PrivateRoomParticipant,
-  type PrivateRoomSettingValue,
   type PrivateRoomSettings,
 } from "./room";
 
@@ -292,63 +292,6 @@ function isPrivateRoomSettings(value: unknown): value is PrivateRoomSettings {
       (isRecord(value.parameters) &&
         isPrivateRoomSettingValue(value.parameters)))
   );
-}
-
-function isPrivateRoomSettingValue(
-  value: unknown,
-): value is PrivateRoomSettingValue {
-  const pendingValues: unknown[] = [value];
-  const visitedObjects = new WeakSet<object>();
-
-  while (pendingValues.length > 0) {
-    const currentValue = pendingValues.pop();
-
-    if (
-      currentValue === null ||
-      typeof currentValue === "boolean" ||
-      typeof currentValue === "string"
-    ) {
-      continue;
-    }
-
-    if (typeof currentValue === "number") {
-      if (!Number.isFinite(currentValue)) {
-        return false;
-      }
-
-      continue;
-    }
-
-    if (typeof currentValue !== "object") {
-      return false;
-    }
-
-    // Parsed JSON is a tree, so a repeated object means the input is cyclic or
-    // contains shared references that could not have crossed the wire.
-    if (visitedObjects.has(currentValue)) {
-      return false;
-    }
-
-    visitedObjects.add(currentValue);
-
-    if (Array.isArray(currentValue)) {
-      for (const entry of currentValue) {
-        pendingValues.push(entry);
-      }
-
-      continue;
-    }
-
-    if (!isRecord(currentValue)) {
-      return false;
-    }
-
-    for (const key of Object.keys(currentValue)) {
-      pendingValues.push(currentValue[key]);
-    }
-  }
-
-  return true;
 }
 
 function isMultiplayerGameSnapshot(
