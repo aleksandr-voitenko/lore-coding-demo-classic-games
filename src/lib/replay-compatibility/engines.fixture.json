@@ -1,0 +1,613 @@
+[
+  {
+    "name": "rotations and seeded piece locks end at the ceiling",
+    "gameId": "tetris",
+    "eventRuns": [
+      {"event":{"type":"start"},"count":1},
+      {"event":{"type":"rotateClockwise"},"count":1},
+      {"event":{"type":"moveLeft"},"count":2},
+      {"event":{"type":"softDrop"},"count":1},
+      {"event":{"type":"rotateCounterclockwise"},"count":1},
+      {"event":{"type":"hardDrop"},"count":12}
+    ],
+    "checkpoints": [
+      {
+        "eventCount": 7,
+        "state": {
+          "currentPiece": {
+            "kind": "L",
+            "position": {
+              "x": 3,
+              "y": 0
+            },
+            "rotation": 0
+          },
+          "level": 3,
+          "lines": 0,
+          "nextPieceKind": "Z",
+          "score": 35,
+          "status": "running"
+        },
+        "stateHash": "ddb3c7ced9a3efc04e135cee0ccad6fb3af3c778a706478724d8fe1247fd6eb4"
+      },
+      {
+        "eventCount": 12,
+        "state": {
+          "currentPiece": {
+            "kind": "J",
+            "position": {
+              "x": 3,
+              "y": 0
+            },
+            "rotation": 0
+          },
+          "level": 3,
+          "lines": 0,
+          "nextPieceKind": "L",
+          "score": 167,
+          "status": "running"
+        },
+        "stateHash": "33b6bfb92ba68e5f172fe2013eefb2bb6385a4067785b622fff5c03c7d425f53"
+      }
+    ],
+    "final": {
+      "currentPiece": {
+        "kind": "L",
+        "position": {
+          "x": 3,
+          "y": 0
+        },
+        "rotation": 0
+      },
+      "level": 3,
+      "lines": 0,
+      "nextPieceKind": "S",
+      "score": 217,
+      "status": "lost"
+    },
+    "finalStateHash": "365479b58edeadd9999268282445fabc24297bfd58d5c04b4dea1b1440f6c0db",
+    "finalEventCount": 18,
+    "tickEventTypes": [
+      "advance"
+    ],
+    "payload": {
+      "boardHeight": 20,
+      "boardWidth": 10,
+      "startLevel": 3,
+      "gameId": "tetris",
+      "schemaVersion": 1,
+      "seed": 4321,
+      "runId": "compatibility-tetris-4321",
+      "startedAt": "2026-09-05T00:00:00.000Z",
+      "leaderboardKey": "tetris|board=10x20|level=3",
+      "finalScore": 217,
+      "finalStatus": "lost",
+      "finalTick": 0,
+      "finalLevel": 3,
+      "finalLines": 0
+    }
+  },
+  {
+    "name": "flag-first protected opening and seeded mine loss",
+    "gameId": "minesweeper",
+    "eventRuns": [
+      {"event":{"type":"start"},"count":1},
+      {"event":{"type":"toggleFlag","cellId":"3:3"},"count":1},
+      {"event":{"type":"reveal","cellId":"0:0"},"count":1},
+      {"event":{"type":"toggleFlag","cellId":"3:3"},"count":1},
+      {"event":{"type":"reveal","cellId":"2:0"},"count":1}
+    ],
+    "checkpoints": [
+      {
+        "eventCount": 2,
+        "state": {
+          "flagCount": 1,
+          "mineCount": 10,
+          "minefieldStatus": "pending",
+          "revealedSafeCellCount": 0,
+          "status": "ready"
+        },
+        "stateHash": "0d3fdd79c88f91dea83e2a6250ac6b321dbc01f9219b7605dc7440489be5761e"
+      },
+      {
+        "eventCount": 3,
+        "state": {
+          "flagCount": 1,
+          "mineCount": 10,
+          "minefieldStatus": "placed",
+          "revealedSafeCellCount": 8,
+          "status": "running"
+        },
+        "stateHash": "8879dfcf6ef3a3354be68c0aa37295f5ca56098ff8e2caaa2d392d808340bdc1"
+      }
+    ],
+    "final": {
+      "flagCount": 0,
+      "mineCount": 10,
+      "minefieldStatus": "placed",
+      "revealedSafeCellCount": 8,
+      "status": "lost"
+    },
+    "finalStateHash": "e6800421f8c877604c7851c7e024cada138fdaacbf8d82d96fd4c2d8b09d9a8b",
+    "finalEventCount": 5,
+    "tickEventTypes": [],
+    "payload": {
+      "difficulty": "easy",
+      "boardHeight": 9,
+      "boardWidth": 9,
+      "mineCount": 10,
+      "gameId": "minesweeper",
+      "schemaVersion": 3,
+      "seed": 1234,
+      "runId": "compatibility-minesweeper-1234",
+      "startedAt": "2026-09-05T00:00:00.000Z",
+      "leaderboardKey": "minesweeper|difficulty=easy",
+      "finalScore": 0,
+      "finalStatus": "lost",
+      "finalTick": 0,
+      "cursorEvents": [],
+      "finalFlagCount": 0,
+      "finalRevealedSafeCellCount": 8
+    }
+  },
+  {
+    "name": "salvo collisions and recovery end in terminal loss",
+    "gameId": "space-invaders",
+    "eventRuns": [
+      {"event":{"type":"start"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":8},
+      {"event":{"type":"fire"},"count":1},
+      {"event":{"type":"advance"},"count":150},
+      {"event":{"type":"fire"},"count":1},
+      {"event":{"type":"advance"},"count":3188}
+    ],
+    "checkpoints": [
+      {
+        "eventCount": 160,
+        "state": {
+          "hitStreak": 1,
+          "lives": 3,
+          "nextInvaderShotId": 1,
+          "nextPlayerShotId": 1,
+          "playerRespawnTicks": 0,
+          "score": 20,
+          "status": "running"
+        },
+        "stateHash": "465bde97363f6ed8f9ad94382ea292482e1eacc0ea052948ff97d3e998ef3a1c"
+      },
+      {
+        "eventCount": 500,
+        "state": {
+          "hitStreak": 0,
+          "lives": 2,
+          "nextInvaderShotId": 7,
+          "nextPlayerShotId": 2,
+          "playerRespawnTicks": 0,
+          "score": 20,
+          "status": "running"
+        },
+        "stateHash": "6525bc06b1cfc44cb9358fab6dc22e7599e717e93d9928253bbbdc23c867430f"
+      },
+      {
+        "eventCount": 1000,
+        "state": {
+          "hitStreak": 0,
+          "lives": 2,
+          "nextInvaderShotId": 19,
+          "nextPlayerShotId": 2,
+          "playerRespawnTicks": 0,
+          "score": 20,
+          "status": "running"
+        },
+        "stateHash": "018961b640f873f06a2af4485546a0cf7983b4cc1cd11380734580e22ea26679"
+      }
+    ],
+    "final": {
+      "hitStreak": 0,
+      "lives": 0,
+      "nextInvaderShotId": 79,
+      "nextPlayerShotId": 2,
+      "playerRespawnTicks": 0,
+      "score": 20,
+      "status": "lost"
+    },
+    "finalStateHash": "1ce7b5b4d8aa20b0f384eb0ee526b5a6e4cc107102cf6493d09896b5618c8eb8",
+    "finalEventCount": 3349,
+    "tickEventTypes": [
+      "advance"
+    ],
+    "payload": {
+      "alienCount": 24,
+      "boardHeight": 560,
+      "boardWidth": 420,
+      "gameId": "space-invaders",
+      "schemaVersion": 1,
+      "seed": 4321,
+      "runId": "compatibility-space-invaders-4321",
+      "startedAt": "2026-09-05T00:00:00.000Z",
+      "leaderboardKey": "space-invaders|board=420x560|aliens=24",
+      "finalScore": 20,
+      "finalStatus": "lost",
+      "finalTick": 3338,
+      "finalLives": 0,
+      "finalInvaderCount": 23
+    }
+  },
+  {
+    "name": "thrust and firing through seeded hazards and respawn",
+    "gameId": "asteroids",
+    "eventRuns": [
+      {"event":{"type":"start"},"count":1},
+      {"event":{"type":"control","controls":{"rotateLeft":false,"rotateRight":true,"thrust":true}},"count":1},
+      {"event":{"type":"fire"},"count":1},
+      {"event":{"type":"advance"},"count":24},
+      {"event":{"type":"control","controls":{"rotateLeft":false,"rotateRight":false,"thrust":true}},"count":1},
+      {"event":{"type":"fire"},"count":1},
+      {"event":{"type":"advance"},"count":1415}
+    ],
+    "checkpoints": [
+      {
+        "eventCount": 27,
+        "state": {
+          "lives": 3,
+          "nextAsteroidId": 4,
+          "nextBulletId": 1,
+          "nextSaucerId": 0,
+          "respawnInvulnerabilityTicks": 164,
+          "score": 0,
+          "status": "running",
+          "wave": 1
+        },
+        "stateHash": "138879befdbfdd214d6f9e1d1e18b59e17f40229b64855e6280738db20c7cb99"
+      },
+      {
+        "eventCount": 250,
+        "state": {
+          "lives": 3,
+          "nextAsteroidId": 4,
+          "nextBulletId": 2,
+          "nextSaucerId": 0,
+          "respawnInvulnerabilityTicks": 0,
+          "score": 0,
+          "status": "running",
+          "wave": 1
+        },
+        "stateHash": "9447f035c452b2a6ff50f0bcaff365f204d93c14bff36d985a9662fdb8874764"
+      },
+      {
+        "eventCount": 750,
+        "state": {
+          "lives": 2,
+          "nextAsteroidId": 4,
+          "nextBulletId": 2,
+          "nextSaucerId": 0,
+          "respawnInvulnerabilityTicks": 0,
+          "score": 0,
+          "status": "running",
+          "wave": 1
+        },
+        "stateHash": "21e2f026a0090e409d18d29c6f9ea6eaaa95f3b73abca74605f43f59c4051079"
+      }
+    ],
+    "final": {
+      "lives": 0,
+      "nextAsteroidId": 4,
+      "nextBulletId": 2,
+      "nextSaucerId": 1,
+      "respawnInvulnerabilityTicks": 0,
+      "score": 0,
+      "status": "lost",
+      "wave": 1
+    },
+    "finalStateHash": "cb824f2f408828ba5c728b398915862469ddc9fe63b9390fe81db02975eda823",
+    "finalEventCount": 1444,
+    "tickEventTypes": [
+      "advance"
+    ],
+    "payload": {
+      "difficulty": "medium",
+      "gameId": "asteroids",
+      "schemaVersion": 3,
+      "seed": 4321,
+      "runId": "compatibility-asteroids-4321",
+      "startedAt": "2026-09-05T00:00:00.000Z",
+      "leaderboardKey": "asteroids|difficulty=medium",
+      "finalScore": 0,
+      "finalStatus": "lost",
+      "finalTick": 1439,
+      "boardHeight": 600,
+      "boardWidth": 800,
+      "startingAsteroidCount": 4,
+      "finalLives": 0,
+      "finalAsteroidCount": 4,
+      "finalWave": 1
+    }
+  },
+  {
+    "name": "level exit and timed apple lifecycle before wall loss",
+    "gameId": "snake",
+    "eventRuns": [
+      {"event":{"type":"start"},"count":1},
+      {"event":{"type":"direction","direction":"up"},"count":1},
+      {"event":{"type":"advance"},"count":6},
+      {"event":{"type":"direction","direction":"left"},"count":1},
+      {"event":{"type":"advance"},"count":5},
+      {"event":{"type":"direction","direction":"down"},"count":1},
+      {"event":{"type":"advance"},"count":1},
+      {"event":{"type":"direction","direction":"right"},"count":1},
+      {"event":{"type":"advance"},"count":2},
+      {"event":{"type":"direction","direction":"down"},"count":1},
+      {"event":{"type":"advance"},"count":5},
+      {"event":{"type":"direction","direction":"right"},"count":1},
+      {"event":{"type":"advance"},"count":1},
+      {"event":{"type":"direction","direction":"down"},"count":1},
+      {"event":{"type":"advance"},"count":2},
+      {"event":{"type":"direction","direction":"right"},"count":1},
+      {"event":{"type":"advance"},"count":4},
+      {"event":{"type":"direction","direction":"down"},"count":1},
+      {"event":{"type":"advance"},"count":3},
+      {"event":{"type":"direction","direction":"right"},"count":1},
+      {"event":{"type":"advance"},"count":1},
+      {"event":{"type":"direction","direction":"up"},"count":1},
+      {"event":{"type":"advance"},"count":4},
+      {"event":{"type":"direction","direction":"left"},"count":1},
+      {"event":{"type":"advance"},"count":1},
+      {"event":{"type":"direction","direction":"up"},"count":1},
+      {"event":{"type":"advance"},"count":1},
+      {"event":{"type":"direction","direction":"left"},"count":1},
+      {"event":{"type":"advance"},"count":8},
+      {"event":{"type":"direction","direction":"up"},"count":1},
+      {"event":{"type":"advance"},"count":3},
+      {"event":{"type":"direction","direction":"right"},"count":1},
+      {"event":{"type":"advance"},"count":7},
+      {"event":{"type":"direction","direction":"up"},"count":1},
+      {"event":{"type":"advance"},"count":1},
+      {"event":{"type":"direction","direction":"right"},"count":1},
+      {"event":{"type":"advance"},"count":2},
+      {"event":{"type":"direction","direction":"up"},"count":1},
+      {"event":{"type":"advance"},"count":1},
+      {"event":{"type":"direction","direction":"right"},"count":1},
+      {"event":{"type":"advance"},"count":1},
+      {"event":{"type":"direction","direction":"up"},"count":1},
+      {"event":{"type":"advance"},"count":3},
+      {"event":{"type":"direction","direction":"left"},"count":1},
+      {"event":{"type":"advance"},"count":1},
+      {"event":{"type":"direction","direction":"down"},"count":1},
+      {"event":{"type":"advance"},"count":1},
+      {"event":{"type":"direction","direction":"left"},"count":1},
+      {"event":{"type":"advance"},"count":3},
+      {"event":{"type":"direction","direction":"down"},"count":1},
+      {"event":{"type":"advance"},"count":2},
+      {"event":{"type":"direction","direction":"right"},"count":1},
+      {"event":{"type":"advance"},"count":1},
+      {"event":{"type":"direction","direction":"down"},"count":1},
+      {"event":{"type":"advance"},"count":1},
+      {"event":{"type":"direction","direction":"right"},"count":1},
+      {"event":{"type":"advance"},"count":2},
+      {"event":{"type":"direction","direction":"up"},"count":1},
+      {"event":{"type":"advance"},"count":1},
+      {"event":{"type":"direction","direction":"right"},"count":1},
+      {"event":{"type":"advance"},"count":1},
+      {"event":{"type":"direction","direction":"up"},"count":1},
+      {"event":{"type":"advance"},"count":4},
+      {"event":{"type":"direction","direction":"left"},"count":1},
+      {"event":{"type":"advance"},"count":3},
+      {"event":{"type":"spawnTimedFood","kind":"bonusFood","nowMs":100000},"count":1},
+      {"event":{"type":"expireTimedFood","kind":"bonusFood","expiresAt":110968},"count":1},
+      {"event":{"type":"spawnTimedFood","kind":"bonusFood","nowMs":120000},"count":1},
+      {"event":{"type":"direction","direction":"down"},"count":1},
+      {"event":{"type":"advance"},"count":2},
+      {"event":{"type":"direction","direction":"left"},"count":1},
+      {"event":{"type":"advance"},"count":1},
+      {"event":{"type":"direction","direction":"down"},"count":1},
+      {"event":{"type":"advance"},"count":2},
+      {"event":{"type":"direction","direction":"right"},"count":1},
+      {"event":{"type":"advance"},"count":1},
+      {"event":{"type":"direction","direction":"down"},"count":1},
+      {"event":{"type":"advance"},"count":1},
+      {"event":{"type":"direction","direction":"right"},"count":1},
+      {"event":{"type":"advance"},"count":1},
+      {"event":{"type":"direction","direction":"down"},"count":1},
+      {"event":{"type":"advance"},"count":8}
+    ],
+    "checkpoints": [
+      {
+        "eventCount": 48,
+        "state": {
+          "bestScore": 5,
+          "boardSize": 12,
+          "bonusFood": null,
+          "door": {
+            "isOpen": false,
+            "position": {
+              "x": 7,
+              "y": 3
+            }
+          },
+          "key": {
+            "x": 0,
+            "y": 6
+          },
+          "level": 1,
+          "pickedUpObjects": 5,
+          "score": 5,
+          "shrinkFood": null,
+          "slowFood": null,
+          "speedBoosts": 0,
+          "speedFood": null,
+          "status": "running"
+        },
+        "stateHash": "c4f47c4c3d7a3160855ca8727a6fe6123e72177f49274a964a7efc8c909c2af5"
+      },
+      {
+        "eventCount": 59,
+        "state": {
+          "bestScore": 5,
+          "boardSize": 12,
+          "bonusFood": null,
+          "door": {
+            "isOpen": true,
+            "position": {
+              "x": 7,
+              "y": 3
+            }
+          },
+          "key": null,
+          "level": 1,
+          "pickedUpObjects": 5,
+          "score": 5,
+          "shrinkFood": null,
+          "slowFood": null,
+          "speedBoosts": 0,
+          "speedFood": null,
+          "status": "running"
+        },
+        "stateHash": "189c0727977d0c29c7a3e9cb55a85c6ba67706961867db357fe261fa15e2b5ce"
+      },
+      {
+        "eventCount": 71,
+        "state": {
+          "bestScore": 5,
+          "boardSize": 13,
+          "bonusFood": null,
+          "door": {
+            "isOpen": false,
+            "position": {
+              "x": 1,
+              "y": 6
+            }
+          },
+          "key": null,
+          "level": 2,
+          "pickedUpObjects": 0,
+          "score": 5,
+          "shrinkFood": null,
+          "slowFood": null,
+          "speedBoosts": 0,
+          "speedFood": null,
+          "status": "running"
+        },
+        "stateHash": "e8054057d3c498e30b8961988e613bf64b5804c3ea5439d5cdd32df7c4619a0d"
+      },
+      {
+        "eventCount": 116,
+        "state": {
+          "bestScore": 8,
+          "boardSize": 13,
+          "bonusFood": {
+            "expiresAt": 110968,
+            "position": {
+              "x": 11,
+              "y": 7
+            }
+          },
+          "door": {
+            "isOpen": false,
+            "position": {
+              "x": 1,
+              "y": 6
+            }
+          },
+          "key": null,
+          "level": 2,
+          "pickedUpObjects": 3,
+          "score": 8,
+          "shrinkFood": null,
+          "slowFood": null,
+          "speedBoosts": 0,
+          "speedFood": null,
+          "status": "running"
+        },
+        "stateHash": "cc3c5e47844f2fe20eb6ad1fee1a94bfe01d9bb8981554843098985fddbd696d"
+      },
+      {
+        "eventCount": 117,
+        "state": {
+          "bestScore": 8,
+          "boardSize": 13,
+          "bonusFood": null,
+          "door": {
+            "isOpen": false,
+            "position": {
+              "x": 1,
+              "y": 6
+            }
+          },
+          "key": null,
+          "level": 2,
+          "pickedUpObjects": 3,
+          "score": 8,
+          "shrinkFood": null,
+          "slowFood": null,
+          "speedBoosts": 0,
+          "speedFood": null,
+          "status": "running"
+        },
+        "stateHash": "526e06a0140cc78a3a8a248b20378278c72b6023a41e771a536871a1f641588a"
+      },
+      {
+        "eventCount": 134,
+        "state": {
+          "bestScore": 10,
+          "boardSize": 13,
+          "bonusFood": null,
+          "door": {
+            "isOpen": false,
+            "position": {
+              "x": 1,
+              "y": 6
+            }
+          },
+          "key": null,
+          "level": 2,
+          "pickedUpObjects": 4,
+          "score": 10,
+          "shrinkFood": null,
+          "slowFood": null,
+          "speedBoosts": 0,
+          "speedFood": null,
+          "status": "running"
+        },
+        "stateHash": "67e1bf967bbb3a4bac72ad92ef44fb3517a027234197172a812f0c639280db98"
+      }
+    ],
+    "final": {
+      "bestScore": 10,
+      "boardSize": 13,
+      "bonusFood": null,
+      "door": {
+        "isOpen": false,
+        "position": {
+          "x": 1,
+          "y": 6
+        }
+      },
+      "key": null,
+      "level": 2,
+      "pickedUpObjects": 4,
+      "score": 10,
+      "shrinkFood": null,
+      "slowFood": null,
+      "speedBoosts": 0,
+      "speedFood": null,
+      "status": "lost"
+    },
+    "finalStateHash": "f7c95793d6e00dd048a19adb1c6d9447d61641bf12af0f6f60342fb29e568a6e",
+    "finalEventCount": 141,
+    "tickEventTypes": [
+      "advance"
+    ],
+    "payload": {
+      "gameId": "snake",
+      "schemaVersion": 1,
+      "seed": 1234,
+      "runId": "compatibility-snake-1234",
+      "startedAt": "2026-09-05T00:00:00.000Z",
+      "leaderboardKey": "snake|mode=levels",
+      "finalScore": 10,
+      "finalStatus": "lost",
+      "finalTick": 98,
+      "finalLevel": 2
+    }
+  }
+]

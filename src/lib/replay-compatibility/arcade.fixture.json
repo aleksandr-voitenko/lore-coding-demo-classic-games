@@ -1,0 +1,1207 @@
+[
+  {
+    "name": "seeded brick collisions and three lost lives",
+    "gameId": "breakout",
+    "tickEventTypes": [
+      "advance"
+    ],
+    "payload": {
+      "boardHeight": 560,
+      "boardWidth": 420,
+      "startingLives": 3,
+      "finalScore": 1050,
+      "finalStatus": "lost",
+      "finalTick": 2332,
+      "gameId": "breakout",
+      "leaderboardKey": "breakout|board=420x560|lives=3",
+      "runId": "compatibility-721d749-breakout-1",
+      "schemaVersion": 1,
+      "seed": 4321,
+      "startedAt": "2026-09-04T12:00:00.000Z",
+      "finalActiveBrickCount": 22,
+      "finalLives": 0
+    },
+    "eventRuns": [
+      {"event":{"type":"moveLeft"},"count":2},
+      {"event":{"type":"moveRight"},"count":1},
+      {"event":{"type":"start"},"count":1},
+      {"event":{"type":"advance"},"count":915},
+      {"event":{"type":"start"},"count":1},
+      {"event":{"type":"advance"},"count":577},
+      {"event":{"type":"start"},"count":1},
+      {"event":{"type":"advance"},"count":840}
+    ],
+    "checkpoints": [
+      {
+        "eventCount": 3,
+        "state": {
+          "ball": {
+            "position": {
+              "x": 203,
+              "y": 513
+            },
+            "velocity": {
+              "x": 1.68,
+              "y": -2.73
+            }
+          },
+          "lives": 3,
+          "paddle": {
+            "height": 12,
+            "width": 92,
+            "x": 157,
+            "y": 520
+          },
+          "score": 0,
+          "status": "ready"
+        },
+        "stateHash": "1ea03efe33360ec8d97d4939303440370baef2ec5a2fa5a1a24d3c328811c8b0"
+      },
+      {
+        "eventCount": 137,
+        "state": {
+          "ball": {
+            "position": {
+              "x": 401.296103,
+              "y": 150.469618
+            },
+            "velocity": {
+              "x": 1.783498,
+              "y": -2.678971
+            }
+          },
+          "lives": 3,
+          "paddle": {
+            "height": 12,
+            "width": 92,
+            "x": 157,
+            "y": 520
+          },
+          "score": 20,
+          "status": "running"
+        },
+        "stateHash": "c08dfbe8ecbdd5f8b6788cc79ab375c17cd17b9d12a0c1aa8cf4ede3376dbf1e"
+      },
+      {
+        "eventCount": 919,
+        "state": {
+          "ball": {
+            "position": {
+              "x": 210,
+              "y": 513
+            },
+            "velocity": {
+              "x": 1.68,
+              "y": -2.73
+            }
+          },
+          "lives": 2,
+          "paddle": {
+            "height": 12,
+            "width": 92,
+            "x": 164,
+            "y": 520
+          },
+          "score": 730,
+          "status": "ready"
+        },
+        "stateHash": "7348b8724c889a7ac57e4bd682ace2fb09850a7b9efbb6b9a29bf1ed0bbff4b7"
+      }
+    ],
+    "final": {
+      "ball": {
+        "position": {
+          "x": 162.81045,
+          "y": 564.409595
+        },
+        "velocity": {
+          "x": 2.412468,
+          "y": 2.23678
+        }
+      },
+      "lives": 0,
+      "paddle": {
+        "height": 12,
+        "width": 92,
+        "x": 164,
+        "y": 520
+      },
+      "score": 1050,
+      "status": "lost"
+    },
+    "finalStateHash": "8ddf66439ecd11dae5985005caa14df1f13e659f628d12692af328956693202e",
+    "finalEventCount": 2338
+  },
+  {
+    "name": "legacy and side-aware paddle inputs through five lost rallies",
+    "gameId": "pong",
+    "tickEventTypes": [
+      "advance"
+    ],
+    "payload": {
+      "boardHeight": 560,
+      "boardWidth": 420,
+      "initialServeSide": "right",
+      "targetScore": 5,
+      "finalScore": 450,
+      "finalStatus": "lost",
+      "finalTick": 667,
+      "gameId": "pong",
+      "leaderboardKey": "pong|board=420x560|target=5",
+      "runId": "compatibility-721d749-pong-2",
+      "schemaVersion": 1,
+      "seed": 1234,
+      "startedAt": "2026-09-04T12:00:00.000Z",
+      "finalCpuScore": 5,
+      "finalPlayerScore": 0
+    },
+    "eventRuns": [
+      {"event":{"type":"moveUp"},"count":40},
+      {"event":{"type":"move","side":"right","direction":"down"},"count":2},
+      {"event":{"type":"move","side":"right","direction":"up"},"count":1},
+      {"event":{"type":"start"},"count":1},
+      {"event":{"type":"advance"},"count":63},
+      {"event":{"type":"scoreTick"},"count":1},
+      {"event":{"type":"advance"},"count":16},
+      {"event":{"type":"start"},"count":1},
+      {"event":{"type":"move","side":"left","direction":"up"},"count":80},
+      {"event":{"type":"advance"},"count":47},
+      {"event":{"type":"scoreTick"},"count":1},
+      {"event":{"type":"advance"},"count":63},
+      {"event":{"type":"scoreTick"},"count":1},
+      {"event":{"type":"advance"},"count":37},
+      {"event":{"type":"start"},"count":1},
+      {"event":{"type":"move","side":"left","direction":"up"},"count":80},
+      {"event":{"type":"advance"},"count":26},
+      {"event":{"type":"scoreTick"},"count":1},
+      {"event":{"type":"advance"},"count":63},
+      {"event":{"type":"scoreTick"},"count":1},
+      {"event":{"type":"advance"},"count":58},
+      {"event":{"type":"start"},"count":1},
+      {"event":{"type":"move","side":"left","direction":"up"},"count":80},
+      {"event":{"type":"advance"},"count":5},
+      {"event":{"type":"scoreTick"},"count":1},
+      {"event":{"type":"advance"},"count":63},
+      {"event":{"type":"scoreTick"},"count":1},
+      {"event":{"type":"advance"},"count":63},
+      {"event":{"type":"scoreTick"},"count":1},
+      {"event":{"type":"advance"},"count":16},
+      {"event":{"type":"start"},"count":1},
+      {"event":{"type":"move","side":"left","direction":"up"},"count":80},
+      {"event":{"type":"advance"},"count":47},
+      {"event":{"type":"scoreTick"},"count":1},
+      {"event":{"type":"advance"},"count":63},
+      {"event":{"type":"scoreTick"},"count":1},
+      {"event":{"type":"advance"},"count":37}
+    ],
+    "checkpoints": [
+      {
+        "eventCount": 43,
+        "state": {
+          "ball": {
+            "position": {
+              "x": 372,
+              "y": 287
+            },
+            "velocity": {
+              "x": -4.8,
+              "y": 0
+            }
+          },
+          "cpuPaddle": {
+            "height": 88,
+            "width": 12,
+            "x": 380,
+            "y": 243
+          },
+          "playerPaddle": {
+            "height": 88,
+            "width": 12,
+            "x": 28,
+            "y": 0
+          },
+          "remainingScore": 1000,
+          "score": {
+            "cpu": 0,
+            "player": 0
+          },
+          "serveSide": "right",
+          "status": "ready"
+        },
+        "stateHash": "e0cf5da89d3e7d508de05211606cee41cdee00ad9d1260ade75c13dce37fb1bf"
+      },
+      {
+        "eventCount": 124,
+        "state": {
+          "ball": {
+            "position": {
+              "x": 48,
+              "y": 280
+            },
+            "velocity": {
+              "x": 4.8,
+              "y": 0
+            }
+          },
+          "cpuPaddle": {
+            "height": 88,
+            "width": 12,
+            "x": 380,
+            "y": 236
+          },
+          "playerPaddle": {
+            "height": 88,
+            "width": 12,
+            "x": 28,
+            "y": 236
+          },
+          "remainingScore": 895,
+          "score": {
+            "cpu": 1,
+            "player": 0
+          },
+          "serveSide": "left",
+          "status": "ready"
+        },
+        "stateHash": "4db810814d08e74e172a3382f527b36a66791d3ca74ee570cdb41fa6262bb159"
+      },
+      {
+        "eventCount": 274,
+        "state": {
+          "ball": {
+            "position": {
+              "x": 373,
+              "y": 280
+            },
+            "velocity": {
+              "x": -4.848,
+              "y": 0
+            }
+          },
+          "cpuPaddle": {
+            "height": 88,
+            "width": 12,
+            "x": 380,
+            "y": 236
+          },
+          "playerPaddle": {
+            "height": 88,
+            "width": 12,
+            "x": 28,
+            "y": 0
+          },
+          "remainingScore": 890,
+          "score": {
+            "cpu": 1,
+            "player": 0
+          },
+          "serveSide": "left",
+          "status": "running"
+        },
+        "stateHash": "40a57629d96a7db0c4bafc351bfe2022fe66daf20aaa4c3878e66d6035c08b52"
+      }
+    ],
+    "final": {
+      "ball": {
+        "position": {
+          "x": 48,
+          "y": 280
+        },
+        "velocity": {
+          "x": 4.8,
+          "y": 0
+        }
+      },
+      "cpuPaddle": {
+        "height": 88,
+        "width": 12,
+        "x": 380,
+        "y": 236
+      },
+      "playerPaddle": {
+        "height": 88,
+        "width": 12,
+        "x": 28,
+        "y": 236
+      },
+      "remainingScore": 450,
+      "score": {
+        "cpu": 5,
+        "player": 0
+      },
+      "serveSide": "left",
+      "status": "lost"
+    },
+    "finalStateHash": "3415a49c742b70b496612132c776c49b2b8ab31299e1394750142ef925e091b9",
+    "finalEventCount": 1045
+  },
+  {
+    "name": "eight complete seeded sequences win easy",
+    "gameId": "simon",
+    "tickEventTypes": [
+      "start",
+      "playback",
+      "pad",
+      "clear",
+      "advanceRound",
+      "advanceMiss"
+    ],
+    "payload": {
+      "difficulty": "easy",
+      "winTarget": 8,
+      "finalScore": 8,
+      "finalStatus": "won",
+      "finalTick": 143,
+      "gameId": "simon",
+      "leaderboardKey": "simon|difficulty=easy",
+      "runId": "compatibility-721d749-simon-3",
+      "schemaVersion": 3,
+      "seed": 5678,
+      "startedAt": "2026-09-04T12:00:00.000Z",
+      "cursorEvents": [],
+      "finalInputIndex": 8,
+      "finalRound": 8,
+      "finalSequenceLength": 8
+    },
+    "eventRuns": [
+      {"event":{"type":"start"},"count":1},
+      {"event":{"type":"playback"},"count":1},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"advanceRound"},"count":1},
+      {"event":{"type":"playback"},"count":3},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"blue"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"advanceRound"},"count":1},
+      {"event":{"type":"playback"},"count":5},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"blue"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"red"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"advanceRound"},"count":1},
+      {"event":{"type":"playback"},"count":7},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"blue"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"red"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"advanceRound"},"count":1},
+      {"event":{"type":"playback"},"count":9},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"blue"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"red"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"advanceRound"},"count":1},
+      {"event":{"type":"playback"},"count":11},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"blue"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"red"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"red"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"advanceRound"},"count":1},
+      {"event":{"type":"playback"},"count":13},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"blue"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"red"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"red"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"advanceRound"},"count":1},
+      {"event":{"type":"playback"},"count":15},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"blue"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"red"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"red"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"yellow"},"count":1}
+    ],
+    "checkpoints": [
+      {
+        "eventCount": 1,
+        "state": {
+          "activePad": "green",
+          "inputIndex": 0,
+          "playbackIndex": 0,
+          "round": 1,
+          "score": 0,
+          "sequence": [
+            "green"
+          ],
+          "status": "showing"
+        },
+        "stateHash": "92ab09857fed56d3e67ae512c06067effb08c8b06ac6e473161c378c1c4fdc6f"
+      },
+      {
+        "eventCount": 32,
+        "state": {
+          "activePad": null,
+          "inputIndex": 0,
+          "playbackIndex": 0,
+          "round": 4,
+          "score": 3,
+          "sequence": [
+            "green",
+            "blue",
+            "red",
+            "green"
+          ],
+          "status": "input"
+        },
+        "stateHash": "146dae9be393c067132a173bed170f27f99993521f556849fc910e78c0dcd31b"
+      },
+      {
+        "eventCount": 135,
+        "state": {
+          "activePad": "green",
+          "inputIndex": 4,
+          "playbackIndex": 0,
+          "round": 8,
+          "score": 7,
+          "sequence": [
+            "green",
+            "blue",
+            "red",
+            "green",
+            "green",
+            "red",
+            "green",
+            "yellow"
+          ],
+          "status": "input"
+        },
+        "stateHash": "5f927e5dbf737159468c06848a842eef82f61b752074b5254e4041ec60d27b2e"
+      }
+    ],
+    "final": {
+      "activePad": "yellow",
+      "inputIndex": 8,
+      "playbackIndex": 0,
+      "round": 8,
+      "score": 8,
+      "sequence": [
+        "green",
+        "blue",
+        "red",
+        "green",
+        "green",
+        "red",
+        "green",
+        "yellow"
+      ],
+      "status": "won"
+    },
+    "finalStateHash": "484a7b127279187abcbc79249674bdcaa3457cbbf0c59747af180eedd1b4ba07",
+    "finalEventCount": 143
+  },
+  {
+    "name": "correct rounds followed by a visible miss and loss",
+    "gameId": "simon",
+    "tickEventTypes": [
+      "start",
+      "playback",
+      "pad",
+      "clear",
+      "advanceRound",
+      "advanceMiss"
+    ],
+    "payload": {
+      "difficulty": "medium",
+      "winTarget": 12,
+      "finalScore": 3,
+      "finalStatus": "lost",
+      "finalTick": 39,
+      "gameId": "simon",
+      "leaderboardKey": "simon|difficulty=medium",
+      "runId": "compatibility-721d749-simon-4",
+      "schemaVersion": 3,
+      "seed": 5678,
+      "startedAt": "2026-09-04T12:00:00.000Z",
+      "cursorEvents": [],
+      "finalInputIndex": 0,
+      "finalRound": 4,
+      "finalSequenceLength": 4
+    },
+    "eventRuns": [
+      {"event":{"type":"start"},"count":1},
+      {"event":{"type":"playback"},"count":1},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"advanceRound"},"count":1},
+      {"event":{"type":"playback"},"count":3},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"blue"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"advanceRound"},"count":1},
+      {"event":{"type":"playback"},"count":5},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"blue"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"red"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"advanceRound"},"count":1},
+      {"event":{"type":"playback"},"count":7},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"blue"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"pad","pad":"green"},"count":1},
+      {"event":{"type":"clear"},"count":1},
+      {"event":{"type":"advanceMiss"},"count":1}
+    ],
+    "checkpoints": [
+      {
+        "eventCount": 1,
+        "state": {
+          "activePad": "green",
+          "inputIndex": 0,
+          "playbackIndex": 0,
+          "round": 1,
+          "score": 0,
+          "sequence": [
+            "green"
+          ],
+          "status": "showing"
+        },
+        "stateHash": "e56fa117efbcd89188395f91f9ca7e83740991cc679f53f8946c864da3fbc9fe"
+      },
+      {
+        "eventCount": 32,
+        "state": {
+          "activePad": null,
+          "inputIndex": 0,
+          "playbackIndex": 0,
+          "round": 4,
+          "score": 3,
+          "sequence": [
+            "green",
+            "blue",
+            "red",
+            "green"
+          ],
+          "status": "input"
+        },
+        "stateHash": "716e9ea37c635aba9b5e69a36ea096701b8b57ac81ca6502832ec6f467b89356"
+      },
+      {
+        "eventCount": 37,
+        "state": {
+          "activePad": "green",
+          "inputIndex": 0,
+          "playbackIndex": 0,
+          "round": 4,
+          "score": 3,
+          "sequence": [
+            "green",
+            "blue",
+            "red",
+            "green"
+          ],
+          "status": "missed"
+        },
+        "stateHash": "fef2bb36c9d512464d194949e0e080c0c668bb68ec2b4ddd0f5651b947747f0c"
+      }
+    ],
+    "final": {
+      "activePad": null,
+      "inputIndex": 0,
+      "playbackIndex": 0,
+      "round": 4,
+      "score": 3,
+      "sequence": [
+        "green",
+        "blue",
+        "red",
+        "green"
+      ],
+      "status": "lost"
+    },
+    "finalStateHash": "3ecb10df79d792ca8ab7ffb82089f61eb4ba268c7f4fb0828eee08693699cc55",
+    "finalEventCount": 39
+  },
+  {
+    "name": "seeded spawns and directional merges to a blocked board",
+    "gameId": "twenty-forty-eight",
+    "tickEventTypes": [
+      "move"
+    ],
+    "payload": {
+      "boardSize": 4,
+      "winTile": 2048,
+      "finalScore": 3076,
+      "finalStatus": "lost",
+      "finalTick": 260,
+      "gameId": "twenty-forty-eight",
+      "leaderboardKey": "twenty-forty-eight|board=4|goal=2048",
+      "runId": "compatibility-721d749-twenty-forty-eight-5",
+      "schemaVersion": 1,
+      "seed": 4321,
+      "startedAt": "2026-09-04T12:00:00.000Z",
+      "finalMoveCount": 258,
+      "finalTopTile": 256
+    },
+    "eventRuns": [
+      {"event":{"type":"start"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1},
+      {"event":{"type":"move","direction":"left"},"count":1},
+      {"event":{"type":"move","direction":"up"},"count":1},
+      {"event":{"type":"move","direction":"right"},"count":1},
+      {"event":{"type":"move","direction":"down"},"count":1}
+    ],
+    "checkpoints": [
+      {
+        "eventCount": 0,
+        "state": {
+          "bestScore": 0,
+          "moveCount": 0,
+          "nextTileId": 3,
+          "score": 0,
+          "status": "running",
+          "tiles": [
+            {
+              "id": "tile-1",
+              "value": 2,
+              "x": 0,
+              "y": 0
+            },
+            {
+              "id": "tile-2",
+              "value": 2,
+              "x": 3,
+              "y": 3
+            }
+          ]
+        },
+        "stateHash": "ef71f794ad51a681f9790909afa861f51a2a422e64f21ef4b0c43f1bfbab5bcf"
+      },
+      {
+        "eventCount": 5,
+        "state": {
+          "bestScore": 8,
+          "moveCount": 4,
+          "nextTileId": 7,
+          "score": 8,
+          "status": "running",
+          "tiles": [
+            {
+              "id": "tile-6",
+              "value": 2,
+              "x": 1,
+              "y": 0
+            },
+            {
+              "id": "tile-5",
+              "value": 2,
+              "x": 1,
+              "y": 3
+            },
+            {
+              "id": "tile-1",
+              "value": 4,
+              "x": 2,
+              "y": 3
+            },
+            {
+              "id": "tile-4",
+              "value": 4,
+              "x": 3,
+              "y": 3
+            }
+          ]
+        },
+        "stateHash": "2ad92246b14a37931c24f24570d74af54c836a0ba20d42f92574d9d7ceea087e"
+      },
+      {
+        "eventCount": 201,
+        "state": {
+          "bestScore": 2372,
+          "moveCount": 198,
+          "nextTileId": 201,
+          "score": 2372,
+          "status": "running",
+          "tiles": [
+            {
+              "id": "tile-200",
+              "value": 2,
+              "x": 0,
+              "y": 0
+            },
+            {
+              "id": "tile-99",
+              "value": 256,
+              "x": 2,
+              "y": 0
+            },
+            {
+              "id": "tile-197",
+              "value": 4,
+              "x": 3,
+              "y": 0
+            },
+            {
+              "id": "tile-196",
+              "value": 2,
+              "x": 1,
+              "y": 1
+            },
+            {
+              "id": "tile-133",
+              "value": 64,
+              "x": 2,
+              "y": 1
+            },
+            {
+              "id": "tile-194",
+              "value": 8,
+              "x": 3,
+              "y": 1
+            },
+            {
+              "id": "tile-192",
+              "value": 8,
+              "x": 1,
+              "y": 2
+            },
+            {
+              "id": "tile-155",
+              "value": 32,
+              "x": 2,
+              "y": 2
+            },
+            {
+              "id": "tile-147",
+              "value": 32,
+              "x": 3,
+              "y": 2
+            },
+            {
+              "id": "tile-199",
+              "value": 2,
+              "x": 0,
+              "y": 3
+            },
+            {
+              "id": "tile-195",
+              "value": 2,
+              "x": 1,
+              "y": 3
+            },
+            {
+              "id": "tile-191",
+              "value": 4,
+              "x": 2,
+              "y": 3
+            },
+            {
+              "id": "tile-198",
+              "value": 2,
+              "x": 3,
+              "y": 3
+            }
+          ]
+        },
+        "stateHash": "481ac6faab259170dc368537b0546dc5b6e396491d72057100b82c7251eaefbe"
+      }
+    ],
+    "final": {
+      "bestScore": 3076,
+      "moveCount": 258,
+      "nextTileId": 261,
+      "score": 3076,
+      "status": "lost",
+      "tiles": [
+        {
+          "id": "tile-260",
+          "value": 2,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "id": "tile-246",
+          "value": 4,
+          "x": 1,
+          "y": 0
+        },
+        {
+          "id": "tile-133",
+          "value": 128,
+          "x": 2,
+          "y": 0
+        },
+        {
+          "id": "tile-257",
+          "value": 2,
+          "x": 3,
+          "y": 0
+        },
+        {
+          "id": "tile-252",
+          "value": 8,
+          "x": 0,
+          "y": 1
+        },
+        {
+          "id": "tile-241",
+          "value": 16,
+          "x": 1,
+          "y": 1
+        },
+        {
+          "id": "tile-249",
+          "value": 2,
+          "x": 2,
+          "y": 1
+        },
+        {
+          "id": "tile-250",
+          "value": 8,
+          "x": 3,
+          "y": 1
+        },
+        {
+          "id": "tile-259",
+          "value": 2,
+          "x": 0,
+          "y": 2
+        },
+        {
+          "id": "tile-197",
+          "value": 64,
+          "x": 1,
+          "y": 2
+        },
+        {
+          "id": "tile-230",
+          "value": 32,
+          "x": 2,
+          "y": 2
+        },
+        {
+          "id": "tile-254",
+          "value": 2,
+          "x": 3,
+          "y": 2
+        },
+        {
+          "id": "tile-258",
+          "value": 4,
+          "x": 0,
+          "y": 3
+        },
+        {
+          "id": "tile-247",
+          "value": 8,
+          "x": 1,
+          "y": 3
+        },
+        {
+          "id": "tile-99",
+          "value": 256,
+          "x": 2,
+          "y": 3
+        },
+        {
+          "id": "tile-236",
+          "value": 8,
+          "x": 3,
+          "y": 3
+        }
+      ]
+    },
+    "finalStateHash": "3f8c314d76aa9fa9ae3c95c7d621263c981ece98aa2f4ddf92c497de678a47d2",
+    "finalEventCount": 261
+  }
+]

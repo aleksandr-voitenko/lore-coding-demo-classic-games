@@ -221,6 +221,11 @@ This file covers deterministic game engines and shared source logic under
   transitions.
 - When changing gameplay rules, add or update deterministic tests with injected
   randomness, time, or explicit state fixtures as needed.
+- `replay-compatibility/` holds fixed seeded event scripts and intermediate/terminal
+  outcomes for the nine solo replay engines other than Tank Patrol, whose V1
+  goldens remain in `battle-city-replay.test.ts`. Its README records the reference
+  revision and checkpoint meaning. Do not regenerate expectations to accommodate
+  a refactor without reviewing saved-replay compatibility.
 - Prefer comparing meaningful game states or structured outputs over many
   isolated field assertions unless field-level assertions make failures clearer.
 - Core coverage includes `src/lib/**/*.{ts,tsx}` with thresholded coverage. Keep
