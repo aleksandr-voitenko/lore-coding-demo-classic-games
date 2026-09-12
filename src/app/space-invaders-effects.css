@@ -39,6 +39,145 @@
   will-change: opacity, transform;
 }
 
+@keyframes space-invaders-revenge-ember-rise {
+  from {
+    opacity: 0.95;
+    transform: translate(0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(var(--revenge-ember-drift), -60%);
+  }
+}
+
+@keyframes space-invaders-revenge-alert-pop {
+  0%,
+  100% {
+    transform: translate(-50%, 0);
+  }
+  50% {
+    transform: translate(-50%, -20%);
+  }
+}
+
+.space-invaders-revenge-warning {
+  color: color-mix(in oklch, var(--invaders-yellow) 55%, var(--invaders-red));
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 30;
+}
+
+.space-invaders-revenge-alert {
+  animation: space-invaders-revenge-alert-pop 240ms ease-out;
+  animation-play-state: inherit;
+  filter: drop-shadow(0 0 3px currentColor);
+  height: 30%;
+  left: 50%;
+  min-height: 7px;
+  min-width: 2px;
+  position: absolute;
+  top: -38%;
+  transform: translateX(-50%);
+  width: 9%;
+}
+
+/* Leave the Shield Bearer's role marker visible below the warning. */
+[data-invader-kind="shield-bearer"] .space-invaders-revenge-alert {
+  top: -60%;
+}
+
+.space-invaders-revenge-alert::before,
+.space-invaders-revenge-alert::after {
+  background: currentColor;
+  content: "";
+  position: absolute;
+}
+
+.space-invaders-revenge-alert::before {
+  height: 70%;
+  inset: 0 0 auto;
+}
+
+.space-invaders-revenge-alert::after {
+  bottom: 0;
+  height: 20%;
+  left: 15%;
+  width: 70%;
+}
+
+.space-invaders-revenge-ember {
+  --revenge-ember-drift: -4%;
+  animation: space-invaders-revenge-ember-rise 1200ms linear infinite;
+  animation-play-state: inherit;
+  inset: 0;
+  opacity: 0.8;
+  position: absolute;
+  transform: translate(var(--revenge-ember-drift), var(--revenge-ember-rest-y));
+}
+
+/* Animate an alien-sized layer so particle travel scales with the board. */
+.space-invaders-revenge-ember::before {
+  aspect-ratio: 1;
+  background: currentColor;
+  box-shadow: 0 0 3px currentColor;
+  content: "";
+  left: var(--revenge-ember-x);
+  position: absolute;
+  top: 46%;
+  width: 4.5%;
+}
+
+.space-invaders-revenge-ember:nth-child(even) {
+  --revenge-ember-drift: 4%;
+}
+
+.space-invaders-revenge-ember:nth-child(3n) {
+  color: var(--invaders-red);
+}
+
+.space-invaders-revenge-ember:nth-child(1) {
+  --revenge-ember-x: 12%;
+  --revenge-ember-rest-y: -8%;
+  animation-delay: -100ms;
+}
+
+.space-invaders-revenge-ember:nth-child(2) {
+  --revenge-ember-x: 84%;
+  --revenge-ember-rest-y: -20%;
+  animation-delay: -270ms;
+}
+
+.space-invaders-revenge-ember:nth-child(3) {
+  --revenge-ember-x: 17%;
+  --revenge-ember-rest-y: -35%;
+  animation-delay: -440ms;
+}
+
+.space-invaders-revenge-ember:nth-child(4) {
+  --revenge-ember-x: 78%;
+  --revenge-ember-rest-y: -10%;
+  animation-delay: -610ms;
+}
+
+.space-invaders-revenge-ember:nth-child(5) {
+  --revenge-ember-x: 8%;
+  --revenge-ember-rest-y: -25%;
+  animation-delay: -780ms;
+}
+
+.space-invaders-revenge-ember:nth-child(6) {
+  --revenge-ember-x: 89%;
+  --revenge-ember-rest-y: -45%;
+  animation-delay: -950ms;
+}
+
+.space-invaders-revenge-ember:nth-child(7) {
+  --revenge-ember-x: 21%;
+  --revenge-ember-rest-y: -52%;
+  animation-delay: -1120ms;
+}
+
 .space-invaders-player-shield {
   pointer-events: none;
 }
@@ -440,7 +579,9 @@
 @media (prefers-reduced-motion: reduce) {
   .space-invaders-player-shield__surface,
   .space-invaders-player-shield__surface--flashing,
-  .space-invaders-invader-shield {
+  .space-invaders-invader-shield,
+  .space-invaders-revenge-ember,
+  .space-invaders-revenge-alert {
     animation: none;
   }
   .space-invaders-player-shield__surface--flashing {

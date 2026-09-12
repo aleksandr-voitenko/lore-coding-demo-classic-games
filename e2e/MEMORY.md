@@ -12,6 +12,10 @@ This file covers Playwright browser-flow coverage under `e2e/`.
   screens, and dark app-theme game palette regressions. Dark palette checks
   compare rendered game chrome to the resolved per-game CSS variables so tests
   can tolerate browser color serialization differences.
+- `space-invaders-revenge-warning.spec.ts` uses a seeded run and keyboard fire
+  inputs to cover warning/shield coexistence, Shield Bearer marker spacing,
+  pause/resume, reduced motion, mobile placement, and the two-second volley
+  warning lifetime. Desktop and mobile screenshots are attached to the report.
 - Keep the suite focused as a smoke/regression layer over the browser experience.
   Deterministic game rules and pure helpers belong in Vitest near `src/lib`.
 - `support/app.ts` contains small route and interaction helpers such as

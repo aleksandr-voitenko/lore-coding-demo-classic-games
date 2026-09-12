@@ -143,7 +143,7 @@ export const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
       "When fewer than half the aliens remain, the marching formation speeds up gradually until the final formation alien moves at 1.5x speed.",
       "Clear columns carefully; exposed diver invaders move faster and drop harder than the rest.",
       "Shield Bearers glow cyan and protect nearby active aliens; destroy the bearer or use Piercing to punch through the shield.",
-      "Revenge Aliens glow red, fire fast counterfire shots toward your position, and mark up to five random formation aliens with a red aura when destroyed; after two seconds, each marked alien fires one shot.",
+      "Revenge Aliens glow red, fire fast counterfire shots toward your position, and mark up to five random formation aliens with rising embers and an exclamation mark when destroyed; after two seconds, each marked alien fires one shot.",
       "Splitter Aliens fire magenta fork shots and split into two smaller fragments when destroyed; fragments dive like Divers, do not shoot, do not drop bonuses, and still count as invaders.",
       "Armored Aliens take three hits to destroy; non-lethal hits change their armor and keep clean streaks alive while their wide armor-wave shots move straight down.",
       "Mine Layers drop slow mines; destroying one creates a large blast that damages ships, aliens, and shots, so shoot them near invaders and avoid detonating them near your cannon.",

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { SpaceInvadersBoard } from "./space-invaders-board";
 import { expectMarkup } from "./game-board-test-utils";
 import {
+  advanceSpaceInvadersGame,
   createInitialSpaceInvadersGame,
   SPACE_INVADERS_PLAYER_SHIELD_FLASH_TICKS,
   SPACE_INVADERS_POWER_UP_SIZE,
@@ -17,7 +18,7 @@ import {
 describe("SpaceInvadersBoard", () => {
   it("renders Space Invaders formation, player shot, and remaining count", () => {
     const game = createInitialSpaceInvadersGame({ random: () => 0 });
-    const revengeAuraTarget = game.invaders[1]!;
+    const revengeWarningTarget = game.invaders[1]!;
     const splitterAlien = game.invaders.find((invader) => invader.kind === "splitter")!;
     const armoredHitPointsById = new Map(
       game.invaders
@@ -316,7 +317,7 @@ describe("SpaceInvadersBoard", () => {
           ],
           revengeVolleys: [
             {
-              invaderIds: [revengeAuraTarget.id],
+              invaderIds: [revengeWarningTarget.id],
               ticksRemaining: 18,
             },
           ],
@@ -404,7 +405,7 @@ describe("SpaceInvadersBoard", () => {
       'data-invader-kind="diver"',
       'data-invader-kind="shield-bearer"',
       'data-invader-kind="revenge"',
-      'data-invader-revenge-aura="true"',
+      'data-invader-revenge-warning="true"',
       'data-invader-kind="splitter"',
       'data-invader-kind="splitter-fragment"',
       'data-invader-kind="armored"',
@@ -415,8 +416,9 @@ describe("SpaceInvadersBoard", () => {
       'data-invader-shielded="true"',
       'data-testid="space-invaders-invader-shield"',
       "space-invaders-invader-shield",
-      'data-testid="space-invaders-revenge-aura"',
-      "space-invaders-revenge-aura",
+      'data-testid="space-invaders-revenge-warning"',
+      "space-invaders-revenge-alert",
+      "space-invaders-revenge-ember",
       'data-testid="space-invaders-shield-bearer-blip"',
       'data-testid="space-invaders-player-shot"',
       'data-player-shot-kind="burst"',
@@ -509,6 +511,55 @@ describe("SpaceInvadersBoard", () => {
       2,
     );
     expect(markup.match(/scaleX\(-1\)/g)).toHaveLength(1);
+  });
+
+  it("shows a separate revenge warning on an active shielded alien until it fires", () => {
+    const game = createInitialSpaceInvadersGame({ random: () => 0 });
+    const shieldBearer = {
+      ...game.invaders[0]!,
+      kind: "shield-bearer" as const,
+    };
+    const target = { ...game.invaders[1]!, kind: "standard" as const };
+    const destroyedTarget = { ...game.invaders[2]!, isActive: false };
+    const primed = {
+      ...game,
+      alienFreezeTicks: 10,
+      invaderShotCooldownTicks: 1_000,
+      invaders: [shieldBearer, target, destroyedTarget],
+      revengeVolleys: [
+        { invaderIds: [target.id, destroyedTarget.id], ticksRemaining: 1 },
+      ],
+      status: "running" as const,
+    };
+    const warningMarkup = renderToStaticMarkup(
+      <SpaceInvadersBoard game={primed} statusLabel="Running" />,
+    );
+
+    expect(warningMarkup).toContain(
+      'data-invader-revenge-warning="true" data-invader-shielded="true"',
+    );
+    expect(
+      warningMarkup.match(/data-testid="space-invaders-revenge-warning"/g),
+    ).toHaveLength(1);
+    expectMarkup(warningMarkup, [
+      "space-invaders-revenge-alert",
+      "space-invaders-revenge-ember",
+      'data-testid="space-invaders-invader-shield"',
+    ]);
+    expect(warningMarkup).not.toContain("space-invaders-revenge-aura");
+
+    const fired = advanceSpaceInvadersGame(primed, () => 0);
+    const firedMarkup = renderToStaticMarkup(
+      <SpaceInvadersBoard game={fired} statusLabel="Running" />,
+    );
+
+    expect(fired.invaderShots.map((shot) => shot.sourceInvaderId)).toEqual([
+      target.id,
+    ]);
+    expect(firedMarkup).not.toContain("space-invaders-revenge-warning");
+    expect(firedMarkup).not.toContain("space-invaders-revenge-alert");
+    expect(firedMarkup).not.toContain("space-invaders-revenge-ember");
+    expect(firedMarkup).toContain('data-testid="space-invaders-invader-shield"');
   });
 
   it("renders Space Invaders shield tethers from bearers to shielded divers", () => {
