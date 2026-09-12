@@ -57,10 +57,13 @@ test("Space Invaders distinguishes revenge warnings from shields through pause a
   await page.keyboard.press("p");
   await expect(page.getByTestId("space-invaders-status")).toHaveText("Paused");
   await expect(ember).toHaveCSS("animation-play-state", "paused");
-  const pausedTransform = await ember.evaluate((element) => getComputedStyle(element).transform);
+  const pausedBounds = await ember.boundingBox();
   await page.clock.runFor(3_000);
   await expect(warnings).toHaveCount(5);
-  await expect(ember).toHaveCSS("transform", pausedTransform);
+  const stillBounds = await ember.boundingBox();
+  // Ignore subpixel compositor rounding while checking that the ember stays still.
+  expect(stillBounds!.x).toBeCloseTo(pausedBounds!.x, 2);
+  expect(stillBounds!.y).toBeCloseTo(pausedBounds!.y, 2);
 
   await page.keyboard.press("p");
   await expect(page.getByTestId("space-invaders-status")).toHaveText("Running");
@@ -88,5 +91,24 @@ test("Space Invaders distinguishes revenge warnings from shields through pause a
   await page.clock.runFor(SPACE_INVADERS_TICK_DELAY_MS);
   await expect(warnings).toHaveCount(0);
   await expect(page.locator(".space-invaders-revenge-ember")).toHaveCount(0);
+  await expect(page.getByTestId("space-invaders-invader-shield").first()).toBeVisible();
+
+  const flashes = page.getByTestId("space-invaders-muzzle-flash");
+  await expect(flashes).toHaveCount(5);
+  expect(await flashes.evaluateAll(elements =>
+    elements.map(element => element.getAttribute("data-muzzle-flash-source")).sort(),
+  )).toEqual(["0:0", "0:2", "3:7", "3:8", "4:9"]);
+  const shieldedFlash = page.locator('[data-invader-shielded="true"]')
+    .getByTestId("space-invaders-muzzle-flash");
+  await expect(shieldedFlash).toBeVisible();
+  await expect(shieldedFlash).toHaveCSS("animation-name", "none");
+
+  const volleyPath = testInfo.outputPath("muzzle-flash-revenge-volley.png");
+  await page.getByTestId("space-invaders-board-frame").screenshot({ path: volleyPath });
+  await testInfo.attach("Revenge volley muzzle flashes with shields", { path: volleyPath, contentType: "image/png" });
+  await page.clock.runFor(5 * SPACE_INVADERS_TICK_DELAY_MS);
+  await expect(flashes).toHaveCount(5);
+  await page.clock.runFor(SPACE_INVADERS_TICK_DELAY_MS);
+  await expect(flashes).toHaveCount(0);
   await expect(page.getByTestId("space-invaders-invader-shield").first()).toBeVisible();
 });

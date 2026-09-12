@@ -2,8 +2,10 @@ import type { CSSProperties } from "react";
 
 import { getInvaderShotSpriteSrc, spaceInvadersBackgroundSrc } from "@/components/space-invaders-board-assets";
 import {
+  getInvaderShotLaunchAgeTicks,
   isSpaceInvaderShielded,
   SPACE_INVADERS_SCORE_POPUP_TICKS,
+  SPACE_INVADERS_TICK_DELAY_MS,
   type SpaceInvadersExplosionKind,
   type SpaceInvadersExplosionVariant,
   type SpaceInvadersGameState,
@@ -11,6 +13,37 @@ import {
   type SpaceInvadersInvaderShotKind,
   type SpaceInvader,
 } from "@/lib/space-invaders-game-engine";
+
+export const INVADER_MUZZLE_FLASH_DURATION_MS = 180;
+
+export function getInvaderMuzzleFlashAges(
+  shots: readonly SpaceInvadersInvaderShot[],
+): Map<string, number> {
+  const ages = new Map<string, number>();
+
+  for (const shot of shots) {
+    const ageTicks = getInvaderShotLaunchAgeTicks(shot);
+
+    if (ageTicks === null) {
+      continue;
+    }
+
+    const ageMs = ageTicks * SPACE_INVADERS_TICK_DELAY_MS;
+
+    if (ageMs >= INVADER_MUZZLE_FLASH_DURATION_MS) {
+      continue;
+    }
+
+    const currentAge = ages.get(shot.sourceInvaderId);
+
+    // A scatter volley shares one muzzle; a newer shot refreshes its flash.
+    if (currentAge === undefined || ageMs < currentAge) {
+      ages.set(shot.sourceInvaderId, ageMs);
+    }
+  }
+
+  return ages;
+}
 
 export const spaceInvadersBoardBackgroundStyle: CSSProperties = {
   backgroundImage: `url("${spaceInvadersBackgroundSrc}")`,

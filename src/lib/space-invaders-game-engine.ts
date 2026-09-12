@@ -104,6 +104,7 @@ import {
   maybePrimeSpaceInvadersRevengeVolley,
   maybeFireInvaderShot,
 } from "./space-invaders/projectiles";
+export { getInvaderShotLaunchAgeTicks } from "./space-invaders/projectiles";
 import { advanceSpaceInvadersPlayerShots } from "./space-invaders/player-shots";
 import {
   getCombinedSpaceInvadersScoreTarget,

@@ -15,7 +15,12 @@ This file covers Playwright browser-flow coverage under `e2e/`.
 - `space-invaders-revenge-warning.spec.ts` uses a seeded run and keyboard fire
   inputs to cover warning/shield coexistence, Shield Bearer marker spacing,
   pause/resume, reduced motion, mobile placement, and the two-second volley
-  warning lifetime. Desktop and mobile screenshots are attached to the report.
+  warning lifetime, followed by muzzle flashes on the five firing targets.
+  Desktop and mobile screenshots are attached to the report.
+- `space-invaders-muzzle-flash.spec.ts` checks source identification at shot
+  release, weapon placement, game-clock fade/expiry, pause/resume, and reduced
+  motion, with desktop and phone screenshots. Wait for Running before advancing
+  the test clock so asynchronous run creation has installed the game timer.
 - Keep the suite focused as a smoke/regression layer over the browser experience.
   Deterministic game rules and pure helpers belong in Vitest near `src/lib`.
 - `support/app.ts` contains small route and interaction helpers such as

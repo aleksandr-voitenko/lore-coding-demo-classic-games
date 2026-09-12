@@ -24,10 +24,12 @@ import {
   explosionClassNames,
   explosionSpriteClassNames,
   getBoardEntityStyle,
+  getInvaderMuzzleFlashAges,
   getInvaderShotRenderStyle,
   getScorePopupNumberStyle,
   getScorePopupTextStyle,
   getShieldTethers,
+  INVADER_MUZZLE_FLASH_DURATION_MS,
   invaderShotClassNames,
   spaceInvadersBoardBackgroundStyle,
   spaceInvadersBoardShadeStyle,
@@ -176,6 +178,7 @@ export function SpaceInvadersBoard({
     game.revengeVolleys.flatMap((volley) => volley.invaderIds),
   );
   const shieldTethers = getShieldTethers(game.invaders);
+  const muzzleFlashAges = getInvaderMuzzleFlashAges(game.invaderShots);
 
   return (
     <div
@@ -265,6 +268,9 @@ export function SpaceInvadersBoard({
           const isShielded = isSpaceInvaderShielded(invader, game.invaders);
           const hasRevengeWarning =
             invader.isActive && revengeWarningInvaderIds.has(invader.id);
+          const muzzleFlashAge = invader.isActive
+            ? muzzleFlashAges.get(invader.id)
+            : undefined;
 
           return (
             <span
@@ -319,6 +325,17 @@ export function SpaceInvadersBoard({
                 style={{ backgroundImage: `url("${sprite.src}")` }}
               />
               {getInvaderModifier(invader.kind)}
+              {muzzleFlashAge !== undefined ? (
+                <span
+                  className="space-invaders-muzzle-flash"
+                  data-muzzle-flash-source={invader.id}
+                  data-testid="space-invaders-muzzle-flash"
+                  style={{
+                    animationDelay: `${-muzzleFlashAge}ms`,
+                    animationDuration: `${INVADER_MUZZLE_FLASH_DURATION_MS}ms`,
+                  }}
+                />
+              ) : null}
             </span>
           );
         })}
@@ -373,6 +390,7 @@ export function SpaceInvadersBoard({
               invaderShotClassNames[shot.kind],
             )}
             data-shot-kind={shot.kind}
+            data-shot-source={shot.sourceInvaderId}
             data-testid="space-invaders-invader-shot"
             key={shot.id}
             style={getInvaderShotRenderStyle(shot, game)}

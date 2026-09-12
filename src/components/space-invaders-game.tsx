@@ -135,6 +135,7 @@ export const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
     title: "Rules",
     items: [
       "Shoot every invader before the formation reaches your base.",
+      "A brief yellow-white muzzle flash beneath an alien shows when it fires.",
       "Only one normal shot or one primed shot sequence can be active at a time.",
       "Shoot the UFO bonus ship when it crosses the sky for extra points.",
       `Clean hit streaks add ${SPACE_INVADERS_HIT_STREAK_BONUS_STEP} more points per hit after the first, up to ${SPACE_INVADERS_HIT_STREAK_BONUS_CAP}; missed shots and player hits reset the streak.`,

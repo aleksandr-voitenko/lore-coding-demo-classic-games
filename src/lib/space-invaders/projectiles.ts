@@ -642,6 +642,22 @@ export function isInvaderShotDangerous(shot: SpaceInvadersInvaderShot) {
   );
 }
 
+export function getInvaderShotLaunchAgeTicks(
+  shot: SpaceInvadersInvaderShot,
+): number | null {
+  // These shots originate from a projectile in flight, not an alien's weapon.
+  if (shot.kind === "commander-shard" || shot.kind === "splitter-fragment") {
+    return null;
+  }
+
+  // Counterfire first moves on the update after the stationary windup ticks.
+  const ageTicks = shot.kind === "counterfire"
+    ? shot.ageTicks - REVENGE_COUNTERFIRE_WINDUP_TICKS - 1
+    : shot.ageTicks;
+
+  return ageTicks < 0 ? null : ageTicks;
+}
+
 type CreateInvaderShotOptions = {
   player?: SpaceInvadersPlayer;
   useArmoredArmorWave?: boolean;

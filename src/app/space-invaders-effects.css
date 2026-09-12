@@ -39,6 +39,57 @@
   will-change: opacity, transform;
 }
 
+@keyframes space-invaders-muzzle-flash-fade {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.75);
+  }
+}
+
+.space-invaders-muzzle-flash {
+  animation-fill-mode: both;
+  animation-name: space-invaders-muzzle-flash-fade;
+  /* Sample projectile age via a negative delay so pause and replay stay in sync. */
+  animation-play-state: paused;
+  animation-timing-function: linear;
+  color: color-mix(in oklch, var(--invaders-yellow) 82%, var(--invaders-red));
+  filter: drop-shadow(0 0 3px currentColor);
+  height: 60%;
+  left: 50%;
+  pointer-events: none;
+  position: absolute;
+  top: 75%;
+  transform: translateX(-50%);
+  transform-origin: 50% 26%;
+  width: 54%;
+  z-index: 40;
+}
+
+.space-invaders-muzzle-flash::before,
+.space-invaders-muzzle-flash::after {
+  content: "";
+  inset: 0;
+  position: absolute;
+}
+
+.space-invaders-muzzle-flash::before {
+  background: currentColor;
+  clip-path: polygon(
+    38% 13%, 23% 0, 27% 30%, 0 22%, 23% 48%, 19% 65%,
+    38% 52%, 50% 100%, 62% 52%, 81% 65%, 77% 48%, 100% 22%,
+    73% 30%, 77% 0, 62% 13%
+  );
+}
+
+.space-invaders-muzzle-flash::after {
+  background: color-mix(in oklch, var(--invaders-yellow) 24%, white);
+  clip-path: polygon(38% 17%, 31% 39%, 42% 48%, 50% 74%, 58% 48%, 69% 39%, 62% 17%);
+}
+
 @keyframes space-invaders-revenge-ember-rise {
   from {
     opacity: 0.95;
@@ -580,9 +631,13 @@
   .space-invaders-player-shield__surface,
   .space-invaders-player-shield__surface--flashing,
   .space-invaders-invader-shield,
+  .space-invaders-muzzle-flash,
   .space-invaders-revenge-ember,
   .space-invaders-revenge-alert {
     animation: none;
+  }
+  .space-invaders-muzzle-flash {
+    opacity: 0.8;
   }
   .space-invaders-player-shield__surface--flashing {
     opacity: 0.48;
