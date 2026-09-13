@@ -1,157 +1,102 @@
 # App Router Memory
 
-This file covers routes and App Router conventions under `src/app/`.
+## Entry Boundaries And Pages
 
-## Routes
+- Keep page/route entries limited to Next-supported exports; put injectable
+  factories in adjacent `route-handlers.ts` and pure query parsing in
+  `home-search-params.ts`. Unit/type checks alone missed invalid entry exports;
+  nearby exact-export tests and a Next build cover that contract
+  (`LC-20260709-RPBX`, `LC-20260709-PQBX`). Reusable helpers touching session or
+  response cookies import `server-only` (for example `api/auth/session-response.ts`
+  and `api/replays/route-handlers.ts`). The multiplayer collection
+  `api/multiplayer/rooms/route.ts` currently still houses shared parsing/factories;
+  do not mistake that existing exception for the preferred entry pattern.
+- `page.tsx` hydrates `CurrentUserProvider.initialUser` from the HTTP-only session
+  cookie before rendering `GameLauncher`, preventing signed-out flashes after
+  profile navigation. It maps `?auth=login|signup`, replay ids, and room codes;
+  testable replay/room parsing stays outside the entry.
+- Root and `profile/page.tsx` are dynamic, Node-only routes because of cookies and
+  SQLite. Profile renders signed-in aggregate stats/latest-replay links; unsigned
+  requests redirect to `/?auth=login`. `profile/profile-escape-to-launcher.tsx`
+  makes Escape mirror Back to games. Profile consumes persisted theme but theme
+  switching belongs to launcher chrome.
+- `layout.tsx` owns HTML, Geist variables, CSS import, metadata, pre-hydration
+  persisted-theme initialization, and one app-wide `CookieNotice`. Align public
+  catalog/title/description changes with README. `globals.css` owns Tailwind and
+  theme styles: app chrome uses `--chrome-*` from `../lib/app-theme.ts`; games use
+  `--<game>-page/panel/ink/muted/border` with dark overrides. Keep playfield tokens
+  separate so arcade boards can stay dark. Simon casing uses `--simon-board-*`
+  while its classic pad colors remain stable.
 
-- `page.tsx` is the launcher route. It should stay thin and render
-  `GameLauncher` inside `CurrentUserProvider` so launcher controls, games, and
-  leaderboard saves share the current signed-in display name. The route reads
-  the HTTP-only session cookie on the server and passes `initialUser` into the
-  provider to avoid a signed-out flash during client navigation from `/profile`.
-  It also maps `?auth=login|signup` to the launcher auth modal. Keep testable
-  replay and room query parsing in `home-search-params.ts` so `page.tsx` exports
-  only fields supported by the Next.js page contract.
-- `profile/page.tsx` renders signed-in aggregate stats from the server-side
-  profile store. It is dynamic and Node-only because it reads the session cookie
-  and SQLite-backed session rows. Signed-out profile requests redirect to
-  `/?auth=login` instead of rendering private profile content. It renders a
-  tiny client shortcut component so Escape mirrors the visible Back to games
-  action and returns signed-in users to the launcher. The profile route consumes
-  the persisted app chrome theme but does not host its own theme toggle; theme
-  switching belongs to the launcher chrome.
-- `layout.tsx` owns the global HTML shell, Geist font variables, `globals.css`
-  import, app metadata, and the small pre-hydration script that applies the
-  persisted light/dark chrome theme class and `--chrome-*` variables to
-  `<html>`. It also mounts the app-wide cookie/storage notice so the session
-  cookie and theme preference disclosure follows every route without duplicating
-  per-page UI. Keep public title/description changes aligned with README when
-  the visible catalog changes.
-- `globals.css` owns global Tailwind/theme styles for the game collection. The
-  launcher, profile, and account chrome consume app-level `--chrome-*` variables
-  supplied by `src/lib/app-theme.ts`; game screens consume their own
-  `--<game>-page`, `--<game>-panel`, `--<game>-ink`, `--<game>-muted`, and
-  `--<game>-border` tokens, with `.dark` overrides for surrounding game chrome.
-  Board/playfield tokens stay separate so intentionally dark arcade boards remain
-  dark across light and dark app chrome. Simon also exposes `--simon-board-*`
-  shell tokens for its board casing while the classic pad colors remain stable.
+## Leaderboard, Auth, Sessions, And Replays
 
-## Leaderboard API
-
-- `api/leaderboard/route.ts` exposes the generic leaderboard API at
-  `/api/leaderboard`.
-- The route is dynamic and Node-only (`dynamic = "force-dynamic"`,
-  `runtime = "nodejs"`) because it uses the server leaderboard store.
-- Keep request parsing and store-independent behavior testable through
-  `api/leaderboard/route-handlers.ts` and its
-  `createLeaderboardRouteHandlers(store)` factory. The `route.ts` entry should
-  export only Next-supported route fields and keep GET/POST thin around the
-  production leaderboard and user-profile stores.
-- GET reads `key` and optional `sort` search params. POST expects JSON with a
-  leaderboard key, score, player name, and optional sort direction.
-- Invalid keys, invalid JSON, or invalid scores return `400`; accepted
-  submissions return `201`, while non-qualifying valid submissions return `200`.
-
-## User And Session APIs
-
-- `api/auth/signup/route-handlers.ts` owns testable account registration,
-  including field validation, duplicate normalized display-name errors, and
-  session-cookie responses. `api/auth/signup/route.ts` stays a thin App Router
-  entry that exports only Next-supported route configuration and the production
-  `POST` handler. Session-cookie responses use `Secure` in production while
-  leaving local HTTP development usable.
-- Reusable API helper modules that touch server session cookies or response
-  cookies, such as `api/auth/session-response.ts` and
-  `api/replays/route-handlers.ts`, import `server-only`; route entry files stay
-  under App Router's server boundary and compose those guarded helpers.
-- `api/auth/login/route-handlers.ts` owns the testable display-name/password
-  login handler, including session-cookie responses and generic invalid-credential
-  errors. `api/auth/login/route.ts` stays a thin App Router entry that exports
-  only Next-supported route configuration and the production `POST` handler.
-- `api/me/route-handlers.ts` owns the testable current-session GET and logout
-  DELETE handlers, including session-cookie clearing. `api/me/route.ts` stays a
-  thin App Router entry that exports only Next-supported route configuration
-  and the production `GET` and `DELETE` handlers.
-- `api/game-sessions/route-handlers.ts` owns game-session payload parsing and
-  the injectable signed-in session-recording handler. `api/game-sessions/route.ts`
-  stays a thin App Router entry that exports only Next-supported route
-  configuration and the production `POST` handler. Unsigned requests return
-  `401`; guest play should remain a client-side no-op for profile stats.
-- `api/replays/route-handlers.ts` owns reusable replay run and latest replay
-  route factories. Supported replay games such as Snake, Tetris, Breakout,
-  Minesweeper, Space Invaders, Pong, Simon, 2048, Asteroids, and Tank Patrol
-  expose `api/replays/<game>/run/route.ts` to issue replay run ids and seeds for
-  live recording and `api/replays/<game>/route.ts` to require a signed-in
-  session before saving or downloading the current user's latest replay. Each
-  game's adjacent `route-handlers.ts` owns its testable game-id, payload-parser,
-  and replay-label adapters; both production route entries export only their
-  Next-supported HTTP and configuration fields.
+- `api/leaderboard/route-handlers.ts` injects leaderboard/session stores into
+  `createLeaderboardRouteHandlers`; `route.ts` composes dynamic Node GET/POST.
+  GET takes `key` and optional `sort`; POST JSON takes key, score, player name,
+  optional sort. Invalid key/JSON/score returns 400; accepted scores return 201,
+  valid nonqualifying scores 200.
+- `api/auth/signup/route-handlers.ts` owns validation, normalized-name duplicate
+  errors, and cookie responses; `api/auth/login/route-handlers.ts` owns generic
+  invalid-credential errors. Cookies use Secure in production, preserving local
+  HTTP development. `api/me/route-handlers.ts` owns current-user GET and logout
+  DELETE/cookie clearing. Their entries only wire production handlers/config.
+- `api/game-sessions/route-handlers.ts` parses payloads and injects the signed-in
+  POST recorder; unsigned requests return 401. Guest play remains a client-side
+  profile-stat no-op; actor identity always comes from the cookie.
+- `api/replays/route-handlers.ts` provides common run/latest-replay factories.
+  Per-game adjacent helpers supply game id, parser, and label; entries expose
+  only HTTP/config fields. All ten solo games support
+  `/api/replays/<game-id>/run` for server-issued run/seed and
+  `/api/replays/<game-id>` for signed-in latest-replay save/download. Tank Patrol
+  uses `battle-city`; multiplayer never enters this solo path.
 
 ## Multiplayer Room API
 
-- `api/multiplayer/rooms/[code]/route-handlers.ts` owns testable room lookup,
-  command parsing, WebSocket-only command rejection, and signed-in host-command
-  authorization. Its `route.ts` entry stays thin and exports only Next-supported
-  route configuration plus the production `GET` and `POST` handlers.
-- `api/multiplayer/rooms/request-body.ts` bounds public room create/command JSON
-  to 64 KiB using both declared and streamed byte lengths before parsing;
-  oversized bodies return 413. Settings parsing shares admission normalization
-  with the room authority: at most 32 containers including settings root 1 and
-  parameters 2, and 16 KiB of serialized UTF-8 settings including game id,
-  keys, punctuation, and escaping. Invalid or excessive settings return 400
-  before command authorization performs a room lookup or advances gameplay.
-  The canonical room store repeats admission validation for internal sidecar
-  callers. The unversioned and retired version routes retain their existing
-  fail-closed 426 responses.
+- `api/multiplayer/rooms/[code]/route-handlers.ts` owns lookup, command parsing,
+  WebSocket-only rejection, and signed-in host authorization. Unversioned
+  `[code]/route.ts` serves GET; live create/host POSTs use
+  `api/multiplayer/rooms/v6/route.ts` and `[code]/v6/route.ts`.
+  Unversioned and retired mutation routes return 426;
+  do not infer that the unversioned POST applies commands.
+- `api/multiplayer/rooms/request-body.ts` bounds declared and streamed public
+  JSON to 64 KiB before parsing (413). Settings admission shares authority
+  normalization: maximum nesting is 32 containers, counting settings root as 1
+  and parameters as 2, with 16 KiB serialized UTF-8 including game id, keys,
+  punctuation, and escaping. Invalid/excessive settings return 400 before host
+  authorization looks up/advances the room; canonical storage repeats admission
+  for internal callers (`LC-20260905-5EDA`).
 
 ## Social API
 
-- `api/social/shared.ts` owns the common signed-in session lookup, optional
-  same-origin mutation check, JSON content-type/body parsing, no-store response
-  shaping, durable and volatile error mapping, and the only serializer allowed
-  to turn a private invitation record into client JSON. Its shared reader
-  rejects declared or streamed JSON bodies over 16 KiB before unbounded parsing.
-  Route entries stay thin and export only Next-supported methods plus `dynamic`
-  and `runtime`.
-- `GET /api/social` returns one durable overview enriched with chunked volatile
-  friend availability. Failed or rejected authority chunks remain `unknown`
-  instead of hiding the durable graph. `GET /api/social/discovery` performs one
-  exact normalized display-name lookup without exposing a directory. Before
-  overview serialization, private pending invitation tuples are inspected and
-  terminal-party rows are revoked; party codes never enter the response.
-- `POST` and `DELETE /api/social/presence` renew or release one authenticated
-  browser lease. The actor always comes from the session cookie. Presence is a
-  volatile invitation gate and never resolves durable invitations: pending
-  invitations remain suspended while the effective state is not `available`
-  and can be accepted after availability clears, subject to TTL.
-- Friend-request, friend, and block routes delegate direction and retry
-  semantics to the SQLite social store. JSON methods require
-  `application/json`; every state-changing method rejects a mismatched supplied
-  Origin before calling the store. Exact discovery, friend-request creation,
-  and party-invitation creation consume separate durable fixed-window rate
-  limits (30/minute, 10/minute, and 20/minute) and return `429` plus
-  `Retry-After`; the store also caps pending incoming and outgoing requests at
-  100 each per account.
-- Party invitation creation validates friendship/block state before the private
-  authority call, checks host ownership, recipient availability, and capacity,
-  revalidates the relationship after the call, and only then persists the row.
-  Busy, in-party, offline, and unknown recipients return a conflict without
-  resolving an existing pending invitation. Terminal party failures revoke all
-  invitations for that party.
-- Acceptance claims one pending invitation through a 30-second recipient-wide
-  SQLite lease before calling party authority. Only the matching live token can
-  finalize acceptance; the claim extends the invitation through a two-minute
-  recovery grace while retaining the base expiry. A handled authority failure
-  releases the claim and restores that base expiry, immediately expiring the
-  row when its original deadline has passed. Successful finalization accepts
-  the selected invitation and revokes the recipient's other pending invitations
-  atomically before returning the capability. A failed durable finalization
-  compensates only `admitted`,
-  never `reacquired`, membership and releases the claim only after compensation
-  is confirmed. An accepted-response retry uses the authority's membership-only
-  `party.reacquireAuthenticated` command, which cannot create a new participant
-  after the account leaves. Party invitations are capped at 20 pending incoming
-  and 20 pending outgoing rows per account; resolved nonaccepted history is
-  capped at 1,000 rows, with only the newest accepted row per recipient retained
-  as a retry index. Overview reconciliation and friend-availability resolution
-  run at most four authority calls concurrently.
+- `api/social/shared.ts` centralizes cookie-derived actor lookup, no-store JSON,
+  private-error mapping, bounded body parsing, and private invitation redaction.
+  JSON methods require `application/json`; declared/streamed bodies over 16 KiB
+  return 413. Every mutation checks a supplied Origin before storage: accept the
+  framework origin or same-protocol transport Host (Next may canonicalize its
+  URL), reject different host/protocol. An absent Origin is allowed.
+- `GET /api/social` reconciles private pending invitation tuples with authority,
+  revokes terminal-party rows, then returns durable overview plus chunked friend
+  availability; failed/rejected chunks remain `unknown`. Party codes never enter
+  invitation JSON. Reconciliation and availability each use at most four
+  concurrent authority calls. `GET /api/social/discovery` is exact normalized
+  display-name lookup, never a directory.
+- Presence POST/DELETE renew/release a volatile browser lease using the session
+  actor. Nonavailable presence suspends pending invitations; it does not resolve
+  them. They remain acceptable after availability clears, subject to TTL.
+  Friend/request/block routes delegate direction and retry rules to SQLite.
+  Separate durable fixed-window limits for discovery/request/invitation creation
+  are 30/10/20 per minute and return 429 with `Retry-After`.
+- Invitation creation validates friendship/block state, asks authority to check
+  host ownership, recipient availability, and capacity, revalidates the
+  relationship, then persists. Busy/in-party/offline/unknown conflicts preserve
+  existing pending invitations; terminal parties revoke their invitations.
+- Acceptance claims in SQLite before authority admission; only the live claim
+  token can atomically accept the selected invitation and revoke other pending
+  invitations before returning a capability. Handled authority failure releases
+  the claim and restores base expiry. Failed durable finalization compensates
+  only newly `admitted`, never `reacquired`, membership, and releases the claim
+  only after confirmed compensation. Accepted-response retries use
+  `party.reacquireAuthenticated`, which cannot rejoin after departure
+  (`LC-20260803-SAPI`). Claim/TTL/history bounds and the deferred late-response
+  provisional-admission limitation live in `../lib/server/MEMORY.md` and
+  `../../docs/adr/0003-persistent-parties-and-friends.md`.

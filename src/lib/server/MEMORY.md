@@ -1,346 +1,220 @@
 # Server Library Memory
 
-This file covers Node-only server helpers and storage adapters under
-`src/lib/server/`.
+Node-only storage and multiplayer authority live here. Pure room/protocol rules
+are in `../multiplayer/MEMORY.md`; authenticated HTTP boundaries are documented
+in `../../app/MEMORY.md`. Root `README.md` owns operational commands and overrides.
 
-## Leaderboard Store Boundary
+## Ownership and Runtime Boundaries
 
-- Production modules in this folder import `server-only` so Next fails the build
-  if a client component accidentally pulls Node-only storage, cookie, or crypto
-  helpers into a browser bundle. Add the same marker to new Next-facing runtime
-  modules under this boundary; tests use the shared Vitest resolver alias for the
-  empty server marker implementation.
-- `multiplayer-room-runtime.ts` and `multiplayer-room-websocket.ts` are the
-  intentional exceptions: they avoid importing `server-only` so the standalone
-  realtime sidecar can reuse the same in-memory service and WebSocket gateway
-  under normal Node resolution. Next API routes should import
-  `multiplayer-room-store.ts`, not the runtime or gateway directly.
-- `leaderboard-store.ts` defines the small `LeaderboardStore` interface used by
-  the API route and tests. Keep parsing, validation, normalized submissions, JSON
-  response shaping, and rank calculation behind this boundary.
-- `sqlite-app-schema.ts` owns shared SQLite path preparation and schema
-  initialization for leaderboards, users, password hashes, user sessions,
-  signed-in game sessions, and the durable social graph. Schema version 7 adds
-  pending canonical-pair friend requests, canonical friendships, directed
-  blocks, short-lived party invitations, recipient-wide invitation-acceptance
-  claims, and fixed-window social API rate-limit counters. Every SQLite store
-  uses this same
-  initialized database and configured path rather than creating a separate
-  friends database.
-- `sqlite-leaderboard-store.ts` is the current production leaderboard store. It
-  uses `better-sqlite3`, initializes the shared schema, and exposes
-  `getLeaderboardStore()` as the default singleton.
-- `password-auth.ts` owns server-only password hashing and verification using
-  Node `crypto.scrypt` with per-user salts.
-- `sqlite-user-profile-store.ts` owns user registration, password login,
-  signed-in session persistence, game-session recording, and aggregate profile
-  stats.
-- `sqlite-social-store.ts` is the only writer for durable friend requests,
-  friendships, directed blocks, and party invitations. Its immediate
-  transactions keep pair cleanup and invitation transitions atomic, make
-  state-based retries safe, and return client-safe overview invitations without
-  their bearer-like party codes. Invitation mutation/admission helpers retain
-  the code only in server-side records and compute expiration from the
-  server-owned five-minute TTL rather than accepting a caller timestamp.
-  `getSocialStore()` shares the configured application SQLite path with account
-  and profile storage. Successful post-admission acceptance and revocation of
-  every other live invitation for that recipient happen inside one immediate
-  transaction; an idempotent accepted retry repeats the cleanup without turning
-  the invitation record into a client-visible party credential. Pending
-  incoming/outgoing friend requests have 100-row per-account ceilings. Exact
-  discovery consumes a 30-per-minute durable fixed-window counter and
-  friend-request creation consumes a separate 10-per-minute counter; party
-  invitation creation consumes 20 per minute. Party invitations have 20-row
-  pending incoming/outgoing ceilings. Resolved nonaccepted history is bounded
-  to 1,000 rows, while only the newest accepted invitation per recipient is
-  retained as the lost-response reacquisition index. Acceptance uses a
-  30-second recipient-wide claim with a two-minute recovery grace so one account
-  cannot concurrently accept invitations to different parties and only the
-  matching live token can finalize. Invitations retain a base expiry so handled
-  failures restore the original TTL instead of extending it with every attempt.
-- `sqlite-replay-store.ts` owns generic server-issued replay runs and one latest
-  saved replay per signed-in user/game. Keep generic `createReplayRun`,
-  `saveReplay`, and `getReplay` behavior available for future games while
-  preserving Snake wrapper methods for the current replay MVP.
-- `multiplayer-room-store.ts` is the private-room API MVP facade. It imports
-  `server-only`, exposes the Next-facing singleton, and re-exports the runtime
-  types/class from `multiplayer-room-runtime.ts`. The default remains the local
-  in-process store; setting `MULTIPLAYER_ROOM_SERVICE_URL` switches Next API
-  routes to the HTTP room service client.
-- `multiplayer-room-service-client.ts` is the guarded Next-to-sidecar HTTP
-  adapter. It implements the room store contract over the advertised versioned
-  collection/room mutation paths plus `GET <base>/<code>`, sends
-  `MULTIPLAYER_ROOM_SERVICE_CLIENT_BEARER_TOKEN` when configured, and maps
-  sidecar or upstream failures back into store-style results for route handlers.
-- `multiplayer-room-runtime.ts` wraps the pure room model with process-local room
-  state, deterministic id/code/time factories for tests, snapshot sequence
-  numbers for API routes, and adapter-owned runtimes that expose optional
-  server-owned game snapshots. Creation, settings updates, and match replacement
-  first normalize and bound settings through `multiplayer/settings.ts`: 32 nested
-  containers (settings root 1, parameters 2) and 16 KiB of serialized UTF-8 JSON.
-  Rejection precedes room lookup, retention work, and runtime advancement, so
-  excessive settings cannot consume room capacity or advance a rejected match.
-  Domain and snapshot settings copies reuse the same iterative traversal. The
-  runtime retains the current canonical room/game state,
-  not an internal history of accepted inputs or snapshot advances; current
-  WebSocket reconnects recover from a fresh authoritative snapshot. Room state
-  is intentionally volatile: the in-process store or sidecar owns server
-  authority while the room exists, and in-progress games may be abandoned if
-  that process restarts.
-  Party identity and membership remain stable at `code`, `hostParticipantId`,
-  and `participants`; the flat `matchId`, `seats`, `settings`, and `status`
-  fields are the current-match projection. Match-scoped commands must carry the
-  expected positive match id, which the store checks before runtime advancement
-  or mutation. Restart increments the generation and creates a new adapter
-  runtime with its game sequence reset; pause, resume, and finish preserve the
-  generation. Room creation places the host in the first adapter seat, while a
-  play-intent guest join atomically takes the first open seat between matches
-  and otherwise remains an observer. Cross-game settings changes are rejected;
-  the authenticated host instead uses atomic match replacement, which preserves
-  participant order, remaps current players by seat ordinal, advances the
-  generation, supplies the target adapter's seats, and clears the old runtime.
-  When an adapter reports its runtime terminal, the store synchronizes the room
-  to `finished` and advances room sequence once so replacement is available
-  without a separate host finish command. Each runtime also retains an immutable
-  match-start room projection for terminal seat and winner attribution; live
-  membership changes continue to use the canonical party room. Watchers may
-  enter an idempotent FIFO next-match queue. It never changes a running roster
-  and promotes into open seats only at a lobby start, finished-match restart, or
-  game replacement. Explicit leave removes the member's seat, queue entry,
-  capability, connections, and held input. A leaving host transfers to the
-  earliest connected signed-in member or closes the party when none exists.
-  The store bounds that volatile authority to 256 rooms by default. Successful
-  room/game commands refresh meaningful activity; passive reads, snapshot
-  advancement, handshakes, and diagnostics do not. Unconnected lobbies expire
-  after 60 minutes, running/paused rooms after two hours, and explicit or
-  adapter-classified terminal rooms after 30 minutes. Recognized participant
-  WebSocket connections protect a room and the last disconnect starts a full
-  state-specific grace. Capacity eviction prefers expired rooms, then terminal
-  rooms, then lobbies, and never removes connected or nonterminal
-  running/paused rooms. Up-to-five-minute, capacity-bounded tombstones
-  distinguish recent expiry from an unknown room code.
-  Public participant ids are labels, not credentials. Room creation and public
-  guest admission mint separate 256-bit participant capabilities, retain only
-  SHA-256 hashes beside the volatile room, and return the raw value only in the
-  creating HTTP response or joining socket acknowledgement. `getRoom` and room
-  snapshots must never contain a capability. The store also enforces an
-  independently configurable watcher limit (eight by default) and
-  per-participant connection limit (four by default).
-- `multiplayer-room-websocket.ts` owns the reusable Node WebSocket gateway for
-  the realtime sidecar. It adapts the generic protocol envelopes to the room
-  runtime, accepts an injectable `MultiplayerRoomStore`, rejects public
-  WebSocket lifecycle/settings commands because signed-in host authorization
-  lives on the authenticated HTTP room route, broadcasts authoritative room
-  snapshots after accepted WebSocket commands, runs a subscribed-room snapshot
-  pump so server-owned games keep advancing when HTTP polling is disabled,
-  exposes a narrow snapshot fanout method for sidecar-owned mutations, and keeps
-  game-specific payloads nested behind `game.input` dispatch. When the injected
-  store exposes the co-located participant-connection capability, the gateway
-  resolves an opaque participant capability before binding a socket, derives
-  seat and game-input actors from that binding, promotes a socket only after a
-  successful guest join, and releases presence on close, error, or room change.
-  Client-submitted participant ids never establish authority, public joins
-  cannot assert an account user id, and anonymous invite viewers receive a
-  bootstrap snapshot but are not ongoing subscribers and do not protect
-  retention. Recognized members receive queue/cancel/leave broadcasts; leave
-  detaches every socket for that participant, while party closure sends one
-  terminal event and detaches all members. Its public
-  factory defaults inbound client messages to 64 KiB through `ws` `maxPayload`
-  while preserving explicit caller overrides. Protocol v6 carries match ids in
-  game snapshots, reconnect cursors, command acknowledgements, and every
-  match-scoped command. The gateway includes the generation in broadcast
-  deduplication and relays stale-match failures without acknowledging or
-  broadcasting the rejected command. It also adds play-intent admission and
-  atomic host match replacement; older mutation routes fail closed with 426.
-- `multiplayer-room-sidecar.ts` owns the standalone Node HTTP/WebSocket process
-  wrapper around the gateway. It parses `MULTIPLAYER_SIDECAR_HOST`,
-  `MULTIPLAYER_SIDECAR_PORT`, `MULTIPLAYER_SIDECAR_WEBSOCKET_PATH`,
-  `MULTIPLAYER_SIDECAR_ROOM_SERVICE_PATH`,
-  `MULTIPLAYER_SIDECAR_MAX_CONNECTIONS_PER_PARTICIPANT`,
-  `MULTIPLAYER_SIDECAR_MAX_OBSERVERS_PER_PARTY`,
-  `MULTIPLAYER_SIDECAR_SNAPSHOT_INTERVAL_MS`, and optional
-  `MULTIPLAYER_SIDECAR_ROOM_SERVICE_BEARER_TOKEN`. It also parses the strict
-  positive `MULTIPLAYER_SIDECAR_MAX_ROOMS` capacity override, owns the one-minute
-  room sweep timer, and clears that timer during idempotent shutdown. It exposes
-  `/healthz`, keeps
-  public WebSocket upgrades on `/multiplayer/rooms` by default, serves internal
-  JSON room create/get/command endpoints on `/_internal/multiplayer/rooms` by
-  default, passes one in-process room store to both those HTTP endpoints and the
-  WebSocket gateway, and fans successful internal room command POST results back
-  to already-subscribed WebSocket clients as authoritative `room.snapshot`
-  messages. The authenticated collection GET advertises the capability-aware
-  room protocol and versioned mutation path; mutating POSTs require both that
-  path and its version header before their bodies are parsed, and WebSocket
-  bootstrap requires the same version before room lookup. A legacy sidecar
-  cannot route the versioned mutation path even if a rolling-deployment
-  preflight reaches a newer instance. This deliberately makes mixed app,
-  sidecar, or browser deployments fail before room state changes. It also
-  exposes a bearer-only `/v6/_accounts` authority endpoint for expiring browser
-  presence leases, one-party-per-account membership, authenticated admission,
-  atomic membership-only capability reacquisition, bounded capability fanout,
-  and tuple-bound admission compensation. The collection preflight advertises
-  `membershipOnlyReacquisition: true` only when
-  account authority is configured, and the service client requires that bit so
-  an older v6 sidecar fails closed before any mutation. The same bearer boundary
-  protects room creation because its host id establishes
-  authoritative account membership; tokenless capability discovery fails those
-  account-authority flags closed. The multiplayer development wrapper generates
-  one ephemeral secret and supplies it to both local processes. The sidecar is
-  emitted through `tsconfig.sidecar.json` because the main app
-  TypeScript config typechecks only and does not emit runtime JavaScript. Keep
-  sidecar-emitted runtime imports resolvable by plain Node after TypeScript emits
-  CommonJS; TypeScript path aliases are not rewritten in emitted output.
-- Keep this adapter boundary small so a future Postgres store can replace SQLite
-  without changing the client API or game components.
+- Next-facing storage, cookie, crypto, and service facades import `server-only`;
+  Vitest aliases that marker to its empty implementation. The standalone
+  sidecar graph deliberately omits it: runtime, gateway, sidecar, game adapters,
+  and account/presence helpers must run under plain Node. Next routes enter
+  through `multiplayer-room-store.ts`, not the runtime/gateway.
+- `leaderboard-store.ts` defines the injectable `LeaderboardStore` contract,
+  submission/query parsing, response shaping, and ranking helpers.
+  `sqlite-leaderboard-store.ts` supplies the production singleton; keep clients
+  and routes independent of the SQLite implementation.
+- `sqlite-app-schema.ts` owns shared path preparation and schema initialization
+  (currently version 7). Leaderboard, profile, replay, and social stores use the
+  same application database; do not create a separate friends database.
+- `sqlite-user-profile-store.ts` owns registration/login, sessions, signed-in
+  game-session recording, and aggregate stats. `password-auth.ts` uses Node
+  `crypto.scrypt` with per-user salts; `user-session-cookie.ts` owns cookie policy.
+- `sqlite-replay-store.ts` issues runs/seeds and stores one latest signed-in
+  replay per user/game. Preserve generic `createReplayRun`, `saveReplay`, and
+  `getReplay` plus the existing Snake compatibility wrappers.
+- `multiplayer-room-store.ts` supplies the Next singleton: local in-process
+  authority by default, or `multiplayer-room-service-client.ts` when
+  `MULTIPLAYER_ROOM_SERVICE_URL` is set. The client validates sidecar responses
+  and maps upstream failures to store results for routes.
+- `multiplayer-room-runtime.ts` owns canonical volatile rooms, generations,
+  ordering, retention, capabilities, account membership, and adapter dispatch.
+  `multiplayer-account-party.ts` defines the trusted account-authority contract;
+  `multiplayer-social-presence.ts` owns leases and effective availability.
 
-## Multiplayer Adapter Target
+## SQLite Invariants
 
-- The long-term multiplayer runtime is a `gameId`-keyed adapter registry, not a
-  Pong-owned room architecture. Pong is the first adapter; later games should
-  plug into the same room service, sidecar, protocol envelopes, and result
-  pipeline.
-- The supported ids and default game live in
-  `src/lib/multiplayer/game-registry.ts`; keep the server adapter map exhaustive
-  over its `MultiplayerGameId` while leaving adapter implementations in this
-  server-only folder.
-- A server game adapter owns game settings defaults/validation, seat and role
-  mapping, accepted input payloads, initial state, deterministic application of
-  server-ordered intents and ticks, authoritative snapshot projection, terminal
-  result data, and game-specific match-summary fields. The room service owns
-  room identity, membership, admission, host authorization, observer permissions,
-  sequencing, and dispatch to the selected adapter. Every registered party game
-  currently exposes exactly two required seats so automatic Player 1/Player 2
-  admission and ordinal match replacement have one consistent contract.
-- The Space Invaders co-op adapter milestone should expose required `ship-a` and
-  `ship-b` seats. It owns server-side random choices for simultaneous ambiguous
-  outcomes: choosing the respawning ship when a double hit has only one shared
-  life left, and choosing the power-up recipient when both ships collect the
-  same power-up on one tick. Tests should inject deterministic randomness.
-- The Asteroids co-op adapter milestone should expose required `ship-a` and
-  `ship-b` seats and keep the room service game-agnostic. It owns server-side
-  random choices for saucer targeting, asteroid double-hit final-life
-  resolution, saucer-shot double-hit resolution, and simultaneous power-up
-  pickup. The adapter should project compact terminal summaries with shared
-  score, wave, lives, and occupied seats; per-ship contribution stats are out of
-  scope for the first Asteroids co-op slice.
-- `battle-city-multiplayer-game-adapter.ts` owns Tank Patrol's private-room
-  runtime under the stable `battle-city` id. It requires occupied `player-1`
-  and `player-2` seats, starts/restarts the deterministic co-op engine at Stage
-  1, maps participants to their claimed seats, latches one-shot fire alongside
-  held direction, advances NTSC ticks with bounded catch-up, and exposes cloned
-  authoritative snapshots. Internal stage introductions, results, and ending
-  tails continue while the room is running; room pause freezes the runtime
-  without replacing the engine's own status. Terminal summaries use the
-  mode-scoped `battle-city|mode=private-room|start-stage=1` key and remain
-  volatile rather than entering the solo replay or leaderboard stores. Freeze
-  the outcome and occupied-seat attribution when the runtime first reaches
-  `lost`; later room-seat changes must not rewrite the terminal summary.
-- The current authoritative source is the room's canonical state plus room/game
-  sequence counters while the room exists. Do not retain an unbounded internal
-  history of high-frequency inputs, ticks, snapshots, or power-up awards. A
-  bounded reconnect window may be added when its cursor and retention policy are
-  defined; until then reconnect uses a fresh snapshot. If multiplayer
-  persistence is needed later, persist compact terminal summaries or mode-scoped
-  results derived from server-owned final state, not a durable per-event log.
-- Multiplayer results and scores stay mode-scoped, for example private-room
-  Pong keys must remain separate from solo Pong keys. Do not write multiplayer
-  outcomes through solo replay uploads or unscoped solo leaderboard keys.
-- Browser live room delivery uses WebSocket fanout plus the volatile ordered
-  event path. Keep public HTTP limited to room creation, invite snapshot reads,
-  and authenticated host-only commands; the sidecar HTTP room service remains an
-  internal bridge rather than a browser polling or live-command fallback.
+- Prefer `GAME_LEADERBOARD_SQLITE_PATH`, with
+  `SNAKE_LEADERBOARD_SQLITE_PATH` as fallback. The compatibility default remains
+  `.data/snake-leaderboard.sqlite`. `:memory:` tests must not create directories.
+- `leaderboard_scores` uses stable game/parameter keys and separate ascending
+  and descending indexes. Ties sort by earlier `created_at`, then `id`.
+  Schema initialization migrates legacy `snake_scores` to `snake|board=<size>`.
+- Optional score/session links resolve inside the score insert transaction only
+  when the session belongs to the server-derived score user. Guest, missing,
+  and mismatched links become null without rejecting a valid score. Profile
+  stats come from `game_sessions`, not leaderboard rows (`LC-20260709-SOWN`).
+- Normalized unique display-name keys identify accounts. Nullable password
+  hashes preserve legacy rows, but passwordless names stay reserved and cannot
+  be claimed through signup or used for social relationships. Session cookies
+  are stored as token hashes. `game_sessions` records signed-in active duration,
+  final score/result, sort direction, game id, and leaderboard key.
+- `game_replay_runs` records server-issued ids/seeds; `game_replays` holds latest
+  user/game payloads. Multiplayer matches, inputs, and outcomes never enter
+  these solo replay, profile-session, or leaderboard paths.
 
-## SQLite Assumptions
+## Durable Social State and Admission
 
-- `GAME_LEADERBOARD_SQLITE_PATH` is the preferred durable override.
-  `SNAKE_LEADERBOARD_SQLITE_PATH` is still honored as a fallback.
-- The default path is `.data/snake-leaderboard.sqlite`, intentionally preserved
-  for existing Snake deployments.
-- `:memory:` is supported for isolated tests and should not trigger directory
-  creation.
-- The generic schema stores rows in `leaderboard_scores` with stable
-  game-and-parameter keys. It maintains separate ascending and descending indexes
-  for high-score and low-time rankings.
-- `leaderboard_scores` can optionally link to `users` and `game_sessions`, but
-  profile stats are derived from `game_sessions`, not from top-three leaderboard
-  rows. The SQLite leaderboard insert resolves an optional game-session link in
-  the same transaction and stores it only when the session belongs to the
-  server-derived score user; guest, missing, and mismatched links remain null.
-- `users` are keyed by normalized display name and store nullable password
-  hashes for backward-compatible migration. New signups must set a password hash;
-  legacy passwordless users remain reserved names and cannot be claimed through
-  sign-up. `user_sessions` stores hashed cookie tokens, and `game_sessions`
-  stores only signed-in play sessions with active duration, final score, result,
-  sort direction, game id, and leaderboard key.
-- Social lookup is an exact query through the existing normalized
-  `display_name_key` and returns at most one minimal identity. Social repository
-  operations must require a password-backed account, exclude legacy
-  passwordless rows, suppress either-direction blocks, and derive the acting
-  account from its authenticated session boundary rather than accepting it from
-  a public identifier.
-- `friend_requests` stores only the current pending request for one canonical
-  account pair and separately records which account requested it;
-  `friendships` stores accepted canonical pairs; `user_blocks` remains directed.
-  The repository must serialize relationship mutations in SQLite transactions.
-  Blocking deletes requests and friendships and revokes pending party
-  invitations in both directions atomically. Removing a friendship also revokes
-  pending invitations for the pair, and unblocking does not recreate any prior
-  state.
-- `party_invitations` stores a bounded-lifetime play/watch intent against a
-  volatile party code without a room foreign key. A pending invitation has no
-  resolution timestamp and may transition to accepted, declined, canceled,
-  revoked, or expired with one. It stores neither match state nor participant
-  capabilities. The store owns a five-minute default TTL, redacts the party code
-  from social overviews, caps pending incoming/outgoing invitations at 20 each,
-  and leaves existing rows pending through volatile busy, in-party, offline, or
-  unknown availability. Presence leases, effective availability, party
-  membership, matches, observer queues, and capabilities stay process-local and
-  must not be inferred from SQLite after a restart.
-- `party_invitation_acceptance_claims` serializes acceptance per recipient with
-  one 30-second lease and a token bound to both invitation and recipient. A
-  successful claim extends the pending invitation through the lease plus a
-  two-minute recovery grace while `party_invitations.base_expires_at` preserves
-  the original deadline. Releasing a handled failure restores that deadline and
-  expires the invitation if it has passed. Terminal relationship, block,
-  cancellation, party, and successful acceptance transitions clear claims;
-  expiry cleanup preserves a live claim. Resolved nonaccepted invitation history
-  is capped at 1,000 rows, and a recipient retains only the newest accepted row
-  for lost-response membership-only reacquisition. These leases are not a
-  distributed transaction with sidecar admission; ADR 0003 documents the rare
-  delayed-response recovery window that requires future provisional-admission
-  generations to close.
-- Authenticated invitation APIs keep party codes inside the server boundary.
-  Creation validates the durable relationship, checks host ownership,
-  availability, and capacity, revalidates the relationship, and only then
-  persists. Existing invitations remain pending when volatile availability
-  changes. Acceptance claims first, admits through party authority, atomically
-  finalizes the claimed durable row, and exposes the capability only after
-  finalization; a newly admitted participant is exactly compensated when
-  persistence fails, and the claim is released only after compensation is
-  confirmed. Accepted-response retries use the authority's atomic,
-  membership-only
-  `party.reacquireAuthenticated` command, so an accepted row is not a reusable
-  rejoin grant. Social overview reads
-  reconcile private pending tuples through `party.inspectInvitation` and revoke
-  terminal parties before serializing rows, covering WebSocket closure, expiry,
-  eviction, and sidecar restart without exposing party codes. Host transfer is
-  not terminal: an already-issued invitation continues to target the persistent
-  party. Reconciliation is bounded to four concurrent authority calls.
-- `game_replay_runs` stores server-issued run ids and seeds. `game_replays`
-  stores the latest signed-in replay payload per user/game and is used by the
-  profile page to expose the Last Replay action.
-- Schema initialization migrates legacy `snake_scores` rows into
-  `leaderboard_scores` as `snake|board=<size>` keys.
-- Ranking ties use score order, then earlier `created_at`, then `id`, preserving
-  deterministic earlier-entry behavior.
+- `sqlite-social-store.ts` is the sole durable relationship/invitation writer.
+  Immediate transactions serialize mutations and state-based retries. Exact
+  discovery reuses `display_name_key`, returns at most one minimal identity,
+  and suppresses self, passwordless accounts, and either-direction blocks.
+  Actors come from authenticated session boundaries, never public ids.
+- Friend requests contain one pending canonical pair plus requester direction;
+  friendships are canonical pairs and blocks are directed. Blocking atomically
+  deletes pair requests/friendships and revokes invitations both ways. Removing
+  friendship also revokes pair invitations; unblocking restores nothing.
+- Durable fixed-window limits per account/minute are 30 discovery, 10 request
+  creation, and 20 invitation creation. Pending incoming/outgoing ceilings are
+  independently 100 friend requests and 20 party invitations per account.
+- Invitations contain play/watch intent and a private volatile party code with
+  no room foreign key, match state, or participant capability. The server owns
+  their five-minute default TTL; public overviews redact the code. Pending rows
+  have no resolution timestamp; accepted/declined/canceled/revoked/expired rows
+  do. Busy, in-party, offline, or unknown availability suspends existing pending
+  invitations; it does not revoke them (`LC-20260803-SAPI`).
+- `party_invitation_acceptance_claims` gives each recipient one 30-second claim
+  bound to invitation, recipient, and token. Only the matching live claim may
+  finalize. It extends expiry through the lease plus two-minute recovery grace;
+  `base_expires_at` preserves the original deadline. Handled failure release
+  restores that deadline and expires it if elapsed. Expiry cleanup preserves
+  live claims; terminal relationship/party/invitation transitions clear them.
+- Successful acceptance and revocation of the recipient's other live
+  invitations are one immediate transaction; accepted retries repeat cleanup.
+  Resolved nonaccepted history is capped at 1,000 rows, and only the newest
+  accepted row per recipient survives as the lost-response recovery index.
+- The authenticated API revalidates relationships around authority checks,
+  claims before admission, and returns a capability only after durable
+  finalization. Failed persistence requires exact compensation of a new
+  admission before claim release; pre-existing membership must survive.
+  Accepted retries use atomic membership-only `party.reacquireAuthenticated`,
+  so an accepted row cannot rejoin a party after leave. Overview reconciliation
+  uses private `party.inspectInvitation` tuples to revoke terminal parties,
+  including expiry/eviction/restart; host transfer is not terminal. See
+  `../../app/MEMORY.md` for route ordering and bounded concurrency.
+- Claims are not a distributed transaction with sidecar admission. The rare
+  delayed-response/retry compensation gap still requires provisional-admission
+  generations; preserve this limitation from
+  `docs/adr/0003-persistent-parties-and-friends.md` (repository-root-relative).
 
-## Tests
+## Volatile Party Authority
 
-- `sqlite-leaderboard-store.test.ts` should cover persistence, parameter
-  isolation, sort direction, tie ordering, path/env behavior, and legacy Snake
-  migration with deterministic ids and timestamps.
-- Route tests can inject a `LeaderboardStore` through
-  `createLeaderboardRouteHandlers` instead of reaching for the singleton store.
-- Auth route tests should inject `SqliteUserProfileStore` doubles for field
-  errors/status codes, while store tests cover real SQLite uniqueness,
-  password verification, legacy passwordless-name reservation, and session expiry.
+- Rooms retain current canonical state and room/game sequence counters, with
+  no per-event history. Reconnect takes a fresh authoritative snapshot; restart
+  of the owning process abandons its rooms. A bounded cursor window needs an
+  explicit future retention policy (`LC-20260709-MPRT`).
+- Party code and membership survive match replacement; host ownership may
+  transfer on leave. `matchId`, seats, settings, and status project the current
+  match. Stale generations are rejected before gameplay advances. Restart and
+  replacement increment `matchId` and reset the game runtime/sequence;
+  pause/resume/finish preserve the generation (`LC-20260803-MGEN`).
+- Host creation takes Player 1. Play admission takes an eligible open seat
+  between matches, respecting queue priority, or falls back to Watching within
+  capacity. Cross-game settings updates are rejected: atomic host replacement
+  preserves participant order, maps occupied slots by ordinal including gaps,
+  and supplies the new adapter's exactly two required seats. Ordinary seat
+  changes and replacement require lobby/finished state.
+- FIFO queue promotion fills lobby openings (including queue, release, leave,
+  and start transitions) or establishes the roster at restart/replacement.
+  Restart may replace an active or finished match; promotion never injects a
+  player into the existing running match. Natural adapter termination marks
+  the room finished and increments room sequence once.
+- Explicit leave clears seats, queued position, capabilities, connections, and
+  held input. A departing host transfers to the earliest connected signed-in
+  participant; with no eligible successor the party closes. Each runtime keeps
+  immutable match-start room attribution so later membership edits cannot
+  rewrite terminal participants/winners (`LC-20260803-QUEU`).
+- Public participant ids are labels. Admission mints 256-bit opaque capabilities
+  and stores only SHA-256 hashes. Raw credentials go solely to that participant
+  through authorized admission/reacquisition responses; room snapshots and
+  `getRoom` never contain them. Watcher capacity defaults to eight and live
+  connections to four per participant, configured independently.
+- Account authority enforces one active party per signed-in account, bounded
+  multi-tab capability reacquisition, and tuple-bound admission compensation.
+  Leave/close/expiry/eviction clear account membership. Capability recovery does
+  not refresh room lifetime (`LC-20260803-PRES`).
+- Presence has 45-second leases, at most 16 per account, and precedence
+  in-party > busy > available > offline. Sequenced per-document operations
+  replay exact retries and reject stale/conflicting generations, including
+  capacity failures and release tombstones. Active leases retain ordering;
+  inactive records last at most five minutes with 64 client ids per account.
+  Generationless legacy calls work only until that id enters sequenced mode
+  (`LC-20260803-SWEB`). Presence/membership never reconstruct from SQLite.
+- Default retention is 256 rooms; disconnected lobbies expire after 60 minutes,
+  running/paused rooms after two hours, and terminal rooms after 30 minutes.
+  Successful mutations refresh meaningful activity, but terminal lifetime uses
+  its terminal timestamp. Reads, handshakes, pings, snapshots, and ticks do not
+  refresh clocks. Recognized connections protect rooms; final disconnect grants
+  the full state-specific grace again.
+- Capacity removes expired rooms, then oldest disconnected terminal rooms,
+  then oldest disconnected lobbies. Never evict connected or nonterminal active
+  rooms; reject creation with retryable 503 when no safe candidate exists.
+  Validate creation before capacity eviction. Capacity-bounded expiry markers
+  return 410 for up to five minutes, then ordinary 404 (`LC-20260710-R3TN`).
+
+## Transport and Game Adapters
+
+- `multiplayer-room-websocket.ts` binds actors to capability-authenticated
+  sockets and rejects client-asserted account identities. Anonymous viewers get
+  one bootstrap only; recognized members receive ongoing fanout. Leave detaches
+  all member sockets; closure delivers one terminal event and detaches everyone.
+  Connection cleanup is idempotent on close/error/room change.
+- Live browser snapshots, guest commands, and game input use WebSockets.
+  Authenticated host lifecycle/settings/replacement stay on Next HTTP routes;
+  public room HTTP also creates rooms and reads invites. The internal sidecar
+  service is not a browser polling or live-command fallback.
+- The gateway pumps subscribed rooms at 33ms by default, fans out accepted
+  socket/internal HTTP mutations, deduplicates by generation and sequence, and
+  never acknowledges/broadcasts rejected stale-match commands. Inbound WebSocket
+  `maxPayload` defaults to 64 KiB, preserving explicit factory overrides.
+- `multiplayer-room-sidecar.ts` shares one store between HTTP and WebSocket,
+  serves health/internal room/account endpoints, owns the one-minute retention
+  sweep, and clears timers during idempotent shutdown. `tsconfig.sidecar.json`
+  emits CommonJS: runtime imports must resolve in plain Node, since TypeScript
+  does not rewrite aliases. README lists paths and configuration variables.
+- Protocol v6 mutation paths and version headers are checked before parsing
+  bodies; WebSocket bootstrap checks version before room lookup. Legacy paths
+  fail closed with 426. Collection preflight must advertise all required account
+  capabilities, including `membershipOnlyReacquisition` and
+  `sequencedSocialPresenceOperations`, before mutation. Account commands and
+  creation always require the configured shared bearer secret; tokenless
+  sidecars advertise account authority as unavailable. The dev wrapper shares
+  one ephemeral secret between processes.
+- Normalize settings before creation/update/replacement, before room lookup,
+  retention work, or runtime advancement. Admission allows 32 nested containers
+  and 16 KiB UTF-8 serialized settings; public/internal room HTTP bodies have a
+  64 KiB pre-parse budget. Structural snapshot validation has independent depth
+  semantics; see `../multiplayer/MEMORY.md` (`LC-20260905-5EDA`).
+- `multiplayer-game-adapters.ts` is the exhaustive `MultiplayerGameId` registry
+  for Pong, Space Invaders, Asteroids, and Tank Patrol. Per-game adapters own
+  settings, required seats, input validation/mapping, held/one-shot input,
+  lifecycle, bounded tick catch-up, cloned snapshots, and terminal summaries;
+  shared contract/runtime/summary helpers remain separate. Room authority stays
+  game-agnostic. Space Invaders/Asteroids use `ship-a`/`ship-b`; authoritative
+  engine randomness resolves ambiguous hits/pickups (see `../MEMORY.md`).
+- Tank Patrol retains `battle-city`, required `player-1`/`player-2` seats, and
+  Stage 1 starts. Its adapter latches one-shot fire, advances NTSC ticks, and
+  freezes the internal engine during room pause while allowing introductions,
+  results, and ending tails during running play. Freeze outcome on `lost` with
+  match-start attribution. Terminal key:
+  `battle-city|mode=private-room|start-stage=1` (`LC-20260714-TPMP`).
+- Results remain volatile and mode-scoped. Asteroids summaries contain shared
+  score/wave/lives and occupied seats, without per-ship contributions. Future
+  persistence should save compact server-derived terminal summaries, never
+  client-uploaded multiplayer histories or a durable per-event log.
+
+## Verification Map
+
+- SQLite tests inject paths/ids/time and cover persistence, migrations,
+  parameter isolation, ranking/ties, ownership links, password/session rules,
+  transactional social retries, claim expiry, privacy, and capacity/rate limits.
+  Route factories accept injected stores; avoid singleton state in tests.
+- Room/runtime tests inject id/code/clock/capability factories. Focused suites
+  cover retention, settings admission, account/presence ordering, match
+  generations, and immutable terminal attribution. Adapter tests use controlled
+  clocks/randomness and explicit engine state.
+- Gateway/service-client/sidecar suites cover capabilities, version preflight,
+  payload guards, fanout, and lifecycle cleanup. Actual socket tests need
+  loopback binding. `npm run build:sidecar` checks emitted Node imports; browser
+  integration uses the isolated sidecar Playwright suite (see `e2e/MEMORY.md`).

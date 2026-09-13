@@ -1,382 +1,225 @@
 # Components Memory
 
-This file covers React component ownership and shared game UI conventions under
-`src/components/`.
+Local ownership and browser invariants. Shared rules and persistence boundaries
+are in `../MEMORY.md`; browser-flow coverage is in `../../e2e/MEMORY.md`.
 
-## Ownership
+## Launcher And Account Chrome
 
-- `*-game.tsx` files own React state, browser events, timers, controls, overlays,
-  pause/resume/restart flows, leaderboard hook usage, and menu return behavior.
-- `*-board.tsx` files render board cells, game pieces, code-native board art, and
-  board accessibility labels for the active state.
-- Tank Patrol retains the internal `battle-city` namespace and follows the same
-  split with `battle-city-game.tsx` owning the single-player campaign flow,
-  `battle-city-multiplayer-room.tsx` owning the server-authoritative room view
-  and seat-specific input, and `battle-city-board.tsx` layering fragment-
-  rendered terrain, tanks, projectiles, explosions, and foreground forest
-  cover for either one or two players. Its held-direction state is sampled by
-  one fixed-step NTSC loop; do
-  not add a second movement interval because frame ordering is part of
-  collision behavior. Latch each fire press for that same loop so the engine
-  can apply movement before creating the shell on its first eligible frame.
-  Player protection uses one code-native four-arc shield layer instead of
-  pulsing the tank texture. Center it on the player sprites' measured visual
-  centroid, 9.7% below their PNG canvas center; only the final 64-frame clock
-  count blinks, and reduced-motion mode keeps the arcs static.
-  The ready overlay owns the original wrapping Stage 1-35
-  selector; after confirmation, the engine owns the fixed map-reveal interval.
-- `game-launcher-config.ts` owns the launcher-only game-card catalog,
-  descriptions, accent styling, parameter registry, and pure
-  default-value/initial-prop helpers. `game-launcher-playables.ts` owns the lazy
-  playable component mapping with `next/dynamic`, so the initial launcher bundle
-  does not import every `*-game.tsx` module. Config imports ids, display labels,
-  and versioned card-art metadata from the server-safe catalog in
-  `src/lib/game-catalog.ts` so server routes and pages can share profile-safe
-  game metadata without importing playable components.
-- `game-launcher.tsx` owns selected game state, single-player/multiplayer
-  launcher tab state, launcher card parameter state, menu rendering, menu
-  viewport preservation, and placement of the shared `UserAccountControls`.
-  Keep browser-only `window` access in this client component; it snapshots
-  `window.scrollX` and `window.scrollY` before opening a game and restores the
-  viewport when returning to the launcher. It also reconciles private-room URL
-  entries on `popstate` while retaining launcher-owned tab, parameter, selection,
-  and viewport state. Forward always bootstraps authoritative room state; it may
-  reuse only a participant id plus opaque capability scoped to the same signed-in
-  user in versioned `sessionStorage`. Capabilities never belong in room URLs,
-  shared snapshots, logs, or durable profile storage.
-  Popstate, account changes, and unmount invalidate in-flight room creation so a
-  stale response cannot navigate or replace a newer creation status.
-  Multiplayer card availability and count come from the pure registry in
-  `src/lib/multiplayer/game-registry.ts`, not a launcher-local game-id list.
-  The launcher tablist uses automatic activation with a roving tab stop, so
-  keyboard navigation must remain relative to the focused tab. Selected tab
-  colors use the paired `--chrome-selection*` tokens and switch without a color
-  transition so every rendered frame keeps readable foreground contrast. Keep
-  both tabpanel shells mounted so each `aria-controls` target exists, while
-  rendering cards only inside the active panel to avoid duplicate form ids.
-  Keep `SocialProvider` as the stable root across launcher early-return
-  surfaces so its overview and lease state survive library/game/party changes.
-  Signed-in library, leaderboard, and room surfaces expose the same nonblocking
-  Friends dialog; solo games and replays intentionally omit its trigger so
-  social management cannot interrupt play. Library and leaderboard surfaces
-  publish `available`, while solo games, replays, and room surfaces publish
-  browser-level `busy`. The room authority upgrades
-  authenticated members to effective `in-party`; the busy fallback also
-  prevents invitations to signed-in legacy guest-link members. Social overview
-  state stays account-scoped across sign-in changes and must never flash the
-  previous account's graph. Friends discovery remains an exact-name lookup,
-  destructive relationship actions require inline confirmation, and incoming
-  party invitations stay visible but cannot be accepted until the current
-  launcher surface provides the credential-adoption callback and presence is
-  `available`. If the acceptance response is lost or invalid, retain the
-  invitation id in account-scoped component memory and retry that same endpoint
-  so its membership-only recovery path can respond. Do the same for an explicit
-  retryable authority response even on the initial attempt: another tab may
-  already own the acceptance claim or the mutation result may be uncertain. If
-  server acceptance succeeds but launcher adoption fails, retain the returned
-  credentials in the
-  same in-memory scope and retry only local adoption. Never render or log the
-  capability. Pass the launcher adoption callback through every SocialCenter
-  branch so an accepted handoff remains retryable across surface changes, but
-  gate ordinary acceptance with both effective availability and an immediate
-  launcher-surface flag; a presence update alone must not reopen acceptance
-  while a room or solo surface is already mounting. Adoption must recheck the
-  current account, invalidate an older room-creation generation, navigate before
-  mutating local credential/session state, clear prior launcher surfaces, and
-  seed `MultiplayerRoomLobby` with the returned room, game, and sequence. Bind
-  that adopted snapshot and its private capability to the current account epoch
-  as well as the account id so switching away and back cannot reactivate an old
-  handoff. The accepted snapshot's participant role—not invitation intent—owns
-  the arrival message because Play can legitimately fall back to Watching. Move
-  focus to the room heading after successful adoption; ambiguous server recovery
-  and local-only adoption recovery focus their respective retry actions instead.
-  Fence ordinary host-room creation success, failure, and cleanup with the
-  synchronous account epoch check too; passive account-change cleanup is too
-  late to prevent a settling request from navigating or storing credentials.
-  Bind its pending indicator and error message to that epoch as well so no
-  previous account state flashes across a sign-in boundary.
-  The launcher injects `SocialPartyInviteControls` into the generic room shell,
-  but `MultiplayerRoomLobby` decides whether to render it from the live,
-  account-bound `isHost` check. Show it above the lobby Party roster and between
-  the active-game roster and guest-link fallback. The panel may correlate only
-  invitations created or idempotently returned for its mounted party; global
-  outgoing summaries intentionally omit party identity and cannot establish a
-  current-party pending state after host transfer. Once this panel receives an
-  exact invitation id, record the request generation of its explicit
-  post-creation refresh. A successful overview may reconcile that known id only
-  when its generation is at least the recorded generation, so pre-creation poll
-  results cannot hide a new invitation while concurrent, failed, or superseded
-  refreshes still retire invitations resolved before first observation.
-  Memoize the injected panel against invitation-relevant membership, seat,
-  queue, status, and capacity fields; active game snapshots arrive much more
-  often than those party fields change.
-- `multiplayer-room-lobby.tsx` owns the generic private-room lobby/shell UI and
-  browser session state: participant resolution, fresh snapshot selection,
-  host derivation, diagnostics presentation, and pending form/action state.
-  After a successful local lifecycle action, focus the persistent party heading;
-  after local match replacement, focus the newly rendered game heading. Announce
-  game, match, and lifecycle transitions through a polite live region for every
-  member, alternating persistent live slots so identical consecutive transitions
-  are announced. Remote changes keep surviving focus in place; if a layout change
-  or same-layout membership update removes the focused control, restore focus to
-  the persistent party heading.
-  Invitation arrival copy describes the initially admitted role because observers
-  may later claim a player seat without changing that historical message.
-  `multiplayer-room-client.ts` owns validated browser HTTP room creation and
-  authenticated host-command helpers plus the game-agnostic HTTP/WebSocket
-  dispatch boundary consumed by the shell. `multiplayer-room-transport.ts` is
-  the stable public transport surface. `multiplayer-room-websocket-transport.ts`
-  owns URL derivation from `NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL`, generic
-  non-host `room.command` and `game.input` envelopes, resume/hello bootstrap,
-  timeout, cancellation, and inbound message validation.
-  `multiplayer-room-transport-hook.ts` owns the React reconnect,
-  focus/visibility, diagnostics-ping, callback, and status lifecycle. Host-only
-  lifecycle/settings commands stay on the Next HTTP route until the WebSocket
-  sidecar has an authenticated host session model. Live room snapshots,
-  guest-capable room commands, and game input require the WebSocket stream; do
-  not reintroduce browser HTTP polling or POST fallback for those paths.
-  Bootstrap and command-ack deadlines default to five seconds and remain
-  configurable at the transport boundary. Bootstrap timeouts reconnect, while
-  command timeouts reject without automatic retry because the server may have
-  applied a command before its ack was lost and request ids are not idempotency
-  keys. Keep these surfaces game-agnostic; actual game play, score submission,
-  replay derivation, and server transport authority belong outside the shell.
-  Validate inbound WebSocket and successful room HTTP snapshots with the shared
-  transport-neutral protocol guards before updating React state. The low-level
-  WebSocket transport normalizes its requested room code once before sending
-  messages or scoping inbound validation. A resume sends the private participant
-  capability; public participant ids are display identifiers only. The server
-  binds the resolved participant to the socket and supplies command authority,
-  while an invalid stored capability is cleared before reconnecting read-only.
-  HTTP room mutations use versioned paths, and an unversioned/mismatched
-  WebSocket bootstrap is terminal: ignore pre-bootstrap snapshots, close the
-  socket, and do not schedule reconnects against the incompatible gateway.
-  `multiplayer-party-panel.tsx` derives player slots from seats rather than role
-  labels, keeps Watching and FIFO Next match lists visible during and after play,
-  and owns Join game, Join next match, Cancel, Watch instead, and Leave party
-  presentation. Membership-ended and party-closed messages clear local
-  credentials, show a terminal room message, and suppress reconnect. Back to
-  library remains navigation and must not implicitly leave the party.
-- Active multiplayer game UI should be selected through a client
-  renderer/input registry keyed by `gameId`. A renderer consumes authoritative
-  server snapshots/events and emits adapter-owned intents through the generic
-  transport envelope; it does not own canonical game state, result ordering,
-  solo replay saving, or solo leaderboard submission.
-  Keep that renderer map exhaustive over the shared `MultiplayerGameId` so a
-  registry addition cannot omit its client implementation silently.
-- `battle-city-multiplayer-room.tsx` renders authoritative Tank Patrol room
-  snapshots, sends direction/fire intents only for the active participant's
-  claimed `player-1` or `player-2` seat, and leaves observers read-only. It may
-  visually project player movement between snapshots, but must reconcile to the
-  server state and must not resolve collisions, scoring, pickups, stage flow, or
-  outcomes locally. Before the first local direction transition, projection
-  must use the active seat's server-held direction; `undefined` means no local
-  override, while `null` is an explicit local stop. Keep the fixed Stage 1 room
-  setup, separate P1/P2 stats and stage-result columns, room-owned pause state,
-  and terminal summary outside the solo campaign's replay/session/leaderboard
-  orchestration.
-- The future Space Invaders multiplayer renderer should present two independent
-  ship seats, `ship-a` and `ship-b`, on one shared alien wave with shared score
-  and lives. It should display server-owned outcomes for simultaneous hits and
-  power-up awards rather than resolving those ambiguities locally.
-- The future Asteroids multiplayer renderer should present two independent
-  `ship-a` and `ship-b` seats on one shared asteroid field with shared score,
-  wave, lives, saucer state, and power-up spawn state. It should render
-  server-owned per-ship position, explosion/respawn, invulnerability, shot
-  cooldown, and upgrade outcomes rather than resolving collisions, saucer-shot
-  hits, saucer target choice, respawn choice, or power-up ownership locally.
-- `pong-multiplayer-room.tsx` owns the first private-room Pong renderer/input
-  adapter fed by server snapshots. It may render `PongBoard` and post committed
-  room `game.input` commands for seated participants, but it must not import
-  `PongGame`, solo replay/session hooks, leaderboard presenters, or local Pong
-  engine tick ownership, and it should not become the template for generic room
-  shell behavior.
-- `game-card-artwork-frame.tsx` owns the shared launcher-style key-art frame
-  used by launcher cards and the global leaderboard cards. Keep the blurred
-  background, dark overlay, centered rounded foreground image, responsive
-  optimizer sizing, versioned source URL, and button-safe `<span>` structure
-  together there.
-- `game-leaderboard.tsx` renders the shared top-three panel and save-score form.
-  `use-game-leaderboard.ts` in `src/hooks/` owns the client state feeding those
-  components and pre-fills the signed-in display name when available.
-- `global-leaderboard.tsx` renders the launcher-level leaderboard overview. It
-  should consume `src/lib/global-leaderboard.ts` targets so the overview shows
-  each game's default parameter-scoped board instead of mixing incompatible
-  launcher parameter variants.
-- `user-account-controls.tsx` is the stable launcher account-control entry point
-  against `useCurrentUser`. Keep the signed-out modal implementation in
-  `user-account-auth-dialog.tsx` and the signed-in circular menu implementation
-  in `user-account-profile-menu.tsx`. Durable account state belongs in the
-  provider; local component state should stay limited to auth mode, form values,
-  menu/tooltip intent, pending state, and field-level errors. Account chrome can
-  host the shared `ThemeToggle`, but theme persistence and `<html class="dark">`
-  mutation belong to `use-app-theme.ts`.
-- `cookie-notice.tsx` owns the app-wide essential cookie/storage disclosure. It
-  should keep dismissal state minimal and versioned in localStorage, and it
-  should not grow into an optional analytics or marketing consent manager unless
-  the app actually adds non-essential storage.
+- `*-game.tsx` owns React state, events, timers, controls, overlays, session and
+  leaderboard hooks, and menu return; `*-board.tsx` renders state and accessible
+  board labels. Rules remain in deterministic engines.
+- `game-launcher-config.ts` owns card copy/style, parameters, and initial-prop
+  helpers, importing server-safe metadata from `../lib/game-catalog.ts`.
+  `game-launcher-playables.ts` alone maps lazy `next/dynamic` game components so
+  the menu does not eagerly import every game. Multiplayer availability/count
+  comes from `../lib/multiplayer/game-registry.ts`.
+- `game-launcher.tsx` owns selected game/tab/parameters and browser navigation.
+  Snapshot scroll coordinates before play and restore them on menu return.
+  `popstate` preserves launcher state but forward navigation bootstraps an
+  authoritative room. Reusable room credentials are a participant id and opaque
+  capability in versioned, account-scoped `sessionStorage`; capabilities never
+  enter URLs, snapshots, logs, or durable profile storage.
+- Room creation results, cleanup, pending indicators, and errors are fenced by
+  request generation and synchronous account epoch. Popstate, account changes,
+  and unmount invalidate requests; passive account-change effects are too late
+  to prevent stale navigation or credential writes. Switching away and back to
+  the same account must not revive an old handoff (`LC-20260803-JOIN`).
+- Launcher tabs automatically activate with a roving tab stop relative to the
+  focused tab. Keep both tabpanel shells mounted for `aria-controls`, but render
+  cards only in the active panel to avoid duplicate form ids. Paired
+  `--chrome-selection*` colors switch without a color transition to preserve
+  contrast throughout the change.
+- `game-card-artwork-frame.tsx` shares launcher/global-leaderboard art: blurred
+  background, dark overlay, centered rounded foreground, responsive optimizer
+  sizing, versioned URL, and button-safe `<span>` structure stay together.
+- `game-leaderboard.tsx` renders top-three/save-score UI;
+  `../hooks/use-game-leaderboard.ts` owns state and signed-in name prefill.
+  `global-leaderboard.tsx` consumes `../lib/global-leaderboard.ts` default-key
+  targets so incompatible parameter variants are never mixed.
+- `user-account-controls.tsx` is the stable `useCurrentUser` entry;
+  `user-account-auth-dialog.tsx` and `user-account-profile-menu.tsx` own signed-out
+  modal and signed-in menu UI. Account state belongs in the provider; local state
+  is form/menu intent, pending state, and errors. `ThemeToggle` may appear here,
+  but `../hooks/use-app-theme.ts` owns theme persistence and `<html>` mutation.
+- `cookie-notice.tsx` owns the essential-storage disclosure with minimal,
+  versioned localStorage dismissal. Optional consent management needs an actual
+  nonessential-storage feature.
 
-## Shared Layout
+## Friends And Invitation Handoff
 
-- `game-layout.tsx` is the stable import surface for game components. Put new
-  shared layout, action, Help, dialog, or flow-hook implementation details in
-  focused sibling modules so the barrel does not regain unrelated responsibilities.
-- `game-layout-shell.tsx` contains `GameShell`, `GameSidebar`,
-  `GameStatsBar`, `GameBoardColumn`, `GameBoardStage`, `GameHeader`, and
-  `GameStatCard`.
-- `GameShell` centers the board column in the viewport. Per-game
-  `GameBoardColumn` usage should provide an explicit responsive width, and
-  `GameSidebar` should be the first child inside that board column so the stats
-  bar sits directly above `GameBoardStage` and matches the board/stage width.
-- Per-game `GameBoardColumn` widths should include a viewport-height cap based
-  on the board aspect ratio so the stats bar plus board fit in the first
-  in-game viewport without page scrolling. Use the existing `svh`-based width
-  classes as the pattern when adding or resizing a board.
-- Simon live and replay surfaces use `--simon-*` tokens for page chrome, stats,
-  replay messages, board casing, and board feedback panels. Keep the four
-  classic Simon pad colors stable unless a task explicitly changes pad contrast
-  or visual identity.
-- `GameHeader` is intentionally screen-reader-only status/title structure for
-  accessibility and existing status test IDs. Keep visible titles and statuses in
-  board overlays, Help screens, and end screens.
-- Keep per-game metrics and live status details in `GameSidebar`; do not add
-  separate information strips below `GameBoardStage`. Use `GameStatsBar` for the
-  single-row metric list, `GameStatCard` for simple repeated metrics, and keep
-  specialized panels local.
+- Keep `SocialProvider` as the stable root across launcher branches so overview
+  and presence survive surface changes without leaking a previous account's
+  graph. Library/leaderboard publish `available`; solo/replay/room publish
+  browser `busy`. Room authority upgrades authenticated members to `in-party`;
+  busy also protects signed-in legacy guest-link members from invitations.
+  Friends opens on signed-in library/leaderboard/room surfaces; solo/replay
+  omit its trigger. Discovery is exact-name; destructive actions need inline
+  confirmation.
+- Incoming invitations stay visible when unavailable. Ordinary acceptance
+  requires effective `available` presence, a current launcher adoption callback,
+  and an immediate surface flag: delayed presence must not reopen acceptance
+  while solo/room UI mounts. Pass the callback through every `SocialCenter`
+  branch so recovery remains possible across surfaces.
+- Lost/invalid acceptance responses and explicit retryable authority failures
+  retain the invitation id in account-scoped component memory and retry that
+  endpoint, including after an initial uncertain attempt. Successful acceptance
+  followed by failed local adoption retains credentials only in that memory and
+  retries local adoption alone. Never render/log the capability. Focus the
+  appropriate server-recovery or local-adoption retry action.
+- Adoption rechecks account/epoch, invalidates old room creation, navigates to
+  the canonical room URL before changing local credentials/session state, clears
+  prior surfaces, and seeds the lobby with returned room/game/sequence. Bind
+  snapshot and capability to both account id and epoch. Focus the room heading;
+  arrival copy describes the server's initially admitted role because Play may
+  fall back to Watching and watchers can later claim seats (`LC-20260803-JOIN`).
+- Launcher injects `SocialPartyInviteControls`; the lobby gates it with live,
+  account-bound `isHost`. Place it above the lobby roster or between active-game
+  roster and guest-link fallback. Correlate only exact invitation ids created or
+  idempotently returned for this mounted party: global outgoing summaries omit
+  party identity and cannot recover current-party pending state after transfer.
+  Record the explicit post-creation refresh generation; only successful overviews
+  at least that new may reconcile the id. This excludes old polls while allowing
+  concurrent/replacement refreshes to retire resolutions before first observation.
+  Memoize against invitation-relevant membership, seats, queue, status, and
+  capacity rather than high-frequency game snapshots (`LC-20260803-INVT`).
 
-## Board Actions And Overlays
+## Multiplayer UI And Transport
 
-- Use `GameBoardStage` and `GameBoardActions` for the right-side action rail
-  beside game boards. Back belongs at the top of that rail and should use the
-  shared Escape-to-menu path.
-- Realtime games provide Back, Help, Pause-or-Resume, and Restart actions.
-  Turn-based games such as Minesweeper and 2048 provide Back, Help, and Restart
-  and omit Pause.
-- Games that should contribute to profile stats call `useGameSession` with their
-  `gameId`, `leaderboardKey`, active/started state, terminal result, final score,
-  and sort direction. The hook is a signed-in-only boundary; guest sessions are
-  intentionally ignored.
-- Snake replay playback is launched through the root launcher query
-  `/?replay=snake`, passed into `SnakeGame` as replay mode, and rendered by the
-  focused `snake-replay-player.tsx` component. The other replay-enabled games
-  follow the same launcher query pattern at
-  `/?replay=tetris`, `/?replay=breakout`, `/?replay=minesweeper`,
-  `/?replay=space-invaders`, `/?replay=pong`, `/?replay=simon`,
-  `/?replay=twenty-forty-eight`, `/?replay=asteroids`, and
-  `/?replay=battle-city` through their focused replay-player components,
-  with replayed parameters coming from the saved payload instead of current
-  launcher selections. Replay mode should not record profile sessions or expose
-  live-game controls; use a Back-only board action rail wired through the shared
-  Escape-to-menu hook to return to the profile during playback. Snake replay
-  playback should mirror live Snake pickup feedback popups by deriving them from
-  replayed game-state transitions.
-- Live replay recordings are one-shot per run. Terminal replay payload capture
-  should consume the active recording, and starting a new run should abandon any
-  unsaved replay state so stale events cannot be saved later. When replacement
-  run setup is asynchronous, freeze the current game, replay clock, and profile
-  session clock and ignore live input until setup succeeds; a failed replacement
-  must not reset the completed profile-session guard or discard the current
-  replay. Save settlements belong to the finished payload's generation: reset,
-  start, and successful replacement invalidate older saves synchronously, while
-  failed replacement preserves the current save and its retry state. Replay
-  recordings
-  stamp active elapsed milliseconds on each event and pause that replay clock
-  while Pause, Help, or abandon-confirm overlays stop the player's active view;
-  replay players schedule playback from those elapsed timestamps instead of
-  fixed per-turn delays. `game-replay-playback.ts` ignores stale saved-replay
-  load settlements and owns the main elapsed-frame timeout, shared
-  ready/finished state, and ref cleanup on player unmount. Its optional
-  next-frame adapter lets fixed-step games schedule synthetic frames from a
-  compressed stored event without expanding the payload in memory. Tank Patrol
-  uses that boundary for run-length-encoded identical inputs and applies paused
-  frame spans as one engine operation. Its adapter may reduce at most 128
-  consecutive advance frames that resolve to the same interpolated timestamp in
-  one scheduled step; it still applies every engine frame in order, yields
-  between batches, and stops immediately on terminal loss so trailing-event
-  integrity failures stay observable. Focused replay
-  players keep their game-specific frame reducers and visual side effects;
-  Minesweeper and Simon also keep their cursor timers local so
-  cursor-before-action ordering remains explicit. Replacing a loader or
-  initializer must synchronously cancel the current main-frame timeout before
-  replacement playback refs can be installed. Every accepted load increments an
-  internal scheduling generation so replacement playback starts even when its
-  initialized game keeps the same object identity.
-  Minesweeper and Simon live recordings also sample mouse movement over the
-  board into a separate cursor event stream every 50ms, and their replay
-  playback draws that stream as a schematic board-local cursor without moving
-  the system mouse. `game-replay-cursor.tsx` owns the shared schematic cursor
-  appearance for cursor-enabled replay players, while
-  `game-replay-cursor-recording.ts` owns shared live cursor appending,
-  board-local coordinate normalization, and board/action event extraction;
-  future games should reuse those helpers instead of adding game-specific
-  cursor plumbing or icon styles.
-- Use `GameReplaySaveAction` for replay-enabled terminal Save replay footers.
-  Keep finished replay payload creation and save handlers local to each game,
-  and pass a game-specific `testIdPrefix` so existing replay save button and
-  error test IDs stay stable.
-- Use `GameEndScreen` for terminal won/lost overlays. Use
-  `GameEndLeaderboardContent` when a terminal overlay needs the shared pending
-  leaderboard branch; pass per-game summary text, leaderboard props, score-form
-  props, and the action button without adding extra wrappers. Use
-  `GameEndSummary` directly for terminal overlays that do not need leaderboard
-  branching.
-- Use `GameStartScreen` and `GameStartScreenHeader` for ready overlays. The
-  shared shell owns the high-contrast neutral start-screen palette and marker
-  used by browser coverage, while each game keeps its own preview art, start
-  action, status copy, and leaderboard ordering local.
-- Use `useGameLeaderboardPresenter` from
-  `game-leaderboard-presenter.ts` to assemble repeated start-panel, final-panel,
-  score-form, and void-save leaderboard props. Keep game-specific scoring,
-  leaderboard keys, sort direction, formatting, pending-entry checks, and reset
-  behavior in the game component.
-- Use `GameHelpScreen` and `useGameHelpScreen` for Help overlays. Realtime games
-  pause when Help opens from an active run and resume only when Help caused the
-  pause; turn-based games should block keyboard input while Help is visible.
-  The shared Help screen owns a theme-aware modal palette through
-  `--game-help-*` tokens, so game components should pass content only rather than
-  board-specific color classes. Long Controls or Rules content scrolls inside
-  its own Help section while the Help header stays fixed. Controls sections use
-  compact keyboard/mouse rows, arrow icons only for arrow keys, and short rules
-  lists.
-- Use `useGameEscapeToMenu` and `GameAbandonDialog` for Escape/back-to-menu
-  behavior. Ready and terminal games return directly to the launcher; active
-  unfinished games show the abandon confirmation. Keep this hook disabled while
-  Help is visible so Help owns Escape until it closes. The shared abandon
-  confirmation owns a theme-aware modal palette through `--game-abandon-*`
-  tokens, so game components should pass behavior only rather than
-  board-specific dialog colors.
-- Shared Help and abandon surfaces use Base UI modal dialogs for focus trapping
-  and background isolation. Keep their `data-game-modal` marker so shared game
-  input ignores every mounted modal. Their shared return-focus helper defers
-  restoration until the parent flow re-enables the action opener after close
-  and must not override focus intentionally taken by another surface.
-- Completed UI surfaces that show a Back, Close, Done, or equivalent return
-  action should let Escape trigger that same action. Keep this behavior
-  consistent across game overlays, replay screens, and modal-like UI unless a
-  focused text input, form submission flow, or higher-priority overlay owns
-  Escape.
-- Shared Help and Escape/back-to-menu transition rules live in
-  `src/lib/game-ui-flow.ts`; component hooks should apply returned effects rather
-  than reimplementing the state machine.
+- `multiplayer-room-lobby.tsx` owns generic room UI/session state: participant
+  resolution, fresh snapshots, account-bound host derivation, diagnostics, and
+  pending actions. Local lifecycle success focuses the persistent party heading;
+  replacement focuses the new game heading. Alternate persistent polite-live
+  slots to announce even identical repeated transitions to every member. Remote
+  changes preserve surviving focus; if the exact focused control disappears,
+  including a same-layout membership update, focus the party heading
+  (`LC-20260803-JRNY`).
+- `multiplayer-party-panel.tsx` derives player slots from seats, not role labels,
+  and shows Watching and FIFO Next match lists during/after play. It presents
+  Join game/next match, Cancel, Watch instead, and Leave party. Membership-ended
+  and party-closed events clear credentials, show terminal feedback, and suppress
+  reconnect. Back to library is navigation, not an implicit leave.
+- `multiplayer-room-client.ts` owns validated HTTP creation/host commands and
+  generic HTTP/WebSocket dispatch. `multiplayer-room-transport.ts` is the stable
+  facade; `multiplayer-room-websocket-transport.ts` owns URL derivation from
+  `NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL`, envelopes, bootstrap/resume,
+  validation, deadlines, and cancellation. `multiplayer-room-transport-hook.ts`
+  owns React reconnect, visibility/focus, diagnostics ping, callbacks, and status
+  (`LC-20260714-MTRS`). Gameplay and server authority remain outside these layers.
+- Host lifecycle/settings use versioned Next HTTP routes. Live snapshots,
+  guest-capable commands, and game input require WebSockets; do not add browser
+  HTTP polling/POST fallback. Bootstrap and command-ack deadlines default to five
+  seconds and are configurable. Bootstrap timeout reconnects; command timeout
+  rejects without automatic retry because an applied command can lose its ack
+  and request ids are not idempotency keys.
+- Validate successful HTTP and inbound WebSocket snapshots with shared protocol
+  guards before state updates. Normalize the requested room code once. Resume
+  sends the private capability; public participant ids confer no authority.
+  Clear invalid stored capabilities before reconnecting read-only. Ignore
+  pre-bootstrap snapshots; missing/mismatched protocol bootstrap is terminal,
+  closes the socket, and must not reconnect to the incompatible gateway.
+- `multiplayer-room-game-registry.tsx` exhaustively maps `MultiplayerGameId` to
+  renderers/input adapters for Pong, Space Invaders, Asteroids, and Tank Patrol.
+  Render authoritative snapshots/events and emit adapter-owned intents. Seated
+  input is local; observers are read-only. Clients may project visuals but must
+  reconcile to server state, never own collisions, scores, outcomes, result
+  ordering, solo replay/session hooks, or solo leaderboards.
+- `pong-multiplayer-room.tsx` reuses `PongBoard`, not `PongGame` or local engine
+  tick ownership. Generic shell behavior belongs outside the Pong adapter.
+- `space-invaders-multiplayer-room.tsx` renders `ship-a`/`ship-b` over a shared
+  wave, score, and lives; simultaneous hits and power-up awards are server-owned
+  (`LC-20260626-SICR`). `asteroids-multiplayer-room.tsx` uses the same seat ids
+  with shared field, score, wave, lives, saucers, and power-up spawns. Per-ship
+  motion, explosion/respawn, invulnerability, cooldowns, upgrades, target/respawn
+  choices, and pickup ownership reconcile to authority (`LC-20260626-AMUI`).
+- `battle-city-multiplayer-room.tsx` sends direction/fire for the participant's
+  `player-1`/`player-2` seat. Before any local direction change, projection uses
+  server-held direction: `undefined` means no local override; `null` means stop.
+  Keep Stage 1 setup, separate P1/P2 stats/results, room-owned pause and terminal
+  summary outside solo orchestration (`LC-20260714-TPMP`).
 
-## Input And Tests
+## Layout, Overlays, And Input
 
+- `game-layout.tsx` is the stable import barrel; focused sibling modules own
+  implementation. `game-layout-shell.tsx` owns shell, sidebar/stats, board column,
+  stage, header, and stat cards. Center the board column; give it responsive width
+  with an aspect-ratio-based `svh` cap so stats and board fit the first viewport.
+  Put `GameSidebar` first inside it, directly above and matching the stage width.
+  Keep metrics there through `GameStatsBar`/`GameStatCard`, with special panels
+  local; do not add information strips below the board. `GameHeader` intentionally
+  remains screen-reader-only status/title markup and stable test ids.
+- `GameBoardActions` is the right-side rail with Back first through the shared
+  Escape path. Realtime games add Help, Pause/Resume, Restart; turn-based games
+  omit Pause. Replay playback uses Back only, returning to profile.
+- Ready overlays use `GameStartScreen`/`GameStartScreenHeader`; the shared shell
+  owns neutral contrast and browser-test marker, games own preview, action, copy,
+  and leaderboard order. Terminal overlays use `GameEndScreen` with
+  `GameEndLeaderboardContent` for pending-score branching or `GameEndSummary`
+  otherwise; avoid redundant wrappers. `useGameLeaderboardPresenter` assembles
+  repeated panel/form/save props; scoring, key, sort, format, pending checks, and
+  reset remain local.
+- Help uses `GameHelpScreen`/`useGameHelpScreen`: pause active realtime play and
+  resume only if Help caused the pause; block turn-based input. Shared
+  `--game-help-*` tokens own colors. Controls/rules scroll within sections under
+  a fixed header; use compact keyboard/mouse rows and arrow icons only for arrows.
+- `useGameEscapeToMenu`/`GameAbandonDialog` return ready/terminal play directly to
+  menu and confirm abandoning unfinished play. Disable the hook while Help owns
+  Escape. Shared `--game-abandon-*` tokens own colors; games supply behavior.
+  Apply transitions from `../lib/game-ui-flow.ts` rather than duplicating them.
+- Help/abandon use Base UI modal focus trapping/background isolation. Keep
+  `data-game-modal` for global input filtering. `game-dialog-focus.ts` retries
+  return focus after the parent re-enables the opener without stealing intentional
+  focus elsewhere (`LC-20260709-M4FQ`). Completed Back/Close/Done surfaces should
+  map Escape to that action unless typing, submission, or a higher overlay owns it.
 - Use `shouldIgnoreGameKeyDown`, `registerGameKeyDown`, and `registerGameKeyUp`
-  from `game-input.ts` for game-level global keyboard handlers that should ignore
-  Help overlays, mounted shared game modals, pending leaderboard entry, and
-  typing targets.
-- Direct game-level keyboard pause/resume shortcuts should use `isGamePauseKey`;
-  `P` is the only direct pause key, while Space remains available for
-  game-specific actions such as start, hard drop, or fire.
-- For held-key movement, keep transient key state out of React render state and
-  drive movement through engine/helper functions on an interval until
-  keyup/blur/modal cleanup. Use the shared held-direction movement state,
-  controller, and React lifecycle hook in `game-input.ts`, with small
-  game-specific key-map wrappers beside the game components.
-- For non-exclusive realtime controls that must be held together, keep a small
-  local control-state helper beside the game component. Asteroids uses this for
-  simultaneous rotation and thrust while still using shared key registration and
-  keyboard guards.
-- Component tests are useful for static board renderers, shared input filtering,
-  and focused shared UI behavior. Prefer Playwright for broad rendered flows and
-  browser interactions.
+  from `game-input.ts` to ignore Help, mounted modals, pending leaderboard entry,
+  and typing. `isGamePauseKey` recognizes P only; Space remains game-specific.
+  Shared held-direction state/controller/hook keeps transient keys outside React
+  state and clears on keyup/blur/modal changes. Small local control-state helpers
+  handle simultaneous inputs such as Asteroids rotation/thrust.
+- Simon live/replay chrome and casing use `--simon-*` tokens; preserve its classic
+  four pad colors. Tank Patrol's shared `battle-city-board.tsx` layers terrain
+  fragments, tanks, shells, explosions, and foreground forest for one/two players.
+  Protection is a four-arc code-native layer centered 9.7% below the sprite canvas
+  center; only the final 64-frame count blinks, with static reduced-motion arcs.
+- Tank Patrol solo samples held direction and latched fire in one NTSC fixed-step
+  loop so movement precedes firing; a second movement interval changes collision
+  ordering. The ready overlay owns wrapping Stage 1–35 selection, then the engine
+  owns the fixed map-reveal interval.
+
+## Replay Lifecycle
+
+- `/?replay=<game-id>` selects focused `*-replay-player.tsx` components with saved
+  parameters, not launcher selections. Playback has no profile-session recording
+  or live controls. Snake derives pickup feedback from replayed state transitions.
+- `game-replay-recording.ts` owns one-shot recordings: terminal capture consumes
+  the recording; new starts abandon stale unsaved state. During asynchronous
+  replacement, freeze game/replay/profile clocks and input. Failure preserves
+  current replay, save/retry state, and the completed profile-session guard.
+  Reset/start/successful replacement synchronously invalidate older save results
+  using the finished-payload generation (`LC-20260905-0AB7`).
+- Events carry active elapsed milliseconds; Pause, Help, and abandon confirmation
+  suspend that clock. `game-replay-playback.ts` owns elapsed-frame scheduling,
+  load/ready/finished state, stale-load suppression, and ref/timer cleanup.
+  Loader/initializer replacement cancels the old timeout before installing refs;
+  every accepted load advances the scheduling generation even if initialized game
+  identity is unchanged (`LC-20260709-RPLC`). Game-specific reducers/effects stay
+  in players.
+- The optional next-frame adapter schedules compressed events without materializing
+  expanded payloads. Tank Patrol stores identical inputs as runs and applies
+  paused spans in one engine operation. Its adapter batches at most 128 advance
+  frames sharing an interpolated timestamp, applies every frame in order, yields
+  between batches, and stops immediately at terminal loss so trailing events still
+  fail integrity checks (`LC-20260714-TPBF`).
+- Minesweeper/Simon sample board-local mouse positions every 50ms through
+  `game-replay-cursor-recording.ts`; `game-replay-cursor.tsx` renders a schematic
+  cursor without moving the system pointer. Keep their timers local to preserve
+  cursor-before-action ordering; reuse shared normalization/extraction/appearance.
+- Use `GameReplaySaveAction` for terminal save footers and a per-game
+  `testIdPrefix`; payload construction and game-specific save wiring stay local.
+
+## Verification Pointers
+
+Use nearby board/input/shared-UI tests for pure/static behavior; Playwright covers
+rendered navigation and interactions. Replay lifecycle tests are beside their
+shared hooks; launcher, social, lobby, transport, and renderer tests cover their
+respective account, timing, input, and authority boundaries.

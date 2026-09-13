@@ -1,233 +1,162 @@
 # Library Memory
 
-This file covers deterministic game engines and shared source logic under
-`src/lib/`.
+Deterministic engines and shared logic under `src/lib/`. Room contracts and
+Node-only authority/storage have narrower context in
+[multiplayer/MEMORY.md](multiplayer/MEMORY.md) and [server/MEMORY.md](server/MEMORY.md).
 
-## Engine Boundaries
+## Boundaries
 
-- `*-game-engine.ts` files own deterministic rules, scoring, progression,
-  win/loss states, launcher preset normalization, and state transitions.
-- Keep `*-game-engine.ts` as the public facade imported by components and tests.
-  Large engines may split implementation internals under `src/lib/<game>/`
-  when cohesive subsystems outgrow one file, but smaller engines should stay
-  single-file until the added navigation cost is justified.
-- Space Invaders uses `src/lib/space-invaders/` internals behind
-  `space-invaders-game-engine.ts`: `types.ts`, `constants.ts`, `formation.ts`,
-  `hitboxes.ts`, `projectiles.ts`, `player-shots.ts`, `effects.ts`,
-  `scoring.ts`, plus shared geometry/random helpers. The multiplayer facade uses
-  `multiplayer-types.ts` for its public state/protocol contract and
-  `multiplayer-state.ts` for solo/shared-state projection and immutable snapshot
-  cloning. Player-shot resolution and effect helpers are extracted; keep
-  lifecycle ordering and mine-blast handling in the facade unless a later
-  refactor can move them without obscuring cross-system behavior.
-- The Space Invaders private-room co-op milestone is two independent ships, not
-  a shared cannon. Seats are `ship-a` and `ship-b`; each player controls one
-  ship; score, alien wave, and lives are shared. Player ships do not collide
-  with each other. A simultaneous enemy-shot hit on both ships destroys both and
-  spends two shared lives; if only one shared life remains, authoritative
-  randomness chooses the respawning ship. If a power-up touches both ships on
-  the same tick, authoritative randomness chooses the recipient.
-- Asteroids uses `src/lib/asteroids/` internals behind
-  `asteroids-game-engine.ts`: `types.ts`, `constants.ts`, `difficulty.ts`,
-  `asteroids.ts`, `projectiles.ts`, `saucers.ts`, `power-ups.ts`, `scoring.ts`,
-  `geometry.ts`, and `ship.ts`. The multiplayer facade uses
-  `multiplayer-types.ts` for its public state/protocol contract and
-  `multiplayer-state.ts` for solo/shared-world projection and immutable snapshot
-  cloning. Keep lifecycle/world tick orchestration in the facade so ship,
-  bullet, asteroid, saucer, power-up, scoring, and respawn ordering stays easy
-  to audit.
-- Tank Patrol retains the internal `battle-city` namespace and uses
-  `battle-city-game-engine.ts` as the deterministic facade for its single-player
-  campaign and private-room co-op rules. Movement/collision geometry lives in
-  `battle-city/geometry.ts`, the ordered terrain/shell/tank projectile pass in
-  `battle-city/projectiles.ts`, and shared score and active-state helpers in
-  `battle-city/scoring.ts` and `battle-city/state.ts`. Keep frame lifecycle and
-  enemy/player/fire/spawn/pickup/ending sequencing in the facade so the
-  hardware-sensitive order remains auditable. The 35 maps form a displayed
-  70-stage cycle;
-  Stages 36-70 reuse the maps with the Stage 35 enemy mix before resetting.
-  Keep 26x26 terrain mutation, 4x4 wall fragments, tank and projectile
-  collision, enemy spawning and decisions, headquarters defense, scoring,
-  lives, and stage progression in pure library code.
-  Tank coordinates are fractional 26x26-grid positions resolved in 1/8-cell
-  (one original pixel) steps, while projectile coordinates are center points;
-  terrain reads and mutations must always derive integer cells explicitly.
-  A normal shell probes a 16-pixel face and removes up to four intact 4x4
-  fragments across the two touched 8x8 cells; a maximum shell clears both
-  touched cells. Resolve
-  terrain/headquarters impacts before shell-vs-shell and tank collisions, keep
-  non-shield impacts in their nine-frame slot-holding phase, and collision-test
-  newborn shells at the muzzle before moving them on the next frame.
-  Explosion counters represent 21 tank-handler updates: the player handler runs
-  on three of four frames, fast enemies run every frame, and other enemy slots
-  alternate parity. Do not replace these cadences with uniform wall-clock ticks.
-  Spawn counters similarly represent 28 handler updates, so player spawning is
-  37-38 video frames and enemy spawning is 55-56 depending on frame/slot phase.
-  Run enemy tank handlers before the player handler, then resolve player fire
-  before the separate enemy-fire pass; this ordering affects collisions,
-  activation frames, muzzle placement, and deterministic RNG trajectories.
-  Rebase the frame clock when an ending tail begins, then carry that phase
-  through results and the following stage setup as the hardware does.
-  Browser time is accumulated into fixed 60.0988 Hz simulation frames; do not
-  couple gameplay speed directly to callback frequency.
-  Private-room play uses `battle-city-multiplayer.ts` and the same deterministic
-  engine, always starts Stage 1, and processes Player 2 before Player 1 where
-  the original ordering matters. P1 spawns at row 24/column 8 and P2 at row
-  24/column 16. Each player starts with three lives and owns their score,
-  one-time 20,000-point bonus-life flag, upgrade tier, shield, kill counts,
-  bullet slots, and elimination state. Continue while either player has lives;
-  losing the headquarters or eliminating both ends the team run. An eliminated
-  player stays inactive for the current stage, with a side game-over marker;
-  a late score-earned life retains them for the following stage. Multiplayer
-  permits six active enemies instead of four and advances the spawn interval by
-  20 ticks.
-  Friendly shells are consumed when they hit the teammate; an unshielded active
-  teammate receives the original `0xC8` player-handler movement stun without
-  losing a life and may still fire. Star, helmet, tank, pickup score, and the
-  score-earned extra life apply to the collector; grenade, clock, and shovel
-  alter shared world state. Stage results retain separate player counts and
-  scores, and a surviving strict total-kill leader receives 1,000 points; a tie
-  awards neither player. Keep the multiplayer snapshot/history path separate
-  from the solo `battle-city` replay V1 contract and campaign leaderboard. As
-  long as replay schema V1 uses the current engine, preserve its original solo
-  final-life and slot-sorted shell-collision paths; multiplayer's cross-player
-  object-slot ordering must remain behind the multiplayer-state guard.
-- The Asteroids private-room co-op milestone is two independent ships in one
-  shared asteroid field. Seats are `ship-a` and `ship-b`; each player controls
-  one ship; score, wave, asteroid field, saucer state, and lives are shared.
-  Ship position, velocity, explosion/respawn state, shot cooldown, and ship
-  upgrade effects are per-ship. Player ships pass through each other, friendly
-  fire is disabled, and player bullets do not collide with each other. An
-  asteroid can destroy both ships on the same tick and spend two shared lives;
-  if only one life remains in that case, authoritative randomness chooses the
-  ship that receives the final respawn path. Saucer targeting chooses a random
-  active ship, and each saucer shot is consumed after destroying at most one
-  randomly chosen hit ship. Power-up ship upgrades apply to the collecting ship,
-  shared score/life effects apply to the team, and simultaneous pickup by both
-  ships is resolved by authoritative randomness. Ships respawn independently at
-  separated safe-ish positions with invulnerability. Game over waits for the
-  final explosion to finish. Terminal summaries initially include only shared
-  score, wave, lives, and occupied seats.
-- Engines that expose launcher presets keep those values in game state so
-  restart, terminal replay, board rendering, accessibility labels, and leaderboard
-  keys preserve the selected board size, difficulty, target, lives, alien
-  count, or start level.
-- Inject randomness, time, and explicit state fixtures into engine helpers when
-  needed for deterministic behavior and tests.
-- Keep browser events, timers, audio/visual effects, and DOM concerns outside
-  engines. Components should schedule and render; engines should calculate.
+- Keep `*-game-engine.ts` as the public facade for rules, scoring, progression,
+  terminal states, and presets. Split cohesive internals under `<game>/` only
+  when they justify the navigation cost; preserve public imports and state shapes.
+- Inject randomness/time for deterministic transitions and tests. Keep browser
+  events, timers, rendering, audio, and DOM effects in components; deterministic
+  explosion, popup, and power-up state may belong in engines.
+- Presets remain in game state so restart, replay, rendering, accessibility, and
+  leaderboard keys retain the selected parameters.
+- Space Invaders and Asteroids internals live in their named folders. Their
+  `multiplayer-types.ts` contracts and `multiplayer-state.ts` solo/shared-state
+  conversion and immutable cloning remain re-exported by multiplayer facades.
+  Keep world/lifecycle orchestration in the game facades so collision, scoring,
+  respawn, and RNG-call order stay auditable. Space Invaders mine-blast sequencing
+  stays in its facade even though player-shot/effect helpers are extracted.
+  Source: `LC-20260714-MPST`.
 
-## Shared Logic
+## Game-specific invariants
 
-- `leaderboard.ts` owns leaderboard key creation, normalization, sorting,
-  top-three ranking, pending-entry calculation, and client fetch/submit helpers.
-  Keys use stable game-and-parameter segments such as `snake|mode=levels` or
-  `tetris|board=10x20|level=3`.
-- `global-leaderboard.ts` owns the default leaderboard targets used by the
-  launcher-level overview. Keep those targets aligned with default launcher game
-  parameters and preserve Minesweeper's ascending timed ranking; do not use it
-  for a single mixed cross-game or cross-parameter ranking.
-- `user-profile.ts` owns shared auth, user, game-session, and profile-stat
-  types; display-name/password/game-id/session-id validation; and client helpers
-  for `/api/auth/*`, `/api/me`, and `/api/game-sessions`.
-- `social.ts` owns client-safe social record types, availability and
-  relationship vocabularies, invitation intent/status validation, social entity
-  id normalization, and deterministic canonical account-pair ordering. Exact
-  social discovery must reuse the unique normalized display-name key from
-  `user-profile.ts`; it is a one-result minimal-identity lookup, not a fuzzy
-  search or user directory. Legacy passwordless account rows are excluded from
-  discovery and social relationships. Keep SQLite transactions, session
-  authorization, and invitation admission out of this shared module.
-  `social-client.ts` owns defensive browser parsing and typed request errors for
-  `/api/social`, including numeric `Retry-After` handling and validation that
-  accepted invitation credentials identify the participant in the returned
-  authoritative snapshot. `social-presence-client.ts` owns one cryptographic
-  per-document lease identity, serialized renew/release ordering, visible-only
-  15-second renewal against the 45-second server TTL, and best-effort keepalive
-  release. Presence requests have a bounded lifetime so a stalled request cannot
-  hold later renewal or recovery work forever. Every browser operation carries
-  an increasing per-document generation. The volatile authority suppresses
-  delayed lower generations for up to five minutes within a cap of 64 inactive
-  client tombstones per account; active leases retain their ordering record.
-  Missing generations remain a rollout-only legacy mode until that client id
-  first enters sequenced mode. Logout gives authenticated lease release a
-  bounded head start before deleting the session cookie; the server TTL remains
-  the fallback when that advisory cleanup cannot finish in time. Once that
-  awaited release has run, the signed-out React update clears the held desired
-  presence without issuing a second request after the session cookie is gone.
-  The sidecar
-  protocol handshake must advertise sequenced presence support before a service
-  client sends account commands, so deploy the sidecar before clients that
-  require this capability.
-- `game-replay.ts` owns shared replay run ids, seed normalization, deterministic
-  replay random creation, active-play replay clocks, API path/client helpers,
-  base replay payload validation, and generic cursor coordinate
-  validation/sampling helpers for all future game-specific replay modules.
-- `snake-replay.ts`, `tetris-replay.ts`, `breakout-replay.ts`,
-  `minesweeper-replay.ts`, `space-invaders-replay.ts`, `pong-replay.ts`,
-  `simon-replay.ts`, `twenty-forty-eight-replay.ts`, `asteroids-replay.ts`, and
-  `battle-city-replay.ts` own game-specific replay
-  payload contracts, event parsing, and deterministic replay event application.
-  Replay payloads record
-  engine events such as direction changes, advances, timed-food lifecycle events,
-  Tetris moves, rotations, soft drops, hard drops, Breakout
-  starts/advances/paddle movement, Minesweeper reveals and flag toggles, Space
-  Invaders start/move/fire/advance events, Pong
-  starts/advances/paddle movement/score ticks, Simon phase/input events, 2048
-  move directions, Asteroids starts/advances/control-state changes/fire events,
-  and Tank Patrol starts/run-length-encoded frame-input advances/compact paused
-  frame spans rather than video or full board snapshots. Playback verifies that
-  the reconstructed terminal score, stage, cycle, lives, and headquarters state
-  match the saved metadata. Each replay event requires
-  active elapsed milliseconds; parsers reject payloads without event timing.
-  Minesweeper and Simon additionally carry separate visual-only cursor event
-  streams with board-local normalized coordinates; cursor events do not apply to
-  the deterministic game engines.
-- `game-catalog.ts` owns the pure playable-game id and label catalog plus
-  server-safe card artwork metadata and versioned artwork URLs. Launcher config
-  should enrich these entries with descriptions and parameters locally, while
-  `src/components/game-launcher-playables.ts` keeps the dynamic playable
-  component mapping; server pages should use catalog helpers instead of
-  importing launcher config.
-- `game-ui-flow.ts` owns pure Help and Escape/back-to-menu state transitions.
-  React hooks in `src/components/game-ui-hooks.ts` should delegate decisions here
-  and only apply effects such as pause, resume, or back-to-menu callbacks.
-- `src/lib/multiplayer/` owns the pure private-room model and protocol types for
-  multiplayer work. Keep it generic across games and free of WebSockets,
-  route handlers, persistence stores, singleton room state, and React concerns.
-- `snake-food-feedback.ts` keeps Snake pickup feedback metadata outside both the
-  engine and React rendering code.
-- Snake pickup progression order lives in
-  `SNAKE_PICKUP_INTRODUCTION_ORDER` in `snake-game-engine.ts`; timed-food kinds
-  and introduction thresholds are derived from that single order. Level
-  progression applies an additional level-number cap so level 1 only has red
-  apples, level 2 can unlock yellow apples, level 3 can unlock purple diamonds,
-  and later levels continue through the same order.
-- Snake level generation in `snake-game-engine.ts` owns the board-size formula,
-  level-scaled obstacle coverage, door placement, key spawning threshold,
-  closed-door collision loss, and open-door transition. Entering an open door
-  creates the next level and preserves only the score from the previous level.
-- Snake initial hazard safety reserves the starting snake, first red food,
-  first-food route, immediate head neighbors, and the full row to the right of
-  the initial head before door and obstacle generation. This keeps the default
-  rightward start lane free of generated collision hazards.
-- `utils.ts` provides shared utility glue such as class-name merging for shadcn
-  and Tailwind components.
+- Space Invaders co-op has independent `ship-a`/`ship-b` ships sharing score,
+  alien wave, and lives. Ships pass through each other. One enemy shot may destroy
+  both on the same tick and spend two lives; when only one life remains,
+  authoritative randomness selects the respawning ship. Simultaneous power-up
+  pickup also uses authoritative randomness (`space-invaders-multiplayer.ts`).
+- Asteroids co-op shares score, wave, asteroid/saucer world, and lives across
+  `ship-a`/`ship-b`. Position, velocity, explosion/respawn state, cooldowns, and
+  upgrades remain per-ship. Ships pass through each other, friendly fire is off,
+  and player bullets do not collide with each other. A body hazard can destroy
+  both ships and spend two lives;
+  randomness chooses the final respawn when only one life remains. Saucers target
+  a random active ship; each shot destroys at most one randomly selected hit ship.
+  Ship upgrades go to the collector, score/life effects to the team; simultaneous
+  pickups use authoritative randomness. Independent respawns use separated
+  positions and invulnerability. Game over waits for the last explosion; terminal
+  summaries retain shared score/wave/lives and occupied-seat attribution
+  (`asteroids-multiplayer.ts`, `asteroids/multiplayer-types.ts`).
+- Snake pickup kinds and introduction thresholds derive from
+  `SNAKE_PICKUP_INTRODUCTION_ORDER`; the additional level cap permits only red
+  apples in level 1, yellow apples from level 2, purple diamonds from level 3,
+  then subsequent kinds in order. Level generation owns size, obstacle coverage,
+  doors, and key thresholds. Closed doors kill; entering an open door rebuilds
+  level-local progression while preserving score and updating best score.
+  Initial hazard placement reserves
+  the snake, first red food, route to it, head neighbors, and the entire rightward
+  starting lane (`snake-game-engine.ts`). `snake-food-feedback.ts` supplies pure
+  pickup presentation metadata outside engine and React rendering.
 
-## Tests
+## Tank Patrol
 
-- `src/lib/*.test.ts` contains deterministic Vitest coverage for engines, shared
-  leaderboard behavior, utility helpers, Snake pickup feedback, and pure UI-flow
-  transitions.
-- When changing gameplay rules, add or update deterministic tests with injected
-  randomness, time, or explicit state fixtures as needed.
-- `replay-compatibility/` holds fixed seeded event scripts and intermediate/terminal
-  outcomes for the nine solo replay engines other than Tank Patrol, whose V1
-  goldens remain in `battle-city-replay.test.ts`. Its README records the reference
-  revision and checkpoint meaning. Do not regenerate expectations to accommodate
-  a refactor without reviewing saved-replay compatibility.
-- Prefer comparing meaningful game states or structured outputs over many
-  isolated field assertions unless field-level assertions make failures clearer.
-- Core coverage includes `src/lib/**/*.{ts,tsx}` with thresholded coverage. Keep
-  pure logic reachable from Vitest instead of hiding important behavior behind
-  DOM-only component flows.
+- Preserve the `battle-city` implementation, replay, persisted-id, and asset
+  namespace. `battle-city-game-engine.ts` is the solo/co-op facade; geometry,
+  ordered projectile resolution, scoring, and state predicates live in
+  `battle-city/{geometry,projectiles,scoring,state}.ts`. Keep frame lifecycle and
+  enemy/player/fire/spawn/pickup/ending sequencing in the facade
+  (`LC-20260714-TPIR`).
+- The 35 maps form a displayed Stage 1-70 cycle. Stages 36-70 reuse maps with
+  the Stage 35 enemy mix, then reset to Stage 1 (`battle-city/stage-progression.ts`).
+- Terrain is a 26x26 grid of 8x8-pixel cells with 4x4-pixel wall fragments. Tanks
+  move in fractional 1/8-cell (one-pixel) steps; projectile positions are centers.
+  Explicitly derive integer cells for terrain access. A normal shell probes a
+  16-pixel face, removing up to four intact fragments across two touched cells;
+  maximum shells clear both cells. Resolve terrain/headquarters before shell and
+  tank collisions. Non-shield impacts hold their slots for nine frames; newborn
+  shells collide at the muzzle before moving on the next frame.
+- Explosion counters are **24 tank-handler updates** (`battle-city/constants.ts`,
+  `battle-city-game-engine.projectiles.test.ts`): players update on three of four
+  frames, fast enemies every frame, other enemy slots on alternating parity.
+  Spawn counters are 28 handler updates: player spawning takes 37-38 video frames,
+  enemy spawning 55-56 depending on frame/slot phase. Preserve these distinct
+  cadences. Browser elapsed time accumulates into fixed 60.0988 Hz simulation
+  frames (`battle-city/fixed-step.ts`), independently of callback frequency.
+- Run enemy handlers before players, then player fire before the separate
+  enemy-fire pass. Ordering determines collisions, activation, muzzle placement,
+  and RNG trajectories. Rebase the frame clock at ending-tail entry and carry
+  its phase through results and the next stage setup.
+- `battle-city-multiplayer.ts` requires both `player-1`/`player-2` seats and starts
+  Stage 1. Process P2 before P1 where original ordering matters. P1 starts at
+  row 24/column 8, P2 at row 24/column 16, each with three lives. Scores, the
+  one-time 20,000-point bonus-life flag, upgrades, shields, kill counts, shell
+  slots, and elimination state are individual. Six enemies replace solo's four;
+  the spawn interval is 20 ticks faster.
+- Continue until headquarters loss or both players are eliminated. An eliminated
+  player stays inactive for that stage with a side game-over marker; a late
+  score-earned life can retain them for the following stage. Friendly shells are
+  consumed; an unshielded active teammate receives `0xC8` player-handler updates
+  of movement stun without losing a life and can still fire. Star, helmet, tank,
+  pickup score, and score-earned lives belong to the collector; grenade, clock,
+  and shovel affect the shared world. Results keep separate counts/scores; a
+  surviving strict total-kill leader receives 1,000 points, with no tie bonus.
+- Co-op snapshots/outcomes remain separate from solo replay V1 and the campaign
+  leaderboard. While V1 uses this engine, preserve solo final-life and slot-sorted
+  shell-collision behavior; multiplayer cross-player object-slot ordering stays
+  behind the multiplayer-state guard (`LC-20260714-TPMP`).
+
+## Shared clients and UI logic
+
+- `leaderboard.ts` owns scoped keys, normalization, top-three ranking,
+  pending-entry calculation, and client requests. `global-leaderboard.ts` selects
+  default launcher targets; preserve separate game/parameter rankings and
+  Minesweeper's ascending times. Snake progression uses `snake|mode=levels`.
+- `user-profile.ts` owns shared auth/profile/session contracts, validation, and
+  `/api/auth/*`, `/api/me`, `/api/game-sessions` clients.
+- `game-catalog.ts` is the server-safe source of game ids, labels, artwork metadata,
+  and versioned URLs. Launcher config enriches it with descriptions/parameters;
+  `src/components/game-launcher-playables.ts` owns lazy components. Server pages
+  must not import launcher config.
+- `game-ui-flow.ts` owns pure Help and Escape/menu decisions;
+  `src/components/game-ui-hooks.ts` applies pause/resume/navigation effects.
+  `utils.ts` provides shared class-name merging.
+
+## Browser social contract
+
+- `social.ts` owns client-safe vocabulary, validation, entity ids, and canonical
+  account-pair ordering. Exact discovery reuses normalized display-name keys from
+  `user-profile.ts`: one minimal identity, no fuzzy directory. Passwordless legacy
+  accounts cannot participate. SQLite transactions, authorization, and invitation
+  admission stay server-side.
+- `social-client.ts` validates successful payloads and typed errors, including
+  numeric `Retry-After`. Accepted credentials must correlate to the requested
+  invitation, recipient, participant, and authoritative snapshot.
+  `social-mutation-coordinator.ts` fences async actions by account epoch and token,
+  so old settlements cannot expose credentials or clear a newer pending action.
+- `social-presence-client.ts` owns one cryptographic per-document lease id,
+  serialized renew/release operations, and increasing operation generations.
+  Renew every 15 seconds only while visible against the server's 45-second TTL;
+  use best-effort keepalive release. Requests time out so a stall cannot block
+  subsequent renewal/recovery. Server ordering, legacy rollout, and required
+  handshake capabilities are documented in [server/MEMORY.md](server/MEMORY.md).
+- Logout gives authenticated release a bounded head start before cookie deletion;
+  TTL is the fallback. The signed-out update clears desired presence without a
+  second request after cookie deletion; failed logout can resume the held lease.
+  Source: `LC-20260803-SWEB`.
+
+## Replays and verification
+
+- `game-replay.ts` owns run ids, seeds, seeded RNG, active-play clocks, API/client
+  helpers, base validation, and cursor sampling. Each `*-replay.ts` owns its
+  game's payload parsing and deterministic event application. Record engine
+  inputs/events, not video or board snapshots; each event requires active elapsed
+  milliseconds and parsers reject missing timing. Minesweeper/Simon cursor streams
+  use normalized board-local coordinates and never affect engine state.
+- Tank Patrol uses run-length-encoded frame inputs and compact paused-frame spans.
+  Playback checks reconstructed score, stage, cycle, lives, and headquarters
+  against saved metadata (`src/components/battle-city-replay-player.tsx`,
+  `LC-20260713-TPRP`).
+- Nearby Vitest suites use injected randomness/time and explicit state fixtures.
+  Prefer meaningful complete-state/structured assertions. Core coverage includes
+  `src/lib/**/*.{ts,tsx}` (`vitest.coverage.core.config.ts`); keep pure behavior
+  testable without DOM orchestration.
+- [replay-compatibility/README.md](replay-compatibility/README.md) documents fixed
+  seeded inputs and intermediate/terminal goldens for the nine solo games other
+  than Tank Patrol, whose V1 goldens are in `battle-city-replay.test.ts`. Preserve
+  old expectations while their schemas remain supported; review replay-version
+  policy before intentional gameplay changes, and never regenerate goldens merely
+  to make a refactor pass (`LC-20260905-2260`).

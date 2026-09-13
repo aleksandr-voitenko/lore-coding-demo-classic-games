@@ -1,95 +1,68 @@
 # Multiplayer Library Memory
 
-This folder owns pure private-room domain models and transport-neutral protocol
-types for multiplayer work. Keep WebSocket APIs, HTTP route parsing, server
-stores, sidecar runtime state, persistence, and React components outside this
-folder.
+Pure private-room models, settings, support registry, and transport-neutral
+protocols live here. WebSockets, HTTP parsing, process-local authority/storage,
+and React belong outside this folder; server behavior is in
+`../server/MEMORY.md`.
 
-## Files
+## Domain Ownership
 
-- `game-registry.ts` owns pure multiplayer support membership and default game
-  selection. `game-catalog.ts` owns game labels, while the launcher `GAME_CARDS`
-  catalog owns rendered card order and filters that order through the registry.
-  Client renderer and server adapter maps must be exhaustive over
-  `MultiplayerGameId`; keep their actual imports local to their UI and server
-  layers. Tank Patrol participates under its stable `battle-city` id with
-  required `player-1` and `player-2` seats and no launcher parameters because
-  private-room runs always begin at Stage 1.
-- `room.ts` owns the reusable private-room model: signed-in hosts, guest
-  observers, automatic two-player admission, player seats, generic game
-  settings, invite paths, host-only lifecycle/settings and match-replacement
-  commands, and immutable room transitions. The room code and participants are
-  stable party identity; replacement advances the match generation and maps
-  current players by seat ordinal, including empty slots, onto the target
-  adapter's exactly two required seats. Creation and replacement reject any
-  other seat contract. Seat changes and replacement are restricted to
-  lobby/finished states. Watching is derived from seat occupancy and bounded by
-  `observerLimit`, so an unseated host is still a watcher while retaining host
-  ownership. The model also owns FIFO next-match queueing/cancellation, queue
-  promotion at match boundaries, explicit member leave, host transfer, and
-  close-when-no-successor outcomes.
-- `settings.ts` owns shared setting types, iterative JSON-tree validation and
-  copying, and admission normalization. `room.ts` re-exports the existing type
-  names. Admission allows at most 32 object/array containers along a path,
-  counting normalized settings as 1 and parameters as 2, and at most 16 KiB of
-  serialized UTF-8 settings including game id, keys, punctuation, and escaping.
-  Create, update, and replacement reject invalid or excessive settings before
-  applying them. Snapshot structural validation remains total for deep valid
-  JSON without imposing these admission limits; the distinction preserves
-  forward-compatible input parsing without admitting settings that native JSON
-  serialization cannot safely emit. Copies never share nested source references
-  and preserve special JSON keys such as `__proto__` as data properties.
-- `protocol.ts` owns the shared realtime envelope types. The envelope should
-  stay stable across games: connection messages identify the room, room commands
-  wrap the private-room command model, game input carries `gameId` plus a nested
-  game payload, and server messages carry room snapshots, events, acks,
-  rejections, and ping-style timing messages.
-- `protocol-validation.ts` owns dependency-free runtime guards for untrusted
-  server messages and room snapshots shared by browser WebSocket, browser HTTP,
-  and internal room-service HTTP boundaries.
+- `game-registry.ts` defines supported multiplayer ids and the single default
+  (Pong). The other registered games are Space Invaders, Asteroids, and Tank
+  Patrol under stable `battle-city`. Labels belong to `../game-catalog.ts`;
+  launcher cards own rendered order, filtered by this registry. Client renderer
+  and server adapter maps must exhaust `MultiplayerGameId`, with implementation
+  imports local to their owning layers.
+- `room.ts` owns immutable party/match transitions. Creation seats the signed-in
+  host in Player 1; guest Play takes an eligible open seat between matches or
+  falls back to Watching within capacity. Watchers are derived from occupancy,
+  so an unseated host counts toward `observerLimit` while retaining ownership.
+  Creation/replacement require exactly two required seats.
+- Party code/membership survive host-only match replacement. It advances
+  `matchId`, remaps occupied slots by ordinal (including gaps), and changes
+  settings/seats atomically. Seat changes and replacement require lobby/finished
+  state; restart establishes a new generation from active or finished state.
+  Host ownership may transfer on explicit leave. Tank Patrol always starts
+  Stage 1 with `player-1`/`player-2` and no launcher parameters.
+- FIFO next-match queueing/cancellation preserves existing players. Promotion
+  fills lobby openings and runs at start/restart/replacement; it never inserts
+  watchers into the existing running roster. Leave frees seat/queue membership;
+  the model validates a signed-in host successor or returns party closure.
+  The server chooses a connected successor and clears credentials/held input.
+- `settings.ts` owns shared types, iterative JSON-tree validation/copying, and
+  admission normalization (`room.ts` re-exports the types). Creation, updates,
+  and replacement admit at most 32 containers per path (settings root 1,
+  parameters 2) and 16 KiB of serialized UTF-8 including game id, keys,
+  punctuation, and escaping. Copies preserve special keys such as `__proto__`
+  as data and never share nested references. Snapshot structural validation
+  remains total without an admission-depth limit; keep that separate from safe
+  mutation/serialization limits (`LC-20260905-5EDA`).
 
 ## Protocol Boundaries
 
-- Keep room settings and generic protocol envelopes catalog-generic through
-  `GameId`. A catalog game may have no active multiplayer adapter yet; the
-  shared registry identifies runtime support, while adapter dispatch returns
-  the existing unsupported-game behavior at the owning runtime boundary.
-- Do not add one top-level transport message per game. Add game-specific input
-  or snapshot payloads behind the generic `game.input` and game-snapshot
-  envelopes so Pong, Space Invaders, Asteroids, and later games can share the
-  same realtime room service.
-- Keep the protocol aligned with a `gameId`-keyed server adapter registry and a
-  matching client renderer/input registry. The envelope carries room identity,
-  participant/session context, message kind, and server ordering; adapter-owned
-  payloads remain nested behind the game boundary.
-- Server sequence fields are the live-stream cursor for volatile in-process
-  room events, not a promise of durable replay storage. The sidecar may use a
-  bounded memory window for reconnect catch-up while the room exists, but
-  clients must fall back to a fresh server snapshot when that cursor is gone.
-  Replays or match summaries, if added later, should be compact terminal
-  summaries derived from server-owned final state, not client-uploaded
-  multiplayer histories or a SQLite-backed per-event log.
-- Tank Patrol private rooms keep authoritative game state only for the room's
-  lifetime. Their Stage 1 starts, player inputs, stage results, and terminal
-  summaries do not become `battle-city` replay V1 events or solo leaderboard
-  submissions.
-- Current Pong aliases in `protocol.ts` exist to keep the existing Pong
-  multiplayer UI/runtime typed while the sidecar protocol is introduced. Future
-  game integrations should narrow by `gameId` at the edge that understands that
-  game, not in the room transport envelope itself.
-- Live browser room transport uses the WebSocket stream for snapshots,
-  guest-capable room commands, and game input. Public browser HTTP may still
-  create rooms and carry authenticated host-only commands, but new protocol work
-  should not depend on polling-only message shapes.
-- Protocol tests should remain deterministic data-shape checks using TypeScript
-  `satisfies` objects and small runtime assertions. Runtime guard tests should
-  cover every known top-level discriminant, malformed nested room state, and
-  forward-compatible extra fields.
-- Runtime validation owns the complete generic room structure and invariants,
-  server envelope fields, room/game sequence and timestamp fields, and the
-  generic game snapshot envelope. Game state remains an opaque object here;
-  game-specific state and snapshot extras belong to the adapter or renderer
-  that understands that game instead of being duplicated in the shared codec.
-  Keep settings traversal iterative so deeply nested JSON remains valid without
-  a recursion limit; reject cyclic/shared-reference graphs, and keep public
-  guards total by returning `false` when reflective access fails.
+- `protocol.ts` owns generic room, nested game input/snapshot, event, ack,
+  rejection, and connection/timing envelopes. Protocol v6 carries match ids in
+  snapshots, reconnect cursors, acknowledgements, and match-scoped commands.
+  Keep envelope types catalog-generic through `GameId`; runtime support is the
+  registry/adapter boundary's decision.
+- Game-specific aliases live beside their game contracts, e.g.
+  `../pong-multiplayer.ts`, not in the generic protocol (`LC-20260626-MPPT`).
+  Narrow by `gameId` in the adapter/renderer that understands the nested
+  payload; do not add a top-level transport message for each game.
+- Sequence fields order the live volatile stream. Current reconnect uses a
+  fresh authoritative snapshot, with no retained event history. Any future
+  bounded catch-up window needs a cursor/retention policy. Multiplayer summaries
+  remain server-derived and mode-scoped, separate from solo replay/profile and
+  leaderboard persistence (`LC-20260709-MPRT`).
+- Live browser snapshots, guest room commands, and game inputs use WebSockets.
+  Public HTTP supports creation/invite reads and authenticated host commands;
+  the sidecar HTTP bridge is internal, not a polling/live-command fallback.
+- `protocol-validation.ts` supplies dependency-free runtime guards shared by
+  browser WebSocket/HTTP and internal service HTTP boundaries. Validate full
+  generic room invariants, nested identity/generation, sequence/timestamp fields,
+  and envelope structure. Game state is an opaque object; game-specific extras
+  belong to their adapter/renderer. Accept forward-compatible extra fields.
+- Keep guards total: iterative settings traversal accepts deep valid JSON,
+  rejects cycles/shared-reference graphs, and returns false on reflective access
+  failures. Tests pair typed `satisfies` examples with malformed runtime inputs,
+  cover every known discriminant, and exercise nested invariants and extra fields.

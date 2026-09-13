@@ -1,81 +1,57 @@
 # E2E Memory
 
-This file covers Playwright browser-flow coverage under `e2e/`.
+Playwright covers rendered interaction; deterministic game rules and pure helpers
+belong in nearby Vitest tests.
 
-## Strategy
+## Strategy and Helpers
 
-- Playwright owns rendered browser behavior that is too user-facing or fragile
-  for broad TSX markup assertions: launcher handoff, configurable parameters,
-  Help/Escape flows, real keyboard/pointer input, responsive overlays, and
-  leaderboard client/server integration.
-- `game-layout.spec.ts` covers shared board/stats geometry, high-contrast ready
-  screens, and dark app-theme game palette regressions. Dark palette checks
-  compare rendered game chrome to the resolved per-game CSS variables so tests
-  can tolerate browser color serialization differences.
-- `space-invaders-revenge-warning.spec.ts` uses a seeded run and keyboard fire
-  inputs to cover warning/shield coexistence, Shield Bearer marker spacing,
-  pause/resume, reduced motion, mobile placement, and the two-second volley
-  warning lifetime, followed by muzzle flashes on the five firing targets.
-  Desktop and mobile screenshots are attached to the report.
-- `space-invaders-muzzle-flash.spec.ts` checks source identification at shot
-  release, weapon placement, game-clock fade/expiry, pause/resume, and reduced
-  motion, with desktop and phone screenshots. Wait for Running before advancing
-  the test clock so asynchronous run creation has installed the game timer.
-- Keep the suite focused as a smoke/regression layer over the browser experience.
-  Deterministic game rules and pure helpers belong in Vitest near `src/lib`.
-- `support/app.ts` contains small route and interaction helpers such as
-  `openLauncher`, `openGame`, and `selectGameParameter`.
-- `support/fixtures.ts` extends Playwright with automatic console error and
-  page-error collection; tests should finish with no captured browser issues.
+- Cover launcher/parameter handoff, Help/Escape, real keyboard/pointer input,
+  responsive overlays, and client/server leaderboard flows. Keep this a focused
+  browser regression layer.
+- `support/app.ts` provides `openLauncher`, `openGame`, and parameter selection.
+  `support/fixtures.ts` automatically collects console/page errors and requires
+  an empty issue list at test completion.
+- `game-layout.spec.ts` owns board/stats geometry, ready-screen contrast, and
+  dark-theme palettes. Compare rendered chrome to resolved per-game CSS variables
+  using `support/css-color.ts` to tolerate browser serialization differences.
+- `space-invaders-revenge-warning.spec.ts` and
+  `space-invaders-muzzle-flash.spec.ts` use seeded runs and controlled clocks to
+  verify warning/shield coexistence, marker/weapon placement, two-second warning
+  expiry and release-time flashes, pause/resume, reduced motion, and phone layout.
+  They attach screenshots to the report. Wait for Running before advancing the
+  test clock: asynchronous run creation must first install the game timer
+  (Lore `LC-20260913-CD7A`).
 
-## Local Server And Artifacts
+## Isolated Suites
 
-- `playwright.config.ts` starts the Next dev server on `127.0.0.1:3100` and does
-  not reuse an existing server.
-- The Playwright run sets `GAME_LEADERBOARD_SQLITE_PATH` to an isolated temp
-  SQLite database so local leaderboard data is not touched.
-- Artifacts live under `reports/playwright/`: failure screenshots, retained
-  traces/videos, and the HTML report.
-- The configured project is focused Chromium with one worker. Keep this narrow
-  unless a task specifically needs broader browser coverage.
-- `e2e/playwright.sidecar.config.ts` is the isolated realtime-sidecar entry
-  point. It starts the built sidecar on `127.0.0.1:3111`, starts Next on
-  `127.0.0.1:3110` with `MULTIPLAYER_ROOM_SERVICE_URL` and
-  `NEXT_PUBLIC_MULTIPLAYER_WEBSOCKET_URL` pointed at that sidecar, supplies the
-  same test-only room-service bearer secret to both processes, and only
-  discovers `e2e/sidecar/**/*.e2e.ts`.
-- Sidecar e2e files intentionally use the `.e2e.ts` suffix rather than
-  `.spec.ts` so `npm run test:e2e` remains the default Next-only smoke suite.
-- Sidecar e2e coverage is the acceptance path for WebSocket-only live room
-  delivery. The isolated sidecar suite should prove that WebSocket room events
-  cover the host, guest, observer, lifecycle, and active-game delivery paths
-  needed by the shared room shell and registered game adapters.
-- `sidecar/pong-private-room.e2e.ts` also owns the two-account host invitation
-  path because Play/Watch must stay disabled until the live party stream is
-  active. It covers friendship setup, linkless Watch creation, party-code
-  redaction, accessible admission help, local cancellation, external decline,
-  focus recovery when the pending action disappears asynchronously, an in-party
-  recipient's disabled Accept and still-enabled Decline actions, recipient
-  acceptance as Watching, an interrupted committed acceptance response, a
-  transient acceptance-in-progress response on both the initial attempt and its
-  first retry, membership-only reacquisition, an injected one-time local history
-  failure, local-only handoff retry without an additional acceptance request,
-  visible destination focus, and a two-friend Pong-to-Asteroids replacement
-  that keeps the room code and observer membership before the friend claims
-  Asteroids Player 2. A subsequent Asteroids-to-Pong-to-Asteroids round trip
-  proves both occupied seats map by ordinal across games. The journey verifies
-  local transition focus, remote polite status announcements without focus
-  theft, focus continuity when Join game becomes Watch instead, a party-heading
-  fallback when Start removes that control, alternating live slots across two
-  identical Restart announcements, live game delivery to both clients, and
-  same-account recovery after reload.
-- The same sidecar queue journey verifies that remote Restart promotion moves a
-  watcher from a focused Cancel request action to the persistent party heading
-  when that action is removed without changing the active-game layout.
-- `sidecar/tank-patrol-private-room.e2e.ts` covers Tank Patrol's required
-  Player 1/Player 2 seat claims, authoritative Stage 1 start, both rendered
-  tanks, and bidirectional held-movement delivery across two browser contexts.
-- CI runs both the default `npm run test:e2e` smoke and the separate
-  `npm run test:e2e:sidecar` acceptance path. Sidecar artifacts remain isolated
-  under `reports/playwright-sidecar/` so failures from either suite can be
-  diagnosed without merging their discovery boundaries.
+- Root `playwright.config.ts` starts a fresh Next dev server on `127.0.0.1:3100`.
+  The sidecar config, `e2e/playwright.sidecar.config.ts`, builds/starts the emitted
+  sidecar on `3111` and Next on `3110`, wired with the internal room-service URL,
+  browser WebSocket URL, and matching test-only bearer credentials.
+- Both use Chromium, one worker, no existing-server reuse, and a unique temporary
+  SQLite path via `GAME_LEADERBOARD_SQLITE_PATH`; preserve local user data.
+- Default `npm run test:e2e` discovers `.spec.ts`; sidecar tests deliberately use
+  `sidecar/**/*.e2e.ts` and run via `npm run test:e2e:sidecar`.
+  Live host/guest/observer, lifecycle, and active-game WebSocket acceptance belongs
+  in the sidecar suite.
+- `sidecar/pong-private-room.e2e.ts` also owns cross-game/social party journeys:
+  Play/Watch availability requires a live stream; invitation code redaction,
+  accessible eligibility help, cancellation/decline, and busy-state acceptance
+  gating must hold. Acceptance covers lost committed responses, repeated
+  acceptance-in-progress retries, membership-only reacquisition, and local
+  handoff failure/retry without another server acceptance.
+- That journey preserves watcher membership and ordinal player seats through
+  Pong/Asteroids replacements, then verifies live play and same-account reload.
+  Preserve local heading/successor focus, remote announcements without focus
+  theft, repeated identical Restart announcements, and heading fallback when a
+  focused action disappears, including queue promotion without a layout change
+  (Lore `LC-20260803-JRNY`).
+- `sidecar/tank-patrol-private-room.e2e.ts` verifies both required player seats,
+  Stage 1 start, two rendered tanks, and bidirectional authoritative held movement.
+- `e2e/playwright.sidecar-latency.config.ts` adds the configurable latency proxy
+  through `npm run test:e2e:sidecar:latency`; the Next/sidecar/proxy ports are
+  `3120`/`3121`/`3122`. Keep its artifacts separate too.
+- Reports live in `reports/playwright/`, `reports/playwright-sidecar/`, and
+  `reports/playwright-sidecar-latency/`: HTML reports, failure screenshots, and
+  retained failure traces/videos. CI runs the default and sidecar suites and
+  uploads both report directories on failure; see `.github/MEMORY.md`.

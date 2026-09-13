@@ -1,140 +1,82 @@
 # Project Memory
 
-This file is compact repository-wide context for agents and maintainers. Keep
-public setup and usage instructions in `README.md`; keep durable implementation
-patterns and constraints in scoped `MEMORY.md` files near the code they describe.
+Repository-wide context; public setup and usage live in `README.md`. Read child
+memory for local constraints instead of duplicating it here.
 
-## Repository Shape
+## Architecture and Ownership
 
-- This is a Next.js App Router classic game collection. The launcher currently
-  exposes Snake, Tetris, Breakout, Minesweeper, Space Invaders, Pong,
-  2048, Simon, Asteroids, and Tank Patrol.
-- `src/` owns application source. See `src/MEMORY.md` for App Router,
-  component, hook, library, and server boundaries.
-- `public/images/` owns launcher key art and the sprite-backed board assets.
-  See `public/images/MEMORY.md`.
-- `e2e/` owns rendered browser-flow coverage. See `e2e/MEMORY.md`.
-- `docs/adr/` owns durable architecture decision records for future runtime
-  work, including private multiplayer room architecture.
-- `.githooks/` owns repository-local Git hook tooling, including the
-  dependency-free Agentic Lore Coding validator. See `.githooks/MEMORY.md`.
-- `.github/` owns CI workflow behavior. See `.github/MEMORY.md`.
-- `Dockerfile` owns the production container image. It builds the Next.js
-  standalone server bundle and runs with SQLite storage under `/data`.
+- Next.js App Router collection of ten games. `src/lib/game-catalog.ts` owns
+  stable ids, public labels, and card artwork metadata. Tank Patrol's public
+  rename preserves `battle-city` in code, storage, replay URLs, and board assets
+  so existing records remain valid.
+- `src/app/page.tsx` renders the launcher. Components own browser orchestration
+  and rendering; deterministic engines and shared contracts live in `src/lib`;
+  Node-only storage and room services live in `src/lib/server`.
+  See `src/MEMORY.md`, then `src/app/MEMORY.md`, `src/components/MEMORY.md`,
+  `src/lib/MEMORY.md`, and `src/lib/server/MEMORY.md` for their boundaries.
+- Solo games use engine/game/board modules. Launcher config owns card parameters;
+  the playable registry loads games lazily. Shared UI is exported through
+  `src/components/game-layout.tsx`; use existing input and leaderboard helpers.
+- Private multiplayer uses server-authoritative, volatile parties and game
+  adapters, with WebSocket delivery through a separate Node sidecar. Pure room
+  models/protocols are documented in `src/lib/multiplayer/MEMORY.md`; lifecycle,
+  retention, credentials, and social admission belong in server memory.
+  `docs/adr/` preserves architecture rationale for rooms, smoothing, and friends.
+- `public/images/MEMORY.md` owns card/sprite asset and cache-version constraints;
+  `e2e/MEMORY.md` owns browser acceptance strategy;
+  `.github/MEMORY.md` owns CI/publishing; `.githooks/MEMORY.md` owns Lore tooling.
 
-## Major Boundaries
+## Durable Cross-Cutting Contracts
 
-- The root route is the game launcher: `src/app/page.tsx` renders
-  `GameLauncher`; `src/components/game-launcher-config.ts` owns the game-card
-  catalog and parameter registry, `src/components/game-launcher-playables.ts`
-  owns the lazy playable component registry, and
-  `src/components/game-launcher.tsx` owns selected-game browser state and menu
-  rendering.
-- Games split browser orchestration from reusable rules: `src/components/*-game.tsx`
-  owns React state and browser events, `src/components/*-board.tsx` renders the
-  board, and `src/lib/*-game-engine.ts` owns deterministic game state transitions.
-- Tank Patrol has a 35-map single-player campaign and a server-authoritative
-  two-player co-op mode in the existing online private-room pipeline. Solo play
-  displays the original Stages 1-70 difficulty cycle, then resets to Stage 1;
-  private rooms require `player-1` and `player-2` seats and always start at
-  Stage 1. The room rules preserve the original P1/P2 spawn points, three
-  independent lives, individual scores/upgrades/stage kill totals,
-  friendly-fire stun, a six-enemy cap with faster spawning, individual and global
-  power-up effects, play until both players are eliminated, separate results,
-  and the surviving strict kill leader's 1,000-point bonus.
-  Tank Patrol's persisted game id, replay query, implementation namespace, and
-  asset directory remain `battle-city` so existing profile and leaderboard
-  records keep resolving after the public-title rename. Replay V1 and the
-  campaign leaderboard remain solo-only; private-room state and outcomes are
-  volatile and do not enter either persistence path.
-- Shared game UI is exported through `src/components/game-layout.tsx`; focused
-  implementation modules live beside it in `src/components/`.
-- Leaderboards cross source folders: shared key/ranking/client helpers live in
-  `src/lib/leaderboard.ts`, the React state hook lives in `src/hooks/`, shared
-  UI lives in `src/components/`, the API route lives in `src/app/api/`, and the
-  current server store lives in `src/lib/server/`.
-- User profiles cross the same boundaries: `src/lib/user-profile.ts` owns shared
-  user/session/auth types and client helpers, `src/hooks/use-current-user.tsx`
-  owns browser auth state, `src/hooks/use-game-session.ts` records signed-in play
-  sessions, `/api/auth/*`, `/api/me`, and `/api/game-sessions` expose server
-  routes, and `/profile` renders aggregate stats for the current session.
-- Replays cross the same client/server boundary: `src/lib/game-replay.ts` owns
-  shared run ids, seed normalization, deterministic replay random creation, API
-  paths, client helpers, and base payload validation; `src/lib/snake-replay.ts`,
-  `src/lib/tetris-replay.ts`, `src/lib/breakout-replay.ts`,
-  `src/lib/minesweeper-replay.ts`, `src/lib/space-invaders-replay.ts`,
-  `src/lib/pong-replay.ts`, `src/lib/simon-replay.ts`,
-  `src/lib/twenty-forty-eight-replay.ts`, `src/lib/asteroids-replay.ts`, and
-  `src/lib/battle-city-replay.ts` own game-specific events and replay
-  application helpers.
-  `/api/replays/<game>/run` issues replay run ids and seeds for supported replay
-  games;
-  `/api/replays/<game>` saves/downloads the current signed-in user's latest
-  replay; `/profile` links saved replays back to `/?replay=snake`,
-  `/?replay=tetris`, `/?replay=breakout`, `/?replay=minesweeper`,
-  `/?replay=space-invaders`, `/?replay=pong`, `/?replay=simon`,
-  `/?replay=twenty-forty-eight`, `/?replay=asteroids`, or
-  `/?replay=battle-city`.
+- Keep browser events, timers, DOM rendering, and effects playback outside pure
+  game rules. Adding a game requires aligned catalog/playable registration,
+  engine tests, game/board components, menu art, and public documentation.
+- Launcher parameters use real selects and flow through `initial*` props into
+  game state. Restart, replay, rendering, accessible labels, and leaderboard keys
+  must preserve those selections. Tank Patrol's campaign timing, 35-map/70-stage
+  cycle, and two-player rules are detailed in `src/lib/MEMORY.md`.
+- Leaderboards are top-three, game-and-parameter scoped. Snake level progression
+  uses `snake|mode=levels` because its board grows during play. Minesweeper saves
+  only wins and ranks lower elapsed time first; other games rank higher scores.
+- Profiles, auth, and sessions share contracts in `src/lib/user-profile.ts`,
+  hooks in `src/hooks`, routes under `src/app/api`, and SQLite server stores.
+  Profile stats count signed-in play only; guest play and guest leaderboard
+  saves remain allowed. Normalized display names are unique, passwords are
+  salted hashes, and private identity comes from the HTTP-only session cookie.
+- All ten solo games record deterministic events after server-issued replay
+  runs, including guest play. Saving/downloading a profile replay requires auth;
+  SQLite retains one latest replay per user/game. Shared replay helpers live in
+  `src/lib/game-replay.ts`, with game-specific `*-replay.ts` contracts and
+  `/api/replays/<game>[/run]` routes. Profile links use `/?replay=<game-id>`.
+  Private-room sessions/outcomes never feed solo replays, profile game sessions,
+  or solo leaderboards. Preserve replay compatibility when changing engines.
+- Accounts, leaderboards, sessions, replays, and the durable social graph share
+  SQLite. Presence leases, room membership/capabilities, matches, and queues are
+  volatile; durable social rows must not reconstruct room state after restart.
 
-## Cross-Cutting Constraints
+## Runtime and Verification
 
-- Keep browser-only concerns in React components and reusable gameplay/state
-  rules in `src/lib`.
-- Preserve launcher integration when adding or changing a game: update the
-  launcher catalog, deterministic engine tests, focused game and board
-  components, menu artwork, and user-facing docs when the public catalog changes.
-- Pre-game parameters live on launcher cards as real select controls. Games
-  receive selected values as `initial*` props and keep those values in game state
-  so restart, terminal replay, board rendering, accessibility labels, and
-  leaderboard keys remain scoped to the chosen parameters.
-- Leaderboard keys are game-and-parameter scoped. Snake uses the stable
-  `snake|mode=levels` key for its level-progression run because board size
-  changes during play. Most games rank higher scores first; Minesweeper submits
-  only won boards and ranks lower elapsed times first.
-- The default leaderboard database path remains `.data/snake-leaderboard.sqlite`
-  for existing Snake deployments. `GAME_LEADERBOARD_SQLITE_PATH` is the preferred
-  durable override, with `SNAKE_LEADERBOARD_SQLITE_PATH` still honored as a
-  fallback.
-- Profile stats count only signed-in sessions. Guest play and guest leaderboard
-  saves remain allowed but do not create `game_sessions` rows. First-party auth
-  uses normalized unique display names plus salted password hashes; private
-  profile access is derived from the HTTP-only session cookie, never client ids.
-- Replay recording may run during guest play for supported replay games, but
-  persisted profile replays are signed-in and scoped by user and game. The MVP
-  keeps one latest replay per user/game in SQLite.
-- `npm run dev:multiplayer` owns LAN host discovery for local room testing. It
-  forwards the resolved exact IPv4 host to Next's development-origin allowlist
-  so the printed app URL, browser WebSocket URL, and allowed host stay aligned.
-  The shared host parser rejects protocols, ports, paths, hostnames, IPv6, and
-  wildcards; ordinary `npm run dev` leaves custom LAN origins unset unless the
-  variable is supplied.
-- shadcn/ui is initialized with Tailwind CSS v4, the `base-nova` preset, and the
-  `@/*` import alias. The shared button is `src/components/ui/button.tsx`.
-
-## Verification
-
-- `npm test` runs deterministic Vitest coverage.
-- `npm run test:coverage:core` runs the thresholded core coverage gate for
-  deterministic engines, server/API helpers, pure board renderers, shared input
-  filtering, and utilities.
-- Run coverage checks when code changes are significant, especially when they
-  touch core coverage surfaces or add new branches that CI will gate with
-  `npm run test:coverage:core`.
-- After large implementation tasks, run `npm run test:coverage:core` before
-  final reporting so global core coverage regressions are caught locally.
-- `npm run test:e2e` runs the focused Chromium Playwright smoke suite. Browser
-  flow details live in `e2e/MEMORY.md`.
-- `npm run test:e2e:sidecar` builds the emitted multiplayer sidecar and runs its
-  isolated Chromium acceptance suite with Next wired to the sidecar room
-  service and WebSocket endpoint.
-- `npm run typecheck`, `npm run lint`, `npm run check:deps`,
-  `npm run check:unused`, and `npm run build` are the standard TypeScript,
-  ESLint, dependency-boundary, unused-code, and Next build checks.
-- `npm run lore-coding -- --file <path>` validates a Lore Coding commit message file.
-  `npm install` runs `.githooks/install-lore-coding-hooks.mjs` through the package
-  `prepare` script to configure `core.hooksPath .githooks` for local clones;
-  CI does not run Lore Coding validation yet.
-- CI repeats the build, static checks, dependency-boundary gate, Knip
-  unused-code gate, core coverage gate, and both default and sidecar Playwright
-  suites for code-affecting changes, then publishes the Docker image to Docker
-  Hub after successful `main` pushes. See `.github/MEMORY.md`.
+- `Dockerfile` builds Next's standalone server and stores SQLite under `/data`.
+  The default non-container database remains `.data/snake-leaderboard.sqlite`.
+  `GAME_LEADERBOARD_SQLITE_PATH` overrides it, with legacy
+  `SNAKE_LEADERBOARD_SQLITE_PATH` fallback.
+- `npm run dev:multiplayer` discovers or accepts one exact LAN IPv4 host and
+  aligns the printed URL, browser WebSocket URL, and Next dev-origin allowlist.
+  Its parser rejects protocols, ports, paths, hostnames, IPv6, and wildcards.
+  Ordinary dev leaves that allowlist unset unless the override is supplied.
+- UI uses Tailwind v4, shadcn `base-nova`, and `@/*` imports; the shared button is
+  `src/components/ui/button.tsx`.
+- `npm test` runs Vitest. `npm run test:coverage:core` gates library logic,
+  API routes, pure board renderers, and shared input filtering at 90% statements,
+  functions, and lines / 85% branches. Run it for significant core changes and
+  after large implementation tasks before reporting completion.
+- Standard checks: `npm run typecheck`, `npm run lint`, `npm run check:deps`,
+  `npm run check:unused`, and `npm run build`. Browser checks are
+  `npm run test:e2e` and `npm run test:e2e:sidecar`; the latter builds and tests
+  the emitted sidecar with a separately wired Next server.
+- CI gates code-affecting changes on those checks and both browser suites, then
+  publishes Docker images after successful `main` pushes; Markdown-only changes
+  are ignored. Lore validation remains local:
+  `npm run lore-coding -- --file <path>`. Package `prepare` installs the hook
+  unless skipped or a custom hook path exists; see `.githooks/MEMORY.md` for
+  the installer contract.
