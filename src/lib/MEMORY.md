@@ -24,6 +24,10 @@ Node-only authority/storage have narrower context in
 
 ## Game-specific invariants
 
+- Space Invaders cyan needles survive direct collisions with every player-shot
+  kind in solo and co-op; player shields still absorb them. New solo recordings
+  use replay V2. V1 playback explicitly selects destructible needles through
+  `advanceSpaceInvadersGame`'s collision rules, preserving saved outcomes.
 - Space Invaders co-op has independent `ship-a`/`ship-b` ships sharing score,
   alien wave, and lives. Ships pass through each other. One enemy shot may destroy
   both on the same tick and spend two lives; when only one life remains,

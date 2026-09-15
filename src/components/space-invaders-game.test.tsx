@@ -61,6 +61,7 @@ describe("SpaceInvadersGame", () => {
         "Armored Aliens take three hits to destroy; non-lethal hits change their armor and keep clean streaks alive while their wide armor-wave shots move straight down.",
         "Mine Layers drop slow mines; destroying one creates a large blast that damages ships, aliens, and shots, so shoot them near invaders and avoid detonating them near your cannon.",
         "Standard invader rows fire tracking commander bolts that split into smaller shards when intercepted, delayed bursts, scatter bursts, needles, or lasers; Divers use their original row shot, while Shield Bearers fire bottom-row lasers.",
+        "Blue aliens fire cyan needles that survive every player shot, including piercing lasers; your shield absorbs them safely.",
       ]),
     );
   });

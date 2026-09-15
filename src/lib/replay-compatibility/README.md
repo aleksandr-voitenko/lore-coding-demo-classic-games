@@ -75,6 +75,10 @@ regeneration.
 
 ## Maintaining compatibility
 
+Space Invaders records V2 after making cyan needles indestructible by player
+shots. V1 remains supported with its original needle interception rule; the
+existing V1 fixture and expected outcomes remain unchanged.
+
 Do not regenerate these fixtures just to make a refactor pass. A mismatch calls
 for reviewing the changed state and event boundary against the documented source
 revision and persisted replay schema. If gameplay changes intentionally, decide

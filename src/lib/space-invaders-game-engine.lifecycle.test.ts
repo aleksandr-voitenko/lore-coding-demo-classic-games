@@ -174,12 +174,13 @@ describe("space invaders lifecycle engine", () => {
   });
 
 
-  it("absorbs player hits while the respawn shield is active", () => {
+  it.each(["standard", "needle"] as const)("absorbs %s shots with a player shield", (kind) => {
     const game = createInitialSpaceInvadersGame();
     const runningGame = createRunningGame({
       invaderShotCooldownTicks: 100,
       invaderShots: [
         createInvaderShotFixture({
+          kind,
           height: 20,
           velocityY: 8,
           width: 5,

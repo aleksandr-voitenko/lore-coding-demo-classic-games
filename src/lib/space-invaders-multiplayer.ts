@@ -877,7 +877,7 @@ function isSpaceInvadersMultiplayerPlayerShotInvulnerable(
 function isSpaceInvadersMultiplayerInvaderShotInvulnerable(
   shot: Pick<SpaceInvadersInvaderShot, "kind">,
 ) {
-  return shot.kind === "armor-wave";
+  return shot.kind === "armor-wave" || shot.kind === "needle";
 }
 
 function detonateSpaceInvadersMultiplayerMineShots(

@@ -63,7 +63,7 @@ export type SpaceInvadersReplayEventInput =
 
 export type SpaceInvadersReplayPayload = BaseGameReplayPayload<
   typeof SPACE_INVADERS_REPLAY_GAME_ID,
-  typeof SPACE_INVADERS_REPLAY_SCHEMA_VERSION
+  1 | typeof SPACE_INVADERS_REPLAY_SCHEMA_VERSION
 > & {
   alienCount: number;
   boardHeight: number;
@@ -76,12 +76,13 @@ export type SpaceInvadersReplayPayload = BaseGameReplayPayload<
 export type SpaceInvadersReplayPlaybackState = {
   game: SpaceInvadersGameState;
   random: () => number;
+  schemaVersion: SpaceInvadersReplayPayload["schemaVersion"];
 };
 
 export type ParseSpaceInvadersReplayPayloadResult =
   ParseGameReplayPayloadResult<SpaceInvadersReplayPayload>;
 
-export const SPACE_INVADERS_REPLAY_SCHEMA_VERSION = 1;
+export const SPACE_INVADERS_REPLAY_SCHEMA_VERSION = 2;
 export const SPACE_INVADERS_REPLAY_GAME_ID = "space-invaders";
 export const MAX_SPACE_INVADERS_REPLAY_EVENTS = 240_000;
 
@@ -153,7 +154,10 @@ export function parseSpaceInvadersReplayPayload(
   const baseReplay = parseBaseGameReplayPayload(value, {
     gameId: SPACE_INVADERS_REPLAY_GAME_ID,
     replayLabel: "Space Invaders replay",
-    schemaVersion: SPACE_INVADERS_REPLAY_SCHEMA_VERSION,
+    schemaVersion:
+      isRecord(value) && value.schemaVersion === 1
+        ? 1
+        : SPACE_INVADERS_REPLAY_SCHEMA_VERSION,
   });
 
   if (!baseReplay.success) {
@@ -236,7 +240,7 @@ export function parseSpaceInvadersReplayPayload(
 export function createInitialSpaceInvadersReplayGame(
   payload: Pick<
     SpaceInvadersReplayPayload,
-    "alienCount" | "boardHeight" | "boardWidth" | "seed"
+    "alienCount" | "boardHeight" | "boardWidth" | "seed" | "schemaVersion"
   >,
 ): SpaceInvadersReplayPlaybackState {
   const random = createSpaceInvadersReplayRandom(payload.seed);
@@ -250,6 +254,7 @@ export function createInitialSpaceInvadersReplayGame(
   return {
     game,
     random,
+    schemaVersion: payload.schemaVersion,
   };
 }
 
@@ -261,7 +266,10 @@ export function applySpaceInvadersReplayEvent(
     case "advance":
       return {
         ...current,
-        game: advanceSpaceInvadersGame(current.game, current.random),
+        game: advanceSpaceInvadersGame(current.game, current.random, {
+          needleShotDurability:
+            current.schemaVersion === 1 ? "destructible" : "indestructible",
+        }),
       };
     case "fire":
       return {

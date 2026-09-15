@@ -151,6 +151,7 @@ export const SPACE_INVADERS_HELP_SECTIONS: GameHelpSection[] = [
       `Destroyed diver invaders drop power-up icons: bonus score adds ${SPACE_INVADERS_BONUS_SCORE_POINTS} points, extra life rarely grants a life, Burst, Freeze, Piercing, Shield, and Shotgun grant their matching bonuses.`,
       "Burst, Piercing, and Shotgun change your next shot, then return the cannon to its normal laser.",
       "Standard invader rows fire tracking commander bolts that split into smaller shards when intercepted, delayed bursts, scatter bursts, needles, or lasers; Divers use their original row shot, while Shield Bearers fire bottom-row lasers.",
+      "Blue aliens fire cyan needles that survive every player shot, including piercing lasers; your shield absorbs them safely.",
       "After a hit, your cannon returns when the explosion finishes and stays shielded for a short window.",
       "Defend Earth to win; the game ends if you lose every life or the invaders reach the base.",
     ],

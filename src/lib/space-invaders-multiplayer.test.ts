@@ -7,6 +7,7 @@ import {
   createPowerUpFixture,
   createRandomSequence,
   createPlayerShotAlignedWith,
+  fireFromOnlyInvader,
   getSpaceInvadersTickDelay,
   SPACE_INVADERS_ALIEN_FREEZE_TICKS,
   SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS,
@@ -1182,9 +1183,10 @@ describe("space invaders multiplayer state model", () => {
     expect(ticked.explosions).toHaveLength(1);
   });
 
-  it("moves invader shots before resolving a ship-b hit", () => {
+  it.each(["standard", "needle"] as const)("moves %s shots before a ship-b hit", (kind) => {
     const initialGame = createRunningSpaceInvadersMultiplayerGame();
     const hittingShot = createInvaderShotMovingIntoShip(initialGame, "ship-b", {
+      kind,
       id: "moving-hit-ship-b",
     });
     const ticked = advanceSpaceInvadersMultiplayerGameTick(
@@ -1232,9 +1234,10 @@ describe("space invaders multiplayer state model", () => {
     expect(ticked.explosions).toHaveLength(2);
   });
 
-  it("absorbs moved invader shots with shields through the tick path", () => {
+  it.each(["standard", "needle"] as const)("absorbs moved %s shots with shields", (kind) => {
     const initialGame = createRunningSpaceInvadersMultiplayerGame();
     const shieldedHit = createInvaderShotMovingIntoShip(initialGame, "ship-a", {
+      kind,
       id: "shielded-tick-hit",
     });
     const ticked = advanceSpaceInvadersMultiplayerGameTick({
@@ -1694,6 +1697,46 @@ describe("space invaders multiplayer state model", () => {
     expect(ticked.ships["ship-a"].playerVolleyHasScored).toBe(false);
     expect(ticked.ships["ship-a"].playerVolleyHasUnscoredExit).toBe(false);
     expect(ticked.ships["ship-b"]).toBe(initialGame.ships["ship-b"]);
+  });
+
+  describe.each(SPACE_INVADERS_MULTIPLAYER_SHIP_SEATS)("%s needle collisions", (seat) => {
+    it.each(["standard", "burst", "shotgun", "piercing"] as const)(
+      "keeps blue-alien needles active against %s player shots",
+      (kind) => {
+        const initialGame = createRunningSpaceInvadersMultiplayerGame();
+        const needle = fireFromOnlyInvader(3).advanced.invaderShots[0]!;
+        const movedNeedle = { ...needle, x: 180, y: 300 };
+        const playerShot = createPlayerShotMovingIntoTarget(movedNeedle, { kind });
+        const ticked = advanceSpaceInvadersMultiplayerGameTick(
+          {
+            ...initialGame,
+            hitStreak: 4,
+            invaderShotCooldownTicks: 1_000,
+            invaderShots: [{ ...movedNeedle, y: movedNeedle.y - needle.velocityY }],
+            ships: {
+              ...initialGame.ships,
+              [seat]: { ...initialGame.ships[seat], playerShots: [playerShot] },
+            },
+          },
+          {},
+          () => 0,
+        );
+
+        expect(needle.kind).toBe("needle");
+        expect(ticked.invaderShots).toEqual([
+          { ...movedNeedle, ageTicks: needle.ageTicks + 1 },
+        ]);
+        expect(ticked.ships[seat].playerShots).toEqual(
+          kind === "piercing"
+            ? [{ ...playerShot, y: playerShot.y + playerShot.velocityY }]
+            : [],
+        );
+        expect(ticked.explosions.map(({ kind }) => kind)).toEqual(["projectile"]);
+        expect(ticked.hitStreak).toBe(4);
+        expect(ticked.score).toBe(0);
+        expect(ticked.lives).toBe(SPACE_INVADERS_STARTING_LIVES);
+      },
+    );
   });
 
   it("keeps piercing shots and armor waves active after opposing collisions", () => {

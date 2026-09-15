@@ -30,6 +30,8 @@ All the code in this repository was created using AI agents and the Lore Coding 
   exclamation mark for two seconds before they fire, keeping the warning
   distinct from protective shields. A brief yellow-white muzzle flash beneath
   each firing alien identifies the source of its shot.
+  Blue aliens fire cyan needles that player shots cannot destroy; player shields
+  still absorb them safely.
 - SQLite-backed, parameter-scoped top-three leaderboards for every game.
   Minesweeper ranks fastest clears; the other games rank higher scores.
 - Name-and-password player accounts with private profile stats for signed-in

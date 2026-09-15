@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { withReplayElapsed } from "./game-replay.test-helpers";
 import {
+  createPlayerShotAlignedWith,
+  createRunningGame,
+  fireFromOnlyInvader,
+} from "./space-invaders-game-engine.test-helpers";
+import {
   applySpaceInvadersReplayEvent,
   createInitialSpaceInvadersReplayGame,
   createSpaceInvadersReplayLeaderboardKey,
@@ -86,7 +91,8 @@ function createTerminalLossReplay(seed: number) {
     boardHeight,
     boardWidth,
     seed,
-  };
+    schemaVersion: SPACE_INVADERS_REPLAY_SCHEMA_VERSION,
+  } satisfies Parameters<typeof createInitialSpaceInvadersReplayGame>[0];
   const events: SpaceInvadersReplayEvent[] = [
     {
       elapsedMs: 0,
@@ -140,6 +146,42 @@ function createTerminalLossReplay(seed: number) {
 }
 
 describe("space invaders replay", () => {
+  it.each([1, 2] as const)("uses V%s needle collision rules", (schemaVersion) => {
+    const payload = createReplayPayload({ schemaVersion });
+    const parsed = parseSpaceInvadersReplayPayload(payload);
+    expect(parsed).toEqual({ success: true, payload });
+    if (!parsed.success) {
+      throw new Error(parsed.error);
+    }
+
+    const playback = createInitialSpaceInvadersReplayGame(parsed.payload);
+    const needle = fireFromOnlyInvader(3).advanced.invaderShots[0]!;
+    const movedNeedle = { ...needle, x: 180, y: 300 };
+    const playerShot = createPlayerShotAlignedWith(movedNeedle);
+    const advanced = applySpaceInvadersReplayEvent(
+      {
+        ...playback,
+        game: createRunningGame({
+          invaderShotCooldownTicks: 1_000,
+          invaderShots: [{ ...movedNeedle, y: movedNeedle.y - needle.velocityY }],
+          playerShots: [playerShot],
+        }),
+      },
+      { type: "advance", seq: 0, tick: 0, elapsedMs: 0 },
+    );
+
+    expect(advanced.game.playerShots).toEqual([]);
+    expect(advanced.game.invaderShots).toEqual(
+      schemaVersion === 1 ? [] : [{ ...movedNeedle, ageTicks: needle.ageTicks + 1 }],
+    );
+  });
+
+  it.each([0, 3, "1", null, undefined])("rejects replay version %s", (schemaVersion) => {
+    expect(
+      parseSpaceInvadersReplayPayload({ ...createReplayPayload(), schemaVersion }),
+    ).toMatchObject({ success: false });
+  });
+
   it("parses supported replay payloads and rejects malformed parameters and events", () => {
     const parsedReplay = parseSpaceInvadersReplayPayload(createReplayPayload());
 

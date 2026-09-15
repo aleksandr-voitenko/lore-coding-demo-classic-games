@@ -140,6 +140,11 @@ type MineBlastResolution = {
   game: SpaceInvadersGameState;
 };
 
+type SpaceInvadersShotCollisionRules = {
+  // Saved V1 replays retain the original needle interception rule.
+  needleShotDurability?: "destructible" | "indestructible";
+};
+
 export type {
   CreateSpaceInvadersGameOptions,
   SpaceInvader,
@@ -300,6 +305,7 @@ export function fireSpaceInvadersShot(game: SpaceInvadersGameState): SpaceInvade
 export function advanceSpaceInvadersGame(
   game: SpaceInvadersGameState,
   random: SpaceInvadersRandomSource = Math.random,
+  shotCollisionRules: SpaceInvadersShotCollisionRules = {},
 ): SpaceInvadersGameState {
   if (game.status !== "running") {
     return game;
@@ -326,7 +332,11 @@ export function advanceSpaceInvadersGame(
   const gameAfterPlayerVolley = finalizeSpaceInvadersPlayerVolley(
     gameAfterMultiKillCombo,
   );
-  const gameAfterInvaderShots = advanceInvaderShots(gameAfterPlayerVolley, random);
+  const gameAfterInvaderShots = advanceInvaderShots(
+    gameAfterPlayerVolley,
+    random,
+    shotCollisionRules,
+  );
 
   if (
     gameAfterInvaderShots.status === "lost" ||
@@ -435,6 +445,7 @@ function advanceAlienFreeze(game: SpaceInvadersGameState) {
 function advanceInvaderShots(
   game: SpaceInvadersGameState,
   random: SpaceInvadersRandomSource,
+  shotCollisionRules: SpaceInvadersShotCollisionRules,
 ): SpaceInvadersGameState {
   if (game.invaderShots.length === 0) {
     return game;
@@ -451,6 +462,7 @@ function advanceInvaderShots(
       nextInvaderShotId,
     },
     random,
+    shotCollisionRules,
   );
   const hittingShots = gameAfterShotCollisions.invaderShots.filter(
     (shot) =>
@@ -498,6 +510,7 @@ function advanceInvaderShots(
 function resolveOpposingShotCollisions(
   game: SpaceInvadersGameState,
   random: SpaceInvadersRandomSource,
+  shotCollisionRules: SpaceInvadersShotCollisionRules,
 ): SpaceInvadersGameState {
   if (game.playerShots.length === 0 || game.invaderShots.length === 0) {
     return game;
@@ -518,7 +531,7 @@ function resolveOpposingShotCollisions(
         if (!isPlayerShotInvulnerable(playerShot)) {
           collidedPlayerShotIds.add(playerShot.id);
         }
-        if (!isInvaderShotInvulnerable(invaderShot)) {
+        if (!isInvaderShotInvulnerable(invaderShot, shotCollisionRules)) {
           collidedInvaderShotIds.add(invaderShot.id);
           if (invaderShot.kind === "mine") {
             collidedMineShots.set(invaderShot.id, invaderShot);
@@ -610,8 +623,12 @@ function isPlayerShotInvulnerable(
 
 function isInvaderShotInvulnerable(
   shot: Pick<SpaceInvadersInvaderShot, "kind">,
+  rules: SpaceInvadersShotCollisionRules,
 ) {
-  return shot.kind === "armor-wave";
+  return (
+    shot.kind === "armor-wave" ||
+    (shot.kind === "needle" && rules.needleShotDurability !== "destructible")
+  );
 }
 
 function detonateMineShots(

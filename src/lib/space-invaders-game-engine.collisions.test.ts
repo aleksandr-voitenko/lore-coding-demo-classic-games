@@ -9,6 +9,7 @@ import {
   createPlayerShotAlignedWith,
   createRunningGame,
   fireSpaceInvadersShot,
+  fireFromOnlyInvader,
   getInvader,
   isSpaceInvaderShielded,
   SPACE_INVADERS_ARMORED_ALIEN_HIT_POINTS,
@@ -27,7 +28,7 @@ import {
 } from "./space-invaders-game-engine.test-helpers";
 
 describe("space invaders collision engine", () => {
-  it("loses a life and clears active shots when an invader shot hits the player", () => {
+  it.each(["standard", "needle"] as const)("spends a life and clears shots on a %s hit", (kind) => {
     const game = createInitialSpaceInvadersGame();
     const hitPlayer = game.player;
     const playerShot = fireSpaceInvadersShot(createRunningGame()).playerShots[0]!;
@@ -39,6 +40,7 @@ describe("space invaders collision engine", () => {
       hitStreak: 3,
       invaderShots: [
         createInvaderShotFixture({
+          kind,
           height: 20,
           velocityY: 8,
           width: 5,
@@ -632,6 +634,42 @@ describe("space invaders collision engine", () => {
     expect(advanced.hitStreak).toBe(2);
   });
 
+
+  it.each([null, "burst-shot", "shotgun-shot", "piercing-laser"] as const)(
+    "keeps blue-alien needles active against player fire with %s power-up",
+    (pendingShotPowerUp) => {
+      const needle = fireFromOnlyInvader(3).advanced.invaderShots[0]!;
+      const collisionY = 300;
+      const movedNeedle = { ...needle, x: 180, y: collisionY };
+      const playerShot = createPlayerShotAlignedWith(
+        movedNeedle,
+        createRunningGame({ pendingShotPowerUp }),
+      );
+      const advanced = advanceSpaceInvadersGame(
+        createRunningGame({
+          hitStreak: 4,
+          invaderShotCooldownTicks: 1_000,
+          invaderShots: [{ ...movedNeedle, y: collisionY - needle.velocityY }],
+          playerShots: [playerShot],
+        }),
+        () => 0,
+      );
+
+      expect(needle.kind).toBe("needle");
+      expect(advanced.invaderShots).toEqual([
+        { ...movedNeedle, ageTicks: needle.ageTicks + 1 },
+      ]);
+      expect(advanced.playerShots).toEqual(
+        playerShot.kind === "piercing"
+          ? [{ ...playerShot, y: playerShot.y + playerShot.velocityY }]
+          : [],
+      );
+      expect(advanced.explosions.map(({ kind }) => kind)).toEqual(["projectile"]);
+      expect(advanced.hitStreak).toBe(4);
+      expect(advanced.score).toBe(0);
+      expect(advanced.lives).toBe(SPACE_INVADERS_STARTING_LIVES);
+    },
+  );
 
   it("keeps armor-wave shots active when they collide with player shots", () => {
     const playerShot = fireSpaceInvadersShot(createRunningGame()).playerShots[0]!;
