@@ -1,16 +1,39 @@
 # Development
 
-Read before forming an implementation plan or editing code, tests, configuration, or documentation. Use the root contract and completed discovery; if context has not been established, load `.lore-coding/instructions/discovery.md` first. Load `.lore-coding/instructions/verification.md` before planning verification or implementing a change, not after the fix.
+Read before preparing or revising a task brief; forming an implementation plan; editing or reviewing code, tests, configuration, or documentation; or reviewing architecture. For read-only reviews, apply the relevant standards as review criteria and report gaps; do not make changes. Use the root contract and completed discovery; if context has not been established, load `.lore-coding/instructions/discovery.md` first. Load `.lore-coding/instructions/verification.md` before planning verification or implementing a change, not after the fix.
 
 ## Assumptions and planning
 
-Do not make unsupported guesses. Before making code edits for any non-trivial task, surface a short standalone `Assumptions:` section containing `Safe assumptions:`, `Material assumptions:`, and `Blocking assumptions:`. Say `None` for empty categories. Do not hide assumptions in a general plan.
+Do not make unsupported guesses. Surface a short standalone `Assumptions:` section containing `Safe assumptions:`, `Material assumptions:`, and `Blocking assumptions:`. Say `None` for empty categories. Do not hide assumptions in a general plan. Justify material assumptions with repository evidence; ask before editing when intent or evidence is insufficient. Do not invent an interpretation for a nonsensical request.
 
 Safe assumptions are low risk. Material assumptions affect behavior, UX, APIs, data, architecture, tests, or user-facing meaning and must be justified with repository evidence. If the evidence is weak, ambiguous, or based mainly on interpreting the user's intent, treat the assumption as blocking and ask before editing. Treat these as material or blocking assumptions by default: the request seems joke-like, absurd, contradictory, or cross-domain; it adds behavior that does not fit the product; or the implementation is easy but the purpose is unclear. Low implementation risk does not make an assumption safe. If the literal request does not make sense for the product, follow the discovery semantic-sanity gate and proceed only after the user explicitly confirms the oddity is intentional.
 
-Before substantial changes, summarize the implementation plan: relevant current behavior and history, observable outcomes to add/change/preserve, important alternatives, verification strategy, and unresolved questions. Ask for missing task context when no safe assumption is supported. For bug fixes, include a test-gap hypothesis and the applicable red-green regression strategy.
+Before committing to a plan or choosing expected test results, you must apply the evidence and applicability checks in `.lore-coding/instructions/discovery.md` to the task-critical memory claims or historical decisions those choices depend on.
 
-Use observable outcomes to guide implementation, tests, manual checks, and the final task record, rather than implementation-only goals.
+### Task brief
+
+After sufficient discovery and before implementation, state or reference a concise task brief covering the material requirements:
+
+- **Outcome:** the observable result to deliver.
+- **Preserve:** task-relevant properties that must remain true, including their scope and qualifications.
+- **Boundaries:** important exclusions and limits on the work.
+- **Acceptance evidence:** how the changed and preserved behavior will be assessed; these are planned checks, not results already obtained.
+
+The brief summarizes the user's request and verified applicable requirements; it is not a new source of authority. An omission or mistaken interpretation in the brief does not override those sources. Keep unresolved interpretations in the assumptions process; do not invent exclusions or narrower success criteria.
+
+Prefer behavioral or contractual preservation requirements over arbitrary file-edit restrictions. Current implementation alone does not establish intended behavior. Listing selected invariants does not waive the obligation to avoid unrelated regressions. An exclusion does not excuse supporting work needed to meet the task's requirements.
+
+The brief does not replace or delay the initial standalone `Assumptions:` block. Scale its presentation to the task. One sentence can suffice for a trivial task; reuse clear criteria already supplied by the user rather than mechanically repeating them. For a read-only investigation or review, use a brief when scope needs clarification, with a finding or recommendation as the outcome and no implied edit authority. No separate brief file, mandatory headings, or additional approval round is required. When scope is clear and the work is authorized, present the brief and continue. Writing a brief does not grant new permissions.
+
+### Implementation plan and revisions
+
+Separate the task brief from the implementation approach. Before substantial changes, summarize the implementation plan: relevant current behavior and history, the approach to meeting the brief, important alternatives, verification strategy, and unresolved questions. Ask for missing task context when no safe assumption is supported. For bug fixes, include a test-gap hypothesis and the applicable red-green regression strategy.
+
+Use observable outcomes to guide implementation, tests, manual checks, and the final task record, rather than implementation-only goals. Changing an implementation approach does not by itself change the task's acceptance conditions.
+
+Record material revisions and their reasons in the task conversation or existing task record. Identify the changed request or verified evidence supporting each revision; correct mistaken summaries explicitly without implying the user approved the mistake. Obtain clarification or approval where the existing assumption and authorization rules require it. Do not silently weaken acceptance conditions to match the implementation. Keep the brief and plan aligned with supported requirement changes, without rewriting the entire brief after every minor edit.
+
+During implementation or review, if new evidence contradicts a relied-on memory claim or the basis of a historical decision, or the scope introduces new task-critical claims or decisions, repeat the affected discovery checks before proceeding with dependent work. Revisit the task brief, plan, implementation, and expected test results already based on an invalidated claim, and rerun affected verification after corrections. Continue independent work where evidence supports it.
 
 ## Scope, environment, and tooling
 
@@ -27,6 +50,14 @@ When changing dependencies, schemas, generated files, lockfiles, snapshots, conf
 Consider alternatives for changes affecting architecture, behavior, public APIs, data models, dependencies, performance, security, accessibility, deployment, tooling, or maintainability. Preserve backward compatibility for migrations, data models, and APIs when zero-downtime deployment matters. In large codebases, use feature flags or toggles when incomplete, large, risky, or behavior-changing work needs to merge safely before being exposed.
 
 Consider an ADR for significant durable architectural, dependency, API, data, deployment, or security decisions. Present a decision that materially changes task direction to the user before proceeding.
+
+### Decision rationale and reconsideration
+
+Capture decision context when the decision is made or revised, not only during finalization. Do not reconstruct unsupported rationale from the completed implementation.
+
+Express identified reconsideration conditions as observable changes in requirements, evidence, dependencies, or operating conditions, without inventing thresholds, deadlines, or future requirements. Apply the discovery and assumption rules when evidence or intent is missing.
+
+### Interface boundaries
 
 Keep module/package/service/layer boundaries and public interfaces explicit. Prefer minimal intentional APIs and private implementation details. Avoid unclear boolean flags, ambiguous null values, positional mode arguments, magic strings, and unexplained numeric literals when clearer alternatives are practical. Make known state handling exhaustive where practical. Avoid catch-all branches when explicit cases would be safer or clearer.
 
@@ -63,7 +94,9 @@ Consult `.lore-coding/references/comment-examples.md` only when examples would c
 
 ## Retain evidence and report for review
 
-Retain task evidence during work as required by the permanent contract.
+Retain task evidence during work as required by the permanent contract. When handing off or resuming work, include or reference the latest brief, material revisions, their source anchors, and available acceptance evidence in the existing task context. A reference must be accessible to the receiving agent; do not assume a previous conversation remains available.
+
+Before reporting an implementation or documentation task ready for user review, load `.lore-coding/instructions/memory-writing.md`, reconcile task-relevant memory, and retain its review evidence. Read-only reviews report discovered inconsistencies without editing memory.
 
 Before reporting completion, load `.lore-coding/instructions/verification.md` and follow its reporting procedure.
 

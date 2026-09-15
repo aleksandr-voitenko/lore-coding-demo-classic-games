@@ -70,11 +70,27 @@ Use `Lore-ID: LC-YYYYMMDD-XXXX`, with the task date and a four-character upperca
 
 Repeated `Lore-Link: LC-YYYYMMDD-XXXX — reason` lines are allowed. Use an em dash separator and a non-empty reason naming the inherited behavior, constraint, decision, or test strategy. Verify that the target record exists and is reachable from the target history. Inspect ambiguous matches; do not fabricate IDs or link mechanically to every blamed change.
 
+A `Lore-Link` reason may identify a revised or superseded decision. Name the affected decision and scope; explain the changed basis in `Context:`. Do not imply that unrelated decisions were superseded.
+
+For example, an earlier task disabled retries and set a request timeout. A later task could explain in `Context:`:
+
+> The provider now documents duplicate-request guarantees, and integration checks verify our handling. The requested change enables retries for the charge endpoint; the existing request timeout remains unchanged.
+
+Its link would identify only the revised decision (the ID is illustrative):
+
+```text
+Lore-Link: LC-20260617-A1B2 — revises the charge endpoint's retry policy; preserves its request timeout
+```
+
 A link is a semantic dependency, not merely a nearby-line edit. Useful links can concern behavior, data models, APIs, UI, tests, configuration, architecture, or constraints. Older records can contain a legacy `Links:` section with hashes; follow it when reading history but write new records with Lore trailers.
 
 ## Context
 
 Explain the previous state, problem/opportunity, desired outcome, and important constraints. Include material assumptions, alternatives, or rejected directions only when they clarify the decision. Keep implementation details here only when needed to explain a constraint.
+
+Summarize material task outcomes, preservation requirements, and supported scope revisions here when relevant. Reuse concise context rather than copying the brief or conversation wholesale; do not introduce new required sections, fields, or trailers.
+
+Record material decision context in concise prose within this section, without additional required fields, sections, or trailers. Use useful source pointers for unchanged inherited rationale instead of copying full earlier records.
 
 Good: a Tetris preview looked top-left aligned because source coordinates were rendered in a visible 4x4 grid; it should be centered without changing piece definitions or gameplay.
 
@@ -92,7 +108,7 @@ For behavior changes, describe the new behavior. For bug fixes, explain how the 
 
 ## Verification
 
-Record honest, concrete, reproducible, behavior-specific acceptance evidence. Each important behavior needs a matching check. Include the relevant command and observed result when it helps reproduce the check; describe what manual/UI verification actually demonstrated.
+Record honest, concrete, reproducible, behavior-specific acceptance evidence. Each important behavior needs a matching check. Map acceptance evidence and remaining gaps to the supported task outcomes and preservation requirements. Distinguish actual delivery from what remains unmet or unverified; describe implementation in `Implementation:` rather than implying a planned check passed. Include the relevant command and observed result when it helps reproduce the check; describe what manual/UI verification actually demonstrated.
 
 Good: deterministic tests cover timed-food placement beside safe obstacle cells, fallback placement when those cells are unsafe, and unchanged placement for other food; the named test command passed with the observed count.
 

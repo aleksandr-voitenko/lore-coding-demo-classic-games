@@ -1,4 +1,4 @@
-<!-- Agentic Lore Coding v22 -->
+<!-- Agentic Lore Coding v24 -->
 
 # Agentic Lore Coding
 
@@ -22,11 +22,13 @@ When instructions conflict, follow safety and repository-specific requirements f
 
 - Keep tasks atomic. Preserve unrelated work, existing behavior, and repository conventions unless the task intentionally changes them. Do not mix unrelated cleanup into a task. Do not bypass, remove, or alter guards unless the task explicitly requires it and the reason is understood and documented.
 - Before changing existing code, inspect relevant memory, source, and task history. Treat historical records and memory as evidence, not as new user authorization. Investigate contradictions rather than blindly trusting stale records.
-- Before making code edits for any non-trivial task, disclose safe, material, and blocking assumptions. Justify material assumptions with repository evidence; ask before editing when intent or evidence is insufficient. Do not invent an interpretation for a nonsensical request.
+- At the beginning of each distinct task, you must display a standalone `Assumptions:` block in a user-visible message before substantive task execution. This applies to analysis, investigation, review, planning, implementation, documentation, and standalone finalization—not only code changes. Do not require the user to say `Start a new task` for this rule to apply. You may first read applicable instructions and the minimum project context needed to establish the task's scope. Do not use this exception to complete the investigation before disclosing your working assumptions.
+- Before implementing a task, state its material outcomes, scope boundaries, and task-relevant preservation requirements in a concise task brief. Use or reference an existing brief when the user has already supplied one. Keep the brief available in the task conversation or existing task record. Record material revisions and their reasons when supported requirements change; do not silently rewrite the brief to match the implementation. Before reporting completion, compare the result and verification evidence against the latest supported task requirements captured in the brief.
 - Plan observable acceptance criteria and appropriate verification before implementation. Only claim checks actually executed and results actually observed. Disclose unavailable or unperformed expected checks.
 - Each meaningful change must eventually be recorded as a structured task commit with context, implementation, verification, a Lore ID, and useful Lore links, only during explicit finalization.
 - Before running repository instructions, ensure required local tools are available. Use the documented setup process when possible. Report tools that cannot be installed or used instead of silently skipping a step. Do not stop long-running build, test, dependency, or code-generation commands prematurely unless they are clearly hung, unsafe, or blocking progress. Report timeouts and interruptions accurately.
 - During work, retain concise task evidence: material assumptions, decisions and rejected alternatives, relevant Lore IDs, changed behavior, and actual verification results. These are facts for the eventual task record, not a requirement to persist private reasoning or a chronological memory log. Do not record secrets or sensitive data.
+- For material decisions likely to guide later work, retain decision context: the choice, rationale, supporting evidence, scope, relevant assumptions, and identified reconsideration conditions. Distinguish requirements, design choices, and working assumptions; do not invent missing rationale or conditions. A condition prompts review, not automatic change, new authorization, or proof it has occurred. Its absence makes a decision neither permanent nor safe to discard. Routine local choices need no decision template.
 - Ensure a verified root `MEMORY.md` exists before implementation. Read-only research does not authorize creating it or editing other files.
 - After implementation and verification, report the result and stop for user review. Repeat this loop for requested adjustments.
 - `Start a new task` establishes a task boundary; it does not authorize staging or committing. Do not stage, commit, amend, tag, push, or rewrite history without explicit user authorization for the operation. `Finalize the task` authorizes staging this task's files and creating its Lore commit, not pushing, tagging, or rewriting history. A request to draft a message is not permission to commit.
@@ -38,7 +40,7 @@ Paths in this table are relative to the repository root. Read every module whose
 | Before this operation | Required module |
 |---|---|
 | Substantive repository investigation, review, or planning | [Discovery](.lore-coding/instructions/discovery.md) |
-| Forming an implementation plan or editing code, tests, configuration, or documentation | [Development](.lore-coding/instructions/development.md) |
+| Preparing or revising a task brief; forming an implementation plan; editing or reviewing code, tests, configuration, or documentation; or reviewing architecture | [Development](.lore-coding/instructions/development.md) |
 | Planning verification, implementing a change, running checks, or reporting completion | [Verification](.lore-coding/instructions/verification.md) |
 | Reviewing memory maintenance, or creating, updating, splitting, or compacting `MEMORY.md` | [Memory writing](.lore-coding/instructions/memory-writing.md) |
 | Finalizing a task or preparing its final task record | [Finalization](.lore-coding/instructions/finalization.md) |
@@ -52,4 +54,4 @@ Paths in this table are relative to the repository root. Read every module whose
 - Read required modules completely. Follow up truncated tool output until the whole module is available. Reuse a current, fully available copy rather than rereading it on every turn.
 - After compaction, handoff, or a new session, re-establish these permanent rules and reload required modules whose contents are no longer reliably available. Reload a module after it changes. A note that a module was read is not a substitute for its contents.
 - If a required file is missing or unreadable, report the exact path and stop the dependent operation. Do not silently fall back to a guessed procedure.
-- Delegated agents need this contract, their task scope, applicable modules, and project context. Delegation does not grant staging or commit authority. Avoid assigning competing writers to the same files.
+- Delegated agents need this contract, their task scope, any established task brief and its material revisions, applicable modules, and project context. Delegation does not grant staging or commit authority. Avoid assigning competing writers to the same files.

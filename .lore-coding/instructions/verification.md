@@ -6,6 +6,8 @@ Read before planning verification, implementing a change, running checks, or rep
 
 For each important behavior introduced, changed, fixed, or intentionally preserved, plan at least one matching verification step. Prefer automated behavioral tests when the project supports them. If the number of tests grows and the technology stack allows measuring test coverage, suggest that the user add it and set recommended thresholds to fail the CI build. Do not treat a coverage percentage as proof of correctness or meaningful assertions.
 
+Use the supported task outcomes and preservation requirements in the brief to organize verification. A passing check supports only the behavior it actually exercises. Missing acceptance evidence remains a gap; do not silently drop the requirement or call it inapplicable merely because a check is unavailable.
+
 Use deterministic controls for randomness, timers, generated data, concurrency, retries, and asynchronous behavior when practical. Test observable behavior rather than the private implementation. Prefer complete meaningful output comparisons when they give clearer failures.
 
 ## Bug investigation and regression tests
@@ -29,6 +31,7 @@ A regression test may be skipped when impractical or misleading: reproduction is
 
 - UI: check the actual screen, state, and interaction. DOM classes, counts, pixels, screenshots, or console output count only when they demonstrate acceptance behavior. If screenshots are mentioned, they should be attached to a review, or otherwise recoverable; otherwise describe the manual visual comparison. Use meaningful tolerances, not false precision.
 - APIs, schemas, and data: check request/response behavior, errors, compatibility, migrations, documentation, and generated clients or schemas when affected. For database tasks, cover migration, rollback, existing data, and new data where practical.
+- Security: check affected security properties, such as access controls, trust boundaries, input handling, sensitive-data protection, and safe failure behavior. Distinguish tested behavior from static evidence.
 - Accessibility: check relevant focus, keyboard interaction, semantics, labels, contrast, reduced motion, and screen-reader-visible behavior.
 - Performance: obtain measurements or before/after evidence where practical. Do not infer a performance improvement from code shape alone.
 - Configuration, dependencies, CI, and builds: check defaults and overrides, lockfiles, generated metadata, build files, affected workflows, produced artifacts, and compatibility.
@@ -51,6 +54,23 @@ Only report tests, builds, migrations, browser/manual checks, or user verificati
 Keep behavior-to-evidence notes available for review and finalization, including commands, observed outcomes, and limitations. A previous task's reported result is historical evidence, not a check performed in this task. Distinguish static structural checks from live agent behavior or end-to-end tests.
 
 Do not bypass, remove, or alter guards unless the task explicitly requires it and the reason is understood and documented. Report unresolved failures and whether the task is safe to proceed.
+
+Claims that a reconsideration condition has occurred require relevant evidence. Recording a future condition does not require implementing or testing an out-of-scope feature.
+
+### Decision-oriented completion reports
+
+Recover the latest task brief and material revisions from the task conversation or existing task record. If no brief exists or it is unavailable, recover supported requirements from the user's request and retained evidence, and disclose material gaps. Do not infer prior agreement from the final diff or treat an incomplete summary as permission to omit a requirement. Completion-only sessions use these reporting rules without needing to load development solely to report results.
+
+Compare the result with those supported requirements, not just the list of changed files or commands. Cover what matters to the user's review:
+
+- what was delivered relative to the brief, and whether the result is complete or partial;
+- evidence for material outcomes and preservation requirements;
+- material deviations, failures, and unverified acceptance conditions;
+- any concrete review action or unresolved decision, with relevant options, consequences, and a recommendation when supported.
+
+Distinguish implementation completeness from verification coverage. Do not describe an unmet or unverified condition as satisfied. For example, working selector tests do not establish browser appearance. Attribute user-performed checks to the user rather than implying independent verification.
+
+Do not invent a decision to fill a template or offload routine engineering judgment. Raise blocking or scope-changing decisions when discovered, not only at completion. It is valid to report that no product decision is outstanding. These are content requirements, not mandatory headings or a fixed status vocabulary. Scale the report to the task and preserve the assumption-disclosure rules below; reporting a brief does not replace them.
 
 ### Assumptions in completion reports
 
