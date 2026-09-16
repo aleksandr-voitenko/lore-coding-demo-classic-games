@@ -50,7 +50,6 @@ import {
   applyTetrisReplayEvent,
   createInitialTetrisReplayGame,
   parseTetrisReplayPayload,
-  type TetrisReplayEvent,
 } from "../tetris-replay";
 import {
   applyTwentyFortyEightReplayEvent,
@@ -200,10 +199,7 @@ verifyReplayCompatibility(
   "tetris",
   parseTetrisReplayPayload,
   createInitialTetrisReplayGame,
-  (current, event: TetrisReplayEvent) => ({
-    ...current,
-    game: applyTetrisReplayEvent(current.game, event, current.random),
-  }),
+  applyTetrisReplayEvent,
   (game) => ({
     finalScore: game.score,
     finalStatus: game.status,

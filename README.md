@@ -11,6 +11,8 @@ All the code in this repository was created using AI agents and the Lore Coding 
 
 - Ten classic games with deterministic gameplay rules and polished browser
   controls.
+- Tetris hard drops award three points per cell traversed; soft drops award one.
+  Saved replays retain the scoring rules used when they were recorded.
 - Tank Patrol provides a single-player campaign across 35 maps and the
   original 70-stage difficulty cycle, including Stage 1-35 selection,
   NES-pixel movement, partial wall destruction, NTSC-paced tank and shell

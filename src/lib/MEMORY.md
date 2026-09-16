@@ -24,6 +24,10 @@ Node-only authority/storage have narrower context in
 
 ## Game-specific invariants
 
+- Tetris hard drops award three points per traversed cell; soft drops award one.
+  New recordings use replay V2. `tetris-replay.ts` retains the schema version in
+  playback state and selects two-point hard drops for saved V1 replays, keeping
+  their scores and complete-state compatibility fixtures unchanged.
 - Space Invaders cyan needles survive direct collisions with every player-shot
   kind in solo and co-op; player shields still absorb them. New solo recordings
   use replay V2. V1 playback explicitly selects destructible needles through

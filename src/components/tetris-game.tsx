@@ -153,6 +153,7 @@ const TETRIS_HELP_SECTIONS: GameHelpSection[] = [
     items: [
       "Fit falling pieces into complete horizontal lines.",
       "Cleared lines score points and raise the level over time.",
+      "Hard drops score 3 points per cell traversed; soft drops score 1 point per cell.",
       "The game ends when a new piece cannot enter the board.",
     ],
   },

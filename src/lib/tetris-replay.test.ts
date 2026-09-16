@@ -97,6 +97,7 @@ function createHardDropReplay(seed: number) {
     boardHeight,
     boardWidth,
     seed,
+    schemaVersion: TETRIS_REPLAY_SCHEMA_VERSION,
     startLevel,
   });
   const random = initialReplay.random;
@@ -144,6 +145,54 @@ function createHardDropReplay(seed: number) {
 }
 
 describe("tetris replay", () => {
+  it.each([1, 2] as const)("parses V%s without changing its scoring version", (schemaVersion) => {
+    const replay = createReplayPayload({ schemaVersion });
+
+    expect(parseTetrisReplayPayload(replay)).toEqual({ payload: replay, success: true });
+  });
+
+  it.each([undefined, 0, 3, "1"])("rejects unsupported schema version %s", (schemaVersion) => {
+    expect(parseTetrisReplayPayload({ ...createReplayPayload(), schemaVersion }).success)
+      .toBe(false);
+  });
+
+  it("uses three-point hard drops for V2 while preserving V1 movement and soft drops", () => {
+    expect(TETRIS_REPLAY_SCHEMA_VERSION).toBe(2);
+
+    const eventTypes: TetrisReplayEvent["type"][] = [
+      "start", "rotateClockwise", "moveLeft", "moveLeft", "softDrop",
+      "rotateCounterclockwise", ...Array<TetrisReplayEvent["type"]>(12).fill("hardDrop"),
+    ];
+    const events = eventTypes.map((type, seq) => ({ type, seq, tick: 0, elapsedMs: seq * 16 }));
+    const payload = createReplayPayload({
+      boardHeight: 20,
+      boardWidth: 10,
+      startLevel: 3,
+      seed: 4321,
+      events,
+    });
+    let legacy = createInitialTetrisReplayGame({ ...payload, schemaVersion: 1 });
+    let current = createInitialTetrisReplayGame({ ...payload, schemaVersion: 2 });
+
+    for (const event of events) {
+      legacy = applyTetrisReplayEvent(legacy, event);
+      current = applyTetrisReplayEvent(current, event);
+
+      expect(current.game).toEqual({ ...legacy.game, score: current.game.score });
+      if (event.type === "softDrop") {
+        expect(current.game.score).toBe(1);
+        expect(legacy.game.score).toBe(1);
+      }
+      if (event.seq === 6) {
+        expect(current.game.score).toBe(52);
+        expect(legacy.game.score).toBe(35);
+      }
+    }
+
+    expect(current.game).toMatchObject({ score: 325, status: "lost", lines: 0, level: 3 });
+    expect(legacy.game).toMatchObject({ score: 217, status: "lost", lines: 0, level: 3 });
+  });
+
   it("parses supported replay payloads and rejects malformed parameters and events", () => {
     const parsedReplay = parseTetrisReplayPayload(createReplayPayload());
 
@@ -217,14 +266,8 @@ describe("tetris replay", () => {
     const replay = createHardDropReplay(4321);
     const first = createInitialTetrisReplayGame(replay);
     const second = createInitialTetrisReplayGame(replay);
-    const firstResult = replay.events.reduce(
-      (game, event) => applyTetrisReplayEvent(game, event, first.random),
-      first.game,
-    );
-    const secondResult = replay.events.reduce(
-      (game, event) => applyTetrisReplayEvent(game, event, second.random),
-      second.game,
-    );
+    const firstResult = replay.events.reduce(applyTetrisReplayEvent, first).game;
+    const secondResult = replay.events.reduce(applyTetrisReplayEvent, second).game;
 
     expect(firstResult).toEqual(secondResult);
     expect(firstResult).toMatchObject({

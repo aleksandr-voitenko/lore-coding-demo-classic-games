@@ -75,6 +75,10 @@ regeneration.
 
 ## Maintaining compatibility
 
+Tetris records V2 with three points per hard-drop cell. V1 remains supported
+with its original two-point bonus; its fixture and expected outcomes remain
+unchanged. Soft-drop scoring and movement are shared by both versions.
+
 Space Invaders records V2 after making cyan needles indestructible by player
 shots. V1 remains supported with its original needle interception rule; the
 existing V1 fixture and expected outcomes remain unchanged.

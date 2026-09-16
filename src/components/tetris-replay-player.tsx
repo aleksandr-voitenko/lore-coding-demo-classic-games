@@ -34,6 +34,7 @@ import {
   fetchTetrisReplay,
   type TetrisReplayEvent,
   type TetrisReplayPayload,
+  type TetrisReplayPlaybackState,
 } from "@/lib/tetris-replay";
 
 type TetrisReplayPlayerProps = {
@@ -43,7 +44,7 @@ type TetrisReplayPlayerProps = {
 type PlaybackState = GameReplayTimedPlayback & {
   eventIndex: number;
   events: TetrisReplayEvent[];
-  random: () => number;
+  replayState: TetrisReplayPlaybackState;
 };
 
 const statusLabels = {
@@ -87,7 +88,7 @@ export function TetrisReplayPlayer({ onBackToProfile }: TetrisReplayPlayerProps)
           eventIndex: 0,
           events: latestReplay.events,
           lastElapsedMs: 0,
-          random: initialReplay.random,
+          replayState: initialReplay,
         } satisfies PlaybackState,
       };
     },
@@ -96,13 +97,12 @@ export function TetrisReplayPlayer({ onBackToProfile }: TetrisReplayPlayerProps)
 
   const advanceReplayFrame = useCallback(
     ({
-      game,
       playback,
     }: {
       game: TetrisGameState;
       playback: PlaybackState;
     }) => {
-      let nextGame = game;
+      let nextReplayState = playback.replayState;
       let lastElapsedMs: number | null = null;
       let processedAdvance = false;
       const frameElapsedMs = getReplayEventElapsedMs(
@@ -121,17 +121,18 @@ export function TetrisReplayPlayer({ onBackToProfile }: TetrisReplayPlayerProps)
         }
 
         playback.eventIndex += 1;
-        nextGame = applyTetrisReplayEvent(nextGame, event, playback.random);
+        nextReplayState = applyTetrisReplayEvent(nextReplayState, event);
         lastElapsedMs = getReplayEventElapsedMs(event) ?? lastElapsedMs;
         processedAdvance = isTimedFrame ? false : event.type === "advance";
       }
 
       playback.lastElapsedMs = lastElapsedMs ?? playback.lastElapsedMs;
+      playback.replayState = nextReplayState;
 
       return {
-        game: nextGame,
+        game: nextReplayState.game,
         isFinished:
-          playback.eventIndex >= playback.events.length || nextGame.status === "lost",
+          playback.eventIndex >= playback.events.length || nextReplayState.game.status === "lost",
       };
     },
     [],

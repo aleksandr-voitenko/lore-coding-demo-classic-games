@@ -50,6 +50,11 @@ export type CreateTetrisGameOptions = {
 
 type RandomSource = () => number;
 
+type HardDropOptions = CreateTetrisGameOptions & {
+  // Saved V1 replays retain the original two-point hard-drop bonus.
+  pointsPerCell?: 2 | 3;
+};
+
 type LockPieceOptions = {
   random?: RandomSource;
   scoreBonus?: number;
@@ -419,7 +424,7 @@ export function softDropTetrisPiece(
 
 export function hardDropTetrisPiece(
   game: TetrisGameState,
-  { random = Math.random }: CreateTetrisGameOptions = {},
+  { random = Math.random, pointsPerCell = 3 }: HardDropOptions = {},
 ) {
   if (game.status !== "running") {
     return game;
@@ -452,7 +457,7 @@ export function hardDropTetrisPiece(
     },
     {
       random,
-      scoreBonus: distance * 2,
+      scoreBonus: distance * pointsPerCell,
     },
   );
 }

@@ -219,19 +219,44 @@ describe("tetris game engine", () => {
     expect(advanced.currentPiece.position.y).toBe(game.currentPiece.position.y + 1);
   });
 
-  it("hard drops, locks the current piece, and spawns the queued next piece", () => {
-    const game = createRunningGame();
+  it.each([
+    { y: 0, dropScore: 54 },
+    { y: 17, dropScore: 3 },
+    { y: 18, dropScore: 0 },
+  ])("hard drops from row $y for $dropScore points and spawns the next piece", ({ y, dropScore }) => {
+    const game = createRunningGame({
+      currentPiece: { kind: "I", position: { x: 3, y }, rotation: 0 },
+      score: 10,
+    });
     const dropped = hardDropTetrisPiece(game, { random: createRandomSequence([4 / 7]) });
 
     expect(dropped.currentPiece.kind).toBe("O");
     expect(dropped.nextPieceKind).toBe("S");
-    expect(dropped.score).toBe(36);
+    expect(dropped.score).toBe(10 + dropScore);
     expect(dropped.board[TETRIS_BOARD_HEIGHT - 1]?.slice(3, 7)).toEqual([
       "I",
       "I",
       "I",
       "I",
     ]);
+  });
+
+  it("adds hard-drop points to unchanged level-scaled line-clear scoring", () => {
+    const game = createRunningGame({
+      board: createBottomRowWithGap(3, 4),
+      currentPiece: { kind: "I", position: { x: 3, y: 16 }, rotation: 0 },
+      level: 5,
+      startLevel: 5,
+      score: 10,
+    });
+    const dropped = hardDropTetrisPiece(game, { random: () => 4 / 7 });
+
+    expect(dropped.score).toBe(216);
+    expect(dropped.lines).toBe(1);
+    expect(dropped.level).toBe(5);
+    expect(dropped.board).toEqual(createEmptyTetrisBoard());
+    expect(dropped.currentPiece.kind).toBe("O");
+    expect(dropped.nextPieceKind).toBe("S");
   });
 
   it("soft drop locks instead of awarding movement points when the piece is blocked", () => {
