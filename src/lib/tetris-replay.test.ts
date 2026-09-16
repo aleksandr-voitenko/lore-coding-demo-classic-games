@@ -96,6 +96,7 @@ function createHardDropReplay(seed: number) {
   const initialReplay = createInitialTetrisReplayGame({
     boardHeight,
     boardWidth,
+    schemaVersion: TETRIS_REPLAY_SCHEMA_VERSION,
     seed,
     startLevel,
   });
@@ -144,6 +145,42 @@ function createHardDropReplay(seed: number) {
 }
 
 describe("tetris replay", () => {
+  it.each([1, 2] as const)("parses and preserves replay version %s", (schemaVersion) => {
+    const replay = createReplayPayload({ schemaVersion });
+
+    expect(parseTetrisReplayPayload(replay)).toEqual({ payload: replay, success: true });
+  });
+
+  it.each([0, 3, "1", null, undefined])("rejects replay version %s", (schemaVersion) => {
+    expect(parseTetrisReplayPayload({ ...createReplayPayload(), schemaVersion })).toEqual({
+      error: "Tetris replay version is not supported.",
+      success: false,
+    });
+  });
+
+  it("changes only hard-drop scoring between V1 and V2 playback", () => {
+    const replay = createReplayPayload({ boardHeight: 20, boardWidth: 10 });
+    let legacy = createInitialTetrisReplayGame({ ...replay, schemaVersion: 1 });
+    let current = createInitialTetrisReplayGame({ ...replay, schemaVersion: 2 });
+
+    for (const event of replay.events) {
+      legacy = applyTetrisReplayEvent(legacy, event);
+      current = applyTetrisReplayEvent(current, event);
+
+      expect(current.game).toEqual({ ...legacy.game, score: current.game.score });
+
+      if (event.type === "softDrop") {
+        expect(legacy.game.score).toBe(1);
+        expect(current.game.score).toBe(1);
+      }
+
+      if (event.type === "hardDrop") {
+        expect(legacy.game.score).toBe(35);
+        expect(current.game.score).toBe(52);
+      }
+    }
+  });
+
   it("parses supported replay payloads and rejects malformed parameters and events", () => {
     const parsedReplay = parseTetrisReplayPayload(createReplayPayload());
 
@@ -218,13 +255,13 @@ describe("tetris replay", () => {
     const first = createInitialTetrisReplayGame(replay);
     const second = createInitialTetrisReplayGame(replay);
     const firstResult = replay.events.reduce(
-      (game, event) => applyTetrisReplayEvent(game, event, first.random),
-      first.game,
-    );
+      applyTetrisReplayEvent,
+      first,
+    ).game;
     const secondResult = replay.events.reduce(
-      (game, event) => applyTetrisReplayEvent(game, event, second.random),
-      second.game,
-    );
+      applyTetrisReplayEvent,
+      second,
+    ).game;
 
     expect(firstResult).toEqual(secondResult);
     expect(firstResult).toMatchObject({

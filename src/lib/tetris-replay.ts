@@ -63,7 +63,7 @@ export type TetrisReplayEventInput = Omit<
 
 export type TetrisReplayPayload = BaseGameReplayPayload<
   typeof TETRIS_REPLAY_GAME_ID,
-  typeof TETRIS_REPLAY_SCHEMA_VERSION
+  1 | typeof TETRIS_REPLAY_SCHEMA_VERSION
 > & {
   boardHeight: number;
   boardWidth: number;
@@ -73,10 +73,16 @@ export type TetrisReplayPayload = BaseGameReplayPayload<
   startLevel: number;
 };
 
+export type TetrisReplayPlaybackState = {
+  game: TetrisGameState;
+  random: () => number;
+  schemaVersion: TetrisReplayPayload["schemaVersion"];
+};
+
 export type ParseTetrisReplayPayloadResult =
   ParseGameReplayPayloadResult<TetrisReplayPayload>;
 
-export const TETRIS_REPLAY_SCHEMA_VERSION = 1;
+export const TETRIS_REPLAY_SCHEMA_VERSION = 2;
 export const TETRIS_REPLAY_GAME_ID = "tetris";
 export const MAX_TETRIS_REPLAY_EVENTS = 80_000;
 
@@ -121,7 +127,10 @@ export function parseTetrisReplayPayload(value: unknown): ParseTetrisReplayPaylo
   const baseReplay = parseBaseGameReplayPayload(value, {
     gameId: TETRIS_REPLAY_GAME_ID,
     replayLabel: "Tetris replay",
-    schemaVersion: TETRIS_REPLAY_SCHEMA_VERSION,
+    schemaVersion:
+      isRecord(value) && value.schemaVersion === 1
+        ? 1
+        : TETRIS_REPLAY_SCHEMA_VERSION,
   });
 
   if (!baseReplay.success) {
@@ -201,8 +210,11 @@ export function parseTetrisReplayPayload(value: unknown): ParseTetrisReplayPaylo
 }
 
 export function createInitialTetrisReplayGame(
-  payload: Pick<TetrisReplayPayload, "boardHeight" | "boardWidth" | "seed" | "startLevel">,
-) {
+  payload: Pick<
+    TetrisReplayPayload,
+    "boardHeight" | "boardWidth" | "seed" | "startLevel" | "schemaVersion"
+  >,
+): TetrisReplayPlaybackState {
   const random = createTetrisReplayRandom(payload.seed);
   const game: TetrisGameState = {
     ...createInitialTetrisGame({
@@ -217,29 +229,37 @@ export function createInitialTetrisReplayGame(
   return {
     game,
     random,
+    schemaVersion: payload.schemaVersion,
   };
 }
 
 export function applyTetrisReplayEvent(
-  current: TetrisGameState,
+  current: TetrisReplayPlaybackState,
   event: TetrisReplayEvent,
-  random: () => number,
-) {
+): TetrisReplayPlaybackState {
+  const { game, random } = current;
+
   switch (event.type) {
     case "advance":
-      return advanceTetrisGame(current, { random });
+      return { ...current, game: advanceTetrisGame(game, { random }) };
     case "hardDrop":
-      return hardDropTetrisPiece(current, { random });
+      return {
+        ...current,
+        game: hardDropTetrisPiece(game, {
+          random,
+          pointsPerCell: current.schemaVersion === 1 ? 2 : 3,
+        }),
+      };
     case "moveLeft":
-      return moveTetrisPiece(current, -1, 0);
+      return { ...current, game: moveTetrisPiece(game, -1, 0) };
     case "moveRight":
-      return moveTetrisPiece(current, 1, 0);
+      return { ...current, game: moveTetrisPiece(game, 1, 0) };
     case "rotateClockwise":
-      return rotateTetrisPiece(current);
+      return { ...current, game: rotateTetrisPiece(game) };
     case "rotateCounterclockwise":
-      return rotateTetrisPiece(current, "counterclockwise");
+      return { ...current, game: rotateTetrisPiece(game, "counterclockwise") };
     case "softDrop":
-      return softDropTetrisPiece(current, { random });
+      return { ...current, game: softDropTetrisPiece(game, { random }) };
     case "start":
       return current;
   }

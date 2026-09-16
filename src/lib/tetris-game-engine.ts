@@ -419,7 +419,10 @@ export function softDropTetrisPiece(
 
 export function hardDropTetrisPiece(
   game: TetrisGameState,
-  { random = Math.random }: CreateTetrisGameOptions = {},
+  { random = Math.random, pointsPerCell = 3 }: CreateTetrisGameOptions & {
+    // Saved V1 replays retain the original hard-drop scoring.
+    pointsPerCell?: 2 | 3;
+  } = {},
 ) {
   if (game.status !== "running") {
     return game;
@@ -452,7 +455,7 @@ export function hardDropTetrisPiece(
     },
     {
       random,
-      scoreBonus: distance * 2,
+      scoreBonus: distance * pointsPerCell,
     },
   );
 }

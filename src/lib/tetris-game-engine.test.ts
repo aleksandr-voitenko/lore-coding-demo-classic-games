@@ -219,19 +219,37 @@ describe("tetris game engine", () => {
     expect(advanced.currentPiece.position.y).toBe(game.currentPiece.position.y + 1);
   });
 
-  it("hard drops, locks the current piece, and spawns the queued next piece", () => {
-    const game = createRunningGame();
+  it.each([
+    { startingY: 0, expectedScore: 54 },
+    { startingY: 7, expectedScore: 33 },
+    { startingY: 17, expectedScore: 3 },
+    { startingY: 18, expectedScore: 0 },
+  ])("hard drops from row $startingY, scores traversed cells, locks, and spawns the next piece", ({ startingY, expectedScore }) => {
+    const game = moveTetrisPiece(createRunningGame(), 0, startingY);
     const dropped = hardDropTetrisPiece(game, { random: createRandomSequence([4 / 7]) });
 
     expect(dropped.currentPiece.kind).toBe("O");
     expect(dropped.nextPieceKind).toBe("S");
-    expect(dropped.score).toBe(36);
+    expect(dropped.score).toBe(expectedScore);
     expect(dropped.board[TETRIS_BOARD_HEIGHT - 1]?.slice(3, 7)).toEqual([
       "I",
       "I",
       "I",
       "I",
     ]);
+  });
+
+  it("adds hard-drop points to the existing score and level-based line-clear points", () => {
+    const game = createRunningGame({
+      board: createBottomRowWithGap(3, 4),
+      level: 3,
+      score: 10,
+    });
+    const dropped = hardDropTetrisPiece(game, { random: createRandomSequence([4 / 7]) });
+
+    expect(dropped.score).toBe(184); // 10 existing + 18 cells at 3 points + 120 for the line.
+    expect(dropped.lines).toBe(1);
+    expect(dropped.board.every((row) => row.every((cell) => cell === null))).toBe(true);
   });
 
   it("soft drop locks instead of awarding movement points when the piece is blocked", () => {
