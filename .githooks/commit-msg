@@ -1,4 +1,0 @@
-#!/bin/sh
-set -eu
-
-node .githooks/lore-coding.mjs --edit "$1"
