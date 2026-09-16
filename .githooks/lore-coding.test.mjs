@@ -1,4 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterEach, describe, expect, it } from "vitest";
 
 import { formatLoreCodingResult, validateLoreCoding } from "./lore-coding.mjs";
 
@@ -51,6 +56,87 @@ async function validate(message, options = {}) {
 function codes(result) {
   return result.errors.map((error) => error.code);
 }
+
+describe("Lore Coding real Git history", () => {
+  const directories = [];
+
+  afterEach(() => {
+    for (const directory of directories.splice(0)) {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  function createHistory() {
+    const cwd = mkdtempSync(join(tmpdir(), "lore-coding-history-"));
+    directories.push(cwd);
+    const git = (args, input) =>
+      execFileSync("git", args, {
+        cwd,
+        input,
+        encoding: "utf8",
+        stdio: ["pipe", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: "Lore test",
+          GIT_AUTHOR_EMAIL: "lore-test@example.invalid",
+          GIT_COMMITTER_NAME: "Lore test",
+          GIT_COMMITTER_EMAIL: "lore-test@example.invalid",
+        },
+      }).trim();
+
+    git(["init", "--quiet"]);
+    const tree = git(["mktree"], "");
+    let parent;
+
+    return {
+      cwd,
+      commit(message) {
+        const hash = git(
+          ["-c", "commit.gpgsign=false", "commit-tree", tree, ...(parent ? ["-p", parent] : [])],
+          message,
+        );
+        git(["update-ref", "HEAD", hash]);
+        parent = hash;
+        return hash;
+      },
+    };
+  }
+
+  it("resolves a Lore-Link with more than 1 MiB of unrelated history", async () => {
+    const history = createHistory();
+    history.commit(`Docs: Unrelated history\n\n${"x".repeat(1024 * 1024 + 1024)}\n`);
+    history.commit(createMessage({ loreId: `Lore-ID:\t${EXISTING_LORE_ID}`, loreLinks: "" }));
+
+    expect(await validateLoreCoding(createMessage(), { cwd: history.cwd })).toEqual({
+      valid: true,
+      errors: [],
+    });
+  });
+
+  it("rejects missing IDs and IDs mentioned only in prose or Lore-Link trailers", async () => {
+    const history = createHistory();
+    history.commit(createMessage({ context: `This refers to ${EXISTING_LORE_ID}.` }));
+
+    for (const loreId of [EXISTING_LORE_ID, MISSING_LORE_ID]) {
+      const result = await validateLoreCoding(
+        createMessage({ loreLinks: `Lore-Link: ${loreId} — previous task` }),
+        { cwd: history.cwd },
+      );
+      expect(result.valid).toBe(false);
+      expect(codes(result)).toEqual(["LORE047"]);
+    }
+  });
+
+  it("rejects a Lore-ID outside the selected target history", async () => {
+    const history = createHistory();
+    const targetCommit = history.commit(createMessage({ loreLinks: "" }));
+    history.commit(createMessage({ loreId: `Lore-ID: ${EXISTING_LORE_ID}`, loreLinks: "" }));
+
+    const result = await validateLoreCoding(createMessage(), { cwd: history.cwd, targetCommit });
+    expect(result.valid).toBe(false);
+    expect(codes(result)).toEqual(["LORE047"]);
+  });
+});
 
 describe("Lore Coding validator", () => {
   it("accepts a complete v15 Lore Coding commit message with a reachable Lore-Link", async () => {

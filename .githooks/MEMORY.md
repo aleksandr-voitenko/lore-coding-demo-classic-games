@@ -34,6 +34,11 @@ This file covers repository-local Git hook and Lore Coding tooling under
   contiguous final lines and resolve to a matching `Lore-ID:` in the target
   history (`HEAD` by default for local hooks), unless syntax-only validation is
   requested.
+- History lookup filters candidate messages by the literal Lore ID in Git before
+  buffering them, then checks their parsed `Lore-ID:` trailers. Prose mentions
+  and `Lore-Link:` references alone do not establish task identity. Unrelated
+  history no longer consumes the output buffer, but matching messages still
+  share Node's default 1 MiB subprocess-output limit.
 - Diagnostics use stable `LORE###` codes with line numbers, expected format,
   fix guidance, and examples. Preserve those codes when tightening copy so
   agents can react to failures reliably.
@@ -44,7 +49,9 @@ This file covers repository-local Git hook and Lore Coding tooling under
   code-fence rejection, subject type/scope validation, required section checks,
   Lore-ID and Lore-Link trailer syntax, legacy Links rejection, Lore-Link
   history resolution, syntax-only link validation, and hook-style diagnostic
-  formatting.
+  formatting. Real temporary Git repositories cover more than 1 MiB of unrelated
+  history, whitespace in Lore-ID trailers, missing IDs, prose/link-only mentions,
+  and target-history reachability.
 - `.githooks/install-lore-coding-hooks.test.mjs` covers install planning for fresh
   worktrees, non-Git directories, CI, explicit opt-out, existing custom hook
   paths, and already-configured `.githooks` paths.

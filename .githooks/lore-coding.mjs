@@ -282,7 +282,11 @@ export function createGitInspector(options = {}) {
 
   return {
     findCommitsByLoreId(loreId, targetCommit) {
-      const logOutput = runGit(["log", "--format=%H%x1f%B%x1e", targetCommit], cwd);
+      // Filter before buffering; the parser still requires an exact Lore-ID trailer.
+      const logOutput = runGit(
+        ["log", "--fixed-strings", `--grep=${loreId}`, "--format=%H%x1f%B%x1e", targetCommit],
+        cwd,
+      );
       return parseLoreIdCommits(logOutput, loreId);
     },
   };
