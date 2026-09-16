@@ -235,6 +235,7 @@ export type GameCard = {
   id: GameId;
   label: string;
   parameters: readonly GameParameterKind[];
+  title?: string;
 };
 
 const snakeCatalogEntry = getGameCatalogEntry("snake");
@@ -367,6 +368,7 @@ export const GAME_CARDS: readonly GameCard[] = [
     id: battleCityCatalogEntry.id,
     label: battleCityCatalogEntry.label,
     parameters: [],
+    title: "Tank Patrol: Arcade",
   },
 ];
 

@@ -110,7 +110,7 @@ type BattleCityReplayRecording = LiveGameReplayRecording<
   startingStage: number;
 };
 
-const BATTLE_CITY_DISPLAY_NAME = getGameCatalogEntry("battle-city").label;
+const BATTLE_CITY_DISPLAY_NAME = `${getGameCatalogEntry("battle-city").label}: Arcade`;
 
 const BATTLE_CITY_LEADERBOARD_KEY = createGameLeaderboardKey("battle-city", [
   { name: "mode", value: "campaign" },

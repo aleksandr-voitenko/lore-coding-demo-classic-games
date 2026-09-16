@@ -825,7 +825,7 @@ function GameCardArticle({
           <span className="flex items-start justify-between gap-3">
             <span className="flex min-w-0 flex-col gap-1">
               <span className="text-2xl font-semibold tracking-normal">
-                {game.label}
+                {game.title ?? game.label}
               </span>
               <span className="text-sm font-medium text-[var(--chrome-muted)]">
                 {game.description}
